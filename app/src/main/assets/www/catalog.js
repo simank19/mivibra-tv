@@ -431,6 +431,7 @@
     return MV.getJSON(url, bearer ? { Authorization: 'Bearer ' + key, Accept: 'application/json' } : null);
   }
   var IMG = 'https://image.tmdb.org/t/p/';
+  MV.tmdb = tmdb; MV.TMDB_IMG = IMG;
   MV.meta = function (item) {
     var ck = 'meta:' + item.key;
     return MV.idbGet(ck).then(function (c) {

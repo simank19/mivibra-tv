@@ -60,7 +60,7 @@
   function navItems() {
     if (MV.isKids()) return [['kids', 'Inicio', IC.home], ['search', 'Buscar', IC.search]];
     return [
-      ['home', 'Inicio', IC.home], ['search', 'Buscar', IC.search], ['live', 'En vivo', IC.live], ['guide', 'Guía', IC.guide],
+      ['home', 'Inicio', IC.home], ['search', 'Buscar', IC.search], ['discover', 'Descubrir', IC.compass], ['live', 'En vivo', IC.live], ['guide', 'Guía', IC.guide],
       ['movies', 'Películas', IC.movie], ['series', 'Series', IC.series], ['platforms', 'Plataformas', IC.platforms], ['anime', 'Anime', IC.anime], ['kdrama', 'K-Drama', IC.kdrama],
       ['docs', 'Documentales', IC.doc], ['favs', 'Favoritos', IC.star], ['history', 'Historial', IC.history], ['games', 'Juegos', IC.games],
       ['settings', 'Ajustes', IC.settings]
@@ -108,7 +108,7 @@
     var sub = '';
     if (it.type === 'live') { var nn = MV.nowNext(it); sub = nn.now ? nn.now.t : (it.group || ''); }
     else sub = [it.year, it.type === 'series' ? 'Serie' : '', it.group].filter(Boolean).join(' · ');
-    var prog = MV.progressOf(it.key), tag = it.platform ? D.platformName(it.platform).toUpperCase() : it.kdrama ? 'K-DRAMA' : it.anime ? 'ANIME' : it.ia ? 'CLÁSICO' : '';
+    var prog = MV.progressOf(it.key), tag = it.type === 'tmdb' ? (it.have ? 'EN TUS LISTAS' : '') : it.platform ? D.platformName(it.platform).toUpperCase() : it.kdrama ? 'K-DRAMA' : it.anime ? 'ANIME' : it.ia ? 'CLÁSICO' : '';
     return '<button class="card ' + kind + ' f" style="--h:' + MV.hue(it.name) + ';animation-delay:' + Math.min(i || 0, 12) * 0.04 + 's" data-act="open" data-key="' + esc(it.key) + '" data-fid="c-' + MV.hash(it.key) + '">' +
       '<div class="th">' + thumbInner(it) + (it.num ? '<span class="num">' + esc(it.num) + '</span>' : '') + (tag ? '<span class="tag">' + tag + '</span>' : '') + '<div class="shine"></div></div>' +
       '<div class="meta"><b>' + esc(it.name) + '</b><span>' + esc(sub) + '</span>' + (prog ? '<div class="prog"><i style="width:' + Math.round(prog.pos / prog.dur * 100) + '%"></i></div>' : '') + '</div></button>';
@@ -244,6 +244,8 @@
     html += row('Favoritos', favs.slice(0, 30));
     html += row('Canales en vivo', live.slice(0, 30), 'ch', live.length + ' canales', 'live');
     html += row('Sugerido para ti', suggested(), 'poster', 'Según lo que ves en este perfil');
+    var trendHave = (DISC.rows.trend || []).filter(function (t) { return t.have; });
+    if (trendHave.length) html += row('Tendencia esta semana', trendHave.slice(0, 20), 'poster', 'Lo más visto en el mundo que ya tienes', 'discover');
     var pls = platformCounts();
     if (pls.length) html += '<section class="row"><h3>Plataformas</h3><div class="strip">' + pls.map(platformTile).join('') + '</div></section>';
     html += row('Películas', movies.slice(0, 30), 'poster', '', 'movies');
@@ -849,7 +851,9 @@
     nav: function (a) { stack = []; MV.go(a, null, { replace: true }); },
     go: function (a) { MV.closeModal(true); if (a === 'profileEdit') { editSel = null; } MV.go(a); },
     more: function (k) { limits[k] = (limits[k] || (k === 'live' ? 150 : k === 'games' ? 120 : 60)) + (k === 'live' ? 150 : 60); MV.rerender(); },
-    open: function (_, el) { var it = S.byKey[el.dataset.key] || MV.reg[el.dataset.key]; if (!it) return; if (it.type === 'live' || it.type === 'rom') MV.playItem(it); else MV.go('detail', it.key); },
+    open: function (_, el) { var it = S.byKey[el.dataset.key] || MV.reg[el.dataset.key]; if (!it) return;
+      if (it.type === 'tmdb') { if (it.have && S.byKey[it.have]) MV.go('detail', it.have); else tmdbInfo(it); return; }
+      if (it.type === 'live' || it.type === 'rom') MV.playItem(it); else MV.go('detail', it.key); },
     play: function (_, el) { MV.playItem(S.byKey[el.dataset.key] || MV.reg[el.dataset.key], false); },
     resume: function (_, el) {
       var k = el.dataset.key, it = S.byKey[k] || MV.reg[k];
@@ -924,6 +928,23 @@
     pin: function (d) { MV._pin && MV._pin(d); },
     // Listas
     addList: function () { if (!MV.acct.canEdit()) return MV.toast('Solo el administrador puede agregar listas'); addListDialog('url'); },
+    closeModal: function () { MV.closeModal(); },
+    discOnly: function () { DISC.onlyHave = !DISC.onlyHave; MV.rerender(); },
+    discReload: function () { DISC.error = ''; loadDiscover(true); MV.rerender(); },
+    tmdbTrailer: function (key) {
+      var t = MV.reg[key]; if (!t) return;
+      MV.tmdb('/' + t.mtype + '/' + t.id + '/videos', '&include_video_language=es,en').then(function (j) {
+        var v = (j.results || []).filter(function (x) { return x.site === 'YouTube'; });
+        v.sort(function (a, b) { return (b.type === 'Trailer') - (a.type === 'Trailer') || (b.iso_639_1 === 'es') - (a.iso_639_1 === 'es'); });
+        if (!v.length) return MV.tmdb('/' + t.mtype + '/' + t.id + '/videos', '&language=en-US').then(function (j2) { return (j2.results || []).filter(function (x) { return x.site === 'YouTube'; }); });
+        return v;
+      }).then(function (v) {
+        if (!v || !v.length) return MV.toast('No hay tráiler disponible');
+        var url = 'https://www.youtube.com/watch?v=' + v[0].key;
+        if (MV.A && MV.A.openExternal) MV.A.openExternal(url); else window.open(url, '_blank');
+      }).catch(function () { MV.toast('No se pudo cargar el tráiler'); });
+    },
+    tmdbSearch: function (key) { var t = MV.reg[key]; if (!t) return; MV.closeModal(true); query = t.name; MV.go('search'); },
     checkUpdate: function () { MV.toast('Buscando actualizaciones…'); MV.checkUpdate(true); },
     checkDupes: function () { MV.checkDupes(true); MV.toast('Probando las señales de los canales repetidos…'); setTimeout(MV.rerender, 300); },
     loginGoogle: function () {
@@ -1113,6 +1134,107 @@
     var fn = ACT[el.dataset.act]; if (!fn) return;
     e.preventDefault(); fn(el.dataset.arg, el);
   });
+
+  // ---------- Descubrir (TMDB) ----------
+  var DISC = { rows: {}, loading: false, ts: 0, onlyHave: false, idx: null, idxSize: -1 };
+  var DISC_ROWS = [
+    ['trend', 'Tendencias de la semana', '/trending/all/week', ''],
+    ['now', 'Estrenos en cines', '/movie/now_playing', '&region=CO'],
+    ['popm', 'Películas populares', '/movie/popular', '&region=CO'],
+    ['popt', 'Series populares', '/tv/popular', ''],
+    ['topm', 'Películas mejor valoradas', '/movie/top_rated', ''],
+    ['topt', 'Series mejor valoradas', '/tv/top_rated', ''],
+    ['anime', 'Anime popular', '/discover/tv', '&with_genres=16&with_original_language=ja&sort_by=popularity.desc'],
+    ['kd', 'K-Drama popular', '/discover/tv', '&with_original_language=ko&with_genres=18&sort_by=popularity.desc'],
+    ['doc', 'Documentales', '/discover/movie', '&with_genres=99&sort_by=popularity.desc'],
+    ['kids', 'Para niños', '/discover/movie', '&with_genres=16,10751&sort_by=popularity.desc&certification_country=US&certification.lte=PG']
+  ];
+  /** Índice de títulos de tus listas para saber qué ya tienes. */
+  function titleKey(n) { return MV.norm(MV.cleanTitle(String(n || '')).replace(/[(\[]?\b(19|20)\d{2}\b[)\]]?/g, ' ')); }
+  function haveIndex() {
+    var vod = S.items.filter(function (i) { return i.type === 'movie' || i.type === 'series'; });
+    if (DISC.idx && DISC.idxSize === vod.length) return DISC.idx;
+    var idx = {};
+    vod.forEach(function (i) {
+      var k = titleKey(i.name); if (!k) return;
+      (idx[k] = idx[k] || []).push(i);
+    });
+    DISC.idx = idx; DISC.idxSize = vod.length;
+    return idx;
+  }
+  function matchHave(t) {
+    var idx = haveIndex(), want = t.mtype === 'tv' ? 'series' : 'movie', best = null;
+    [t.name, t.original].forEach(function (n) {
+      if (best || !n) return;
+      (idx[titleKey(n)] || []).forEach(function (i) {
+        if (i.type !== want) return;
+        if (!best || (t.year && String(i.year || '') === t.year)) best = i;
+      });
+    });
+    return best ? best.key : '';
+  }
+  function toItem(r, forced) {
+    var mtype = forced || r.media_type || (r.title ? 'movie' : 'tv');
+    if (mtype !== 'movie' && mtype !== 'tv') return null;
+    var it = {
+      key: 'tmdb:' + mtype + ':' + r.id, type: 'tmdb', mtype: mtype, id: r.id,
+      name: r.title || r.name || '', original: r.original_title || r.original_name || '',
+      year: (r.release_date || r.first_air_date || '').slice(0, 4),
+      poster: r.poster_path ? MV.TMDB_IMG + 'w342' + r.poster_path : '',
+      backdrop: r.backdrop_path ? MV.TMDB_IMG + 'w1280' + r.backdrop_path : '',
+      overview: r.overview || '', rating: r.vote_average ? r.vote_average.toFixed(1) : ''
+    };
+    it.group = (mtype === 'tv' ? 'Serie' : 'Película') + (it.rating ? ' · ★ ' + it.rating : '');
+    it.have = matchHave(it);
+    return it;
+  }
+  function loadDiscover(force) {
+    if (!P.tmdbKey || DISC.loading) return;
+    if (!force && DISC.ts > Date.now() - 3 * 3600e3) return;
+    DISC.loading = true;
+    Promise.all(DISC_ROWS.map(function (r) {
+      var forced = r[2].indexOf('/tv') >= 0 ? 'tv' : r[2].indexOf('/movie') >= 0 ? 'movie' : '';
+      return MV.tmdb(r[2], r[3]).then(function (j) {
+        DISC.rows[r[0]] = (j.results || []).map(function (x) { return toItem(x, forced); }).filter(function (x) { return x && x.name && x.poster; });
+      }).catch(function (e) { DISC.error = e.message; });
+    })).then(function () {
+      DISC.loading = false; DISC.ts = Date.now();
+      if (view.name === 'discover' || view.name === 'home') MV.rerender();
+    });
+  }
+  MV.on('catalog', function () {
+    // Al cambiar tus listas, recalcula qué títulos ya tienes
+    Object.keys(DISC.rows).forEach(function (k) { DISC.rows[k].forEach(function (t) { t.have = matchHave(t); }); });
+  });
+  VIEWS.discover = function () {
+    var head = top('Descubrir', '<button class="pill f" data-act="discOnly">' + (DISC.onlyHave ? '✓ ' : '') + 'Solo lo que tengo</button>');
+    if (!P.tmdbKey) {
+      return head + '<div class="empty glass"><h2>Falta la clave de TMDB</h2><p class="muted">' +
+        (MV.acct.canEdit() ? 'Pon tu clave gratuita de themoviedb.org en Ajustes › Sinopsis y carátulas para ver tendencias, estrenos y lo más popular.' : 'El administrador aún no ha configurado esta sección.') + '</p>' +
+        (MV.acct.canEdit() ? '<div class="btns" style="justify-content:center"><button class="btn f" data-act="go" data-arg="settings" data-autofocus>Ir a Ajustes</button></div>' : '') + '</div>';
+    }
+    loadDiscover(false);
+    var any = Object.keys(DISC.rows).length;
+    if (!any) return head + (DISC.error ? '<div class="panel glass"><p>No se pudo conectar con TMDB: ' + esc(DISC.error) + '</p><div class="btns"><button class="btn f" data-act="discReload">Reintentar</button></div></div>' : '<div class="panel glass" style="display:flex;gap:14px;align-items:center"><div class="spinner"></div><b>Buscando lo más popular…</b></div>');
+    var kids = MV.isKids(), html = head + '<p class="muted" style="margin:-6px 0 14px">Lo más visto según TMDB. Las marcadas <b style="color:var(--accent-text)">EN TUS LISTAS</b> se pueden ver ya.</p>';
+    DISC_ROWS.forEach(function (r) {
+      if (kids && r[0] !== 'kids' && r[0] !== 'anime') return;
+      var items = DISC.rows[r[0]] || [];
+      if (DISC.onlyHave) items = items.filter(function (t) { return t.have; });
+      var n = items.filter(function (t) { return t.have; }).length;
+      html += row(r[1], items, 'poster', n ? n + ' en tus listas' : '');
+    });
+    if (DISC.onlyHave && !html.match(/class="row"/)) html += '<div class="empty glass"><p class="muted">Ninguno de los títulos populares está en tus listas todavía.</p></div>';
+    return html + '<p class="muted" style="font-size:12px;margin-top:18px">Datos de TMDB. Este producto usa la API de TMDB pero no está respaldado ni certificado por TMDB.</p>';
+  };
+  function tmdbInfo(t) {
+    MV.modal('<div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">' +
+      (t.poster ? '<img src="' + esc(t.poster) + '" alt="" style="width:130px;border-radius:14px;flex:0 0 auto">' : '') +
+      '<div style="flex:1;min-width:200px"><h2 style="margin:0 0 4px">' + esc(t.name) + '</h2><p class="muted" style="margin:0 0 10px">' + esc([t.year, t.mtype === 'tv' ? 'Serie' : 'Película', t.rating ? '★ ' + t.rating : ''].filter(Boolean).join(' · ')) + '</p>' +
+      '<p style="max-height:32vh;overflow:auto;font-size:14px;line-height:1.5">' + esc(t.overview || 'Sin sinopsis en español.') + '</p>' +
+      '<p class="muted" style="font-size:13px">No está en tus listas.</p></div></div>' +
+      '<div class="btns"><button class="btn f" data-act="tmdbTrailer" data-arg="' + esc(t.key) + '" data-autofocus>' + IC.play + 'Ver tráiler</button><button class="btn ghost f" data-act="tmdbSearch" data-arg="' + esc(t.key) + '">' + IC.search + 'Buscar parecidos</button><button class="btn ghost f" data-act="closeModal">Cerrar</button></div>');
+  }
 
   // ---------- Eventos de la app ----------
   MV.on('catalog', function () { if (['boot', 'profiles', 'profileEdit', 'settings', 'games'].indexOf(view.name) < 0) MV.rerender(); });
