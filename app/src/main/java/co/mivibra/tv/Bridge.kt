@@ -431,9 +431,43 @@ class Bridge(private val a: MainActivity) {
             .put("sdk", Build.VERSION.SDK_INT)
             .put("abi", Build.SUPPORTED_ABIS.firstOrNull() ?: "")
             .put("version", BuildConfig.VERSION_NAME)
+            .put("versionCode", BuildConfig.VERSION_CODE)
             .put("external", Environment.getExternalStorageDirectory().absolutePath)
             .toString()
     }
+
+    // ---------------- Actualizaciones ----------------
+
+    /** Descarga la APK nueva (con progreso) y abre el instalador. Si falta el permiso, abre el ajuste y avisa. */
+    @JavascriptInterface
+    fun installUpdate(id: String, url: String) {
+        if (!Updater.canInstall(a)) {
+            a.runOnUiThread { Updater.askPermission(a) }
+            reply(id, true, JSONObject().put("needPermission", true))
+            return
+        }
+        io.execute {
+            try {
+                val f = Updater.apkFile(a)
+                if (f.exists()) f.delete()
+                val code = Net.download(url, f, emptyMap(), decompress = false) { p -> progress(id, p) }
+                if (code >= 400 || f.length() < 1_000_000) throw IllegalStateException("La descarga falló (" + code + ")")
+                a.runOnUiThread {
+                    try {
+                        Updater.install(a, f)
+                        reply(id, true, JSONObject().put("installing", true))
+                    } catch (e: Exception) {
+                        reply(id, false, e.message ?: "No se pudo abrir el instalador")
+                    }
+                }
+            } catch (e: Exception) {
+                reply(id, false, e.message ?: e.javaClass.simpleName)
+            }
+        }
+    }
+
+    @JavascriptInterface
+    fun canInstallUpdates(): Boolean = Updater.canInstall(a)
 
     @JavascriptInterface
     fun toast(msg: String) {
