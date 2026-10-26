@@ -81,9 +81,10 @@ class GameActivity : ComponentActivity() {
         retroView.isFocusable = true
         retroView.isFocusableInTouchMode = true
 
-        // Controles táctiles: solo en celular/tablet sin mando físico
-        val isTv = packageManager.hasSystemFeature("android.software.leanback")
-        if (!isTv && physicalPads() == 0) addTouchPad(root)
+        // Controles táctiles sobrepuestos: siempre en celular/tablet; se ocultan solos si usas un mando físico
+        val isTv = packageManager.hasSystemFeature("android.software.leanback") ||
+            (getSystemService(UI_MODE_SERVICE) as android.app.UiModeManager).currentModeType == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
+        if (!isTv) addTouchPad(root)
 
         // Aviso mientras arranca el núcleo; se quita con el primer cuadro dibujado
         val loading = TextView(this).apply {
@@ -194,7 +195,26 @@ class GameActivity : ComponentActivity() {
         retroView.sendMotionEvent(source, x.coerceIn(-1f, 1f), y.coerceIn(-1f, 1f), port)
     }
 
+    private fun setPadVisible(show: Boolean) {
+        val p = pad ?: return
+        p.visibility = if (show) View.VISIBLE else View.GONE
+    }
+
+    private fun fromGamepad(source: Int) =
+        (source and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
+            (source and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK
+
+    override fun dispatchGenericMotionEvent(event: android.view.MotionEvent): Boolean {
+        if (pad?.visibility == View.VISIBLE && fromGamepad(event.source)) {
+            val moved = listOf(android.view.MotionEvent.AXIS_X, android.view.MotionEvent.AXIS_Y, android.view.MotionEvent.AXIS_HAT_X, android.view.MotionEvent.AXIS_HAT_Y)
+                .any { kotlin.math.abs(event.getAxisValue(it)) > 0.6f }
+            if (moved) setPadVisible(false)
+        }
+        return super.dispatchGenericMotionEvent(event)
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (pad?.visibility == View.VISIBLE && fromGamepad(event.source) && KeyEvent.isGamepadButton(event.keyCode)) setPadVisible(false)
         if (event.keyCode == KeyEvent.KEYCODE_BUTTON_MODE || event.keyCode == KeyEvent.KEYCODE_MENU) {
             if (event.action == KeyEvent.ACTION_UP) showMenu()
             return true
@@ -203,7 +223,8 @@ class GameActivity : ComponentActivity() {
     }
 
     private fun showMenu() {
-        val items = arrayOf("Continuar", "Guardar partida", "Cargar partida", "Reiniciar juego", "Salir del juego")
+        val padItem = if (pad == null) null else if (pad?.visibility == View.VISIBLE) "Ocultar controles en pantalla" else "Mostrar controles en pantalla"
+        val items = listOfNotNull("Continuar", "Guardar partida", "Cargar partida", "Reiniciar juego", "Salir del juego", padItem).toTypedArray()
         AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
             .setTitle(intent.getStringExtra("title") ?: "Juego")
             .setItems(items) { d, which ->
@@ -212,6 +233,7 @@ class GameActivity : ComponentActivity() {
                     2 -> loadState()
                     3 -> retroView.reset()
                     4 -> { saveSram(); finish() }
+                    5 -> setPadVisible(pad?.visibility != View.VISIBLE)
                 }
                 d.dismiss()
                 retroView.requestFocus()

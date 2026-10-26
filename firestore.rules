@@ -1,0 +1,21 @@
+rules_version = '2';
+// Reglas de MiVibra TV. Cambia TU_CORREO@gmail.com por el Gmail del superadministrador (en minúsculas).
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null && request.auth.token.email_verified == true; }
+    function admin() { return signedIn() && request.auth.token.email.lower() == 'TU_CORREO@gmail.com'; }
+    function cfg() { return get(/databases/$(database)/documents/app/config).data; }
+    function allowed() {
+      return admin() || (signedIn() && (cfg().open == true || request.auth.token.email.lower() in cfg().allowed));
+    }
+    // Listas, cuentas Xtream y claves: solo el superadministrador escribe; los usuarios permitidos leen
+    match /app/config {
+      allow read: if allowed();
+      allow write: if admin();
+    }
+    // Perfiles, favoritos, historial y "continuar viendo" de cada usuario
+    match /mivibra/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid && allowed();
+    }
+  }
+}

@@ -71,6 +71,77 @@ class Bridge(private val a: MainActivity) {
         }
     }
 
+    /** POST (para el inicio de sesión con código en TV). */
+    @JavascriptInterface
+    fun httpPost(id: String, url: String, body: String, contentType: String?) {
+        io.execute {
+            try {
+                val c = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                c.connectTimeout = 15000
+                c.readTimeout = 20000
+                c.requestMethod = "POST"
+                c.doOutput = true
+                c.setRequestProperty("Content-Type", contentType ?: "application/x-www-form-urlencoded")
+                c.outputStream.use { it.write(body.toByteArray()) }
+                val code = c.responseCode
+                val txt = Net.body(c).use { it.readBytes().toString(Charsets.UTF_8) }
+                c.disconnect()
+                reply(id, true, JSONObject().put("status", code).put("text", txt))
+            } catch (e: Exception) {
+                reply(id, false, e.message ?: e.javaClass.simpleName)
+            }
+        }
+    }
+
+    /** Prueba varias señales a la vez y dice cuáles responden y en cuánto tiempo. */
+    @JavascriptInterface
+    fun probe(id: String, json: String) {
+        Thread {
+            val arr = try { JSONArray(json) } catch (_: Exception) { JSONArray() }
+            val out = arrayOfNulls<JSONObject>(arr.length())
+            val threads = (0 until arr.length()).map { i ->
+                Thread {
+                    val o = arr.optJSONObject(i) ?: JSONObject()
+                    val url = o.optString("url")
+                    val h = HashMap<String, String>()
+                    o.optString("ua").takeIf { it.isNotBlank() }?.let { h["User-Agent"] = it }
+                    o.optString("ref").takeIf { it.isNotBlank() }?.let { h["Referer"] = it }
+                    val t0 = System.currentTimeMillis()
+                    var ok = false
+                    var code = 0
+                    try {
+                        val c = Net.open(url, h, 7000)
+                        code = c.responseCode
+                        if (code < 400) {
+                            val buf = ByteArray(2048)
+                            val n = Net.body(c).use { it.read(buf) }
+                            val head = if (n > 0) String(buf, 0, n, Charsets.ISO_8859_1) else ""
+                            val isPlaylist = url.contains(".m3u8", true) || head.startsWith("#EXTM3U")
+                            ok = n > 0 && (!isPlaylist || head.contains("#EXT"))
+                        }
+                        c.disconnect()
+                    } catch (_: Exception) {
+                    }
+                    out[i] = JSONObject().put("ok", ok).put("code", code).put("ms", System.currentTimeMillis() - t0)
+                }.also { it.start() }
+            }
+            threads.forEach { try { it.join(12000) } catch (_: Exception) {} }
+            val res = JSONArray()
+            out.forEach { res.put(it ?: JSONObject().put("ok", false).put("ms", 99999)) }
+            reply(id, true, res)
+        }.start()
+    }
+
+    /** Inicio de sesión con Google (selector de cuentas del equipo). */
+    @JavascriptInterface
+    fun googleSignIn(id: String, webClientId: String) {
+        a.runOnUiThread {
+            GoogleAuth.signIn(a, webClientId) { ok, tokenOrError, email ->
+                reply(id, ok, if (ok) JSONObject().put("idToken", tokenOrError).put("email", email) else tokenOrError)
+            }
+        }
+    }
+
     @JavascriptInterface
     fun epg(id: String, url: String, idsJson: String?, hours: Int) {
         io.execute {

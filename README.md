@@ -90,3 +90,7 @@ Este producto usa la API de TMDB pero no está respaldado ni certificado por TMD
 
 GPL-3.0 (requerida por LibretroDroid). Ver `LICENSE`.
 Algunos núcleos libretro (Snes9x, Genesis Plus GX, FBNeo, MAME) solo permiten uso no comercial.
+
+## Cuenta con Google y superadministrador
+
+Opcional: la app puede pedir inicio de sesión con Google, con un superadministrador que maneja listas, cuentas Xtream y claves para todos los usuarios. Guía paso a paso: [docs/CUENTA-GOOGLE.md](docs/CUENTA-GOOGLE.md).

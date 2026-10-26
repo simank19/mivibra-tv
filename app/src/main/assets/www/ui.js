@@ -72,7 +72,7 @@
   function render(keepFocus) {
     MV.applyLook();
     var app = document.getElementById('app');
-    var full = view.name === 'profiles' || view.name === 'profileEdit' || view.name === 'boot';
+    var full = view.name === 'profiles' || view.name === 'profileEdit' || view.name === 'boot' || view.name === 'login';
     var body = (VIEWS[view.name] || VIEWS.home)(view.arg);
     if (full) {
       app.innerHTML = '<div class="who-screen view-in">' + body + '</div>';
@@ -138,6 +138,8 @@
     return S.loading ? '<div class="panel glass" style="display:flex;align-items:center;gap:14px"><div class="spinner"></div><b>' + esc(S.loadMsg || 'Cargando…') + '</b></div>' : '';
   }
   function emptyLists() {
+    if (!MV.acct.canEdit()) return '<div class="empty glass"><img src="img/isotipo.svg" alt="" style="width:64px;height:64px"><h2>Preparando tu contenido</h2>' +
+      '<p class="muted">El administrador aún no ha agregado listas. Cuando lo haga, todo aparecerá aquí automáticamente.</p></div>';
     return '<div class="empty glass"><img src="img/isotipo.svg" alt="" style="width:64px;height:64px"><h2>Agrega tu primera lista</h2>' +
       '<p class="muted">Pega el enlace de tu lista M3U, inicia sesión con Xtream Codes o empieza con canales gratuitos.</p>' +
       '<div class="btns" style="justify-content:center"><button class="btn f" data-act="addList" data-autofocus>' + IC.plus + 'Agregar lista</button><button class="btn ghost f" data-act="presets">Canales gratis</button></div></div>';
@@ -145,6 +147,44 @@
 
   // ---------- Perfiles ----------
   VIEWS.boot = function () { return '<div class="spinner"></div>'; };
+
+  // ---------- Inicio de sesión con Google ----------
+  var loginCode = null, loginBusy = false;
+  VIEWS.login = function () {
+    var A = MV.acct, st = A.status;
+    var head = '<img src="img/logo-corto-oscuro.svg" alt="MiVibra TV" style="height:54px;margin-bottom:18px"><h1>Inicia sesión</h1>';
+    if (st === 'denied') {
+      return head + '<p class="muted" style="max-width:520px;text-align:center">Tu cuenta <b>' + esc((A.user() || {}).email || '') + '</b> todavía no tiene acceso. Pídele al administrador que la agregue en Ajustes › Usuarios.</p>' +
+        '<div class="btns" style="justify-content:center"><button class="btn f" data-act="loginRetry" data-autofocus>' + IC.refresh + 'Volver a intentar</button><button class="btn ghost f" data-act="loginOut">Usar otra cuenta</button></div>';
+    }
+    if (loginCode) {
+      var qr = window.qrcode(0, 'M'); qr.addData(loginCode.url); qr.make();
+      return head + '<div class="panel glass" style="display:flex;gap:28px;align-items:center;flex-wrap:wrap;justify-content:center;max-width:760px">' +
+        '<div class="qr">' + qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true }) + '</div>' +
+        '<div style="max-width:380px"><p style="margin:0 0 6px">En tu celular abre</p><h2 style="font:800 24px var(--brand);margin:0 0 12px">' + esc(loginCode.url.replace(/^https?:\/\//, '')) + '</h2>' +
+        '<p style="margin:0 0 6px">y escribe este código:</p><h2 style="font:800 40px var(--brand);letter-spacing:4px;margin:0 0 12px;color:var(--accent)">' + esc(loginCode.code) + '</h2>' +
+        '<p class="muted" style="font-size:13px">Elige tu cuenta de Google y acepta. Esta pantalla entra sola.</p></div></div>' +
+        '<div class="btns" style="justify-content:center"><button class="btn ghost f" data-act="loginCancel" data-autofocus>Cancelar</button></div>';
+    }
+    var tv = MV.device.tv, btns = [];
+    var g = A.hasGoogleButton() ? '<button class="btn f" data-act="loginGoogle"' + (tv ? '' : ' data-autofocus') + '>' + IC.user + 'Continuar con Google</button>' : '';
+    var c = A.hasCode() ? '<button class="btn' + (tv ? '' : ' ghost') + ' f" data-act="loginCode"' + (tv ? ' data-autofocus' : '') + '>' + IC.phone + 'Entrar con el celular (código)</button>' : '';
+    if (tv) btns.push(c, g); else btns.push(g, c);
+    return head + '<p class="muted" style="max-width:520px;text-align:center">Entra con tu cuenta de Google para ver tu contenido, tus perfiles y seguir viendo donde lo dejaste en cualquier equipo.</p>' +
+      (loginBusy ? '<div class="spinner"></div>' : '<div class="btns" style="justify-content:center;flex-direction:column;align-items:stretch;min-width:300px">' + btns.join('') + '</div>') +
+      (A.error ? '<p class="muted" style="font-size:13px;margin-top:14px;max-width:520px;text-align:center">' + esc(A.error) + '</p>' : '');
+  };
+  function afterLogin() {
+    loginCode = null; loginBusy = false; MV.acct.error = '';
+    MV.go('boot', null, { replace: true });
+    MV.acct.waitUserData().then(function () { continueBoot(); });
+  }
+  function loginFail(e) {
+    loginBusy = false;
+    var m = e && (e.message || e.code) || 'No se pudo iniciar sesión';
+    if (m !== 'cancelado') MV.acct.error = m;
+    MV.rerender();
+  }
   VIEWS.profiles = function () {
     var html = '<img src="img/logo-corto-oscuro.svg" alt="MiVibra" style="height:36px"><h1>¿Quién está viendo?</h1><div class="profiles">';
     html += S.profiles.map(function (p, i) {
@@ -572,19 +612,51 @@
   VIEWS.settings = function (tab) {
     if (tab) setTab = tab;
     var tabs = [['lists', 'Listas'], ['profiles', 'Perfiles'], ['look', 'Temas'], ['playback', 'Reproducción'], ['parental', 'Control parental y +18'], ['remote', 'Mando con celular'], ['sync', 'Sincronización'], ['meta', 'Sinopsis y carátulas'], ['about', 'Acerca de']];
+    if (MV.acct.managed()) {
+      tabs = tabs.map(function (t) { return t[0] === 'sync' ? ['account', 'Cuenta'] : t; });
+      if (MV.acct.isAdmin()) tabs.splice(1, 0, ['users', 'Usuarios']);
+      if (setTab === 'sync') setTab = 'account';
+    }
     var html = top('Ajustes') + '<div class="chips">' + tabs.map(function (t) { return '<button class="chip f' + (setTab === t[0] ? ' on' : '') + '" data-act="setTab" data-arg="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>';
     return html + (SETTINGS[setTab] || SETTINGS.lists)();
   };
   var SETTINGS = {};
+  function dupesPanel() {
+    var d = S.dupes || {};
+    var txt = !MV.native ? 'Disponible en la app instalada.' : d.running ? 'Probando señales… ' + d.done + ' de ' + d.total :
+      d.total ? d.total + ' canales repetidos revisados · se dejó la señal que funciona' + (d.fixed ? ' (' + d.fixed + ' cambiadas)' : '') : 'No hay canales repetidos entre tus listas.';
+    return '<div class="panel glass"><h2>Canales repetidos</h2><p>Si un canal está en varias listas, la app prueba todas sus señales y se queda con la que responde más rápido. Las que no funcionan se descartan; las demás quedan de respaldo por si la principal se cae.</p>' +
+      '<div class="line"><div class="t"><b id="dupesTxt">' + esc(txt) + '</b><span>Se vuelve a revisar cada 6 horas</span></div><button class="btn ghost sm f" data-act="checkDupes"' + (d.running ? ' disabled' : '') + '>' + IC.refresh + 'Verificar ahora</button></div></div>';
+  }
   SETTINGS.lists = function () {
-    return '<div class="panel glass"><h2>Tus listas</h2><p>Todo el contenido de tus listas se combina: los canales repetidos aparecen una sola vez y guardan las señales alternativas.</p>' +
+    if (!MV.acct.canEdit()) {
+      return '<div class="panel glass"><h2>Listas</h2><p>Las listas y claves las administra ' + esc((window.MV_CONFIG || {}).admin ? 'el superadministrador' : 'el administrador') + '. Se cargan solas en este equipo.</p>' +
+        (S.lists.length ? S.lists.map(function (l) { return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.type === 'xtream' ? 'Xtream Codes' : 'Lista M3U') + ' · ' + (l.count || 0) + ' elementos</span></div></div>'; }).join('') : '<p class="muted">Aún no hay listas.</p>') +
+        '<div class="btns" style="margin-top:14px"><button class="btn ghost f" data-act="reloadAll">' + IC.refresh + 'Actualizar todo</button></div></div>' + dupesPanel();
+    }
+    return '<div class="panel glass"><h2>Tus listas</h2><p>Todo el contenido de tus listas se combina: los canales repetidos aparecen una sola vez y se queda la señal que funciona.' + (MV.acct.isAdmin() ? ' <b>Eres superadministrador:</b> lo que cambies aquí llega a todos los usuarios (las listas en archivo solo quedan en este equipo; usa enlaces para compartirlas).' : '') + '</p>' +
       (S.lists.length ? S.lists.map(function (l) {
         return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.type === 'xtream' ? 'Xtream Codes · ' + esc(l.host) : l.type === 'file' ? 'Archivo' : esc(l.url)) + ' · ' + (l.count || 0) + ' elementos' + (l.epg ? ' · con guía' : '') + (l.error ? ' · ⚠ ' + esc(l.error) : '') + '</span></div>' +
           '<button class="toggle f' + (l.enabled !== false ? ' on' : '') + '" data-act="listToggle" data-arg="' + l.id + '" aria-label="Activar lista"></button>' +
           '<button class="iconbtn f" data-act="listEpg" data-arg="' + l.id + '" aria-label="Guía EPG">' + IC.guide + '</button>' +
           '<button class="iconbtn f" data-act="listDelete" data-arg="' + l.id + '" aria-label="Eliminar">' + IC.trash + '</button></div>';
       }).join('') : '<p class="muted">No has agregado listas.</p>') +
-      '<div class="btns" style="margin-top:14px"><button class="btn f" data-act="addList">' + IC.plus + 'Agregar lista</button><button class="btn ghost f" data-act="presets">Canales gratis</button><button class="btn ghost f" data-act="reloadAll">' + IC.refresh + 'Actualizar todo</button></div></div>';
+      '<div class="btns" style="margin-top:14px"><button class="btn f" data-act="addList">' + IC.plus + 'Agregar lista</button><button class="btn ghost f" data-act="presets">Canales gratis</button><button class="btn ghost f" data-act="reloadAll">' + IC.refresh + 'Actualizar todo</button></div></div>' + dupesPanel();
+  };
+  SETTINGS.users = function () {
+    var cfg = MV.acct.config || {}, list = cfg.allowed || [];
+    return '<div class="panel glass"><h2>Usuarios</h2><p>Quienes estén en esta lista entran con su cuenta de Google y ven todo tu contenido ya cargado. No pueden cambiar listas ni claves.</p>' +
+      '<div class="line"><div class="t"><b>Cualquier cuenta de Google puede entrar</b><span>Si lo activas, no hace falta agregar correos (cualquiera con la app vería tus listas)</span></div><button class="toggle f' + (cfg.open ? ' on' : '') + '" data-act="acctOpen"></button></div>' +
+      (list.length ? list.map(function (e) { return '<div class="line"><div class="t"><b>' + esc(e) + '</b><span>Usuario</span></div><button class="iconbtn f" data-act="acctRevoke" data-arg="' + esc(e) + '" aria-label="Quitar">' + IC.trash + '</button></div>'; }).join('') : '<p class="muted">Aún no has agregado usuarios.</p>') +
+      '<label class="field">Correo de Gmail del nuevo usuario<input class="in f" id="acctMail" type="email" autocomplete="off" placeholder="nombre@gmail.com"></label><div class="btns"><button class="btn f" data-act="acctAllow">' + IC.plus + 'Agregar usuario</button></div></div>';
+  };
+  SETTINGS.account = function () {
+    var u = MV.acct.user();
+    return '<div class="panel glass"><h2>Cuenta</h2>' +
+      (u ? '<div class="line"><div class="t"><b>' + esc(u.email || '') + '</b><span>' + (MV.acct.isAdmin() ? 'Superadministrador · puedes cambiar listas, claves y usuarios' : 'Usuario · el contenido lo administra el superadministrador') + '</span></div><button class="btn ghost sm f" data-act="loginOut">Cerrar sesión</button></div>' +
+        '<p>Perfiles, favoritos, historial y “continuar viendo” se sincronizan con esta cuenta en la TV, el celular y la tablet.</p>' +
+        '<div class="line"><div class="t"><b>Nombre de este dispositivo</b></div><button class="btn ghost sm f" data-act="deviceName">' + esc(P.deviceName) + '</button><button class="btn sm f" data-act="syncNow">Sincronizar ahora</button></div>'
+        : '<p>No has iniciado sesión.</p>') + '</div>';
   };
   SETTINGS.profiles = function () {
     return '<div class="panel glass"><h2>Perfiles</h2>' + S.profiles.map(function (p) {
@@ -630,7 +702,8 @@
   };
   SETTINGS.meta = function () {
     return '<div class="panel glass"><h2>Sinopsis y carátulas automáticas</h2><p>Para películas y series se usa TMDB (gratis para uso personal; crea tu clave en themoviedb.org › Ajustes › API). Para anime se usa MyAnimeList a través de Jikan, sin clave.</p>' +
-      '<label class="field">Clave de TMDB (API Key o token de lectura)<input class="in f" id="tmdbKey" value="' + esc(P.tmdbKey || '') + '" autocomplete="off"></label><div class="btns"><button class="btn f" data-act="saveTmdb">Guardar</button><button class="btn ghost f" data-act="clearMeta">Volver a buscar todas las fichas</button></div>' +
+      (MV.acct.canEdit() ? '<label class="field">Clave de TMDB (API Key o token de lectura)' + (MV.acct.isAdmin() ? ' · se comparte con todos los usuarios' : '') + '<input class="in f" id="tmdbKey" value="' + esc(P.tmdbKey || '') + '" autocomplete="off"></label><div class="btns"><button class="btn f" data-act="saveTmdb">Guardar</button><button class="btn ghost f" data-act="clearMeta">Volver a buscar todas las fichas</button></div>'
+        : '<div class="line"><div class="t"><b>' + (P.tmdbKey ? 'Clave configurada por el administrador' : 'El administrador aún no ha puesto la clave') + '</b></div><button class="btn ghost sm f" data-act="clearMeta">Volver a buscar las fichas</button></div>') +
       '<p style="margin-top:14px;font-size:12px">Este producto usa la API de TMDB pero no está respaldado ni certificado por TMDB.</p></div>';
   };
   SETTINGS.about = function () {
@@ -849,7 +922,26 @@
     },
     pin: function (d) { MV._pin && MV._pin(d); },
     // Listas
-    addList: function () { addListDialog('url'); },
+    addList: function () { if (!MV.acct.canEdit()) return MV.toast('Solo el administrador puede agregar listas'); addListDialog('url'); },
+    checkDupes: function () { MV.checkDupes(true); MV.toast('Probando las señales de los canales repetidos…'); setTimeout(MV.rerender, 300); },
+    loginGoogle: function () {
+      loginBusy = true; MV.acct.error = ''; MV.rerender();
+      MV.acct.signInGoogle().then(afterLogin).catch(loginFail);
+    },
+    loginCode: function () {
+      MV.acct.error = '';
+      MV.acct.startCode(function (c) { loginCode = c; MV.rerender(); }).then(afterLogin).catch(function (e) { loginCode = null; loginFail(e); });
+    },
+    loginCancel: function () { MV.acct.stopCode(); loginCode = null; MV.rerender(); },
+    loginRetry: function () { MV.acct.status = 'pending'; MV.acct.signOut().then(function () { MV.acct.error = 'Vuelve a entrar con tu cuenta.'; MV.go('login', null, { replace: true }); }); },
+    loginOut: function () { MV.confirm('¿Cerrar sesión en este equipo?', 'Tus datos quedan guardados en tu cuenta.', 'Cerrar sesión').then(function (y) { if (!y) return; MV.acct.signOut().then(function () { S.pid = null; MV.save('pid', null); MV.go('login', null, { replace: true }); }); }); },
+    acctAllow: function () {
+      var m = (document.getElementById('acctMail').value || '').trim().toLowerCase();
+      if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(m)) return MV.toast('Escribe un correo válido');
+      MV.acct.allow(m).then(function () { MV.toast('Usuario agregado'); MV.rerender(); });
+    },
+    acctRevoke: function (e) { MV.confirm('¿Quitar el acceso a ' + e + '?', '', 'Quitar').then(function (y) { if (y) MV.acct.revoke(e).then(MV.rerender); }); },
+    acctOpen: function () { var c = MV.acct.config || {}; MV.acct.setOpen(!c.open).then(MV.rerender); },
     listTab: function (t) { MV.closeModal(true); addListDialog(t); },
     listSave: function (tab) {
       var name = (document.getElementById('lName') || {}).value;
@@ -881,6 +973,7 @@
       }
     },
     presets: function () {
+      if (!MV.acct.canEdit()) return MV.toast('Solo el administrador puede agregar listas');
       MV.modal('<h2>Canales gratis</h2><p>Listas públicas de canales que se emiten gratis de forma legal.</p>' + D.PRESETS.map(function (p, i) {
         var has = S.lists.some(function (l) { return l.url === p.url; });
         return '<div class="line"><div class="t"><b>' + esc(p.name) + '</b><span>' + esc(p.note) + '</span></div><button class="btn sm f" data-act="presetAdd" data-arg="' + i + '"' + (has ? ' disabled' : '') + '>' + (has ? 'Agregada' : 'Agregar') + '</button></div>';
@@ -890,8 +983,10 @@
       var p = D.PRESETS[+i]; MV.closeModal(true); MV.toast('Agregando “' + p.name + '”…');
       MV.addList({ type: 'url', name: p.name, url: p.url, preset: true }).then(function () { MV.rerender(); MV.toast('Lista agregada'); }).catch(function (e) { MV.toast(e.message); });
     },
-    listToggle: function (id) { var l = S.lists.find(function (x) { return x.id === id; }); l.enabled = l.enabled === false; l.updatedAt = Date.now(); MV.saveLists(); MV.reloadCatalog(false).then(MV.rerender); MV.rerender(); },
-    listDelete: function (id) { MV.confirm('¿Eliminar esta lista?', '', 'Eliminar').then(function (y) { if (y) MV.removeList(id).then(MV.rerender); }); },
+    listToggle: function (id) {
+      if (!MV.acct.canEdit()) return; var l = S.lists.find(function (x) { return x.id === id; }); l.enabled = l.enabled === false; l.updatedAt = Date.now(); MV.saveLists(); MV.reloadCatalog(false).then(MV.rerender); MV.rerender(); },
+    listDelete: function (id) {
+      if (!MV.acct.canEdit()) return; MV.confirm('¿Eliminar esta lista?', '', 'Eliminar').then(function (y) { if (y) MV.removeList(id).then(MV.rerender); }); },
     listEpg: function (id) {
       var l = S.lists.find(function (x) { return x.id === id; });
       MV.prompt('Guía EPG de “' + l.name + '”', 'Enlace XMLTV (.xml o .xml.gz)', l.epg || '', 'url').then(function (v) {
@@ -1022,9 +1117,19 @@
   MV.on('epg', function () { if (view.name === 'guide' || view.name === 'live' || view.name === 'home') MV.rerender(); });
   MV.on('synced', function () { if (view.name === 'home' || view.name === 'history' || view.name === 'favs') MV.rerender(); });
   MV.on('sync', function () { if (view.name === 'settings') MV.rerender(); });
+  MV.on('dupes', function () {
+    var el = document.getElementById('dupesTxt');
+    if (el && view.name === 'settings') { var d = S.dupes; el.textContent = d.running ? 'Probando señales… ' + d.done + ' de ' + d.total : d.total + ' canales repetidos revisados · se dejó la señal que funciona' + (d.fixed ? ' (' + d.fixed + ' cambiadas)' : ''); }
+  });
+  MV.on('acct', function () {
+    if (view.name === 'login' && MV.acct.status === 'denied') MV.rerender();
+    if (view.name !== 'login' && MV.acct.status === 'denied') MV.go('login', null, { replace: true });
+    if (view.name === 'settings') MV.rerender();
+  });
   MV.onStorageChanged = function () { if (view.name === 'games') { MV.toast('Unidad conectada: buscando juegos…'); ACT.scanRoms(); } };
   MV.onResume = function () { if (view.name === 'games') MV.rerender(); };
   MV.onOpenFile = function (d) {
+    if (!MV.acct.canEdit()) { MV.toast('Solo el administrador puede agregar listas'); return; }
     fetch(d.path).then(function (r) { return r.text(); }).then(function (txt) {
       var l = { id: 'l' + Date.now().toString(36), type: 'file', name: 'Lista abierta', enabled: true, added: Date.now(), updatedAt: Date.now() };
       return MV.idbSet('raw:' + l.id, txt).then(function () { S.lists.push(l); MV.saveLists(); return MV.reloadCatalog(true); });
@@ -1042,7 +1147,17 @@
   function boot() {
     MV.applyLook();
     render();
+    if (MV.acct.managed()) {
+      MV.acct.start().then(function (u) {
+        if (!u) { MV.go('login', null, { replace: true }); return; }
+        continueBoot();
+      });
+      return;
+    }
     if (MV.sync.configured()) MV.sync.load().catch(function () {});
+    continueBoot();
+  }
+  function continueBoot() {
     if (!S.profiles.length) { editSel = null; MV.go('profileEdit', null, { replace: true }); }
     else if (S.profiles.length === 1 && !S.profiles[0].pin) { S.pid = S.profiles[0].id; MV.save('pid', S.pid); MV.go(S.profiles[0].kids ? 'kids' : 'home', null, { replace: true }); }
     else MV.go('profiles', null, { replace: true });

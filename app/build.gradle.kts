@@ -83,6 +83,11 @@ dependencies {
     // Decodificador FFmpeg (Jellyfin): audio AC3/E-AC3/MP2/DTS que muchos equipos no traen
     implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.6.1+2")
 
+    // Inicio de sesión con Google
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
+
     // Servidor local para usar el celular como mando
     implementation("org.nanohttpd:nanohttpd-websocket:2.3.1")
 
