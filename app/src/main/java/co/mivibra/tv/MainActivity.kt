@@ -148,7 +148,8 @@ class MainActivity : ComponentActivity() {
         pending.remove(requestCode)?.invoke(resultCode, data)
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+    @Deprecated("Deprecated in Java")
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         js("window.MV&&MV.onStorageChanged&&MV.onStorageChanged()")
     }
