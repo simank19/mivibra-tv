@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0D0C0B">
+<title>MiVibra TV · Mando</title>
+<style>
+:root{--orange:#FF6900;--night:#0D0C0B;--text:#F3EFEA;--muted:#A39C94;--glass:rgba(255,255,255,.08);--line:rgba(255,255,255,.16)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+html,body{margin:0;height:100%;overflow:hidden;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--text);background:var(--night);touch-action:none}
+body.local{background:transparent}
+.bg{position:fixed;inset:0;pointer-events:none;overflow:hidden}
+.bg i{position:absolute;border-radius:50%;filter:blur(40px);opacity:.5;animation:drift 14s ease-in-out infinite}
+.bg i:nth-child(1){width:360px;height:360px;background:#FF6900;left:-120px;top:-120px}
+.bg i:nth-child(2){width:300px;height:300px;background:#B34A00;right:-100px;bottom:-80px;animation-duration:19s;animation-direction:reverse}
+@keyframes drift{50%{transform:translate(40px,30px) scale(1.15)}}
+body.local .bg{display:none}
+.glass{background:var(--glass);backdrop-filter:blur(18px) saturate(150%);-webkit-backdrop-filter:blur(18px) saturate(150%);border:1px solid var(--line)}
+header{position:fixed;left:0;right:0;top:0;display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;z-index:5}
+header img{width:28px;height:28px}
+header b{font-size:17px}
+header .st{margin-left:auto;font-size:12px;padding:6px 10px;border-radius:999px;display:flex;align-items:center;gap:6px}
+.dot{width:8px;height:8px;border-radius:50%;background:#E0447C}
+.ok .dot{background:#3BD16F}
+body.local header{display:none}
+.tabs{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom));display:flex;gap:4px;padding:4px;border-radius:999px;z-index:5}
+.tabs button{border:0;background:transparent;color:var(--text);font:600 14px system-ui;padding:10px 16px;border-radius:999px}
+.tabs button.on{background:var(--orange);color:var(--night)}
+body.local .tabs{display:none}
+.view{position:fixed;inset:0;display:none}
+.view.on{display:block}
+button.k{border:0;color:var(--text);font:700 18px system-ui;touch-action:none;transition:transform .08s,background .12s}
+button.k.down{transform:scale(.9);background:rgba(255,105,0,.45)!important}
+/* ---- Control remoto ---- */
+#remote{display:none;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:70px 20px 90px}
+#remote.on{display:flex}
+.dpad{position:relative;width:min(78vw,300px);aspect-ratio:1;border-radius:50%}
+.dpad .k{position:absolute;background:transparent;font-size:26px}
+.dpad .u{left:33%;right:33%;top:0;height:33%}
+.dpad .d{left:33%;right:33%;bottom:0;height:33%}
+.dpad .l{top:33%;bottom:33%;left:0;width:33%}
+.dpad .r{top:33%;bottom:33%;right:0;width:33%}
+.dpad .c{left:30%;top:30%;width:40%;height:40%;border-radius:50%;background:var(--orange);color:var(--night);font-size:20px;box-shadow:0 10px 30px rgba(255,105,0,.4)}
+.row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+.row .k{min-width:84px;height:54px;border-radius:18px;font-size:15px;padding:0 14px}
+.typ{display:flex;gap:8px;width:min(92vw,420px)}
+.typ input{flex:1;height:50px;border-radius:16px;border:1px solid var(--line);background:rgba(0,0,0,.35);color:var(--text);padding:0 14px;font:500 16px system-ui;user-select:text;-webkit-user-select:text}
+.typ button{height:50px;border-radius:16px;border:0;background:var(--orange);color:var(--night);font:700 15px system-ui;padding:0 16px}
+/* ---- Mando de juego ---- */
+#game{padding:calc(54px + env(safe-area-inset-top)) 12px calc(64px + env(safe-area-inset-bottom))}
+body.local #game{padding:10px}
+.gp{position:absolute;inset:0;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:inherit}
+.side{position:relative;height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:14px}
+.shoulders{position:absolute;top:0;left:0;right:0;display:flex;gap:10px;justify-content:space-between}
+.side.right .shoulders{flex-direction:row-reverse}
+.shoulders .k{flex:1;height:48px;border-radius:14px;font-size:15px}
+.stick{position:relative;width:min(36vh,190px);aspect-ratio:1;border-radius:50%;touch-action:none}
+.stick .knob{position:absolute;left:50%;top:50%;width:42%;height:42%;margin:-21% 0 0 -21%;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ffb98a,#FF6900 60%,#B34A00);box-shadow:0 8px 20px rgba(0,0,0,.45);transition:transform .05s}
+.stick.small{width:min(24vh,120px)}
+.cross{position:relative;width:min(38vh,190px);aspect-ratio:1}
+.cross .k{position:absolute;width:34%;height:34%;border-radius:12px;font-size:20px}
+.cross .u{left:33%;top:0}.cross .d{left:33%;bottom:0}.cross .l{left:0;top:33%}.cross .r{right:0;top:33%}
+.abxy{position:relative;width:min(40vh,200px);aspect-ratio:1}
+.abxy .k{position:absolute;width:36%;height:36%;border-radius:50%;font-size:22px}
+.abxy .y{left:32%;top:0;background:rgba(47,111,235,.55)}
+.abxy .a{right:0;top:32%;background:rgba(224,68,124,.6)}
+.abxy .b{left:32%;bottom:0;background:rgba(59,165,92,.6)}
+.abxy .x{left:0;top:32%;background:rgba(217,162,11,.6)}
+.mid{display:flex;flex-direction:column;align-items:center;gap:12px}
+.mid .k{width:88px;height:38px;border-radius:999px;font-size:12px;letter-spacing:1px}
+.mid .toggle{font-size:11px;width:auto;padding:0 12px}
+body.local .glass{background:rgba(255,255,255,.12);backdrop-filter:none;-webkit-backdrop-filter:none}
+body.local button.k{opacity:.8}
+.rot{position:fixed;inset:0;display:none;align-items:center;justify-content:center;text-align:center;padding:30px;font:600 18px system-ui;z-index:9;background:rgba(13,12,11,.92)}
+@media (orientation:portrait){#game.on ~ .rot.need{display:flex}}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<div class="bg"><i></i><i></i></div>
+<header>
+  <img src="/isotipo.svg" alt="">
+  <b>MiVibra TV</b>
+  <span class="st glass" id="st"><span class="dot"></span><span id="stt">Conectando…</span></span>
+</header>
+
+<section class="view" id="remote">
+  <div class="dpad glass">
+    <button class="k u" data-nav="UP" aria-label="Arriba">▲</button>
+    <button class="k l" data-nav="LEFT" aria-label="Izquierda">◀</button>
+    <button class="k c" data-nav="OK">OK</button>
+    <button class="k r" data-nav="RIGHT" aria-label="Derecha">▶</button>
+    <button class="k d" data-nav="DOWN" aria-label="Abajo">▼</button>
+  </div>
+  <div class="row">
+    <button class="k glass" data-nav="BACK">Atrás</button>
+    <button class="k glass" data-nav="HOME">Inicio</button>
+    <button class="k glass" data-nav="MENU">Menú</button>
+  </div>
+  <div class="row">
+    <button class="k glass" data-nav="CHUP">Canal +</button>
+    <button class="k glass" data-nav="PLAYPAUSE">⏯</button>
+    <button class="k glass" data-nav="CHDOWN">Canal −</button>
+  </div>
+  <form class="typ" id="typ">
+    <input id="txt" placeholder="Escribir en la TV (buscador)" autocomplete="off">
+    <button type="submit">Enviar</button>
+  </form>
+</section>
+
+<section class="view" id="game">
+  <div class="gp">
+    <div class="side left">
+      <div class="shoulders"><button class="k glass" data-g="L2">L2</button><button class="k glass" data-g="L1">L1</button></div>
+      <div class="cross" id="cross">
+        <button class="k glass u" data-g="UP">▲</button>
+        <button class="k glass l" data-g="LEFT">◀</button>
+        <button class="k glass r" data-g="RIGHT">▶</button>
+        <button class="k glass d" data-g="DOWN">▼</button>
+      </div>
+      <div class="stick glass hidden" id="stickL" data-s="l"><div class="knob"></div></div>
+    </div>
+    <div class="mid">
+      <button class="k glass toggle" id="swap">Joystick</button>
+      <button class="k glass" data-g="SELECT">SELECT</button>
+      <button class="k glass" data-g="START">START</button>
+      <button class="k glass" id="menuBtn">MENÚ</button>
+    </div>
+    <div class="side right">
+      <div class="shoulders"><button class="k glass" data-g="R2">R2</button><button class="k glass" data-g="R1">R1</button></div>
+      <div class="abxy">
+        <button class="k y" data-g="Y">Y</button>
+        <button class="k x" data-g="X">X</button>
+        <button class="k a" data-g="A">A</button>
+        <button class="k b" data-g="B">B</button>
+      </div>
+      <div class="stick glass small" id="stickR" data-s="r"><div class="knob"></div></div>
+    </div>
+  </div>
+</section>
+<div class="rot" id="rot">Gira el celular en horizontal para jugar</div>
+
+<nav class="tabs glass">
+  <button id="tRemote" class="on">Control</button>
+  <button id="tGame">Mando de juego</button>
+</nav>
+
+<script>
+(function () {
+  var local = /[?&]local=1/.test(location.search);
+  var bridge = window.PadBridge;
+  var ws = null, connected = false, mode = 'remote', forced = null;
+  if (local) document.body.classList.add('local');
+
+  function vib(ms) { try { navigator.vibrate && navigator.vibrate(ms || 12); } catch (e) {} }
+  function send(o) {
+    if (local) {
+      if (!bridge) return;
+      if (o.t === 'k') bridge.key(o.c, !!o.d);
+      else if (o.t === 'a') bridge.axis(o.s, o.x, o.y);
+      return;
+    }
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify(o));
+  }
+
+  // ---- Conexión con la TV ----
+  function setStatus(ok, txt) {
+    var st = document.getElementById('st');
+    st.classList.toggle('ok', ok);
+    document.getElementById('stt').textContent = txt;
+  }
+  function connect() {
+    try { ws = new WebSocket('ws://' + location.host + '/'); } catch (e) { setTimeout(connect, 2000); return; }
+    ws.onopen = function () {
+      connected = true; setStatus(true, 'Conectado');
+      var n = localStorage.getItem('mvPadName');
+      if (n) send({ t: 'name', v: n });
+    };
+    ws.onmessage = function (ev) {
+      var m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+      if (m.t === 'hello') setStatus(true, 'Jugador ' + (m.slot + 1));
+      if (m.mode) { mode = m.mode; if (!forced) show(mode); }
+    };
+    ws.onclose = function () { connected = false; setStatus(false, 'Reconectando…'); setTimeout(connect, 1500); };
+    ws.onerror = function () { try { ws.close(); } catch (e) {} };
+  }
+  setInterval(function () { send({ t: 'ping' }); }, 8000);
+
+  function show(which) {
+    document.getElementById('remote').classList.toggle('on', which === 'remote');
+    document.getElementById('game').classList.toggle('on', which === 'game');
+    document.getElementById('tRemote').classList.toggle('on', which === 'remote');
+    document.getElementById('tGame').classList.toggle('on', which === 'game');
+    document.getElementById('rot').classList.toggle('need', which === 'game' && !local);
+  }
+  document.getElementById('tRemote').onclick = function () { forced = 'remote'; show('remote'); };
+  document.getElementById('tGame').onclick = function () { forced = 'game'; show('game'); };
+
+  // ---- Botones (multitáctil) ----
+  function bindPress(el, onDown, onUp) {
+    var active = false;
+    el.addEventListener('pointerdown', function (e) {
+      e.preventDefault(); el.setPointerCapture && el.setPointerCapture(e.pointerId);
+      if (active) return; active = true; el.classList.add('down'); vib(); onDown();
+    });
+    function up(e) { if (!active) return; active = false; el.classList.remove('down'); onUp && onUp(); }
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+    el.addEventListener('lostpointercapture', up);
+    el.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  }
+
+  // Control remoto con repetición al mantener presionado
+  Array.prototype.forEach.call(document.querySelectorAll('[data-nav]'), function (el) {
+    var t1 = null, t2 = null, key = el.getAttribute('data-nav');
+    var repeat = /UP|DOWN|LEFT|RIGHT/.test(key);
+    bindPress(el, function () {
+      send({ t: 'k', c: key, d: 1 });
+      if (repeat) t1 = setTimeout(function () { t2 = setInterval(function () { send({ t: 'k', c: key, d: 1 }); }, 130); }, 420);
+    }, function () { clearTimeout(t1); clearInterval(t2); });
+  });
+
+  // Botones de juego
+  Array.prototype.forEach.call(document.querySelectorAll('[data-g]'), function (el) {
+    var key = el.getAttribute('data-g');
+    bindPress(el, function () { send({ t: 'k', c: key, d: 1 }); }, function () { send({ t: 'k', c: key, d: 0 }); });
+  });
+
+  document.getElementById('menuBtn').onclick = function () {
+    if (local && bridge) bridge.menu(); else send({ t: 'k', c: 'BACK', d: 1 });
+  };
+
+  // ---- Joysticks analógicos ----
+  function bindStick(el) {
+    var knob = el.querySelector('.knob'), stick = el.getAttribute('data-s'), id = null, last = 0, lx = 0, ly = 0;
+    function emit(x, y, force) {
+      var now = Date.now();
+      if (!force && now - last < 25) return;
+      if (Math.abs(x - lx) < 0.02 && Math.abs(y - ly) < 0.02 && !force) return;
+      last = now; lx = x; ly = y;
+      send({ t: 'a', s: stick, x: +x.toFixed(3), y: +y.toFixed(3) });
+    }
+    function move(e) {
+      var r = el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, rad = r.width / 2;
+      var dx = (e.clientX - cx) / rad, dy = (e.clientY - cy) / rad, len = Math.sqrt(dx * dx + dy * dy);
+      if (len > 1) { dx /= len; dy /= len; }
+      if (len < 0.12) { dx = 0; dy = 0; }
+      knob.style.transform = 'translate(' + (dx * rad * 0.62) + 'px,' + (dy * rad * 0.62) + 'px)';
+      emit(dx, dy);
+    }
+    el.addEventListener('pointerdown', function (e) { e.preventDefault(); id = e.pointerId; el.setPointerCapture && el.setPointerCapture(id); vib(8); move(e); });
+    el.addEventListener('pointermove', function (e) { if (e.pointerId === id) move(e); });
+    function end(e) { if (e.pointerId !== id) return; id = null; knob.style.transform = ''; emit(0, 0, true); }
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+  }
+  bindStick(document.getElementById('stickL'));
+  bindStick(document.getElementById('stickR'));
+
+  // Cruceta o joystick en el lado izquierdo
+  var useStick = localStorage.getItem('mvPadStick') === '1';
+  function applySwap() {
+    document.getElementById('cross').classList.toggle('hidden', useStick);
+    document.getElementById('stickL').classList.toggle('hidden', !useStick);
+    document.getElementById('swap').textContent = useStick ? 'Cruceta' : 'Joystick';
+  }
+  document.getElementById('swap').onclick = function () { useStick = !useStick; localStorage.setItem('mvPadStick', useStick ? '1' : '0'); applySwap(); };
+  applySwap();
+
+  // Texto para el buscador de la TV
+  document.getElementById('typ').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var v = document.getElementById('txt').value;
+    send({ t: 'text', v: v });
+    vib(20);
+  });
+
+  if (local) { show('game'); }
+  else { show('remote'); connect(); }
+})();
+</script>
+</body>
+</html>
