@@ -71,7 +71,7 @@
   MV._cb = function (id, res) {
     var w = waiting[id]; if (!w) { if (id === 'open-intent' && res.ok) MV.onOpenFile && MV.onOpenFile(res.data); return; }
     delete waiting[id]; delete progressCb[id];
-    if (res.ok) w.res(res.data); else w.rej(new Error(typeof res.data === 'string' ? res.data : 'Error'));
+    if (res.ok) w.res(res.data); else w.rej(new Error(typeof res.data === 'string' ? res.data : (res.data && res.data.status ? 'HTTP ' + res.data.status : 'Error')));
   };
   MV._progress = function (id, pct) { var f = progressCb[id]; if (f) f(pct); };
   function call(method, args, onProgress) {

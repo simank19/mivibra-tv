@@ -178,19 +178,44 @@
   }
 
   // ---------- Xtream Codes ----------
+  /** Solo protocolo, servidor y puerto: acepta que peguen http://srv:8080/get.php?… o …/player_api.php */
   function xtBase(list) {
-    var h = String(list.host || '').trim().replace(/\/+$/, '');
+    var h = String(list.host || '').trim().replace(/\s+/g, '');
     if (!/^https?:\/\//i.test(h)) h = 'http://' + h;
-    return h;
+    var m = h.match(/^(https?:\/\/[^\/?#]+)/i);
+    return m ? m[1] : h.replace(/\/+$/, '');
   }
+  function xtHdr(list) { return list.ua ? { 'User-Agent': list.ua } : null; }
+  function xtGet(list, action, extra, big) { return MV.getJSON(xtApi(list, action, extra), xtHdr(list), big); }
   function xtApi(list, action, extra) {
     return xtBase(list) + '/player_api.php?username=' + encodeURIComponent(list.user) + '&password=' + encodeURIComponent(list.pass) + (action ? '&action=' + action : '') + (extra || '');
   }
+  /** Inicia sesión probando también como reproductores conocidos (algunos servidores bloquean apps desconocidas). */
   MV.xtLogin = function (list) {
-    return MV.getJSON(xtApi(list, '')).then(function (j) {
-      if (!j || !j.user_info || +j.user_info.auth !== 1) throw new Error('Usuario o contraseña incorrectos');
-      return j;
-    });
+    list.host = xtBase(list); list.user = String(list.user || '').trim(); list.pass = String(list.pass || '').trim();
+    var agents = ['', 'IPTVSmartersPro', 'VLC/3.0.20 LibVLC/3.0.20', 'okhttp/4.12.0'], i = 0, lastErr = null;
+    function attempt() {
+      if (i >= agents.length) throw lastErr || new Error('No se pudo conectar al servidor');
+      var ua = agents[i++];
+      return MV.getText(xtApi(list, ''), ua ? { 'User-Agent': ua } : null).then(function (t) {
+        var j; try { j = JSON.parse(t); } catch (e) { lastErr = new Error('El servidor respondió, pero no como Xtream. Revisa la dirección y el puerto.'); return attempt(); }
+        if (!j || !j.user_info) { lastErr = new Error('El servidor respondió, pero no como Xtream. Revisa la dirección y el puerto.'); return attempt(); }
+        var st = String(j.user_info.status || '').toLowerCase();
+        if (+j.user_info.auth !== 1) throw new Error('Usuario o contraseña incorrectos');
+        if (st && st !== 'active') throw new Error(st === 'expired' ? 'La cuenta está vencida' : st === 'banned' ? 'La cuenta está bloqueada por el proveedor' : st === 'disabled' ? 'La cuenta está desactivada' : 'Cuenta en estado: ' + j.user_info.status);
+        if (ua) list.ua = ua; else delete list.ua;
+        return j;
+      }, function (e) {
+        var m = String(e && e.message || '');
+        lastErr = /40[13]/.test(m) ? new Error('El servidor rechazó la conexión (' + m + '). Puede que tu proveedor solo permita ciertas apps o que la cuenta tenga el máximo de conexiones.')
+          : /UnknownHost|resolve|ENOTFOUND/i.test(m) ? new Error('No existe ese servidor. Revisa la dirección.')
+          : /timeout|timed out|ConnectException|refused|failed to connect/i.test(m) ? new Error('El servidor no responde. Revisa la dirección, el puerto y tu internet.')
+          : new Error('No se pudo conectar: ' + (m || 'error desconocido'));
+        if (/Usuario o contraseña|vencida|bloqueada|desactivada|estado/.test(m)) throw e;
+        return attempt();
+      });
+    }
+    return Promise.resolve().then(attempt);
   };
   function catMap(arr) { var m = {}; (arr || []).forEach(function (c) { m[c.category_id] = c.category_name; }); return m; }
 
@@ -200,19 +225,19 @@
     if (!list.epg) list.epg = base + '/xmltv.php?username=' + u + '&password=' + p;
     function safe(pr) { return pr.catch(function () { return []; }); }
     return Promise.all([
-      safe(MV.getJSON(xtApi(list, 'get_live_categories'))),
-      safe(MV.getJSON(xtApi(list, 'get_live_streams'), null, true)),
-      safe(MV.getJSON(xtApi(list, 'get_vod_categories'))),
-      safe(MV.getJSON(xtApi(list, 'get_vod_streams'), null, true)),
-      safe(MV.getJSON(xtApi(list, 'get_series_categories'))),
-      safe(MV.getJSON(xtApi(list, 'get_series'), null, true))
+      safe(xtGet(list, 'get_live_categories')),
+      safe(xtGet(list, 'get_live_streams', '', true)),
+      safe(xtGet(list, 'get_vod_categories')),
+      safe(xtGet(list, 'get_vod_streams', '', true)),
+      safe(xtGet(list, 'get_series_categories')),
+      safe(xtGet(list, 'get_series', '', true))
     ]).then(function (r) {
       var lc = catMap(r[0]), vc = catMap(r[2]), sc = catMap(r[4]), out = [];
       (r[1] || []).forEach(function (c) {
-        out.push(tags({ key: 'live:' + (c.epg_channel_id ? String(c.epg_channel_id).toLowerCase() : MV.norm(c.name)), type: 'live', name: c.name, logo: c.stream_icon, group: lc[c.category_id] || 'En vivo', tvg: c.epg_channel_id || '', num: c.num, url: base + '/live/' + u + '/' + p + '/' + c.stream_id + '.' + fmt, list: list.id }));
+        out.push(tags({ key: 'live:' + (c.epg_channel_id ? String(c.epg_channel_id).toLowerCase() : MV.norm(c.name)), type: 'live', name: c.name, logo: c.stream_icon, group: lc[c.category_id] || 'En vivo', tvg: c.epg_channel_id || '', num: c.num, url: base + '/live/' + u + '/' + p + '/' + c.stream_id + '.' + fmt, ua: list.ua || '', list: list.id }));
       });
       (r[3] || []).forEach(function (m) {
-        out.push(tags({ key: 'movie:' + MV.norm(m.name), type: 'movie', name: m.name, poster: m.stream_icon, group: vc[m.category_id] || 'Películas', url: base + '/movie/' + u + '/' + p + '/' + m.stream_id + '.' + (m.container_extension || 'mp4'), rating: m.rating, added: +m.added || 0, list: list.id }));
+        out.push(tags({ key: 'movie:' + MV.norm(m.name), type: 'movie', name: m.name, poster: m.stream_icon, group: vc[m.category_id] || 'Películas', url: base + '/movie/' + u + '/' + p + '/' + m.stream_id + '.' + (m.container_extension || 'mp4'), ua: list.ua || '', rating: m.rating, added: +m.added || 0, list: list.id }));
       });
       (r[5] || []).forEach(function (s) {
         out.push(tags({ key: 'series:' + MV.norm(s.name), type: 'series', name: s.name, poster: s.cover, group: sc[s.category_id] || 'Series', plot: s.plot, genre: s.genre || '', rating: s.rating, year: (s.releaseDate || s.release_date || '').slice(0, 4), xt: { list: list.id, id: s.series_id }, list: list.id }));
@@ -227,12 +252,12 @@
     var list = S.lists.find(function (l) { return l.id === item.xt.list; });
     if (!list) return Promise.resolve([]);
     var base = xtBase(list), u = encodeURIComponent(list.user), p = encodeURIComponent(list.pass);
-    return MV.getJSON(xtApi(list, 'get_series_info', '&series_id=' + item.xt.id)).then(function (j) {
+    return xtGet(list, 'get_series_info', '&series_id=' + item.xt.id).then(function (j) {
       var eps = [];
       var src = j.episodes || {};
       Object.keys(src).forEach(function (season) {
         (src[season] || []).forEach(function (e) {
-          eps.push({ season: +season, ep: +e.episode_num, title: e.title || ('Episodio ' + e.episode_num), url: base + '/series/' + u + '/' + p + '/' + e.id + '.' + (e.container_extension || 'mp4'), plot: e.info && e.info.plot, img: e.info && e.info.movie_image });
+          eps.push({ season: +season, ep: +e.episode_num, title: e.title || ('Episodio ' + e.episode_num), url: base + '/series/' + u + '/' + p + '/' + e.id + '.' + (e.container_extension || 'mp4'), ua: list.ua || '', plot: e.info && e.info.plot, img: e.info && e.info.movie_image });
         });
       });
       if (j.info) { item.plot = item.plot || j.info.plot; item.backdrop = item.backdrop || (j.info.backdrop_path && j.info.backdrop_path[0]); }

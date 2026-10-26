@@ -847,7 +847,7 @@
       ? '<p>Pega tus direcciones (una por línea) o elige tu archivo .txt. Puedes poner un nombre antes de cada una: <code>Mi lista, https://…</code>. Los enlaces de Xtream (get.php?username=…) se agregan como cuenta Xtream con películas y series.</p>' +
         '<label class="field">Direcciones<textarea class="in f" id="lMulti" rows="6" placeholder="https://…/lista1.m3u&#10;Deportes, https://…/lista2.m3u" data-autofocus></textarea></label><p class="muted" id="lMultiCount" style="font-size:13px;margin:-4px 0 8px"></p>'
       : tab === 'xtream'
-      ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi proveedor" data-autofocus></label><label class="field">Servidor<input class="in f" id="lHost" placeholder="http://servidor:puerto" autocomplete="off"></label><label class="field">Usuario<input class="in f" id="lUser" autocomplete="off"></label><label class="field">Contraseña<input class="in f" id="lPass" type="password"></label>'
+      ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi proveedor" data-autofocus></label><label class="field">Servidor<input class="in f" id="lHost" placeholder="http://servidor:puerto" autocomplete="off"></label><label class="field">Usuario<input class="in f" id="lUser" autocomplete="off"></label><label class="field">Contraseña<input class="in f" id="lPass" type="password"></label><p class="muted" style="font-size:13px;margin:-4px 0 8px">Servidor: solo la dirección y el puerto, por ejemplo http://servidor.com:8080</p><p id="lErr" style="color:#FF8A80;font-size:14px;margin:0 0 8px"></p>'
       : tab === 'file'
         ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Lista descargada" data-autofocus></label><p>Elige un archivo .m3u del dispositivo, una USB o el administrador de archivos.</p>'
         : '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi lista" data-autofocus></label><label class="field">Enlace de la lista M3U / M3U8<input class="in f" id="lUrl" placeholder="https://…/lista.m3u" autocomplete="off" inputmode="url"></label><label class="field">Guía EPG XMLTV (opcional)<input class="in f" id="lEpg" placeholder="https://…/guia.xml" autocomplete="off" inputmode="url"></label>';
@@ -1033,12 +1033,13 @@
         var l = { type: 'xtream', name: name || 'Xtream', host: document.getElementById('lHost').value.trim(), user: document.getElementById('lUser').value.trim(), pass: document.getElementById('lPass').value };
         if (!l.host || !l.user) { MV.toast('Completa servidor y usuario'); return; }
         MV.toast('Iniciando sesión…');
+        var errEl = document.getElementById('lErr'); if (errEl) errEl.textContent = '';
         MV.xtLogin(l).then(function (j) {
           MV.closeModal(true);
           var exp = j.user_info.exp_date ? new Date(+j.user_info.exp_date * 1000).toLocaleDateString('es-CO') : '';
           MV.toast('Conectado' + (exp ? ' · vence ' + exp : ''), 3500);
           return MV.addList(l);
-        }).then(function () { MV.rerender(); }).catch(function (e) { MV.toast(e.message, 4000); });
+        }).then(function () { MV.rerender(); }).catch(function (e) { var el = document.getElementById('lErr'); if (el) el.textContent = '⚠ ' + e.message; MV.toast(e.message, 6000); });
       } else if (tab === 'multi') {
         var parsed = MV.parseUrlList(document.getElementById('lMulti').value);
         if (parsed === null) { MV.toast('Eso es una lista M3U completa: usa la pestaña Archivo'); return; }
