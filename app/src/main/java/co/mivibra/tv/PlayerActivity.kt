@@ -28,6 +28,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.AspectRatioFrameLayout
@@ -60,7 +61,6 @@ class PlayerActivity : ComponentActivity() {
     private var audioLang = "es"
     private var subLang = ""
     private var retries = 0
-    private var altIndex = 0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -119,9 +119,19 @@ class PlayerActivity : ComponentActivity() {
 
     private fun current(): JSONObject = queue.optJSONObject(index) ?: JSONObject()
 
+    private lateinit var http: DefaultHttpDataSource.Factory
+
+    /** Formas de abrir un canal: la URL tal cual, forzando HLS, con otro User-Agent, .ts/.m3u8 y señales alternativas. */
+    private data class Attempt(val url: String, val forceHls: Boolean, val ua: String?)
+    private var attempts = listOf<Attempt>()
+    private var attemptIndex = 0
+    private var startPosition = 0L
+
+    private val vlcUa = "VLC/3.0.20 LibVLC/3.0.20"
+
     private fun createPlayer() {
         val first = current()
-        val http = DefaultHttpDataSource.Factory()
+        http = DefaultHttpDataSource.Factory()
             .setAllowCrossProtocolRedirects(true)
             .setConnectTimeoutMs(15000)
             .setReadTimeoutMs(20000)
@@ -129,7 +139,12 @@ class PlayerActivity : ComponentActivity() {
         val referer = first.optString("ref")
         if (referer.isNotBlank()) http.setDefaultRequestProperties(mapOf("Referer" to referer))
 
-        val p = ExoPlayer.Builder(this)
+        // FFmpeg primero para el audio: AC3/E-AC3/MP2/DTS suenan aunque el equipo no los soporte
+        val renderers = DefaultRenderersFactory(this)
+            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+            .setEnableDecoderFallback(true)
+
+        val p = ExoPlayer.Builder(this, renderers)
             .setMediaSourceFactory(DefaultMediaSourceFactory(this).setDataSourceFactory(http))
             .build()
         p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
@@ -143,27 +158,24 @@ class PlayerActivity : ComponentActivity() {
                 if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
                     p.seekToDefaultPosition(); p.prepare(); return
                 }
-                if (retries < 2) {
+                val transient = error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ||
+                    error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
+                if (transient && retries < 1) {
                     retries++
                     ui.postDelayed({ p.prepare(); p.play() }, 1500)
                     return
                 }
-                // El mismo canal en otra lista: probar la señal alternativa
-                val alts = current().optJSONArray("alts")
-                if (alts != null && altIndex < alts.length()) {
-                    val next = alts.optString(altIndex++)
-                    if (next.isNotBlank()) {
-                        retries = 0
-                        info.text = "Probando otra señal…"
-                        info.visibility = View.VISIBLE
-                        info.alpha = 1f
-                        p.setMediaItem(MediaItem.fromUri(next))
-                        p.prepare(); p.play()
-                        return
-                    }
+                if (attemptIndex < attempts.size - 1) {
+                    attemptIndex++
+                    retries = 0
+                    info.text = "Probando otra forma de abrir el canal… (" + (attemptIndex + 1) + "/" + attempts.size + ")"
+                    info.visibility = View.VISIBLE
+                    info.alpha = 1f
+                    startAttempt()
+                    return
                 }
                 errorView.text = "No se pudo reproducir este contenido.\n" +
-                    (if (live) "Prueba otro canal con ▲ ▼ o vuelve atrás." else "Vuelve atrás e intenta de nuevo.")
+                    (if (live) "El canal puede estar caído o bloqueado en tu país. Prueba otro con ▲ ▼." else "Vuelve atrás e intenta de nuevo.")
                 errorView.visibility = View.VISIBLE
             }
 
@@ -181,16 +193,37 @@ class PlayerActivity : ComponentActivity() {
         player = p
     }
 
-    private fun playIndex(i: Int, startMs: Long) {
-        val p = player ?: return
-        index = (i + queue.length()) % maxOf(1, queue.length())
-        val item = current()
+    private fun buildAttempts(item: JSONObject): List<Attempt> {
         val url = item.optString("url")
-        if (url.isBlank()) return
-        val b = MediaItem.Builder().setUri(Uri.parse(url)).setMediaId(item.optString("id", url))
+        val ua = item.optString("ua").ifBlank { null }
+        val urls = mutableListOf(url)
         val lower = url.lowercase().substringBefore('?')
+        // Xtream: el mismo canal suele existir en .m3u8 y en .ts
+        if (lower.contains("/live/")) {
+            if (lower.endsWith(".m3u8")) urls.add(url.replaceFirst(Regex("\\.m3u8", RegexOption.IGNORE_CASE), ".ts"))
+            else if (lower.endsWith(".ts")) urls.add(url.replaceFirst(Regex("\\.ts", RegexOption.IGNORE_CASE), ".m3u8"))
+        }
+        val alts = item.optJSONArray("alts")
+        if (alts != null) for (i in 0 until alts.length()) alts.optString(i).takeIf { it.isNotBlank() }?.let { urls.add(it) }
+        val out = mutableListOf<Attempt>()
+        for (u in urls.distinct()) {
+            val isHls = u.lowercase().substringBefore('?').let { it.endsWith(".m3u8") || it.contains("/hls/") }
+            out.add(Attempt(u, isHls, ua))
+            if (!isHls && live) out.add(Attempt(u, true, ua))     // HLS sin extensión .m3u8
+            out.add(Attempt(u, isHls, vlcUa))                      // servidores que solo aceptan reproductores conocidos
+        }
+        return out.take(10)
+    }
+
+    private fun startAttempt() {
+        val p = player ?: return
+        val item = current()
+        val at = attempts.getOrNull(attemptIndex) ?: return
+        http.setUserAgent(at.ua ?: Net.UA)
+        val b = MediaItem.Builder().setUri(Uri.parse(at.url)).setMediaId(item.optString("id", at.url))
+        val lower = at.url.lowercase().substringBefore('?')
         when {
-            lower.endsWith(".m3u8") || lower.contains("/hls/") -> b.setMimeType(MimeTypes.APPLICATION_M3U8)
+            at.forceHls -> b.setMimeType(MimeTypes.APPLICATION_M3U8)
             lower.endsWith(".mpd") -> b.setMimeType(MimeTypes.APPLICATION_MPD)
         }
         val sub = item.optString("sub")
@@ -206,12 +239,23 @@ class PlayerActivity : ComponentActivity() {
                 )
             )
         }
-        retries = 0
-        altIndex = 0
         errorView.visibility = View.GONE
-        p.setMediaItem(b.build(), if (startMs > 0) startMs else C.TIME_UNSET)
+        p.setMediaItem(b.build(), if (startPosition > 0) startPosition else C.TIME_UNSET)
         p.prepare()
         p.play()
+    }
+
+    private fun playIndex(i: Int, startMs: Long) {
+        index = (i + queue.length()) % maxOf(1, queue.length())
+        val item = current()
+        if (item.optString("url").isBlank()) return
+        val ref = item.optString("ref")
+        http.setDefaultRequestProperties(if (ref.isNotBlank()) mapOf("Referer" to ref) else emptyMap())
+        attempts = buildAttempts(item)
+        attemptIndex = 0
+        retries = 0
+        startPosition = startMs
+        startAttempt()
         showInfo(item)
     }
 

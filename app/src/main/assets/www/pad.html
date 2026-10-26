@@ -9,7 +9,7 @@
 :root{--orange:#FF6900;--night:#0D0C0B;--text:#F3EFEA;--muted:#A39C94;--glass:rgba(255,255,255,.08);--line:rgba(255,255,255,.16)}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
 html,body{margin:0;height:100%;overflow:hidden;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--text);background:var(--night);touch-action:none}
-body.local{background:transparent}
+html.local,body.local{background:transparent!important}
 .bg{position:fixed;inset:0;pointer-events:none;overflow:hidden}
 .bg i{position:absolute;border-radius:50%;filter:blur(40px);opacity:.5;animation:drift 14s ease-in-out infinite}
 .bg i:nth-child(1){width:360px;height:360px;background:#FF6900;left:-120px;top:-120px}
@@ -151,7 +151,7 @@ body.local button.k{opacity:.8}
   var local = /[?&]local=1/.test(location.search);
   var bridge = window.PadBridge;
   var ws = null, connected = false, mode = 'remote', forced = null;
-  if (local) document.body.classList.add('local');
+  if (local) { document.documentElement.classList.add('local'); document.body.classList.add('local'); }
 
   function vib(ms) { try { navigator.vibrate && navigator.vibrate(ms || 12); } catch (e) {} }
   function send(o) {

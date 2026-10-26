@@ -15,6 +15,7 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
@@ -84,8 +85,30 @@ class GameActivity : ComponentActivity() {
         val isTv = packageManager.hasSystemFeature("android.software.leanback")
         if (!isTv && physicalPads() == 0) addTouchPad(root)
 
+        // Aviso mientras arranca el núcleo; se quita con el primer cuadro dibujado
+        val loading = TextView(this).apply {
+            text = "Cargando juego…"
+            setTextColor(Color.WHITE)
+            textSize = 18f
+            gravity = Gravity.CENTER
+            setBackgroundColor(Color.BLACK)
+        }
+        root.addView(loading, FrameLayout.LayoutParams(-1, -1))
         setContentView(root)
         retroView.requestFocus()
+
+        var firstFrame = false
+        lifecycleScope.launch {
+            retroView.getGLRetroEvents().collect { ev ->
+                if (ev is GLRetroView.GLRetroEvents.FrameRendered && !firstFrame) {
+                    firstFrame = true
+                    runOnUiThread { loading.animate().alpha(0f).setDuration(300).withEndAction { loading.visibility = View.GONE }.start() }
+                }
+            }
+        }
+        root.postDelayed({
+            if (!firstFrame) loading.text = "El juego no arranca.\n\nRevisa que el archivo sea del sistema correcto y que la BIOS esté importada (PlayStation, Lynx).\nPresiona Atrás para salir."
+        }, 15000)
 
         lifecycleScope.launch {
             retroView.getGLRetroErrors().collect { code ->
