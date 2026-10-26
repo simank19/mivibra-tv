@@ -29,7 +29,7 @@ Las nuevas versiones se instalan encima de la anterior sin perder tus datos.
 - Continuar donde lo dejaste, también desde otro dispositivo.
 
 **Perfiles y familia**
-- Perfiles con 98 avatares de [alohe/avatars](https://github.com/alohe/avatars) (MIT) y PIN opcional.
+- Perfiles con 133 avatares de [alohe/avatars](https://github.com/alohe/avatars) (MIT) y PIN opcional.
 - Menú infantil con límite de tiempo diario y salida con PIN parental.
 - Contenido +18 oculto con usuario, contraseña y PIN, que se bloquea solo a los 30 minutos.
 - Temas de color, intensidad del vidrio y animaciones configurables.

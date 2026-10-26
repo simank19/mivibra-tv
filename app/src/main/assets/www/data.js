@@ -9,6 +9,7 @@
     ['upstream', 'Ilustrados', 22],
     ['toon', 'Caricatura', 10],
     ['3d', '3D', 5],
+    ['memo', 'Memo', 35],
     ['teams', 'Equipo', 9],
     ['notion', 'Boceto', 15],
     ['bluey', 'Línea', 10]
