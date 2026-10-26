@@ -153,6 +153,76 @@
   };
   D.genreName = function (id) { var g = D.GENRES.concat(D.GAME_GENRES).find(function (x) { return x.id === id; }); return g ? g.name : id; };
 
+  // Países para subdividir los canales de TV: [código, nombre, códigos alternos, palabras]
+  D.COUNTRIES = [
+    ['co', 'Colombia', 'col', 'colombia|colombian'], ['mx', 'México', 'mex', 'mexico|mexican'],
+    ['ar', 'Argentina', 'arg', 'argentina'], ['cl', 'Chile', 'chl|chi', 'chile'], ['pe', 'Perú', 'per', 'peru'],
+    ['ve', 'Venezuela', 'ven', 'venezuela'], ['ec', 'Ecuador', 'ecu', 'ecuador'], ['bo', 'Bolivia', 'bol', 'bolivia'],
+    ['py', 'Paraguay', 'par|pry', 'paraguay'], ['uy', 'Uruguay', 'uru|ury', 'uruguay'], ['cr', 'Costa Rica', 'cri|crc', 'costa rica'],
+    ['pa', 'Panamá', 'pan', 'panama'], ['gt', 'Guatemala', 'gua|gtm', 'guatemala'], ['hn', 'Honduras', 'hon|hnd', 'honduras'],
+    ['sv', 'El Salvador', 'slv|esa', 'el salvador|salvador'], ['ni', 'Nicaragua', 'nic', 'nicaragua'],
+    ['do', 'Rep. Dominicana', 'dom|rd', 'dominicana|dominican'], ['cu', 'Cuba', 'cub', 'cuba'], ['pr', 'Puerto Rico', 'pri|pur', 'puerto rico'],
+    ['us', 'Estados Unidos', 'usa', 'estados unidos|united states|eeuu|usa'], ['ca', 'Canadá', 'can', 'canada'],
+    ['br', 'Brasil', 'bra', 'brasil|brazil'], ['es', 'España', 'esp|spa', 'espana|spain'], ['pt', 'Portugal', 'por|prt', 'portugal'],
+    ['gb', 'Reino Unido', 'uk|gbr', 'reino unido|united kingdom|england|britain'], ['ie', 'Irlanda', 'irl', 'irlanda|ireland'],
+    ['fr', 'Francia', 'fra', 'francia|france'], ['de', 'Alemania', 'ger|deu', 'alemania|germany|deutschland'],
+    ['it', 'Italia', 'ita', 'italia|italy'], ['nl', 'Países Bajos', 'ned|nld|hol', 'holanda|netherlands|nederland'],
+    ['be', 'Bélgica', 'bel', 'belgica|belgium'], ['ch', 'Suiza', 'sui|che', 'suiza|switzerland|schweiz'], ['at', 'Austria', 'aut', 'austria'],
+    ['pl', 'Polonia', 'pol', 'polonia|poland|polska'], ['ru', 'Rusia', 'rus', 'rusia|russia'], ['ua', 'Ucrania', 'ukr', 'ucrania|ukraine'],
+    ['tr', 'Turquía', 'tur', 'turquia|turkey|turkiye'], ['gr', 'Grecia', 'gre|grc', 'grecia|greece'], ['se', 'Suecia', 'swe', 'suecia|sweden'],
+    ['no', 'Noruega', 'nor', 'noruega|norway'], ['dk', 'Dinamarca', 'den|dnk', 'dinamarca|denmark'], ['fi', 'Finlandia', 'fin', 'finlandia|finland'],
+    ['ro', 'Rumania', 'rom|rou', 'rumania|romania'], ['hu', 'Hungría', 'hun', 'hungria|hungary'], ['cz', 'Chequia', 'cze', 'chequia|czech'],
+    ['in', 'India', 'ind', 'india'], ['pk', 'Pakistán', 'pak', 'pakistan'], ['cn', 'China', 'chn', 'china'], ['jp', 'Japón', 'jpn', 'japon|japan'],
+    ['kr', 'Corea del Sur', 'kor', 'corea|korea'], ['ph', 'Filipinas', 'phi|phl', 'filipinas|philippines'], ['id', 'Indonesia', 'idn', 'indonesia'],
+    ['th', 'Tailandia', 'tha', 'tailandia|thailand'], ['vn', 'Vietnam', 'vie|vnm', 'vietnam'], ['my', 'Malasia', 'mys', 'malasia|malaysia'],
+    ['au', 'Australia', 'aus', 'australia'], ['nz', 'Nueva Zelanda', 'nzl', 'nueva zelanda|new zealand'], ['za', 'Sudáfrica', 'zaf|rsa', 'sudafrica|south africa'],
+    ['ng', 'Nigeria', 'nga', 'nigeria'], ['eg', 'Egipto', 'egy', 'egipto|egypt'], ['sa', 'Arabia Saudita', 'ksa|sau', 'arabia|saudi'],
+    ['ae', 'Emiratos Árabes', 'uae|are', 'emiratos|emirates'], ['il', 'Israel', 'isr', 'israel'], ['ma', 'Marruecos', 'mar', 'marruecos|morocco'],
+    ['latam', 'Latinoamérica', 'lat|latam|latino', 'latinoamerica|latam|latino|hispano']
+  ];
+  var CBY = {}, CWORDS = [];
+  D.COUNTRIES.forEach(function (c) {
+    CBY[c[0]] = c; c[2].split('|').forEach(function (a) { CBY[a] = c; });
+    CWORDS.push([new RegExp('(^|[^a-z])(' + c[3] + ')([^a-z]|$)'), c[0]]);
+  });
+  function fold(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+  function codeFrom(t) {
+    // "CO: Caracol", "|CO| Noticias", "[MEX] Canal 5", "COL - Deportes", "CO | Noticias"
+    var m = /^\s*[\[|(]?\s*([a-z]{2,5})\s*(?:[\]|):]|\s-\s|\s\|)/.exec(fold(t));
+    if (m && CBY[m[1]] && !/^(tv|hd|sd|fhd|uhd|vip|ppv|fm|new|live|24)$/.test(m[1])) return CBY[m[1]][0];
+    return '';
+  }
+  D.countryOf = function (o) {
+    var tc = fold(o.tc).split(/[;,\s]+/)[0];
+    if (tc && CBY[tc]) return CBY[tc][0];
+    var id = /\.([a-z]{2})(?:@|$)/.exec(fold(o.tvg));
+    if (id && CBY[id[1]] && id[1] !== 'tv') return CBY[id[1]][0];
+    var c = codeFrom(o.group) || codeFrom(o.name);
+    if (c) return c;
+    var g = fold(o.group);
+    for (var i = 0; i < CWORDS.length; i++) if (CWORDS[i][0].test(g)) return CWORDS[i][1];
+    return '';
+  };
+  D.countryName = function (code) { return CBY[code] ? CBY[code][1] : 'Otro país'; };
+  D.countryFlag = function (code) {
+    if (code === 'latam') return '🌎';
+    if (!code || code.length !== 2) return '';
+    return String.fromCodePoint(0x1F1E6 + code.charCodeAt(0) - 97, 0x1F1E6 + code.charCodeAt(1) - 97);
+  };
+
+  // Secciones dentro de En vivo (los canales de TV solo se subdividen aquí)
+  D.TV_SECTIONS = [
+    { id: 'news', name: 'Noticias', test: function (i, g) { return D.RX.news.test(g); } },
+    { id: 'sports', name: 'Deportes', test: function (i, g) { return D.RX.sports.test(g); } },
+    { id: 'movies', name: 'Películas', test: function (i, g) { return D.RX.movie.test(g); } },
+    { id: 'series', name: 'Series', test: function (i, g) { return D.RX.series.test(g); } },
+    { id: 'kids', name: 'Infantil', test: function (i) { return i.kids; } },
+    { id: 'anime', name: 'Anime', test: function (i) { return i.anime; } },
+    { id: 'kdrama', name: 'K-Drama', test: function (i) { return i.kdrama; } },
+    { id: 'docs', name: 'Documentales', test: function (i) { return i.doc; } },
+    { id: 'music', name: 'Música', test: function (i, g) { return D.RX.music.test(g); } }
+  ];
+
   // Paleta para tarjetas sin imagen
   D.HUES = ['#FF6900', '#2F6FEB', '#14A38B', '#D9A20B', '#E0447C', '#3BA55C', '#7A3FD1', '#C2410C', '#4C8DFF', '#B34A00'];
 

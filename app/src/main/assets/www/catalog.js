@@ -92,7 +92,7 @@
         cur = {
           name: name || attr(l, 'tvg-name') || 'Sin nombre',
           tvg: attr(l, 'tvg-id'), logo: attr(l, 'tvg-logo'), group: attr(l, 'group-title'),
-          num: attr(l, 'tvg-chno'), catchup: attr(l, 'catchup')
+          num: attr(l, 'tvg-chno'), catchup: attr(l, 'catchup'), country: attr(l, 'tvg-country')
         };
         group = ''; ua = ''; ref = '';
         continue;
@@ -134,6 +134,7 @@
     if (o.platform === 'viki' && !o.anime) o.kdrama = o.kdrama || /drama|corea|korea/i.test(g);
     o.doc = RX.doc.test(o.group || '') || /document/i.test(o.name || '');
     o.adult = RX.adult.test(g);
+    if (o.type === 'live') o.country = D.countryOf(o);
     if (o.type !== 'live' || o.doc || o.kids) {
       var gtxt = g + ' ' + (o.genre || '');
       o.genres = D.classifyGenres(gtxt);
@@ -163,7 +164,7 @@
         var y = (e.name.match(/\((19|20)\d{2}\)/) || [''])[0].replace(/[()]/g, '');
         res.push(tags({ key: 'movie:' + MV.norm(e.name), type: 'movie', name: e.name, poster: e.logo, group: e.group, url: e.url, ua: e.ua, ref: e.ref, year: y, list: list.id }));
       } else {
-        res.push(tags({ key: 'live:' + (e.tvg ? e.tvg.toLowerCase() : MV.norm(e.name)), type: 'live', name: e.name, logo: e.logo, group: e.group, tvg: e.tvg, num: e.num, url: e.url, ua: e.ua, ref: e.ref, list: list.id }));
+        res.push(tags({ key: 'live:' + (e.tvg ? e.tvg.toLowerCase() : MV.norm(e.name)), type: 'live', name: e.name, logo: e.logo, group: e.group, tvg: e.tvg, tc: e.country, num: e.num, url: e.url, ua: e.ua, ref: e.ref, list: list.id }));
       }
     });
     return res;
@@ -237,7 +238,7 @@
   function loadList(list, force) {
     var ck = 'list:' + list.id;
     return MV.idbGet(ck).then(function (cached) {
-      var fresh = cached && cached.ts > Date.now() - 12 * 3600e3 && cached.v === 3;
+      var fresh = cached && cached.ts > Date.now() - 12 * 3600e3 && cached.v === 4;
       if (cached && !force && fresh) return cached.items;
       var job;
       if (list.type === 'xtream') job = buildFromXtream(list);
@@ -248,7 +249,7 @@
       });
       return job.then(function (items) {
         list.count = items.length; list.updated = Date.now(); list.error = '';
-        MV.idbSet(ck, { ts: Date.now(), v: 3, items: items });
+        MV.idbSet(ck, { ts: Date.now(), v: 4, items: items });
         return items;
       }).catch(function (e) {
         list.error = e.message || 'Error';

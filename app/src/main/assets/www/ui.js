@@ -212,8 +212,8 @@
     html += row('Anime', anime.slice(0, 30), 'poster', '', 'anime');
     var kd = MV.visible(S.items.filter(function (i) { return i.kdrama && i.type !== 'live'; }));
     html += row('K-Drama', kd.slice(0, 30), 'poster', '', 'kdrama');
-    var docs = MV.visible(S.items.filter(function (i) { return i.doc; }));
-    html += row('Documentales', docs.slice(0, 30), null, '', 'docs');
+    var docs = MV.visible(S.items.filter(function (i) { return i.doc && i.type !== 'live'; }));
+    html += row('Documentales', docs.slice(0, 30), 'poster', '', 'docs');
     html += '<div id="archiveRow"></div>';
     return html;
   };
@@ -240,14 +240,66 @@
   }
 
   // ---------- En vivo ----------
-  var liveCat = 'Todos';
+  var liveCat = 'Todos', liveSec = 'all', liveCountry = 'all';
+  function liveSections(all) {
+    var out = [{ id: 'all', name: 'Todos', count: all.length }];
+    var fcount = MV.favs().filter(function (f) { return f.type === 'live'; }).length;
+    if (fcount) out.push({ id: 'fav', name: 'Favoritos', count: fcount });
+    var matched = {};
+    D.TV_SECTIONS.forEach(function (sec) {
+      var n = all.filter(function (i) { var ok = sec.test(i, (i.group || '') + ' ' + i.name); if (ok) matched[i.key] = 1; return ok; }).length;
+      if (n) out.push({ id: sec.id, name: sec.name, count: n });
+    });
+    var pm = {}; all.forEach(function (i) { if (i.platform) { pm[i.platform] = (pm[i.platform] || 0) + 1; matched[i.key] = 1; } });
+    D.PLATFORMS.forEach(function (p) { if (pm[p.id]) out.push({ id: 'pl:' + p.id, name: p.name, count: pm[p.id] }); });
+    var other = all.filter(function (i) { return !matched[i.key]; }).length;
+    if (other && other < all.length) out.push({ id: 'other', name: 'Otros', count: other });
+    return out;
+  }
+  function inSection(all, sec) {
+    if (sec === 'all') return all;
+    if (sec === 'fav') { var f = {}; MV.favs().forEach(function (x) { f[x.key] = 1; }); return all.filter(function (i) { return f[i.key]; }); }
+    if (sec.indexOf('pl:') === 0) { var pid = sec.slice(3); return all.filter(function (i) { return i.platform === pid; }); }
+    if (sec === 'other') return all.filter(function (i) { return !i.platform && !D.TV_SECTIONS.some(function (x) { return x.test(i, (i.group || '') + ' ' + i.name); }); });
+    var def = D.TV_SECTIONS.find(function (x) { return x.id === sec; });
+    return def ? all.filter(function (i) { return def.test(i, (i.group || '') + ' ' + i.name); }) : all;
+  }
+  function countriesOf(list) {
+    var m = {}, none = 0;
+    list.forEach(function (i) { if (i.country) m[i.country] = (m[i.country] || 0) + 1; else none++; });
+    var out = Object.keys(m).map(function (k) { return { id: k, name: D.countryFlag(k) + ' ' + D.countryName(k), count: m[k] }; })
+      .sort(function (a, b) { return b.count - a.count; });
+    if (out.length && none) out.push({ id: 'none', name: 'Sin país', count: none });
+    return out;
+  }
+  function liveBase() {
+    var l = inSection(MV.visible(S.live), liveSec);
+    if (liveCountry === 'all') return l;
+    return l.filter(function (i) { return liveCountry === 'none' ? !i.country : i.country === liveCountry; });
+  }
+  function countryChips() {
+    var secList = inSection(MV.visible(S.live), liveSec), cs = countriesOf(secList);
+    if (!cs.length) { liveCountry = 'all'; return ''; }
+    if (liveCountry !== 'all' && !cs.some(function (c) { return c.id === liveCountry; })) liveCountry = 'all';
+    return '<div class="chips" aria-label="Países">' + [{ id: 'all', name: '🌐 Todos los países', count: secList.length }].concat(cs).map(function (x) {
+      return '<button class="chip f' + (x.id === liveCountry ? ' on' : '') + '" data-act="liveCountry" data-arg="' + esc(x.id) + '">' + esc(x.name) + ' <small>' + x.count + '</small></button>';
+    }).join('') + '</div>';
+  }
+  function secChips() {
+    var secs = liveSections(MV.visible(S.live));
+    return '<div class="chips" aria-label="Secciones de TV">' + secs.map(function (x) {
+      return '<button class="chip f' + (x.id === liveSec ? ' on' : '') + '" data-act="liveSec" data-arg="' + esc(x.id) + '">' + esc(x.name) + ' <small>' + x.count + '</small></button>';
+    }).join('') + '</div>';
+  }
   VIEWS.live = function () {
     if (!S.lists.length) return top('En vivo') + emptyLists();
-    var all = MV.visible(S.live);
-    var cats = [{ name: 'Todos', count: all.length }, { name: 'Favoritos', count: MV.favs().filter(function (f) { return f.type === 'live'; }).length }].concat(MV.groups(all));
+    var filt = secChips() + countryChips();
+    var all = liveBase();
+    var cats = [{ name: 'Todos', count: all.length }].concat(MV.groups(all));
+    if (liveCat !== 'Todos' && !cats.some(function (c) { return c.name === liveCat; })) liveCat = 'Todos';
     var list = channelsOf(liveCat, all);
     var lim = limits.live || 150;
-    return top('En vivo', '<button class="pill f" data-act="adultToggle">' + IC.lock.replace('<svg', '<svg width="18" height="18"') + (MV.adultOk() ? 'Bloquear +18' : '+18') + '</button>') + loadingBlock() +
+    return top('En vivo', '<button class="pill f" data-act="adultToggle">' + IC.lock.replace('<svg', '<svg width="18" height="18"') + (MV.adultOk() ? 'Bloquear +18' : '+18') + '</button>') + loadingBlock() + filt +
       '<div class="live"><div class="cats glass">' + cats.map(function (c) {
         return '<button class="cat f' + (c.name === liveCat ? ' on' : '') + '" data-act="liveCat" data-arg="' + esc(c.name) + '" data-fid="cat-' + MV.hash(c.name) + '"><span>' + esc(c.name) + '</span><small>' + c.count + '</small></button>';
       }).join('') + '</div><div class="chlist glass">' +
@@ -270,8 +322,11 @@
   // ---------- Guía ----------
   VIEWS.guide = function () {
     if (!S.lists.length) return top('Guía') + emptyLists();
-    var all = MV.visible(S.live), list = channelsOf(liveCat, all).slice(0, 80);
-    var cats = ['Todos', 'Favoritos'].concat(MV.groups(all).map(function (g) { return g.name; }));
+    var filt = secChips() + countryChips();
+    var all = liveBase();
+    if (liveCat !== 'Todos' && !all.some(function (i) { return i.group === liveCat; })) liveCat = 'Todos';
+    var list = channelsOf(liveCat, all).slice(0, 80);
+    var cats = ['Todos'].concat(MV.groups(all).map(function (g) { return g.name; }));
     var start = Math.floor((Date.now() - 30 * 60e3) / (30 * 60e3)) * 30 * 60e3, hours = 4, slot = 220, end = start + hours * 3600e3;
     var pxPerMs = slot / (30 * 60e3), width = hours * 2 * slot;
     var hdr = '<div class="hdr"><div class="c0"></div>';
@@ -288,7 +343,7 @@
       return '<div class="ln"><div class="who glass">' + (it.logo ? '<img loading="lazy" src="' + esc(it.logo) + '" alt="" onerror="this.remove()">' : '') + '<span>' + esc(it.name) + '</span></div><div class="tl" style="width:' + width + 'px">' + cells + '</div></div>';
     }).join('');
     return top('Guía de programación', '<button class="pill f" data-act="reloadEpg">' + IC.refresh.replace('<svg', '<svg width="18" height="18"') + 'Actualizar guía</button>') +
-      chips(cats, liveCat, 'liveCat') +
+      filt + chips(cats, liveCat, 'liveCat') +
       (!anyEpg ? '<div class="panel glass"><p style="margin:0">Aún no hay guía cargada. Si tu lista trae una guía EPG (XMLTV) se carga sola; también puedes poner el enlace en Ajustes › Listas.</p></div>' : '') +
       '<div class="epg glass" style="--slot:' + slot + 'px">' + hdr + '<div style="position:relative">' + rows +
       '<div class="nowline" style="left:' + (200 + (Date.now() - start) * pxPerMs) + 'px"></div></div></div>';
@@ -321,7 +376,7 @@
   // ---------- Plataformas (separadores por servicio, según las categorías de tus listas) ----------
   function platformCounts() {
     var m = {};
-    MV.visible(S.items).forEach(function (i) { if (i.platform) m[i.platform] = (m[i.platform] || 0) + 1; });
+    MV.visible(S.items).forEach(function (i) { if (i.platform && i.type !== 'live') m[i.platform] = (m[i.platform] || 0) + 1; });
     return D.PLATFORMS.filter(function (p) { return m[p.id]; }).map(function (p) { return { id: p.id, name: p.name, count: m[p.id] }; });
   }
   function platformTile(p, i) {
@@ -332,8 +387,8 @@
   VIEWS.platforms = function (id) {
     if (!S.lists.length) return top('Plataformas') + emptyLists();
     if (id) {
-      var items = S.items.filter(function (i) { return i.platform === id; });
-      return '<div class="top"><button class="iconbtn f" data-act="back" aria-label="Volver">' + IC.back + '</button></div>' + catalogView('pl-' + id, D.platformName(id), items.filter(function (i) { return i.type !== 'live'; }).concat(items.filter(function (i) { return i.type === 'live'; })));
+      var items = S.items.filter(function (i) { return i.platform === id && i.type !== 'live'; });
+      return '<div class="top"><button class="iconbtn f" data-act="back" aria-label="Volver">' + IC.back + '</button></div>' + catalogView('pl-' + id, D.platformName(id), items);
     }
     var list = platformCounts();
     return top('Plataformas', '<span class="muted">Según las categorías de tus listas</span>') + loadingBlock() +
@@ -343,9 +398,9 @@
 
   VIEWS.movies = function () { return catalogView('movies', 'Películas', S.movies); };
   VIEWS.series = function () { return catalogView('series', 'Series', S.series); };
-  VIEWS.anime = function () { return catalogView('anime', 'Anime', S.items.filter(function (i) { return i.anime; })); };
-  VIEWS.kdrama = function () { return catalogView('kdrama', 'K-Drama', S.items.filter(function (i) { return i.kdrama; })); };
-  VIEWS.docs = function () { return catalogView('docs', 'Documentales', S.items.filter(function (i) { return i.doc; })); };
+  VIEWS.anime = function () { return catalogView('anime', 'Anime', S.items.filter(function (i) { return i.anime && i.type !== 'live'; })); };
+  VIEWS.kdrama = function () { return catalogView('kdrama', 'K-Drama', S.items.filter(function (i) { return i.kdrama && i.type !== 'live'; })); };
+  VIEWS.docs = function () { return catalogView('docs', 'Documentales', S.items.filter(function (i) { return i.doc && i.type !== 'live'; })); };
 
   // ---------- Ficha ----------
   VIEWS.detail = function (key) {
@@ -462,8 +517,8 @@
   var kidCat = 'all';
   VIEWS.kids = function () {
     var items = MV.visible(S.items);
-    var cats = [['all', 'Todo', '#FF6900', '★'], ['live', 'Canales', '#2F6FEB', 'TV'], ['movie', 'Películas', '#E0447C', '▶'], ['series', 'Series', '#14A38B', '◆'], ['anime', 'Anime', '#D9A20B', '✦']];
-    var list = items.filter(function (i) { return kidCat === 'all' || (kidCat === 'anime' ? i.anime : i.type === kidCat); });
+    var cats = [['all', 'Todo', '#FF6900', '★'], ['live', 'Canales de TV', '#2F6FEB', 'TV'], ['movie', 'Películas', '#E0447C', '▶'], ['series', 'Series', '#14A38B', '◆'], ['anime', 'Anime', '#D9A20B', '✦']];
+    var list = items.filter(function (i) { if (kidCat === 'live') return i.type === 'live'; if (i.type === 'live') return false; return kidCat === 'all' || (kidCat === 'anime' ? i.anime : i.type === kidCat); });
     var p = MV.profile() || {};
     return '<div class="top"><img src="' + esc(p.avatar || '') + '" alt="" style="width:58px;height:58px;border-radius:50%;background:#F3EFEA;box-shadow:0 0 0 4px var(--accent)"><div><h1>¡Hola, ' + esc(p.name || '') + '!</h1><span class="muted">¿Qué quieres ver hoy?</span></div><div class="sp"></div>' +
       '<span class="pill">Te quedan ' + MV.kidsLeft() + ' min</span><button class="pill f" data-act="kidsExit">' + IC.lock.replace('<svg', '<svg width="18" height="18"') + 'Salir</button></div>' +
@@ -620,7 +675,7 @@
     if (it.type === 'series') { MV.go('detail', it.key); return; }
     if (it.type === 'rom') { playRom(it.rom); return; }
     if (it.type === 'live') {
-      var list = channelsOf(liveCat, MV.visible(S.live));
+      var list = channelsOf(liveCat, liveBase());
       if (list.indexOf(it) < 0) list = MV.visible(S.live);
       var idx = Math.max(0, list.indexOf(it)), from = Math.max(0, idx - 200), slice = list.slice(from, from + 400);
       launch({ queue: slice.map(function (c) { return q(c); }), index: slice.indexOf(it) < 0 ? 0 : slice.indexOf(it), live: true }, { item: it, list: slice });
@@ -737,6 +792,8 @@
     },
     coverPick: function (url) { P.covers[MV._coverItem.key] = url; MV.savePrefs(); MV.closeModal(true); MV.toast('Carátula actualizada'); MV.rerender(); },
     liveCat: function (c) { liveCat = c; limits.live = 150; MV.rerender(); },
+    liveSec: function (x) { liveSec = x; liveCat = 'Todos'; limits.live = 150; MV.rerender(); },
+    liveCountry: function (x) { liveCountry = x; liveCat = 'Todos'; limits.live = 150; MV.rerender(); },
     cat: function (c, el) { catSel[el.dataset.v] = c; genreSel[el.dataset.v] = ''; limits[el.dataset.v] = 60; MV.rerender(); },
     plat: function (p, el) { platSel[el.dataset.v] = p; genreSel[el.dataset.v] = ''; limits[el.dataset.v] = 60; MV.rerender(); },
     platform: function (id) { MV.go('platforms', id); },
