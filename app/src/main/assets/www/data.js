@@ -185,6 +185,22 @@
     CBY[c[0]] = c; c[2].split('|').forEach(function (a) { CBY[a] = c; });
     CWORDS.push([new RegExp('(^|[^a-z])(' + c[3] + ')([^a-z]|$)'), c[0]]);
   });
+  // Todos los países del mundo (códigos ISO) con su nombre en español e inglés, si el equipo lo permite
+  try {
+    var dEs = new Intl.DisplayNames(['es'], { type: 'region' }), dEn = new Intl.DisplayNames(['en'], { type: 'region' });
+    var AZ = 'abcdefghijklmnopqrstuvwxyz';
+    for (var i1 = 0; i1 < 26; i1++) for (var i2 = 0; i2 < 26; i2++) {
+      var cc = AZ[i1] + AZ[i2], up = cc.toUpperCase();
+      if (CBY[cc] || /^(tv|eu|un|zz|xa|xb|qo|ez|aa|qm|qn|qp|qq|qr|qs|qt|qu|qv|qw|qx|qy|qz|xc|xd|xe|xf|xg|xh|xi|xj|xl|xm|xn|xo|xp|xq|xr|xs|xt|xu|xv|xw|xx|xy|xz)$/.test(cc)) continue;
+      var es = dEs.of(up), en = dEn.of(up);
+      if (!es || es === up || !en || en === up || /unknown|desconocid/i.test(es + en)) continue;
+      var words = [en, es].map(function (w) { return w.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z ]/g, ' ').trim(); })
+        .filter(function (w, k, a) { return w.length > 3 && a.indexOf(w) === k; }).join('|');
+      var row = [cc, es, '', words || cc];
+      D.COUNTRIES.push(row); CBY[cc] = row;
+      if (words) CWORDS.push([new RegExp('(^|[^a-z])(' + words + ')([^a-z]|$)'), cc]);
+    }
+  } catch (e) { /* equipos antiguos: se queda la lista básica */ }
   function fold(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
   function codeFrom(t) {
     // "CO: Caracol", "|CO| Noticias", "[MEX] Canal 5", "COL - Deportes", "CO | Noticias"

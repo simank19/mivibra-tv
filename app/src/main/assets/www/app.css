@@ -152,15 +152,16 @@ input.f:focus { box-shadow: 0 0 0 3px var(--accent); transform: none; }
 .chrow .fav { color: var(--accent); }
 
 /* Guía */
-.epg { border-radius: 24px; padding: 12px; overflow: auto; height: calc(100vh - 150px); position: relative; }
+.epg { --c0: 200px; border-radius: 24px; padding: 12px; overflow: auto; height: calc(100vh - 150px); position: relative; }
 .epg .hdr { display: flex; position: sticky; top: 0; z-index: 3; padding-bottom: 8px; background: transparent; }
-.epg .hdr .c0 { flex: 0 0 200px; }
+.epg .hdr .c0 { flex: 0 0 var(--c0); }
 .epg .hdr .t { flex: 0 0 var(--slot); font: 600 13px var(--ui); color: var(--muted); }
 .epg .ln { display: flex; gap: 0; height: 64px; margin-bottom: 8px; }
-.epg .who { flex: 0 0 192px; margin-right: 8px; border-radius: 14px; display: flex; align-items: center; gap: 10px; padding: 0 10px; font: 700 13px var(--ui); overflow: hidden; position: sticky; left: 0; z-index: 2; }
+.epg .who { flex: 0 0 calc(var(--c0) - 8px); background: color-mix(in srgb, var(--base) 88%, #fff 12%); color: var(--text); margin-right: 8px; border-radius: 14px; display: flex; align-items: center; gap: 10px; padding: 0 10px; font: 700 13px var(--ui); overflow: hidden; position: sticky; left: 0; z-index: 2; }
 .epg .who img { width: 40px; height: 30px; object-fit: contain; }
 .epg .tl { position: relative; flex: 0 0 auto; }
-.epg .pr { position: absolute; top: 0; bottom: 0; padding: 0 3px; }
+.epg .pr { position: absolute; top: 0; bottom: 0; padding: 0 3px; margin: 0; background: none; border: 0; color: inherit; font: inherit; text-align: left; -webkit-appearance: none; appearance: none; cursor: pointer; }
+.epg .pr:focus .in, .epg .pr.focus .in { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .epg .pr .in { height: 100%; border-radius: 12px; padding: 8px 12px; display: flex; flex-direction: column; justify-content: center; gap: 2px; overflow: hidden; border: 1px solid var(--line); background: var(--glass); }
 .epg .pr.now .in { border-color: var(--accent); background: var(--accent-soft); }
 .epg .pr b { font: 700 13px var(--ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -269,6 +270,10 @@ html.kids { --base: #141A3A; --accent: #FFD15C; --accent-soft: rgba(255,209,92,.
 
 /* Celular / tablet vertical: barra inferior */
 @media (max-width: 760px) {
+  .epg { --c0: 118px; padding: 8px; height: calc(100vh - 230px); }
+  .epg .who { font-size: 11px; padding: 0 6px; gap: 6px; }
+  .epg .who img { width: 30px; height: 24px; }
+  .epg .ln { height: 56px; }
   :root { --side: 0px; }
   .shell { flex-direction: column; }
   .side { position: fixed; z-index: 10; left: 10px; right: 10px; bottom: 12px; top: auto; width: auto; margin: 0; height: 72px; flex-direction: row; overflow-x: auto; padding: 0 8px; border-radius: 26px; justify-content: flex-start; }

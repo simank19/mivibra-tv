@@ -386,7 +386,7 @@
       filt + chips(cats, liveCat, 'liveCat') +
       (!anyEpg ? '<div class="panel glass"><p style="margin:0">Aún no hay guía cargada. Si tu lista trae una guía EPG (XMLTV) se carga sola; también puedes poner el enlace en Ajustes › Listas.</p></div>' : '') +
       '<div class="epg glass" style="--slot:' + slot + 'px">' + hdr + '<div style="position:relative">' + rows +
-      '<div class="nowline" style="left:' + (200 + (Date.now() - start) * pxPerMs) + 'px"></div></div></div>';
+      '<div class="nowline" style="left:calc(var(--c0) + ' + ((Date.now() - start) * pxPerMs) + 'px)"></div></div></div>';
   };
 
   // ---------- Películas, series, anime, k-drama, documentales ----------
