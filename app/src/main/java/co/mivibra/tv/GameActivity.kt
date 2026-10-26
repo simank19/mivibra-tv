@@ -37,7 +37,7 @@ import java.io.File
 class GameActivity : ComponentActivity() {
 
     private lateinit var retroView: GLRetroView
-    private var pad: WebView? = null
+    private var pad: TouchPadView? = null
     private lateinit var romFile: File
     private lateinit var saveFile: File
     private lateinit var stateFile: File
@@ -130,44 +130,18 @@ class GameActivity : ComponentActivity() {
         RemoteHub.setGame(this)
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
     private fun addTouchPad(root: FrameLayout) {
-        val loader = WebViewAssetLoader.Builder()
-            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
-            .build()
-        val w = WebView(this)
-        w.setBackgroundColor(Color.TRANSPARENT)
-        w.settings.javaScriptEnabled = true
-        w.isFocusable = false
-        w.isFocusableInTouchMode = false
-        w.isHapticFeedbackEnabled = true
-        w.webViewClient = object : WebViewClient() {
-            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
-                loader.shouldInterceptRequest(request.url)
-        }
-        w.addJavascriptInterface(LocalPad(), "PadBridge")
-        w.loadUrl("https://appassets.androidplatform.net/assets/www/pad.html?local=1")
-        root.addView(w, FrameLayout.LayoutParams(-1, -1))
-        pad = w
-    }
-
-    /** Puente de los controles táctiles locales (jugador 1). */
-    inner class LocalPad {
-        @JavascriptInterface
-        fun key(name: String, down: Boolean) {
-            val code = RemoteHub.KEYS[name] ?: return
-            runOnUiThread { retroView.sendKeyEvent(if (down) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, code, 0) }
-        }
-
-        @JavascriptInterface
-        fun axis(stick: String, x: Float, y: Float) {
-            runOnUiThread { sendAxis(0, stick, x, y) }
-        }
-
-        @JavascriptInterface
-        fun menu() {
-            runOnUiThread { showMenu() }
-        }
+        val v = TouchPadView(this,
+            onKey = { code, down -> retroView.sendKeyEvent(if (down) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, code, 0) },
+            onStick = { x, y ->
+                retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, x, y, 0)
+                // También como cruceta, para consolas sin palanca analógica (NES, SNES, Doom…)
+                fun dir(a: Float) = if (a > 0.4f) 1f else if (a < -0.4f) -1f else 0f
+                retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_DPAD, dir(x), dir(y), 0)
+            },
+            onMenu = { showMenu() })
+        root.addView(v, FrameLayout.LayoutParams(-1, -1))
+        pad = v
     }
 
     private fun physicalPads(): Int = InputDevice.getDeviceIds().count { id ->
@@ -197,6 +171,7 @@ class GameActivity : ComponentActivity() {
 
     private fun setPadVisible(show: Boolean) {
         val p = pad ?: return
+        p.releaseAll()
         p.visibility = if (show) View.VISIBLE else View.GONE
     }
 
@@ -204,14 +179,12 @@ class GameActivity : ComponentActivity() {
         (source and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
             (source and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK
 
-    override fun dispatchGenericMotionEvent(event: android.view.MotionEvent): Boolean {
-        if (pad?.visibility == View.VISIBLE && fromGamepad(event.source)) {
-            val moved = listOf(android.view.MotionEvent.AXIS_X, android.view.MotionEvent.AXIS_Y, android.view.MotionEvent.AXIS_HAT_X, android.view.MotionEvent.AXIS_HAT_Y)
-                .any { kotlin.math.abs(event.getAxisValue(it)) > 0.6f }
-            if (moved) setPadVisible(false)
-        }
-        return super.dispatchGenericMotionEvent(event)
+    /** Si los controles estaban ocultos (por usar un mando) y tocas la pantalla, vuelven a salir. */
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+        if (ev.actionMasked == android.view.MotionEvent.ACTION_DOWN && pad != null && pad?.visibility != View.VISIBLE && !padHiddenByUser) setPadVisible(true)
+        return super.dispatchTouchEvent(ev)
     }
+    private var padHiddenByUser = false
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (pad?.visibility == View.VISIBLE && fromGamepad(event.source) && KeyEvent.isGamepadButton(event.keyCode)) setPadVisible(false)
@@ -223,6 +196,7 @@ class GameActivity : ComponentActivity() {
     }
 
     private fun showMenu() {
+        pad?.releaseAll()
         val padItem = if (pad == null) null else if (pad?.visibility == View.VISIBLE) "Ocultar controles en pantalla" else "Mostrar controles en pantalla"
         val items = listOfNotNull("Continuar", "Guardar partida", "Cargar partida", "Reiniciar juego", "Salir del juego", padItem).toTypedArray()
         AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
@@ -233,7 +207,7 @@ class GameActivity : ComponentActivity() {
                     2 -> loadState()
                     3 -> retroView.reset()
                     4 -> { saveSram(); finish() }
-                    5 -> setPadVisible(pad?.visibility != View.VISIBLE)
+                    5 -> { val show = pad?.visibility != View.VISIBLE; padHiddenByUser = !show; setPadVisible(show) }
                 }
                 d.dismiss()
                 retroView.requestFocus()
@@ -288,7 +262,6 @@ class GameActivity : ComponentActivity() {
 
     override fun onDestroy() {
         RemoteHub.setGame(null)
-        pad?.destroy()
         super.onDestroy()
     }
 
