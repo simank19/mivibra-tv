@@ -61,7 +61,7 @@
     if (MV.isKids()) return [['kids', 'Inicio', IC.home], ['search', 'Buscar', IC.search]];
     return [
       ['home', 'Inicio', IC.home], ['search', 'Buscar', IC.search], ['live', 'En vivo', IC.live], ['guide', 'Guía', IC.guide],
-      ['movies', 'Películas', IC.movie], ['series', 'Series', IC.series], ['anime', 'Anime', IC.anime], ['kdrama', 'K-Drama', IC.kdrama],
+      ['movies', 'Películas', IC.movie], ['series', 'Series', IC.series], ['platforms', 'Plataformas', IC.platforms], ['anime', 'Anime', IC.anime], ['kdrama', 'K-Drama', IC.kdrama],
       ['docs', 'Documentales', IC.doc], ['favs', 'Favoritos', IC.star], ['history', 'Historial', IC.history], ['games', 'Juegos', IC.games],
       ['settings', 'Ajustes', IC.settings]
     ];
@@ -108,7 +108,7 @@
     var sub = '';
     if (it.type === 'live') { var nn = MV.nowNext(it); sub = nn.now ? nn.now.t : (it.group || ''); }
     else sub = [it.year, it.type === 'series' ? 'Serie' : '', it.group].filter(Boolean).join(' · ');
-    var prog = MV.progressOf(it.key), tag = it.kdrama ? 'K-DRAMA' : it.anime ? 'ANIME' : it.ia ? 'CLÁSICO' : '';
+    var prog = MV.progressOf(it.key), tag = it.platform ? D.platformName(it.platform).toUpperCase() : it.kdrama ? 'K-DRAMA' : it.anime ? 'ANIME' : it.ia ? 'CLÁSICO' : '';
     return '<button class="card ' + kind + ' f" style="--h:' + MV.hue(it.name) + ';animation-delay:' + Math.min(i || 0, 12) * 0.04 + 's" data-act="open" data-key="' + esc(it.key) + '" data-fid="c-' + MV.hash(it.key) + '">' +
       '<div class="th">' + thumbInner(it) + (it.num ? '<span class="num">' + esc(it.num) + '</span>' : '') + (tag ? '<span class="tag">' + tag + '</span>' : '') + '<div class="shine"></div></div>' +
       '<div class="meta"><b>' + esc(it.name) + '</b><span>' + esc(sub) + '</span>' + (prog ? '<div class="prog"><i style="width:' + Math.round(prog.pos / prog.dur * 100) + '%"></i></div>' : '') + '</div></button>';
@@ -204,6 +204,8 @@
     html += row('Favoritos', favs.slice(0, 30));
     html += row('Canales en vivo', live.slice(0, 30), 'ch', live.length + ' canales', 'live');
     html += row('Sugerido para ti', suggested(), 'poster', 'Según lo que ves en este perfil');
+    var pls = platformCounts();
+    if (pls.length) html += '<section class="row"><h3>Plataformas</h3><div class="strip">' + pls.map(platformTile).join('') + '</div></section>';
     html += row('Películas', movies.slice(0, 30), 'poster', '', 'movies');
     html += row('Series', series.slice(0, 30), 'poster', '', 'series');
     var anime = MV.visible(S.items.filter(function (i) { return i.anime && i.type !== 'live'; }));
@@ -293,7 +295,7 @@
   };
 
   // ---------- Películas, series, anime, k-drama, documentales ----------
-  var catSel = {}, genreSel = {};
+  var catSel = {}, genreSel = {}, platSel = {};
   function genreChips(list, cur, vkey, act) {
     if (!list.length) return '';
     return '<div class="chips" aria-label="Géneros"><span class="muted" style="align-self:center;font:700 12px var(--ui);letter-spacing:1px;padding:0 4px">GÉNERO</span>' +
@@ -307,11 +309,38 @@
     var cats = [{ name: 'Todo', count: all.length }].concat(MV.groups(all).slice(0, 60));
     var cur = catSel[vkey] || 'Todo', gen = genreSel[vkey] || '';
     var list = cur === 'Todo' ? all : all.filter(function (i) { return i.group === cur; });
+    var plat = platSel[vkey] || '';
+    var pm = {}; list.forEach(function (i) { if (i.platform) pm[i.platform] = (pm[i.platform] || 0) + 1; });
+    var plats = vkey.indexOf('pl-') === 0 ? [] : D.PLATFORMS.filter(function (p) { return pm[p.id]; }).map(function (p) { return { id: p.id, name: p.name, count: pm[p.id] }; });
+    if (plat) list = list.filter(function (i) { return i.platform === plat; });
     var genres = MV.genresOf(list);
     if (gen) list = list.filter(function (i) { return (i.genres || []).indexOf(gen) >= 0; });
-    return top(title, '<span class="muted">' + all.length + ' títulos</span>') + loadingBlock() + chips(cats, cur, 'cat', ' data-v="' + vkey + '"') + genreChips(genres, gen, vkey) +
+    return top(title, '<span class="muted">' + all.length + ' títulos</span>') + loadingBlock() + chips(cats, cur, 'cat', ' data-v="' + vkey + '"') + (plats.length ? genreChips(plats, plat, vkey, 'plat').replace('>GÉNERO<', '>PLATAFORMA<') : '') + genreChips(genres, gen, vkey) +
       (list.length ? grid(list, kind, vkey) : '<div class="empty glass"><h2>No hay contenido aquí todavía</h2><p class="muted">Se llena con lo que traen tus listas M3U o tu cuenta Xtream.</p></div>');
   }
+  // ---------- Plataformas (separadores por servicio, según las categorías de tus listas) ----------
+  function platformCounts() {
+    var m = {};
+    MV.visible(S.items).forEach(function (i) { if (i.platform) m[i.platform] = (m[i.platform] || 0) + 1; });
+    return D.PLATFORMS.filter(function (p) { return m[p.id]; }).map(function (p) { return { id: p.id, name: p.name, count: m[p.id] }; });
+  }
+  function platformTile(p, i) {
+    return '<button class="card wide f" style="--h:' + MV.hue(p.id + 'mv') + ';animation-delay:' + Math.min(i, 12) * 0.04 + 's" data-act="platform" data-arg="' + p.id + '" data-fid="pl-' + p.id + '">' +
+      '<div class="th" style="height:120px"><span class="mono" style="font-size:30px;letter-spacing:-.5px">' + esc(p.name) + '</span></div>' +
+      '<div class="meta"><b>' + esc(p.name) + '</b><span>' + p.count + ' títulos</span></div></button>';
+  }
+  VIEWS.platforms = function (id) {
+    if (!S.lists.length) return top('Plataformas') + emptyLists();
+    if (id) {
+      var items = S.items.filter(function (i) { return i.platform === id; });
+      return '<div class="top"><button class="iconbtn f" data-act="back" aria-label="Volver">' + IC.back + '</button></div>' + catalogView('pl-' + id, D.platformName(id), items.filter(function (i) { return i.type !== 'live'; }).concat(items.filter(function (i) { return i.type === 'live'; })));
+    }
+    var list = platformCounts();
+    return top('Plataformas', '<span class="muted">Según las categorías de tus listas</span>') + loadingBlock() +
+      (list.length ? '<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">' + list.map(function (p, i) { return platformTile(p, i).replace('card wide', 'card wide" style="width:auto'); }).join('') + '</div>'
+        : '<div class="empty glass"><h2>No encontramos plataformas en tus listas</h2><p class="muted">Aparecen cuando las categorías de tus listas llevan el nombre del servicio, por ejemplo “Netflix Series” o “Disney+ Películas”.</p></div>');
+  };
+
   VIEWS.movies = function () { return catalogView('movies', 'Películas', S.movies); };
   VIEWS.series = function () { return catalogView('series', 'Series', S.series); };
   VIEWS.anime = function () { return catalogView('anime', 'Anime', S.items.filter(function (i) { return i.anime; })); };
@@ -709,6 +738,9 @@
     coverPick: function (url) { P.covers[MV._coverItem.key] = url; MV.savePrefs(); MV.closeModal(true); MV.toast('Carátula actualizada'); MV.rerender(); },
     liveCat: function (c) { liveCat = c; limits.live = 150; MV.rerender(); },
     cat: function (c, el) { catSel[el.dataset.v] = c; genreSel[el.dataset.v] = ''; limits[el.dataset.v] = 60; MV.rerender(); },
+    plat: function (p, el) { platSel[el.dataset.v] = p; genreSel[el.dataset.v] = ''; limits[el.dataset.v] = 60; MV.rerender(); },
+    platform: function (id) { MV.go('platforms', id); },
+    back: function () { MV.onBack(); },
     genre: function (g, el) { genreSel[el.dataset.v] = g; limits[el.dataset.v] = 60; MV.rerender(); },
     gameGenre: function (g) { gameGenre = g; MV.rerender(); },
     kidCat: function (c) { kidCat = c; MV.rerender(); },

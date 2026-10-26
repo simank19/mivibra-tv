@@ -14,7 +14,8 @@ Las nuevas versiones se instalan encima de la anterior sin perder tus datos.
 **Ver**
 - Listas M3U/M3U8 por enlace o archivo, y cuentas Xtream Codes (en vivo, películas y series).
 - Todas las listas se combinan en un solo catálogo; los canales repetidos guardan señales alternativas y el reproductor cambia solo si una falla.
-- Secciones: Inicio, En vivo, Guía EPG, Películas, Series, Anime, K-Drama, Documentales, Favoritos e Historial.
+- Secciones: Inicio, En vivo, Guía EPG, Películas, Series, Plataformas, Anime, K-Drama, Documentales, Favoritos e Historial.
+- Separadores por plataforma (Netflix, Disney+, Prime Video, Max, Paramount+, Apple TV+, Hulu, Crunchyroll, Viki, Star+, ViX y más) según las categorías de tus listas; solo texto, sin logotipos de marcas.
 - Clasificador de géneros: acción, aventura, suspenso, terror, comedia, drama, romance, ciencia ficción, fantasía, crimen, infantil, documental y más.
 - Sugerencias en el Inicio según lo que ve cada perfil.
 - Buscador con teclado en pantalla y por voz desde el celular.

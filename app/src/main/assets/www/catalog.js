@@ -130,6 +130,8 @@
     o.kids = RX.kids.test(g);
     o.anime = RX.anime.test(g);
     o.kdrama = RX.kdrama.test(g);
+    o.platform = D.platformOf(o.group || '') || (o.type !== 'live' ? D.platformOf(o.name || '') : '');
+    if (o.platform === 'viki' && !o.anime) o.kdrama = o.kdrama || /drama|corea|korea/i.test(g);
     o.doc = RX.doc.test(o.group || '') || /document/i.test(o.name || '');
     o.adult = RX.adult.test(g);
     if (o.type !== 'live' || o.doc || o.kids) {
@@ -235,7 +237,7 @@
   function loadList(list, force) {
     var ck = 'list:' + list.id;
     return MV.idbGet(ck).then(function (cached) {
-      var fresh = cached && cached.ts > Date.now() - 12 * 3600e3 && cached.v === 2;
+      var fresh = cached && cached.ts > Date.now() - 12 * 3600e3 && cached.v === 3;
       if (cached && !force && fresh) return cached.items;
       var job;
       if (list.type === 'xtream') job = buildFromXtream(list);
@@ -246,7 +248,7 @@
       });
       return job.then(function (items) {
         list.count = items.length; list.updated = Date.now(); list.error = '';
-        MV.idbSet(ck, { ts: Date.now(), v: 2, items: items });
+        MV.idbSet(ck, { ts: Date.now(), v: 3, items: items });
         return items;
       }).catch(function (e) {
         list.error = e.message || 'Error';

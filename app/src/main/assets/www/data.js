@@ -86,6 +86,30 @@
     episode: /\b[sS](\d{1,2})\s*[eE](\d{1,3})\b|\b(\d{1,2})x(\d{1,3})\b/
   };
 
+  // Separadores por plataforma: según el nombre de la categoría en la lista (solo texto, sin logos)
+  D.PLATFORMS = [
+    { id: 'netflix', name: 'Netflix', rx: /netflix/i },
+    { id: 'disney', name: 'Disney+', rx: /disney/i },
+    { id: 'prime', name: 'Prime Video', rx: /amazon|prime ?video|\bprime\b/i },
+    { id: 'max', name: 'Max', rx: /\bhbo\b|hbo ?max|\bmax originals?\b|^max\b/i },
+    { id: 'paramount', name: 'Paramount+', rx: /paramount/i },
+    { id: 'apple', name: 'Apple TV+', rx: /apple ?tv/i },
+    { id: 'hulu', name: 'Hulu', rx: /\bhulu\b/i },
+    { id: 'crunchyroll', name: 'Crunchyroll', rx: /crunchy/i },
+    { id: 'viki', name: 'Viki', rx: /\bviki\b/i },
+    { id: 'star', name: 'Star+', rx: /star ?(\+|plus)/i },
+    { id: 'vix', name: 'ViX', rx: /\bvix\b/i },
+    { id: 'peacock', name: 'Peacock', rx: /peacock/i },
+    { id: 'discovery', name: 'Discovery+', rx: /discovery ?(\+|plus)/i },
+    { id: 'pluto', name: 'Pluto TV', rx: /pluto/i },
+    { id: 'mubi', name: 'MUBI', rx: /\bmubi\b/i },
+    { id: 'starz', name: 'Starz', rx: /\bstarz\b/i },
+    { id: 'showtime', name: 'Showtime', rx: /showtime/i },
+    { id: 'amc', name: 'AMC+', rx: /\bamc ?\+|amc plus/i }
+  ];
+  D.platformOf = function (txt) { var p = D.PLATFORMS.find(function (x) { return x.rx.test(txt); }); return p ? p.id : ''; };
+  D.platformName = function (id) { var p = D.PLATFORMS.find(function (x) { return x.id === id; }); return p ? p.name : id; };
+
   // Clasificador de géneros: palabras en el grupo, el nombre, el género de Xtream o la ficha (TMDB/Jikan)
   D.GENRES = [
     { id: 'accion', name: 'Acción', rx: /\b(acci[oó]n|action|artes marciales|martial)\b/i },
@@ -139,6 +163,7 @@
     movie: I('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/>'),
     series: I('<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>'),
     anime: I('<path d="M11 3l1.8 4.7 4.7 1.8-4.7 1.8L11 16l-1.8-4.7L4.5 9.5l4.7-1.8z"/><path d="M18.5 14l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/>'),
+    platforms: I('<rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/>'),
     kdrama: I('<path d="M12 21s-7-4.4-9.3-9A5 5 0 0 1 12 6.4 5 5 0 0 1 21.3 12C19 16.6 12 21 12 21z"/>'),
     port: I('<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/><path d="M8 10h3M9.5 8.5v3M15 9.5h.01M17 11h.01"/>'),
     doc: I('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/>'),
