@@ -836,18 +836,47 @@
   }
   function addListDialog(tab) {
     tab = tab || 'url';
-    var tabs = [['url', 'Enlace M3U'], ['file', 'Archivo'], ['xtream', 'Xtream Codes']];
-    var body = tab === 'xtream'
+    var tabs = [['url', 'Enlace M3U'], ['multi', 'Varias (.txt)'], ['file', 'Archivo'], ['xtream', 'Xtream Codes']];
+    var body = tab === 'multi'
+      ? '<p>Pega tus direcciones (una por línea) o elige tu archivo .txt. Puedes poner un nombre antes de cada una: <code>Mi lista, https://…</code>. Los enlaces de Xtream (get.php?username=…) se agregan como cuenta Xtream con películas y series.</p>' +
+        '<label class="field">Direcciones<textarea class="in f" id="lMulti" rows="6" placeholder="https://…/lista1.m3u&#10;Deportes, https://…/lista2.m3u" data-autofocus></textarea></label><p class="muted" id="lMultiCount" style="font-size:13px;margin:-4px 0 8px"></p>'
+      : tab === 'xtream'
       ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi proveedor" data-autofocus></label><label class="field">Servidor<input class="in f" id="lHost" placeholder="http://servidor:puerto" autocomplete="off"></label><label class="field">Usuario<input class="in f" id="lUser" autocomplete="off"></label><label class="field">Contraseña<input class="in f" id="lPass" type="password"></label>'
       : tab === 'file'
         ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Lista descargada" data-autofocus></label><p>Elige un archivo .m3u del dispositivo, una USB o el administrador de archivos.</p>'
         : '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi lista" data-autofocus></label><label class="field">Enlace de la lista M3U / M3U8<input class="in f" id="lUrl" placeholder="https://…/lista.m3u" autocomplete="off" inputmode="url"></label><label class="field">Guía EPG XMLTV (opcional)<input class="in f" id="lEpg" placeholder="https://…/guia.xml" autocomplete="off" inputmode="url"></label>';
     MV.modal('<h2>Agregar lista</h2><div class="chips">' + tabs.map(function (t) { return '<button class="chip f' + (t[0] === tab ? ' on' : '') + '" data-act="listTab" data-arg="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' + body +
-      '<div class="btns"><button class="btn f" data-act="listSave" data-arg="' + tab + '">' + (tab === 'xtream' ? 'Iniciar sesión' : tab === 'file' ? 'Elegir archivo' : 'Cargar lista') + '</button><button class="btn ghost f" data-act="confirmNo">Cancelar</button></div>');
+      '<div class="btns"><button class="btn f" data-act="listSave" data-arg="' + tab + '">' + (tab === 'xtream' ? 'Iniciar sesión' : tab === 'file' ? 'Elegir archivo' : tab === 'multi' ? 'Importar' : 'Cargar lista') + '</button>' + (tab === 'multi' ? '<button class="btn ghost f" data-act="multiPick">Elegir archivo .txt</button>' : '') + '<button class="btn ghost f" data-act="confirmNo">Cancelar</button></div>',
+      { onOpen: function (root) { var ta = root.querySelector('#lMulti'); if (ta) ta.addEventListener('input', multiCount); } });
+  }
+
+  function multiCount() {
+    var ta = document.getElementById('lMulti'), el = document.getElementById('lMultiCount'); if (!ta || !el) return;
+    var r = MV.parseUrlList(ta.value);
+    el.textContent = r === null ? 'Esto es una lista M3U: usa la pestaña Archivo o Enlace M3U.' : r.length ? r.length + (r.length === 1 ? ' dirección encontrada' : ' direcciones encontradas') + ' (' + r.filter(function (x) { return x.type === 'xtream'; }).length + ' Xtream)' : '';
+  }
+  function importMany(arr) {
+    if (!arr || !arr.length) { MV.toast('No encontré direcciones http:// o https://'); return; }
+    MV.closeModal(true);
+    MV.modal('<h2>Importando listas</h2><div style="height:8px;border-radius:8px;background:var(--glass-strong);overflow:hidden;margin:14px 0"><i id="impFill" style="display:block;height:100%;width:0;background:var(--accent);transition:width .3s"></i></div><p class="muted" id="impTxt">Preparando ' + arr.length + ' listas…</p>');
+    MV.addLists(arr, function (n, total, name) {
+      var f = document.getElementById('impFill'), t = document.getElementById('impTxt');
+      if (f) f.style.width = Math.round(n / total * 100) + '%';
+      if (t) t.textContent = n + ' de ' + total + ' · ' + name;
+    }).then(function (r) {
+      MV.closeModal(true);
+      MV.toast(r.added + ' listas agregadas' + (r.skipped ? ' · ' + r.skipped + ' ya estaban' : '') + (r.failed.length ? ' · ' + r.failed.length + ' no cargaron' : ''), 5000);
+      MV.rerender();
+    }).catch(function (e) { MV.closeModal(true); MV.toast(e.message, 4000); MV.rerender(); });
   }
 
   // ---------- Acciones ----------
   var ACT = {
+    multiPick: function () {
+      MV.call('pickFile', []).then(function (d) { return fetch(d.path).then(function (r) { return r.text(); }); }).then(function (txt) {
+        var ta = document.getElementById('lMulti'); if (ta) { ta.value = txt; multiCount(); }
+      }).catch(function (e) { if (e.message !== 'cancel') MV.toast(e.message === 'nopicker' ? 'Este equipo no tiene selector de archivos. Pega el texto.' : e.message); });
+    },
     nav: function (a) { stack = []; MV.go(a, null, { replace: true }); },
     go: function (a) { MV.closeModal(true); if (a === 'profileEdit') { editSel = null; } MV.go(a); },
     more: function (k) { limits[k] = (limits[k] || (k === 'live' ? 150 : k === 'games' ? 120 : 60)) + (k === 'live' ? 150 : 60); MV.rerender(); },
@@ -978,9 +1007,16 @@
           MV.toast('Conectado' + (exp ? ' · vence ' + exp : ''), 3500);
           return MV.addList(l);
         }).then(function () { MV.rerender(); }).catch(function (e) { MV.toast(e.message, 4000); });
+      } else if (tab === 'multi') {
+        var parsed = MV.parseUrlList(document.getElementById('lMulti').value);
+        if (parsed === null) { MV.toast('Eso es una lista M3U completa: usa la pestaña Archivo'); return; }
+        importMany(parsed);
       } else if (tab === 'file') {
         MV.call('pickFile', []).then(function (d) {
           return fetch(d.path).then(function (r) { return r.text(); }).then(function (txt) {
+            // Un .txt con direcciones (no una lista M3U): se importa como varias listas
+            var many = MV.parseUrlList(txt);
+            if (many && many.length) { importMany(many); return; }
             var l = { type: 'file', name: name || (d.name || 'Lista').replace(/\.[^.]+$/, '') };
             MV.closeModal(true); MV.toast('Cargando lista…');
             l.id = 'l' + Date.now().toString(36);

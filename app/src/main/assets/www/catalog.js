@@ -376,6 +376,48 @@
     S.lists.push(list); MV.saveLists();
     return loadList(list, true).then(function () { MV.saveLists(); return MV.reloadCatalog(false); });
   };
+  /** Lee un .txt (o texto pegado) con varias direcciones: una por línea.
+      Acepta "url", "Nombre,url", "Nombre | url" o "Nombre url". Los enlaces de Xtream (get.php?username=…&password=…) se agregan como cuenta Xtream. */
+  MV.parseUrlList = function (text) {
+    text = String(text || '');
+    if (/#EXTINF/i.test(text)) return null; // es una lista M3U normal
+    var out = [], seen = {};
+    text.split(/\r?\n/).forEach(function (line, n) {
+      line = line.trim();
+      if (!line || line[0] === '#' || line.indexOf('//') === 0) return;
+      var m = line.match(/(https?:\/\/\S+)/i);
+      if (!m) return;
+      var url = m[1].replace(/[",;]+$/, '');
+      var name = line.slice(0, m.index).replace(/[,|;:\-–=\t]+\s*$/, '').trim().replace(/^["']|["']$/g, '');
+      if (seen[url]) return; seen[url] = 1;
+      var x = url.match(/^(https?:\/\/[^\/]+)\/(?:get|player_api)\.php\?(.*)$/i);
+      if (x) {
+        var q = {}; x[2].split('&').forEach(function (kv) { var a = kv.split('='); q[decodeURIComponent(a[0] || '')] = decodeURIComponent(a[1] || ''); });
+        if (q.username && q.password) { out.push({ type: 'xtream', name: name || x[1].replace(/^https?:\/\//, ''), host: x[1], user: q.username, pass: q.password }); return; }
+      }
+      var auto = url.split('?')[0].split('/').pop().replace(/\.(m3u8?|txt)$/i, '').replace(/[_-]+/g, ' ').trim();
+      out.push({ type: 'url', name: name || auto || ('Lista ' + (out.length + 1)), url: url });
+    });
+    return out;
+  };
+  /** Agrega varias listas de una vez (sin repetir las que ya tienes) y recarga el catálogo una sola vez. */
+  MV.addLists = function (arr, onProgress) {
+    var fresh = arr.filter(function (l) {
+      return !S.lists.some(function (x) { return (l.url && x.url === l.url) || (l.type === 'xtream' && x.type === 'xtream' && x.host === l.host && x.user === l.user); });
+    });
+    var base = Date.now();
+    fresh.forEach(function (l, i) { l.id = 'l' + (base + i).toString(36); l.enabled = true; l.added = base; l.updatedAt = base; S.lists.push(l); });
+    MV.saveLists();
+    var done = 0, failed = [];
+    return fresh.reduce(function (p, l) {
+      return p.then(function () {
+        return loadList(l, true).catch(function (e) { l.error = e.message; failed.push(l.name); }).then(function () { done++; if (onProgress) onProgress(done, fresh.length, l.name); });
+      });
+    }, Promise.resolve()).then(function () {
+      MV.saveLists();
+      return MV.reloadCatalog(false).then(function () { return { added: fresh.length, skipped: arr.length - fresh.length, failed: failed }; });
+    });
+  };
   MV.removeList = function (id) {
     S.lists = S.lists.filter(function (l) { return l.id !== id; });
     MV.idbDel('list:' + id); MV.idbDel('raw:' + id);
