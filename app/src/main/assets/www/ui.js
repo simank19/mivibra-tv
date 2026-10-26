@@ -58,9 +58,9 @@
   };
 
   function navItems() {
-    if (MV.isKids()) return [['kids', 'Inicio', IC.home], ['search', 'Buscar', IC.search]];
+    if (MV.isKids()) return [['kids', 'Inicio', IC.home], ['search', 'Buscar', IC.search], ['youtube', 'YouTube Kids', IC.yt]];
     return [
-      ['home', 'Inicio', IC.home], ['search', 'Buscar', IC.search], ['discover', 'Descubrir', IC.compass], ['live', 'En vivo', IC.live], ['guide', 'Guía', IC.guide],
+      ['home', 'Inicio', IC.home], ['search', 'Buscar', IC.search], ['discover', 'Descubrir', IC.compass], ['live', 'En vivo', IC.live], ['youtube', 'YouTube', IC.yt], ['music', 'Música', IC.music], ['radio', 'Radio', IC.radio], ['guide', 'Guía', IC.guide],
       ['movies', 'Películas', IC.movie], ['series', 'Series', IC.series], ['platforms', 'Plataformas', IC.platforms], ['anime', 'Anime', IC.anime], ['kdrama', 'K-Drama', IC.kdrama],
       ['docs', 'Documentales', IC.doc], ['favs', 'Favoritos', IC.star], ['history', 'Historial', IC.history], ['games', 'Juegos', IC.games],
       ['settings', 'Ajustes', IC.settings]
@@ -741,6 +741,7 @@
   }
   function launch(req, ctx) {
     if (MV.isKids() && +P.kidsLimit > 0 && MV.kidsLeft() <= 0) { kidsTimeUp(); return; }
+    if (MV.audio && MV.audio.current() && !ctx.noRecord) MV.audio.stop();
     playing = Object.assign({ started: Date.now() }, ctx);
     req.audioLang = P.audioLang; req.subLang = P.subLang;
     if (A) A.play(JSON.stringify(req));
@@ -774,6 +775,7 @@
     var ctx = playing; playing = null;
     var mins = Math.round((Date.now() - ctx.started) / 60000);
     if (mins > 0) MV.addKidsMinutes(mins);
+    if (ctx.noRecord) { MV.rerender(); return; }
     if (ctx.list && r.index != null && ctx.list[r.index]) { MV.recordPlay(ctx.list[r.index], r); }
     else if (ctx.episodes) {
       var e = ctx.episodes[ctx.start + (r.index || 0)];
@@ -879,7 +881,7 @@
     },
     nav: function (a) { stack = []; MV.go(a, null, { replace: true }); },
     go: function (a) { MV.closeModal(true); if (a === 'profileEdit') { editSel = null; } MV.go(a); },
-    more: function (k) { limits[k] = (limits[k] || (k === 'live' ? 150 : k === 'games' ? 120 : 60)) + (k === 'live' ? 150 : 60); MV.rerender(); },
+    more: function (k) { limits[k] = (limits[k] || (k === 'live' ? 150 : k === 'games' ? 120 : k === 'music' ? 200 : 60)) + (k === 'live' ? 150 : k === 'music' ? 200 : 60); MV.rerender(); },
     open: function (_, el) { var it = S.byKey[el.dataset.key] || MV.reg[el.dataset.key]; if (!it) return;
       if (it.type === 'tmdb') { if (it.have && S.byKey[it.have]) MV.go('detail', it.have); else tmdbInfo(it); return; }
       if (it.type === 'live' || it.type === 'rom') MV.playItem(it); else MV.go('detail', it.key); },
@@ -958,6 +960,30 @@
     // Listas
     addList: function () { if (!MV.acct.canEdit()) return MV.toast('Solo el administrador puede agregar listas'); addListDialog('url'); },
     closeModal: function () { MV.closeModal(); },
+    auToggle: function () { AU.toggle(); },
+    auNext: function () { AU.next(); },
+    auPrev: function () { AU.prev(); },
+    auStop: function () { AU.stop(); if (view.name === 'radio' || view.name === 'music') MV.rerender(); },
+    openApp: function (k) { openApp(k); },
+    ytSearch: function () { var v = (document.getElementById('ytIn') || {}).value || ''; v = v.trim(); if (!v) { openApp('youtube'); return; } ytOpen(v); },
+    ytTopic: function (q) { ytOpen(q); },
+    radioScope: function (c) { RADIO.scope = c; RADIO.list = null; limits.radio = 60; MV.rerender(); },
+    radioTag: function (t) { RADIO.tag = t; RADIO.list = null; limits.radio = 60; MV.rerender(); },
+    radioSearch: function () { RADIO.q = ((document.getElementById('radioIn') || {}).value || '').trim(); RADIO.list = null; MV.rerender(); },
+    radioPlay: function (i) { var l = MV._radioList || []; AU.play(l, +i); setTimeout(MV.rerender, 50); },
+    radioFav: function (i) {
+      var s = (MV._radioList || [])[+i]; if (!s) return;
+      var f = radioFavs(), at = f.findIndex(function (x) { return x.url === s.url; });
+      if (at >= 0) { f.splice(at, 1); MV.toast('Quitada de favoritas'); } else { f.unshift(s); MV.toast('Agregada a favoritas'); }
+      MV.save('radioFavs', f.slice(0, 100)); if (RADIO.scope === 'fav') RADIO.key = ''; MV.rerender();
+    },
+    musicTab: function (t) { MUSIC.tab = t; MV.rerender(); },
+    musicScan: function () { scanMusic(); },
+    musicShuffle: function () { var l = (MUSIC.local || []).slice(); for (var i = l.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = l[i]; l[i] = l[j]; l[j] = t; } AU.play(l, 0); setTimeout(MV.rerender, 50); },
+    localPlay: function (i) { AU.play(MUSIC.local || [], +i); setTimeout(MV.rerender, 50); },
+    audPlay: function (i) { AU.play(MUSIC.aud || [], +i); setTimeout(MV.rerender, 50); },
+    musicGenre: function (g) { MUSIC.genre = g; MUSIC.q = ''; MUSIC.aud = null; MV.rerender(); },
+    musicSearch: function () { MUSIC.q = ((document.getElementById('musicIn') || {}).value || '').trim(); MUSIC.aud = null; MV.rerender(); },
     discOnly: function () { DISC.onlyHave = !DISC.onlyHave; MV.rerender(); },
     discReload: function () { DISC.error = ''; loadDiscover(true); MV.rerender(); },
     tmdbTrailer: function (key) {
@@ -1271,6 +1297,228 @@
       '<p class="muted" style="font-size:13px">No está en tus listas.</p></div></div>' +
       '<div class="btns"><button class="btn f" data-act="tmdbTrailer" data-arg="' + esc(t.key) + '" data-autofocus>' + IC.play + 'Ver tráiler</button><button class="btn ghost f" data-act="tmdbSearch" data-arg="' + esc(t.key) + '">' + IC.search + 'Buscar parecidos</button><button class="btn ghost f" data-act="closeModal">Cerrar</button></div>');
   }
+
+  // ---------- Reproductor de audio (radio y música) ----------
+  var AU = MV.audio = (function () {
+    var el = new Audio(), queue = [], idx = -1, cur = null, triedNative = false;
+    el.preload = 'none';
+    function box() { return document.getElementById('mini'); }
+    function draw() {
+      var b = box(); if (!b) return;
+      if (!cur) { b.hidden = true; b.innerHTML = ''; document.body.classList.remove('has-mini'); return; }
+      b.hidden = false; document.body.classList.add('has-mini');
+      var playingNow = !el.paused;
+      b.innerHTML = '<div class="art">' + (cur.art ? '<img src="' + esc(cur.art) + '" alt="" onerror="this.remove()">' : '') + '<span>' + (cur.kind === 'radio' ? IC.radio : IC.music) + '</span></div>' +
+        '<div class="t"><b>' + esc(cur.title) + '</b><span id="miniSub">' + esc(AU.status || cur.sub || '') + '</span></div>' +
+        (queue.length > 1 ? '<button class="iconbtn f" data-act="auPrev" aria-label="Anterior">' + IC.prev + '</button>' : '') +
+        '<button class="iconbtn f on" data-act="auToggle" aria-label="' + (playingNow ? 'Pausa' : 'Reproducir') + '">' + (playingNow ? IC.pause : IC.play) + '</button>' +
+        (queue.length > 1 ? '<button class="iconbtn f" data-act="auNext" aria-label="Siguiente">' + IC.next + '</button>' : '') +
+        '<button class="iconbtn f" data-act="auStop" aria-label="Cerrar">' + IC.close + '</button>';
+    }
+    function setStatus(t) { AU.status = t; var s = document.getElementById('miniSub'); if (s) s.textContent = t || (cur && cur.sub) || ''; }
+    function start() {
+      cur = queue[idx]; triedNative = false; if (!cur) return;
+      setStatus('Conectando…'); draw();
+      el.src = cur.url;
+      var p = el.play(); if (p && p.catch) p.catch(function () {});
+      if (cur.kind === 'radio' && cur.uuid) MV.getText(RB() + '/url/' + cur.uuid).catch(function () {});
+    }
+    el.addEventListener('playing', function () { setStatus(''); draw(); });
+    el.addEventListener('pause', draw);
+    el.addEventListener('waiting', function () { setStatus('Cargando…'); });
+    el.addEventListener('ended', function () { if (idx < queue.length - 1) { idx++; start(); } else draw(); });
+    el.addEventListener('error', function () {
+      if (!cur) return;
+      // Emisoras HLS o formatos que el navegador no abre: se pasan al reproductor del equipo
+      if (cur.kind === 'radio' && !triedNative && A) {
+        triedNative = true; var c = cur; AU.stop();
+        launch({ queue: [{ id: 'radio:' + (c.uuid || c.url), url: c.url, title: c.title, subtitle: c.sub || 'Radio', alts: [] }], index: 0, live: true }, { item: { key: 'radio:' + c.url, name: c.title }, noRecord: true });
+        return;
+      }
+      setStatus('No se pudo reproducir');
+      if (cur.kind !== 'radio' && idx < queue.length - 1) setTimeout(function () { idx++; start(); }, 1200);
+    });
+    return {
+      status: '',
+      play: function (list, i) { queue = list; idx = i || 0; start(); },
+      toggle: function () { if (!cur) return; if (el.paused) el.play(); else el.pause(); draw(); },
+      next: function () { if (idx < queue.length - 1) { idx++; start(); } },
+      prev: function () { if (el.currentTime > 5) el.currentTime = 0; else if (idx > 0) { idx--; start(); } },
+      stop: function () { el.pause(); el.removeAttribute('src'); el.load(); cur = null; queue = []; draw(); },
+      current: function () { return cur; },
+      draw: draw
+    };
+  })();
+
+  // ---------- Otras apps ----------
+  var APPS = {
+    youtube: { name: 'YouTube', pkgs: ['com.google.android.youtube.tv', 'com.google.android.youtube.googletv', 'com.google.android.youtube'], web: 'https://www.youtube.com' },
+    ytkids: { name: 'YouTube Kids', pkgs: ['com.google.android.youtube.tvkids', 'com.google.android.apps.youtube.kids'], web: 'https://www.youtubekids.com' },
+    ytmusic: { name: 'YouTube Music', pkgs: ['com.google.android.apps.youtube.music'], web: 'https://music.youtube.com' },
+    spotify: { name: 'Spotify', pkgs: ['com.spotify.tv.android', 'com.spotify.music'], web: 'https://open.spotify.com' },
+    deezer: { name: 'Deezer', pkgs: ['deezer.android.tv', 'deezer.android.app'], web: 'https://www.deezer.com' },
+    amazon: { name: 'Amazon Music', pkgs: ['com.amazon.mp3'], web: 'https://music.amazon.com' },
+    apple: { name: 'Apple Music', pkgs: ['com.apple.android.music'], web: 'https://music.apple.com' }
+  };
+  var installed = null;
+  function appsInstalled() {
+    if (installed || !A || !A.appsInstalled) return installed || {};
+    var all = []; Object.keys(APPS).forEach(function (k) { all = all.concat(APPS[k].pkgs); });
+    try { installed = JSON.parse(A.appsInstalled(JSON.stringify(all))); } catch (e) { installed = {}; }
+    return installed;
+  }
+  function hasApp(k) { var m = appsInstalled(); return APPS[k].pkgs.some(function (p) { return m[p]; }); }
+  function openApp(k, url) {
+    if (AU.current()) AU.stop();
+    var a = APPS[k];
+    if (A && A.openApp) A.openApp(JSON.stringify({ pkgs: a.pkgs, url: url || '' }));
+    else window.open(url || a.web, '_blank');
+  }
+  function appTile(k, sub) {
+    var a = APPS[k], ok = !A || hasApp(k);
+    return '<button class="apptile glass f" data-act="openApp" data-arg="' + k + '"><b>' + esc(a.name) + '</b><span>' + esc(ok ? (sub || 'Abrir') : 'Instalar desde la tienda') + '</span></button>';
+  }
+
+  // ---------- YouTube ----------
+  var ytQuery = '';
+  var YT_TOPICS = [['Música', 'música en español'], ['Noticias', 'noticias en vivo'], ['Fútbol', 'resumen fútbol'], ['Recetas', 'recetas fáciles'], ['Películas completas', 'películas completas gratis canal oficial'], ['Podcasts', 'podcast en español'], ['Documentales', 'documental completo'], ['Tutoriales', 'tutorial'], ['Comedia', 'comedia stand up']];
+  VIEWS.youtube = function () {
+    var kids = MV.isKids();
+    var html = top(kids ? 'YouTube Kids' : 'YouTube');
+    if (kids) return html + '<div class="panel glass"><p>Videos para niños en la app oficial de YouTube Kids.</p><div class="apps">' + appTile('ytkids', 'Abrir YouTube Kids') + '</div></div>';
+    html += '<div class="panel glass"><p>Se abre en la app oficial de YouTube' + (MV.device.tv ? ' para TV' : '') + ', con tu cuenta. Para volver a MiVibra TV usa el botón Atrás.</p>' +
+      '<label class="field">Buscar en YouTube<input class="in f" id="ytIn" value="' + esc(ytQuery) + '" placeholder="Artista, canción, video…" autocomplete="off" enterkeyhint="search"></label>' +
+      '<div class="btns"><button class="btn f" data-act="ytSearch">' + IC.search + 'Buscar</button><button class="btn ghost f" data-act="openApp" data-arg="youtube">' + IC.yt + 'Abrir YouTube</button></div></div>' +
+      '<h3 style="margin:18px 0 10px">Temas rápidos</h3><div class="chips">' + YT_TOPICS.map(function (t) { return '<button class="chip f" data-act="ytTopic" data-arg="' + esc(t[1]) + '">' + esc(t[0]) + '</button>'; }).join('') + '</div>' +
+      '<h3 style="margin:18px 0 10px">Más apps de YouTube</h3><div class="apps">' + appTile('ytkids', 'Para niños') + appTile('ytmusic', 'Música') + '</div>';
+    return html;
+  };
+  VIEWS.youtube.after = function () { var i = document.getElementById('ytIn'); if (i) i.addEventListener('keydown', function (e) { if (e.key === 'Enter') ACT.ytSearch(); }); };
+  function ytOpen(q) {
+    ytQuery = q;
+    openApp('youtube', 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q));
+  }
+
+  // ---------- Radio (directorio abierto Radio Browser) ----------
+  var RB_HOSTS = ['https://de1.api.radio-browser.info', 'https://de2.api.radio-browser.info', 'https://fi1.api.radio-browser.info', 'https://nl1.api.radio-browser.info'], rbI = 0;
+  function RB() { return RB_HOSTS[rbI % RB_HOSTS.length] + '/json'; }
+  function rbGet(path) {
+    var tries = 0;
+    function go() {
+      return MV.getText(RB() + path).then(function (t) { return JSON.parse(t); }).catch(function (e) { if (++tries < RB_HOSTS.length) { rbI++; return go(); } throw e; });
+    }
+    return go();
+  }
+  var RADIO = { scope: 'CO', tag: '', q: '', list: null, loading: false, key: '', error: '' };
+  var RADIO_SCOPES = [['CO', 'Colombia'], ['MX', 'México'], ['AR', 'Argentina'], ['ES', 'España'], ['US', 'Estados Unidos'], ['VE', 'Venezuela'], ['PE', 'Perú'], ['CL', 'Chile'], ['EC', 'Ecuador'], ['', 'Todo el mundo'], ['fav', '★ Favoritas']];
+  var RADIO_TAGS = [['', 'Todas'], ['news', 'Noticias'], ['salsa', 'Salsa'], ['vallenato', 'Vallenato'], ['reggaeton', 'Reggaetón'], ['tropical', 'Tropical'], ['pop', 'Pop'], ['rock', 'Rock'], ['romantic', 'Románticas'], ['christian', 'Cristianas'], ['classical', 'Clásica'], ['jazz', 'Jazz'], ['electronic', 'Electrónica'], ['sports', 'Deportes'], ['talk', 'Hablada']];
+  function radioFavs() { return MV.load('radioFavs', []); }
+  function stToItem(s) {
+    return { kind: 'radio', uuid: s.stationuuid, title: (s.name || '').trim(), url: s.url_resolved || s.url, art: s.favicon || '', sub: [s.country, (s.tags || '').split(',').slice(0, 2).join(', ')].filter(Boolean).join(' · '), hls: !!s.hls };
+  }
+  function loadRadio() {
+    var key = RADIO.scope + '|' + RADIO.tag + '|' + RADIO.q;
+    if (RADIO.scope === 'fav') { RADIO.list = radioFavs(); RADIO.key = key; return; }
+    if (RADIO.key === key || RADIO.loading) return;
+    RADIO.loading = true; RADIO.error = '';
+    var qs = '/stations/search?hidebroken=true&order=clickcount&reverse=true&limit=120' + (RADIO.scope ? '&countrycode=' + RADIO.scope : '') + (RADIO.tag ? '&tag=' + encodeURIComponent(RADIO.tag) : '') + (RADIO.q ? '&name=' + encodeURIComponent(RADIO.q) : '');
+    rbGet(qs).then(function (arr) {
+      var seen = {};
+      RADIO.list = arr.filter(function (s) { var k = (s.name || '').trim().toLowerCase(); if (!k || seen[k] || !(s.url_resolved || s.url)) return false; seen[k] = 1; return true; }).map(stToItem);
+    }).catch(function (e) { RADIO.list = []; RADIO.error = e.message; }).then(function () {
+      RADIO.loading = false; RADIO.key = key;
+      if (view.name === 'radio') MV.rerender();
+    });
+  }
+  VIEWS.radio = function () {
+    loadRadio();
+    var favSet = {}; radioFavs().forEach(function (f) { favSet[f.url] = 1; });
+    var cur = AU.current();
+    var html = top('Radio') + '<div class="chips">' + RADIO_SCOPES.map(function (c) { return '<button class="chip f' + (RADIO.scope === c[0] ? ' on' : '') + '" data-act="radioScope" data-arg="' + c[0] + '">' + esc(c[1]) + '</button>'; }).join('') + '</div>' +
+      (RADIO.scope !== 'fav' ? '<div class="chips">' + RADIO_TAGS.map(function (c) { return '<button class="chip f' + (RADIO.tag === c[0] ? ' on' : '') + '" data-act="radioTag" data-arg="' + c[0] + '">' + esc(c[1]) + '</button>'; }).join('') + '</div>' +
+        '<div style="display:flex;gap:10px;margin:4px 0 16px;flex-wrap:wrap"><input class="in f" id="radioIn" value="' + esc(RADIO.q) + '" placeholder="Buscar emisora (ej. Caracol, Tropicana, La Mega)" style="flex:1;min-width:220px" autocomplete="off" enterkeyhint="search"><button class="btn f" data-act="radioSearch">' + IC.search + 'Buscar</button></div>' : '');
+    if (RADIO.loading && !RADIO.list) return html + '<div class="panel glass" style="display:flex;gap:14px;align-items:center"><div class="spinner"></div><b>Buscando emisoras…</b></div>';
+    var list = RADIO.list || [];
+    if (!list.length) return html + '<div class="empty glass"><p class="muted">' + (RADIO.error ? 'No se pudo conectar con el directorio de radios.' : RADIO.scope === 'fav' ? 'Aún no tienes emisoras favoritas. Mantén presionada una emisora o usa la estrella.' : 'No encontré emisoras con ese filtro.') + '</p></div>';
+    MV._radioList = list;
+    return html + '<div class="stations">' + list.slice(0, limits.radio || 60).map(function (s, i) {
+      var on = cur && cur.url === s.url;
+      return '<div class="station glass' + (on ? ' on' : '') + '"><button class="f play" data-act="radioPlay" data-arg="' + i + '" data-fid="r-' + MV.hash(s.url) + '"><div class="logo" style="--h:' + MV.hue(s.title) + '">' + (s.art ? '<img loading="lazy" src="' + esc(s.art) + '" alt="" onerror="this.remove()">' : '') + '<i>' + esc(MV.mono(s.title)) + '</i></div><div class="t"><b>' + esc(s.title) + '</b><span>' + esc(s.sub) + '</span></div></button>' +
+        '<button class="iconbtn f' + (favSet[s.url] ? ' on' : '') + '" data-act="radioFav" data-arg="' + i + '" aria-label="Favorita">' + IC.star + '</button></div>';
+    }).join('') + '</div>' + (list.length > (limits.radio || 60) ? '<button class="btn ghost more f" data-act="more" data-arg="radio">Ver más (' + (list.length - (limits.radio || 60)) + ')</button>' : '') +
+      '<p class="muted" style="font-size:12px;margin-top:16px">Emisoras del directorio abierto radio-browser.info. Las transmiten las propias emisoras.</p>';
+  };
+  VIEWS.radio.after = function () { var i = document.getElementById('radioIn'); if (i) i.addEventListener('keydown', function (e) { if (e.key === 'Enter') ACT.radioSearch(); }); };
+
+  // ---------- Música ----------
+  var MUSIC = { tab: 'mine', local: null, scanning: false, genre: '', q: '', aud: null, audKey: '', audLoading: false, host: '' };
+  var AUD_GENRES = [['', 'Tendencias'], ['Latin', 'Latina'], ['Electronic', 'Electrónica'], ['Hip-Hop/Rap', 'Hip-Hop'], ['Pop', 'Pop'], ['Rock', 'Rock'], ['Lo-Fi', 'Lo-Fi'], ['R&B/Soul', 'R&B'], ['Reggae', 'Reggae'], ['Acoustic', 'Acústica'], ['Jazz', 'Jazz'], ['Classical', 'Clásica'], ['Ambient', 'Relajante']];
+  var MUSIC_EXT = ['mp3', 'm4a', 'aac', 'flac', 'ogg', 'opus', 'wav'];
+  function mediaUrl(path, ext) {
+    var b = btoa(unescape(encodeURIComponent(path))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    return 'https://appassets.androidplatform.net/media/' + b + '.' + ext;
+  }
+  function scanMusic() {
+    if (!A) { MV.toast('Disponible en la app instalada'); return; }
+    if (!A.hasStorageAccess()) { MV.toast('Dale permiso a MiVibra TV para ver tus archivos y vuelve'); A.requestStorageAccess(); return; }
+    var roots = JSON.parse(A.storageRoots()).filter(function (r) { return r.readable; }).map(function (r) { return r.path; }).concat((P.romRoots || []).filter(function (p) { return p.indexOf('content://') === 0; }));
+    MUSIC.scanning = true; MV.rerender();
+    MV.call('scanRoms', [JSON.stringify(roots), JSON.stringify(MUSIC_EXT)]).then(function (arr) {
+      MUSIC.local = arr.map(function (f) {
+        var parts = f.path.split('/'), folder = decodeURIComponent(parts[parts.length - 2] || 'Música');
+        return { kind: 'music', title: f.name.replace(/\.[^.]+$/, '').replace(/_/g, ' '), sub: folder, folder: folder, url: mediaUrl(f.path, f.ext) };
+      }).sort(function (a, b) { return a.folder.localeCompare(b.folder) || a.title.localeCompare(b.title); });
+      MV.save('musicCache', MUSIC.local.slice(0, 3000));
+    }).catch(function (e) { MV.toast(e.message); }).then(function () { MUSIC.scanning = false; if (view.name === 'music') MV.rerender(); });
+  }
+  function audHost() {
+    if (MUSIC.host) return Promise.resolve(MUSIC.host);
+    return MV.getText('https://api.audius.co').then(function (t) { var d = []; try { d = JSON.parse(t).data || []; } catch (e) {} MUSIC.host = (Array.isArray(d) && d[0]) || 'https://api.audius.co'; return MUSIC.host; })
+      .catch(function () { MUSIC.host = 'https://api.audius.co'; return MUSIC.host; });
+  }
+  function loadAudius() {
+    var key = MUSIC.genre + '|' + MUSIC.q;
+    if (MUSIC.audKey === key || MUSIC.audLoading) return;
+    MUSIC.audLoading = true;
+    audHost().then(function (h) {
+      var path = MUSIC.q ? '/v1/tracks/search?query=' + encodeURIComponent(MUSIC.q) : '/v1/tracks/trending?time=week' + (MUSIC.genre ? '&genre=' + encodeURIComponent(MUSIC.genre) : '');
+      return MV.getText(h + path + (path.indexOf('?') > 0 ? '&' : '?') + 'app_name=MiVibraTV').then(function (t) {
+        MUSIC.aud = (JSON.parse(t).data || []).filter(function (x) { return x.is_streamable !== false; }).slice(0, 60).map(function (x) {
+          return { kind: 'music', title: x.title, sub: (x.user && x.user.name) || '', art: (x.artwork && (x.artwork['480x480'] || x.artwork['150x150'])) || '', url: h + '/v1/tracks/' + x.id + '/stream?app_name=MiVibraTV', dur: x.duration };
+        });
+      });
+    }).catch(function () { MUSIC.aud = []; MUSIC.host = ''; }).then(function () { MUSIC.audLoading = false; MUSIC.audKey = key; if (view.name === 'music') MV.rerender(); });
+  }
+  function trackRows(list, act) {
+    var cur = AU.current();
+    return '<div class="tracks">' + list.map(function (t, i) {
+      var on = cur && cur.url === t.url;
+      return '<button class="track f' + (on ? ' on' : '') + '" data-act="' + act + '" data-arg="' + i + '" data-fid="t-' + MV.hash(t.url) + '"><div class="art" style="--h:' + MV.hue(t.title) + '">' + (t.art ? '<img loading="lazy" src="' + esc(t.art) + '" alt="" onerror="this.remove()">' : '') + IC.music + '</div><div class="t"><b>' + esc(t.title) + '</b><span>' + esc(t.sub) + (t.dur ? ' · ' + Math.floor(t.dur / 60) + ':' + ('0' + t.dur % 60).slice(-2) : '') + '</span></div>' + (on ? '<i class="eq"></i>' : '') + '</button>';
+    }).join('') + '</div>';
+  }
+  VIEWS.music = function () {
+    var tabs = [['mine', 'Mi música'], ['free', 'Música libre'], ['apps', 'Apps de música']];
+    var html = top('Música') + '<div class="chips">' + tabs.map(function (t) { return '<button class="chip f' + (MUSIC.tab === t[0] ? ' on' : '') + '" data-act="musicTab" data-arg="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>';
+    if (MUSIC.tab === 'apps') {
+      return html + '<div class="panel glass"><p>Abre tus apps de música con tu cuenta.</p><div class="apps">' + ['ytmusic', 'spotify', 'deezer', 'amazon', 'apple'].map(function (k) { return appTile(k); }).join('') + '</div></div>';
+    }
+    if (MUSIC.tab === 'free') {
+      loadAudius();
+      html += '<div class="chips">' + AUD_GENRES.map(function (g) { return '<button class="chip f' + (!MUSIC.q && MUSIC.genre === g[0] ? ' on' : '') + '" data-act="musicGenre" data-arg="' + esc(g[0]) + '">' + esc(g[1]) + '</button>'; }).join('') + '</div>' +
+        '<div style="display:flex;gap:10px;margin:4px 0 16px;flex-wrap:wrap"><input class="in f" id="musicIn" value="' + esc(MUSIC.q) + '" placeholder="Buscar canción o artista" style="flex:1;min-width:220px" autocomplete="off" enterkeyhint="search"><button class="btn f" data-act="musicSearch">' + IC.search + 'Buscar</button></div>';
+      if (MUSIC.audLoading && !MUSIC.aud) return html + '<div class="panel glass" style="display:flex;gap:14px;align-items:center"><div class="spinner"></div><b>Cargando canciones…</b></div>';
+      if (!MUSIC.aud || !MUSIC.aud.length) return html + '<div class="empty glass"><p class="muted">No encontré canciones. Prueba otro género o búsqueda.</p></div>';
+      return html + trackRows(MUSIC.aud, 'audPlay') + '<p class="muted" style="font-size:12px;margin-top:16px">Música publicada gratis por sus propios artistas en Audius.</p>';
+    }
+    if (!MUSIC.local) MUSIC.local = MV.load('musicCache', null);
+    html += '<div class="btns" style="margin-bottom:14px"><button class="btn f" data-act="musicScan">' + IC.refresh + (MUSIC.local ? 'Volver a buscar' : 'Buscar mi música') + '</button><button class="btn ghost f" data-act="romRoots">' + IC.usb + 'Carpetas y unidades</button>' + (MUSIC.local && MUSIC.local.length ? '<button class="btn ghost f" data-act="musicShuffle">Aleatorio</button>' : '') + '</div>';
+    if (MUSIC.scanning) return html + '<div class="panel glass" style="display:flex;gap:14px;align-items:center"><div class="spinner"></div><b>Buscando canciones en el equipo y las USB…</b></div>';
+    if (!MUSIC.local) return html + '<div class="empty glass"><h2>Tu música, aquí</h2><p class="muted">Busca canciones (MP3, M4A, FLAC, OGG, WAV) en la memoria del equipo y en memorias USB o discos conectados.</p></div>';
+    if (!MUSIC.local.length) return html + '<div class="empty glass"><p class="muted">No encontré canciones. Conecta una USB o elige una carpeta en "Carpetas y unidades".</p></div>';
+    return html + '<p class="muted" style="margin:0 0 10px">' + MUSIC.local.length + ' canciones</p>' + trackRows(MUSIC.local.slice(0, limits.music || 200), 'localPlay') +
+      (MUSIC.local.length > (limits.music || 200) ? '<button class="btn ghost more f" data-act="more" data-arg="music">Ver más</button>' : '');
+  };
+  VIEWS.music.after = function () { var i = document.getElementById('musicIn'); if (i) i.addEventListener('keydown', function (e) { if (e.key === 'Enter') ACT.musicSearch(); }); };
 
   // ---------- Eventos de la app ----------
   MV.on('catalog', function () { if (['boot', 'profiles', 'profileEdit', 'settings', 'games'].indexOf(view.name) < 0) MV.rerender(); });

@@ -436,6 +436,59 @@ class Bridge(private val a: MainActivity) {
             .toString()
     }
 
+    // ---------------- Otras apps (YouTube, música) ----------------
+
+    /** Qué apps de la lista están instaladas: {"com.google.android.youtube": true, ...} */
+    @JavascriptInterface
+    fun appsInstalled(pkgsJson: String): String {
+        val out = JSONObject()
+        val arr = try { JSONArray(pkgsJson) } catch (_: Exception) { JSONArray() }
+        for (i in 0 until arr.length()) {
+            val p = arr.optString(i)
+            out.put(p, try { a.packageManager.getPackageInfo(p, 0); true } catch (_: Exception) { false })
+        }
+        return out.toString()
+    }
+
+    /**
+     * Abre la primera app instalada de "pkgs". Con "url" la abre en esa app (por ejemplo una búsqueda de YouTube).
+     * Si ninguna está instalada, abre la tienda o el enlace en el navegador.
+     */
+    @JavascriptInterface
+    fun openApp(json: String): Boolean {
+        val o = try { JSONObject(json) } catch (_: Exception) { return false }
+        val pkgs = o.optJSONArray("pkgs") ?: JSONArray()
+        val url = o.optString("url")
+        val pm = a.packageManager
+        for (i in 0 until pkgs.length()) {
+            val p = pkgs.optString(i)
+            val installed = try { pm.getPackageInfo(p, 0); true } catch (_: Exception) { false }
+            if (!installed) continue
+            try {
+                val intent = if (url.isNotBlank()) Intent(Intent.ACTION_VIEW, Uri.parse(url)).setPackage(p)
+                else (pm.getLeanbackLaunchIntentForPackage(p) ?: pm.getLaunchIntentForPackage(p))
+                if (intent != null) {
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    a.runOnUiThread { try { a.startActivity(intent) } catch (_: Exception) {
+                        pm.getLaunchIntentForPackage(p)?.let { li -> a.startActivity(li.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                    } }
+                    return true
+                }
+            } catch (_: Exception) {
+            }
+        }
+        val store = pkgs.optString(0)
+        a.runOnUiThread {
+            try {
+                if (store.isNotBlank()) a.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$store")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                else if (url.isNotBlank()) a.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            } catch (_: Exception) {
+                try { if (url.isNotBlank()) a.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {}
+            }
+        }
+        return false
+    }
+
     // ---------------- Actualizaciones ----------------
 
     /** Descarga la APK nueva (con progreso) y abre el instalador. Si falta el permiso, abre el ajuste y avisa. */

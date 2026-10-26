@@ -46,6 +46,7 @@ class MainActivity : ComponentActivity() {
         val loader = WebViewAssetLoader.Builder()
             .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
             .addPathHandler("/net/", WebViewAssetLoader.InternalStoragePathHandler(this, File(cacheDir, "net").apply { mkdirs() }))
+            .addPathHandler("/media/", MediaFiles(this))
             .build()
 
         web = WebView(this)

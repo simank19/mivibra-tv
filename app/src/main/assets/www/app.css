@@ -269,7 +269,44 @@ html.kids { --base: #141A3A; --accent: #FFD15C; --accent-soft: rgba(255,209,92,.
 .kids .card { border-radius: 26px; border: 2px solid rgba(255,255,255,.22); }
 
 /* Celular / tablet vertical: barra inferior */
+
+/* ---------- Música, radio y YouTube ---------- */
+.mini { position: fixed; right: 22px; bottom: 22px; z-index: 60; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 20px; width: min(460px, calc(100vw - 32px)); box-shadow: 0 18px 50px rgba(0,0,0,.45); animation: rise .4s var(--ease) both; }
+.mini[hidden] { display: none; }
+.mini .art { position: relative; width: 48px; height: 48px; border-radius: 12px; overflow: hidden; flex: 0 0 auto; background: var(--accent-soft); display: flex; align-items: center; justify-content: center; color: var(--accent-text); }
+.mini .art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #fff; }
+.mini .t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.mini .t b { font: 700 14px var(--ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini .t span { font: 500 12px var(--ui); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini .iconbtn.on { background: var(--accent); color: var(--on-accent); }
+body.has-mini #app { padding-bottom: 90px; }
+.apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.apptile { text-align: left; padding: 18px; border-radius: 18px; border: 1px solid var(--line); color: var(--text); display: flex; flex-direction: column; gap: 4px; }
+.apptile b { font: 800 17px var(--brand); }
+.apptile span { font: 500 13px var(--muted); color: var(--muted); }
+.stations { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+.station { display: flex; align-items: center; gap: 6px; border-radius: 16px; border: 1px solid var(--line); padding: 6px 8px 6px 6px; }
+.station.on { border-color: var(--accent); background: var(--accent-soft); }
+.station .play { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; background: none; border: 0; color: inherit; text-align: left; padding: 4px; border-radius: 12px; }
+.station .logo { position: relative; width: 54px; height: 54px; border-radius: 12px; overflow: hidden; flex: 0 0 auto; background: linear-gradient(140deg, var(--h, #444), #17140F); display: flex; align-items: center; justify-content: center; }
+.station .logo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #fff; padding: 4px; }
+.station .logo i { font: 800 15px var(--brand); font-style: normal; color: #fff; }
+.station .t, .track .t { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.station .t b, .track .t b { font: 700 14px var(--ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.station .t span, .track .t span { font: 500 12px var(--ui); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tracks { display: flex; flex-direction: column; gap: 6px; }
+.track { display: flex; align-items: center; gap: 12px; padding: 8px 12px 8px 8px; border-radius: 14px; border: 1px solid transparent; background: var(--glass); color: var(--text); text-align: left; }
+.track.on { border-color: var(--accent); background: var(--accent-soft); }
+.track .art { position: relative; width: 46px; height: 46px; border-radius: 10px; overflow: hidden; flex: 0 0 auto; background: linear-gradient(140deg, var(--h, #444), #17140F); display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,.8); }
+.track .art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.track .t { flex: 1; }
+.track .eq { width: 16px; height: 16px; border-radius: 50%; background: var(--accent); animation: eqpulse 1s ease-in-out infinite alternate; flex: 0 0 auto; }
+@keyframes eqpulse { from { transform: scale(.6); opacity: .6; } to { transform: scale(1); opacity: 1; } }
+
 @media (max-width: 760px) {
+  .mini { right: 16px; bottom: 104px; width: calc(100vw - 32px); }
+  body.has-mini #app { padding-bottom: 180px; }
+  .stations { grid-template-columns: 1fr; }
   .epg { --c0: 118px; padding: 8px; height: calc(100vh - 230px); }
   .epg .who { font-size: 11px; padding: 0 6px; gap: 6px; }
   .epg .who img { width: 30px; height: 24px; }
