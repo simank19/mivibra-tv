@@ -39,7 +39,7 @@
   }
   function payload() {
     var cur = acct.config || {};
-    return { lists: sharedLists(), tmdbKey: P.tmdbKey || '', allowed: cur.allowed || [], open: !!cur.open };
+    return { lists: sharedLists(), tmdbKey: P.tmdbKey || '', ytKey: P.ytKey || '', allowed: cur.allowed || [], open: !!cur.open };
   }
 
   /** Guarda en la nube los cambios del superadministrador. */
@@ -60,6 +60,7 @@
     try {
       var keyChanged = (cfg.tmdbKey || '') !== (P.tmdbKey || '');
       if (keyChanged) { P.tmdbKey = cfg.tmdbKey || ''; MV.save('prefs', P); }
+      if ((cfg.ytKey || '') !== (P.ytKey || '')) { P.ytKey = cfg.ytKey || ''; MV.save('prefs', P); }
       var mine = acct.isAdmin() ? S.lists.filter(function (l) { return l.type === 'file'; }) : [];
       var remote = (cfg.lists || []).map(function (rl) {
         var ll = S.lists.find(function (l) { return l.id === rl.id; });

@@ -31,6 +31,7 @@
     render(opts.keepFocus);
   };
   MV.onBack = function () {
+    if (MV.ytPlayer && MV.ytPlayer.isOpen()) { MV.ytPlayer.close(); return true; }
     if (MV.modalOpen()) { MV.closeModal(); return true; }
     if (stack.length) {
       var prev = stack.pop();
@@ -706,7 +707,10 @@
     return '<div class="panel glass"><h2>Sinopsis y carátulas automáticas</h2><p>Para películas y series se usa TMDB (gratis para uso personal; crea tu clave en themoviedb.org › Ajustes › API). Para anime se usa MyAnimeList a través de Jikan, sin clave.</p>' +
       (MV.acct.canEdit() ? '<label class="field">Clave de TMDB (API Key o token de lectura)' + (MV.acct.isAdmin() ? ' · se comparte con todos los usuarios' : '') + '<input class="in f" id="tmdbKey" value="' + esc(P.tmdbKey || '') + '" autocomplete="off"></label><div class="btns"><button class="btn f" data-act="saveTmdb">Guardar</button><button class="btn ghost f" data-act="clearMeta">Volver a buscar todas las fichas</button></div>'
         : '<div class="line"><div class="t"><b>' + (P.tmdbKey ? 'Clave configurada por el administrador' : 'El administrador aún no ha puesto la clave') + '</b></div><button class="btn ghost sm f" data-act="clearMeta">Volver a buscar las fichas</button></div>') +
-      '<p style="margin-top:14px;font-size:12px">Este producto usa la API de TMDB pero no está respaldado ni certificado por TMDB.</p></div>';
+      '<p style="margin-top:14px;font-size:12px">Este producto usa la API de TMDB pero no está respaldado ni certificado por TMDB.</p></div>' +
+      '<div class="panel glass"><h2>YouTube dentro de la app</h2><p>Con una clave gratuita de la API de YouTube (Google Cloud › APIs y servicios › YouTube Data API v3) puedes buscar y ver videos sin salir de MiVibra TV. El cupo gratis alcanza para unas 100 búsquedas al día entre todos los usuarios; las tendencias casi no gastan cupo.</p>' +
+      (MV.acct.canEdit() ? '<label class="field">Clave de la API de YouTube' + (MV.acct.isAdmin() ? ' · se comparte con todos los usuarios' : '') + '<input class="in f" id="ytKey" value="' + esc(P.ytKey || '') + '" autocomplete="off" placeholder="AIza…"></label><div class="btns"><button class="btn f" data-act="saveYtKey">Guardar</button></div>'
+        : '<div class="line"><div class="t"><b>' + (P.ytKey ? 'Clave configurada por el administrador' : 'El administrador aún no ha puesto la clave') + '</b></div></div>') + '</div>';
   };
   SETTINGS.about = function () {
     return '<div class="panel glass"><h2>MiVibra TV</h2><p>Versión ' + esc(MV.device.version || '') + ' · ' + esc(MV.device.model || '') + '</p>' +
@@ -965,8 +969,10 @@
     auPrev: function () { AU.prev(); },
     auStop: function () { AU.stop(); if (view.name === 'radio' || view.name === 'music') MV.rerender(); },
     openApp: function (k) { openApp(k); },
-    ytSearch: function () { var v = (document.getElementById('ytIn') || {}).value || ''; v = v.trim(); if (!v) { openApp('youtube'); return; } ytOpen(v); },
-    ytTopic: function (q) { ytOpen(q); },
+    ytSearch: function () { var v = ((document.getElementById('ytIn') || {}).value || '').trim(); if (!P.ytKey) { if (v) ytOpen(v); else openApp('youtube'); return; } YT.q = v; YT.list = null; MV.rerender(); },
+    ytCat: function (c) { YT.cat = c; YT.q = ''; YT.list = null; MV.rerender(); },
+    ytPlay: function (i) { YTP.play(MV._ytList || [], +i); },
+    ytKeySetup: function () { setTab = 'meta'; MV.go('settings'); },
     radioScope: function (c) { RADIO.scope = c; RADIO.list = null; limits.radio = 60; MV.rerender(); },
     radioTag: function (t) { RADIO.tag = t; RADIO.list = null; limits.radio = 60; MV.rerender(); },
     radioSearch: function () { RADIO.q = ((document.getElementById('radioIn') || {}).value || '').trim(); RADIO.list = null; MV.rerender(); },
@@ -1116,6 +1122,7 @@
     },
     syncNow: function () { MV.sync.push().then(function () { MV.toast('Sincronizado'); }); },
     syncOut: function () { MV.sync.signOut().then(MV.rerender); },
+    saveYtKey: function () { P.ytKey = document.getElementById('ytKey').value.trim(); MV.savePrefs(); YT.key = ''; YT.list = null; MV.toast('Clave de YouTube guardada'); },
     saveTmdb: function () { P.tmdbKey = document.getElementById('tmdbKey').value.trim(); MV.savePrefs(); MV.toast('Clave guardada'); },
     clearMeta: function () { MV.toast('Las fichas se volverán a buscar'); S.items.forEach(function (i) { MV.idbDel('meta:' + i.key); }); },
     // Búsqueda con teclado en pantalla
@@ -1379,25 +1386,151 @@
     return '<button class="apptile glass f" data-act="openApp" data-arg="' + k + '"><b>' + esc(a.name) + '</b><span>' + esc(ok ? (sub || 'Abrir') : 'Instalar desde la tienda') + '</span></button>';
   }
 
-  // ---------- YouTube ----------
-  var ytQuery = '';
-  var YT_TOPICS = [['Música', 'música en español'], ['Noticias', 'noticias en vivo'], ['Fútbol', 'resumen fútbol'], ['Recetas', 'recetas fáciles'], ['Películas completas', 'películas completas gratis canal oficial'], ['Podcasts', 'podcast en español'], ['Documentales', 'documental completo'], ['Tutoriales', 'tutorial'], ['Comedia', 'comedia stand up']];
+  // ---------- YouTube dentro de la app (reproductor oficial incrustado + YouTube Data API) ----------
+  var YT = { cat: 'trend', q: '', list: null, loading: false, key: '', error: '', cache: {} };
+  var YT_CATS = [['trend', 'Tendencias', ''], ['10', 'Música', ''], ['17', 'Deportes', ''], ['24', 'Entretenimiento', ''], ['23', 'Comedia', ''], ['20', 'Videojuegos', ''], ['25', 'Noticias', 's'], ['27', 'Educación', 's'], ['s:recetas fáciles', 'Recetas', 's'], ['s:documental completo', 'Documentales', 's'], ['s:podcast en español', 'Podcasts', 's']];
+  function ytApi(path) {
+    var url = 'https://www.googleapis.com/youtube/v3/' + path + '&key=' + encodeURIComponent(P.ytKey);
+    var c = YT.cache[url]; if (c && c.ts > Date.now() - 30 * 60e3) return Promise.resolve(c.data);
+    return MV.getText(url).then(function (t) {
+      var j = JSON.parse(t);
+      if (j.error) throw new Error(j.error.message || 'Error de YouTube');
+      YT.cache[url] = { ts: Date.now(), data: j }; return j;
+    });
+  }
+  function ytItem(v) {
+    var id = typeof v.id === 'string' ? v.id : (v.id && v.id.videoId); var sn = v.snippet || {};
+    if (!id) return null;
+    var th = sn.thumbnails || {};
+    return { id: id, title: (sn.title || '').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&'), channel: sn.channelTitle || '', thumb: (th.high || th.medium || th.default || {}).url || '', live: sn.liveBroadcastContent === 'live' };
+  }
+  function loadYT() {
+    var key = YT.cat + '|' + YT.q;
+    if (YT.key === key || YT.loading || !P.ytKey) return;
+    YT.loading = true; YT.error = '';
+    var safe = MV.isKids() ? 'strict' : 'moderate', job;
+    if (YT.q || YT.cat.indexOf('s:') === 0 || ['25', '27'].indexOf(YT.cat) >= 0) {
+      var q = YT.q || (YT.cat.indexOf('s:') === 0 ? YT.cat.slice(2) : YT.cat === '25' ? 'noticias en vivo' : 'clase explicada');
+      job = ytApi('search?part=snippet&type=video&maxResults=40&regionCode=CO&relevanceLanguage=es&safeSearch=' + safe + '&q=' + encodeURIComponent(q));
+    } else {
+      job = ytApi('videos?part=snippet&chart=mostPopular&maxResults=40&regionCode=CO&hl=es' + (YT.cat !== 'trend' ? '&videoCategoryId=' + YT.cat : ''));
+    }
+    job.then(function (j) { YT.list = (j.items || []).map(ytItem).filter(Boolean); })
+      .catch(function (e) { YT.list = []; YT.error = e.message; })
+      .then(function () { YT.loading = false; YT.key = key; if (view.name === 'youtube') MV.rerender(); });
+  }
   VIEWS.youtube = function () {
     var kids = MV.isKids();
-    var html = top(kids ? 'YouTube Kids' : 'YouTube');
-    if (kids) return html + '<div class="panel glass"><p>Videos para niños en la app oficial de YouTube Kids.</p><div class="apps">' + appTile('ytkids', 'Abrir YouTube Kids') + '</div></div>';
-    html += '<div class="panel glass"><p>Se abre en la app oficial de YouTube' + (MV.device.tv ? ' para TV' : '') + ', con tu cuenta. Para volver a MiVibra TV usa el botón Atrás.</p>' +
-      '<label class="field">Buscar en YouTube<input class="in f" id="ytIn" value="' + esc(ytQuery) + '" placeholder="Artista, canción, video…" autocomplete="off" enterkeyhint="search"></label>' +
-      '<div class="btns"><button class="btn f" data-act="ytSearch">' + IC.search + 'Buscar</button><button class="btn ghost f" data-act="openApp" data-arg="youtube">' + IC.yt + 'Abrir YouTube</button></div></div>' +
-      '<h3 style="margin:18px 0 10px">Temas rápidos</h3><div class="chips">' + YT_TOPICS.map(function (t) { return '<button class="chip f" data-act="ytTopic" data-arg="' + esc(t[1]) + '">' + esc(t[0]) + '</button>'; }).join('') + '</div>' +
-      '<h3 style="margin:18px 0 10px">Más apps de YouTube</h3><div class="apps">' + appTile('ytkids', 'Para niños') + appTile('ytmusic', 'Música') + '</div>';
-    return html;
+    if (kids) return top('YouTube Kids') + '<div class="panel glass"><p>Videos para niños en la app oficial de YouTube Kids.</p><div class="apps">' + appTile('ytkids', 'Abrir YouTube Kids') + '</div></div>';
+    var html = top('YouTube', '<button class="pill f" data-act="openApp" data-arg="youtube">' + IC.yt.replace('<svg', '<svg width="18" height="18"') + 'Abrir app de YouTube</button>');
+    if (!P.ytKey) {
+      return html + '<div class="empty glass"><h2>Ver YouTube aquí mismo</h2><p class="muted">Para buscar y ver videos dentro de MiVibra TV hace falta una clave gratuita de la API de YouTube. ' +
+        (MV.acct.canEdit() ? 'Ponla en Ajustes › Sinopsis y carátulas.' : 'El administrador aún no la ha configurado.') + ' Mientras tanto puedes usar la app oficial.</p>' +
+        '<div class="btns" style="justify-content:center">' + (MV.acct.canEdit() ? '<button class="btn f" data-act="ytKeySetup" data-autofocus>Configurar clave</button>' : '') + '<button class="btn ghost f" data-act="openApp" data-arg="youtube">Abrir app de YouTube</button></div></div>' +
+        '<h3 style="margin:18px 0 10px">Más apps de YouTube</h3><div class="apps">' + appTile('ytkids', 'Para niños') + appTile('ytmusic', 'Música') + '</div>';
+    }
+    loadYT();
+    html += '<div style="display:flex;gap:10px;margin:0 0 12px;flex-wrap:wrap"><input class="in f" id="ytIn" value="' + esc(YT.q) + '" placeholder="Buscar en YouTube" style="flex:1;min-width:220px" autocomplete="off" enterkeyhint="search"><button class="btn f" data-act="ytSearch">' + IC.search + 'Buscar</button></div>' +
+      '<div class="chips">' + YT_CATS.map(function (c) { return '<button class="chip f' + (!YT.q && YT.cat === c[0] ? ' on' : '') + '" data-act="ytCat" data-arg="' + esc(c[0]) + '">' + esc(c[1]) + '</button>'; }).join('') + '</div>';
+    if (YT.loading && !YT.list) return html + '<div class="panel glass" style="display:flex;gap:14px;align-items:center"><div class="spinner"></div><b>Cargando videos…</b></div>';
+    if (YT.error) return html + '<div class="panel glass"><p>YouTube respondió: ' + esc(YT.error) + '</p><p class="muted" style="font-size:13px">Si dice "quota", se acabó el cupo gratis del día (se renueva a medianoche, hora del Pacífico). Puedes usar la app oficial mientras tanto.</p></div>';
+    var list = YT.list || [];
+    if (!list.length) return html + '<div class="empty glass"><p class="muted">No encontré videos.</p></div>';
+    MV._ytList = list;
+    return html + '<div class="vgrid">' + list.map(function (v, i) {
+      return '<button class="vcard f" data-act="ytPlay" data-arg="' + i + '" data-fid="y-' + v.id + '" style="animation-delay:' + Math.min(i, 12) * 0.03 + 's"><div class="th"><img loading="lazy" src="' + esc(v.thumb) + '" alt="" onerror="this.remove()">' + (v.live ? '<span class="tag">EN VIVO</span>' : '') + '</div><b>' + esc(v.title) + '</b><span>' + esc(v.channel) + '</span></button>';
+    }).join('') + '</div>';
   };
   VIEWS.youtube.after = function () { var i = document.getElementById('ytIn'); if (i) i.addEventListener('keydown', function (e) { if (e.key === 'Enter') ACT.ytSearch(); }); };
-  function ytOpen(q) {
-    ytQuery = q;
-    openApp('youtube', 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q));
-  }
+  function ytOpen(q) { openApp('youtube', 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q)); }
+
+  // Reproductor a pantalla completa con controles para control remoto
+  var YTP = MV.ytPlayer = (function () {
+    var player = null, list = [], idx = 0, apiReady = null, hideT = null, open = false;
+    function api() {
+      if (apiReady) return apiReady;
+      apiReady = new Promise(function (res, rej) {
+        if (window.YT && window.YT.Player) return res();
+        window.onYouTubeIframeAPIReady = function () { res(); };
+        var s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api'; s.onerror = function () { apiReady = null; rej(new Error('Sin conexión con YouTube')); };
+        document.head.appendChild(s);
+      });
+      return apiReady;
+    }
+    function box() { return document.getElementById('ytp'); }
+    function showBar() {
+      var b = box(); if (!b) return; b.classList.add('ui');
+      clearTimeout(hideT); hideT = setTimeout(function () { b.classList.remove('ui'); }, 4000);
+    }
+    function frame() {
+      var v = list[idx] || {};
+      var b = box();
+      b.innerHTML = '<div id="ytFrame"></div><button class="iconbtn x" data-yt="close" aria-label="Cerrar video">' + IC.close + '</button><div class="bar"><div class="t"><b>' + esc(v.title || '') + '</b><span>' + esc(v.channel || '') + (list.length > 1 ? ' · ' + (idx + 1) + ' de ' + list.length : '') + '</span></div>' +
+        '<div class="ctl"><button class="iconbtn" data-yt="prev" aria-label="Anterior">' + IC.prev + '</button><button class="iconbtn" data-yt="back10" aria-label="Atrás 10 s">−10</button><button class="iconbtn on" data-yt="toggle" aria-label="Pausa">' + IC.pause + '</button><button class="iconbtn" data-yt="fwd10" aria-label="Adelante 10 s">+10</button><button class="iconbtn" data-yt="next" aria-label="Siguiente">' + IC.next + '</button><button class="iconbtn" data-yt="close" aria-label="Cerrar">' + IC.close + '</button></div></div>';
+      b.querySelectorAll('[data-yt]').forEach(function (btn) { btn.onclick = function (e) { e.stopPropagation(); act(btn.dataset.yt); }; });
+    }
+    function load() {
+      var v = list[idx]; if (!v) return;
+      frame(); showBar();
+      api().then(function () {
+        if (player && player.destroy) { try { player.destroy(); } catch (e) {} }
+        player = new window.YT.Player('ytFrame', {
+          width: '100%', height: '100%', videoId: v.id,
+          playerVars: { autoplay: 1, playsinline: 1, rel: 0, modestbranding: 1, fs: 0, hl: 'es', cc_lang_pref: 'es', origin: location.origin },
+          events: {
+            onReady: function (e) { try { e.target.playVideo(); } catch (x) {} },
+            onStateChange: function (e) {
+              var t = box().querySelector('[data-yt="toggle"]');
+              if (t) t.innerHTML = e.data === 1 ? IC.pause : IC.play;
+              if (e.data === 0) act('next');
+            },
+            onError: function (e) {
+              var m = { 2: 'Video no válido', 5: 'No se puede reproducir aquí', 100: 'El video ya no existe', 101: 'El dueño no permite verlo fuera de YouTube', 150: 'El dueño no permite verlo fuera de YouTube', 152: 'YouTube bloqueó la reproducción aquí', 153: 'YouTube bloqueó la reproducción aquí' }[e.data] || 'Error ' + e.data;
+              MV.toast(m + '. Abriéndolo en la app de YouTube…', 4000);
+              openApp('youtube', 'https://www.youtube.com/watch?v=' + v.id); close();
+            }
+          }
+        });
+        var f = box().querySelector('iframe'); if (f) { f.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture'); f.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin'); }
+      }).catch(function (e) { MV.toast(e.message); close(); });
+    }
+    function act(a) {
+      showBar();
+      if (a === 'close') return close();
+      if (a === 'next') { if (idx < list.length - 1) { idx++; load(); } else close(); return; }
+      if (a === 'prev') { if (idx > 0) { idx--; load(); } return; }
+      if (!player || !player.getPlayerState) return;
+      if (a === 'toggle') { if (player.getPlayerState() === 1) player.pauseVideo(); else player.playVideo(); }
+      if (a === 'back10' || a === 'fwd10') player.seekTo(Math.max(0, player.getCurrentTime() + (a === 'fwd10' ? 10 : -10)), true);
+    }
+    function close() {
+      open = false;
+      if (player && player.destroy) { try { player.destroy(); } catch (e) {} }
+      player = null;
+      var b = box(); b.hidden = true; b.innerHTML = ''; b.classList.remove('ui');
+      document.body.classList.remove('yt-open');
+      setTimeout(function () { var el = document.querySelector('[data-fid="y-' + ((list[idx] || {}).id || '') + '"]'); if (el) el.focus(); else MV.focusFirst(); }, 50);
+    }
+    // Control remoto mientras el video está abierto: OK pausa, ◀ ▶ adelanta/atrasa, ▲ ▼ anterior/siguiente
+    document.addEventListener('keydown', function (e) {
+      if (!open) return;
+      var k = e.key, map = { Enter: 'toggle', ' ': 'toggle', MediaPlayPause: 'toggle', ArrowLeft: 'back10', ArrowRight: 'fwd10', ArrowUp: 'prev', ArrowDown: 'next', MediaTrackNext: 'next', MediaTrackPrevious: 'prev', Escape: 'close' };
+      if (map[k]) { e.preventDefault(); e.stopImmediatePropagation(); act(map[k]); }
+    }, true);
+    window.addEventListener('blur', function () { if (open) setTimeout(function () { if (document.activeElement && document.activeElement.tagName === 'IFRAME') window.focus(); }, 0); });
+    return {
+      isOpen: function () { return open; },
+      play: function (l, i) {
+        if (AU.current()) AU.stop();
+        list = l; idx = i || 0; open = true;
+        var b = box(); b.hidden = false; b.classList.toggle('tv', !!MV.device.tv); document.body.classList.add('yt-open');
+        load();
+      },
+      close: close,
+      act: act,
+      touch: showBar
+    };
+  })();
 
   // ---------- Radio (directorio abierto Radio Browser) ----------
   var RB_HOSTS = ['https://de1.api.radio-browser.info', 'https://de2.api.radio-browser.info', 'https://fi1.api.radio-browser.info', 'https://nl1.api.radio-browser.info'], rbI = 0;
