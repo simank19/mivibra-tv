@@ -673,6 +673,19 @@
   MV.kidsLeft = function () { var u = MV.kidsUsed(); return Math.max(0, (+P.kidsLimit || 60) - (u.m[S.pid] || 0)); };
 
   // ---------- Eventos internos ----------
+  /** Borra del equipo lo personal de una cuenta (perfiles, historial, favoritos, "continuar viendo", PIN y usuario +18).
+      Las listas y claves compartidas se quedan. Cada cuenta recupera lo suyo desde la nube al entrar. */
+  MV.resetUserData = function () {
+    try {
+      Object.keys(localStorage).forEach(function (k) {
+        if (/^mv:(pdata:|profiles$|pid$|kidsUsage|recentSearch$|radioFavs$|recentGames$)/.test(k)) localStorage.removeItem(k);
+      });
+    } catch (e) {}
+    S.profiles = []; S.pid = null; S.adultUntil = 0;
+    P.parentPin = ''; P.adult = null; P.covers = {}; P.updatedAt = 0;
+    MV.save('prefs', P);
+  };
+
   var listeners = {};
   MV.on = function (ev, fn) { (listeners[ev] = listeners[ev] || []).push(fn); };
   MV.emit = function (ev, data) { (listeners[ev] || []).forEach(function (fn) { try { fn(data); } catch (e) { console.error(e); } }); };
@@ -696,7 +709,7 @@
       return load(base + 'firebase-app-compat.js').then(function () { return Promise.all([load(base + 'firebase-auth-compat.js'), load(base + 'firebase-firestore-compat.js')]); }).then(function () {
         if (!window.firebase.apps.length) window.firebase.initializeApp(cfg);
         fb = window.firebase;
-        fb.auth().onAuthStateChanged(function (u) { MV.sync.user = u; if (u) MV.sync.listen(); else if (unsub) { unsub(); unsub = null; } MV.emit('sync'); MV.emit('auth', u); });
+        fb.auth().onAuthStateChanged(function (u) { MV.sync.user = u; if (u) { var last = MV.load('lastUid', null); if (last && last !== u.uid) MV.resetUserData(); MV.save('lastUid', u.uid); MV.sync.listen(); } else if (unsub) { unsub(); unsub = null; } MV.emit('sync'); MV.emit('auth', u); });
         return fb;
       });
     },

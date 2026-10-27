@@ -176,7 +176,10 @@
 
   acct.signOut = function () {
     acct.stopCode();
-    return MV.sync.signOut();
+    // Al salir, el equipo queda limpio para la siguiente cuenta (lo tuyo sigue guardado en la nube)
+    return MV.sync.push().catch(function () {}).then(function () { return MV.sync.signOut(); }).then(function () {
+      MV.resetUserData(); MV.save('lastUid', null);
+    });
   };
 
   // ---------- Usuarios permitidos (solo superadministrador) ----------
