@@ -454,7 +454,29 @@
         return '<button class="chip f' + ((cur || '') === g.id ? ' on' : '') + '" data-act="' + (act || 'genre') + '" data-arg="' + esc(g.id) + '" data-v="' + vkey + '">' + esc(g.name) + (g.count ? ' <small>' + g.count + '</small>' : '') + '</button>';
       }).join('') + '</div>';
   }
-  var CAT_TOP = 10;
+  var CAT_TOP = 10, viewMode = MV.load('viewMode', {}), rowLimit = {};
+  /** Vista por filas: una fila por categoría (como Inicio), con "Ver todo" que abre la categoría completa. */
+  function catRows(vkey, list, kind) {
+    var by = {}, order = [];
+    list.forEach(function (i) { var c = cleanGroup(i.group); if (!by[c]) { by[c] = []; order.push(c); } by[c].push(i); });
+    order.sort(function (a, b) { return by[b].length - by[a].length; });
+    var html = '';
+    // Primeras filas: lo más nuevo y lo mejor calificado de toda la sección
+    var recent = list.filter(function (i) { return i.added; }).sort(function (a, b) { return (b.added || 0) - (a.added || 0); }).slice(0, 20);
+    if (recent.length >= 6) html += row('Agregados recientemente', recent, kind || 'poster');
+    var top = list.filter(function (i) { return +i.rating >= 7; }).sort(function (a, b) { return (+b.rating || 0) - (+a.rating || 0); }).slice(0, 20);
+    if (top.length >= 6) html += row('Mejor calificadas', top, kind || 'poster');
+    var lim = rowLimit[vkey] || 14;
+    order.slice(0, lim).forEach(function (c) {
+      var items = by[c];
+      html += '<section class="row"><h3>' + esc(c) + ' <small>' + items.length + '</small>' +
+        (items.length > 20 ? '<button class="btn ghost sm f rowall" data-act="cat" data-arg="' + esc(c) + '" data-v="' + vkey + '">Ver todo ›</button>' : '') + '</h3><div class="strip">' +
+        items.slice(0, 20).map(function (it, i) { return card(it, kind || 'poster', i); }).join('') +
+        (items.length > 20 ? '<button class="btn ghost sm f" style="align-self:center;flex:0 0 auto" data-act="cat" data-arg="' + esc(c) + '" data-v="' + vkey + '">Ver las ' + items.length + ' ›</button>' : '') + '</div></section>';
+    });
+    if (order.length > lim) html += '<button class="btn ghost more f" data-act="moreRows" data-arg="' + vkey + '">Ver más categorías (' + (order.length - lim) + ')</button>';
+    return html;
+  }
   function catalogView(vkey, title, items, kind) {
     if (!S.lists.length) return top(title) + emptyLists();
     var all = MV.visible(items);
@@ -476,13 +498,14 @@
     var catRow = '<div class="chips filt"><span class="flabel">CATEGORÍA</span><button class="chip f' + (!cur ? ' on' : '') + '" data-act="cat" data-arg="" data-v="' + vkey + '">Todas <small>' + all.length + '</small></button>' +
       shown.map(function (c) { return '<button class="chip f' + (cur === c.name ? ' on' : '') + '" data-act="cat" data-arg="' + esc(c.name) + '" data-v="' + vkey + '">' + esc(c.name) + ' <small>' + c.count + '</small></button>'; }).join('') +
       (cats.length > CAT_TOP ? '<button class="chip more f" data-act="catMore" data-arg="' + vkey + '">Más categorías (' + (cats.length - CAT_TOP) + ') ▾</button>' : '') + '</div>';
-    var sortSeg = '<div class="seg sortseg">' + SORTS.map(function (s) { return '<button class="chip f' + (sort === s[0] ? ' on' : '') + '" data-act="sortBy" data-arg="' + s[0] + '" data-v="' + vkey + '">' + s[1] + '</button>'; }).join('') + '</div>';
+    var mode = viewMode[vkey] || 'rows';
+    var sortSeg = '<div class="seg sortseg">' + (!cur ? '<button class="chip f" data-act="viewMode" data-arg="' + (mode === 'rows' ? 'grid' : 'rows') + '" data-v="' + vkey + '">' + (mode === 'rows' ? '▦ Cuadrícula' : '☰ Filas') + '</button>' : '') + SORTS.map(function (s) { return '<button class="chip f' + (sort === s[0] ? ' on' : '') + '" data-act="sortBy" data-arg="' + s[0] + '" data-v="' + vkey + '">' + s[1] + '</button>'; }).join('') + '</div>';
     var active = [cur, plat ? D.platformName(plat) : '', gen ? D.genreName(gen) : ''].filter(Boolean);
     var summary = '<div class="fsum"><b>' + list.length + '</b> <span>' + (list.length === 1 ? 'título' : 'títulos') + (active.length ? ' · ' + esc(active.join(' · ')) : '') + '</span>' +
       (active.length ? '<button class="btn ghost sm f" data-act="clearFilters" data-arg="' + vkey + '">' + IC.close.replace('<svg', '<svg width="16" height="16"') + 'Limpiar filtros</button>' : '') + '</div>';
     return top(title, sortSeg) + loadingBlock() + '<div class="filters glass">' + catRow +
       (plats.length ? genreChips(plats, plat, vkey, 'plat', 'PLATAFORMA') : '') + genreChips(genres, gen, vkey) + '</div>' + summary +
-      (list.length ? grid(list, kind, vkey) : '<div class="empty glass"><h2>' + (active.length ? 'Nada con esos filtros' : 'No hay contenido aquí todavía') + '</h2><p class="muted">' + (active.length ? 'Prueba quitando algún filtro.' : 'Se llena con lo que traen tus listas M3U o tu cuenta Xtream.') + '</p>' + (active.length ? '<div class="btns" style="justify-content:center"><button class="btn f" data-act="clearFilters" data-arg="' + vkey + '">Limpiar filtros</button></div>' : '') + '</div>');
+      (list.length ? (mode === 'rows' && !cur ? catRows(vkey, list, kind) : grid(list, kind, vkey)) : '<div class="empty glass"><h2>' + (active.length ? 'Nada con esos filtros' : 'No hay contenido aquí todavía') + '</h2><p class="muted">' + (active.length ? 'Prueba quitando algún filtro.' : 'Se llena con lo que traen tus listas M3U o tu cuenta Xtream.') + '</p>' + (active.length ? '<div class="btns" style="justify-content:center"><button class="btn f" data-act="clearFilters" data-arg="' + vkey + '">Limpiar filtros</button></div>' : '') + '</div>');
   }
   function catMoreModal(vkey, filter) {
     var cats = (MV._catAll || {})[vkey] || [], q = MV.norm(filter || '');
@@ -1117,6 +1140,8 @@
     },
     catPick: function (c, el) { var v = el.dataset.v; MV.closeModal(true); catSel[v] = c; genreSel[v] = ''; platSel[v] = ''; limits[v] = 60; MV.rerender(); },
     sortBy: function (s2, el) { sortSel[el.dataset.v] = s2; MV.save('sortSel', sortSel); MV.rerender(); },
+    viewMode: function (m, el) { viewMode[el.dataset.v] = m; MV.save('viewMode', viewMode); MV.rerender(); },
+    moreRows: function (v) { rowLimit[v] = (rowLimit[v] || 14) + 14; MV.rerender(); },
     clearFilters: function (v) { catSel[v] = ''; genreSel[v] = ''; platSel[v] = ''; limits[v] = 60; MV.rerender(); },
     plat: function (p, el) { platSel[el.dataset.v] = p; genreSel[el.dataset.v] = ''; limits[el.dataset.v] = 60; MV.rerender(); },
     platform: function (id) { MV.go('platforms', id); },
