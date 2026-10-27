@@ -1510,7 +1510,7 @@
     saveSubKey: function () { P.subKey = document.getElementById('subKey').value.trim(); MV.savePrefs(); MV.toast('Clave de subtítulos guardada'); },
     saveYtKey: function () { P.ytKey = document.getElementById('ytKey').value.trim(); MV.savePrefs(); YT.key = ''; YT.list = null; MV.toast('Clave de YouTube guardada'); },
     saveTmdb: function () { P.tmdbKey = document.getElementById('tmdbKey').value.trim(); MV.savePrefs(); MV.toast('Clave guardada'); },
-    clearMeta: function () { MV.toast('Las fichas se volverán a buscar'); S.items.forEach(function (i) { MV.idbDel('meta:' + i.key); }); },
+    clearMeta: function () { MV.toast('Las fichas se volverán a buscar'); S.items.forEach(function (i) { MV.idbDel('meta2:' + i.key); }); },
     // Búsqueda con teclado en pantalla
     kb: function (c) { query += c; var i = document.getElementById('searchIn'); if (i) i.value = query; showResults(); },
     kbDel: function () { query = query.slice(0, -1); var i = document.getElementById('searchIn'); if (i) i.value = query; showResults(); },

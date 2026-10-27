@@ -517,7 +517,7 @@
   var IMG = 'https://image.tmdb.org/t/p/';
   MV.tmdb = tmdb; MV.TMDB_IMG = IMG;
   MV.meta = function (item) {
-    var ck = 'meta:' + item.key;
+    var ck = 'meta2:' + item.key;
     return MV.idbGet(ck).then(function (c) {
       if (c && c.ts > Date.now() - 14 * 86400e3) { if (c.data) MV.learnGenres(item, c.data.genres); return c.data; }
       var title = MV.cleanTitle(item.name);
