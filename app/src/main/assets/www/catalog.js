@@ -179,12 +179,13 @@
 
   // ---------- Xtream Codes ----------
   /** Solo protocolo, servidor y puerto: acepta que peguen http://srv:8080/get.php?… o …/player_api.php */
-  function xtBase(list) {
-    var h = String(list.host || '').trim().replace(/\s+/g, '');
+  function cleanHost(h) {
+    h = String(h || '').trim().replace(/\s+/g, '');
     if (!/^https?:\/\//i.test(h)) h = 'http://' + h;
-    var m = h.match(/^(https?:\/\/[^\/?#]+)/i);
-    return m ? m[1] : h.replace(/\/+$/, '');
+    return h.replace(/[?#].*$/, '').replace(/\/(get|player_api|xmltv|panel_api)\.php.*$/i, '').replace(/\/c\/?$/i, '').replace(/\/+$/, '');
   }
+  /** Servidor sin /get.php ni parámetros (conserva la carpeta si la tiene: http://srv.com/iptv) */
+  function xtBase(list) { return cleanHost(list.host); }
   function xtHdr(list) { return list.ua ? { 'User-Agent': list.ua } : null; }
   function xtGet(list, action, extra, big) { return MV.getJSON(xtApi(list, action, extra), xtHdr(list), big); }
   function xtApi(list, action, extra) {
@@ -192,11 +193,19 @@
   }
   /** Inicia sesión probando también como reproductores conocidos (algunos servidores bloquean apps desconocidas). */
   MV.xtLogin = function (list) {
-    list.host = xtBase(list); list.user = String(list.user || '').trim(); list.pass = String(list.pass || '').trim();
-    var agents = ['', 'IPTVSmartersPro', 'VLC/3.0.20 LibVLC/3.0.20', 'okhttp/4.12.0'], i = 0, lastErr = null;
+    list.user = String(list.user || '').trim(); list.pass = String(list.pass || '').trim();
+    // Direcciones a probar: tal cual (con carpeta), solo servidor:puerto y el otro protocolo (http/https)
+    var given = cleanHost(list.host), origin = (given.match(/^(https?:\/\/[^\/]+)/i) || [given])[0];
+    var bases = [given, origin, given.replace(/^http:/i, 'https:'), given.replace(/^https:/i, 'http:')].filter(function (b, k, a) { return a.indexOf(b) === k; });
+    var agents = ['', 'IPTVSmartersPro', 'VLC/3.0.20 LibVLC/3.0.20'], combos = [];
+    bases.forEach(function (b) { agents.forEach(function (a) { combos.push([b, a]); }); });
+    var i = 0, lastErr = null, saw404 = false;
     function attempt() {
-      if (i >= agents.length) throw lastErr || new Error('No se pudo conectar al servidor');
-      var ua = agents[i++];
+      if (i >= combos.length) {
+        if (saw404) throw new Error('No encontré el servicio Xtream en ese servidor (404). Revisa que sea la dirección y el puerto para apps tipo IPTV Smarters. Si tu proveedor te dio un enlace .m3u, agrégalo en la pestaña Enlace M3U; los portales MAC (Stalker) no son compatibles.');
+        throw lastErr || new Error('No se pudo conectar al servidor');
+      }
+      var ua = combos[i][1]; list.host = combos[i][0]; i++;
       return MV.getText(xtApi(list, ''), ua ? { 'User-Agent': ua } : null).then(function (t) {
         var j; try { j = JSON.parse(t); } catch (e) { lastErr = new Error('El servidor respondió, pero no como Xtream. Revisa la dirección y el puerto.'); return attempt(); }
         if (!j || !j.user_info) { lastErr = new Error('El servidor respondió, pero no como Xtream. Revisa la dirección y el puerto.'); return attempt(); }
@@ -207,6 +216,7 @@
         return j;
       }, function (e) {
         var m = String(e && e.message || '');
+        if (/HTTP 404/.test(m)) saw404 = true;
         lastErr = /40[13]/.test(m) ? new Error('El servidor rechazó la conexión (' + m + '). Puede que tu proveedor solo permita ciertas apps o que la cuenta tenga el máximo de conexiones.')
           : /UnknownHost|resolve|ENOTFOUND/i.test(m) ? new Error('No existe ese servidor. Revisa la dirección.')
           : /timeout|timed out|ConnectException|refused|failed to connect/i.test(m) ? new Error('El servidor no responde. Revisa la dirección, el puerto y tu internet.')
