@@ -256,7 +256,7 @@
     }
     html += row('Continuar viendo', cont.map(function (c) { return MV.resolve(c); }), 'wide');
     html += row('Favoritos', favs.slice(0, 30));
-    html += row('Canales en vivo', live.slice(0, 30), 'ch', live.length + ' canales', 'live');
+    html += row('Canales en vivo', coFirst(live).slice(0, 30), 'ch', live.length + ' canales', 'live');
     html += row('Sugerido para ti', suggested(), 'poster', 'Según lo que ves en este perfil');
     var trendHave = (DISC.rows.trend || []).filter(function (t) { return t.have; });
     if (trendHave.length) html += row('Tendencia esta semana', trendHave.slice(0, 20), 'poster', 'Lo más visto en el mundo que ya tienes', 'discover');
@@ -296,7 +296,8 @@
   }
 
   // ---------- En vivo ----------
-  var liveCat = 'Todos', liveSec = 'all', liveCountry = 'all';
+  // País: por defecto Colombia (si tus listas tienen canales colombianos), igual que en Radio
+  var liveCat = 'Todos', liveSec = 'all', liveCountry = 'auto';
   function liveSections(all) {
     var out = [{ id: 'all', name: 'Todos', count: all.length }];
     var fcount = MV.favs().filter(function (f) { return f.type === 'live'; }).length;
@@ -324,21 +325,30 @@
     var m = {}, none = 0;
     list.forEach(function (i) { if (i.country) m[i.country] = (m[i.country] || 0) + 1; else none++; });
     var out = Object.keys(m).map(function (k) { return { id: k, name: D.countryFlag(k) + ' ' + D.countryName(k), count: m[k] }; })
-      .sort(function (a, b) { return b.count - a.count; });
+      .sort(function (a, b) { return (b.id === 'co') - (a.id === 'co') || (b.id === 'latam') - (a.id === 'latam') || b.count - a.count; });
     if (out.length && none) out.push({ id: 'none', name: 'Sin país', count: none });
     return out;
   }
+  /** Colombia primero en cualquier lista de canales. */
+  function coFirst(l) { var co = [], rest = []; l.forEach(function (i) { (i.country === 'co' ? co : rest).push(i); }); return co.concat(rest); }
+  function effCountry(list) {
+    if (liveCountry !== 'auto') return liveCountry;
+    return (list || MV.visible(S.live)).some(function (i) { return i.country === 'co'; }) ? 'co' : 'all';
+  }
   function liveBase() {
-    var l = inSection(MV.visible(S.live), liveSec);
-    if (liveCountry === 'all') return l;
-    return l.filter(function (i) { return liveCountry === 'none' ? !i.country : i.country === liveCountry; });
+    var l = coFirst(inSection(MV.visible(S.live), liveSec));
+    var lc = effCountry(l);
+    if (lc === 'all') return l;
+    if (liveCountry === 'auto' && !l.some(function (i) { return i.country === 'co'; })) return l;
+    return l.filter(function (i) { return lc === 'none' ? !i.country : i.country === lc; });
   }
   function countryChips() {
     var secList = inSection(MV.visible(S.live), liveSec), cs = countriesOf(secList);
-    if (!cs.length) { liveCountry = 'all'; return ''; }
-    if (liveCountry !== 'all' && !cs.some(function (c) { return c.id === liveCountry; })) liveCountry = 'all';
+    if (!cs.length) return '';
+    if (liveCountry !== 'all' && liveCountry !== 'auto' && !cs.some(function (c) { return c.id === liveCountry; })) liveCountry = 'all';
+    var cur = liveCountry === 'auto' ? (cs.some(function (c) { return c.id === 'co'; }) ? 'co' : 'all') : liveCountry;
     return '<div class="chips" aria-label="Países">' + [{ id: 'all', name: '🌐 Todos los países', count: secList.length }].concat(cs).map(function (x) {
-      return '<button class="chip f' + (x.id === liveCountry ? ' on' : '') + '" data-act="liveCountry" data-arg="' + esc(x.id) + '">' + esc(x.name) + ' <small>' + x.count + '</small></button>';
+      return '<button class="chip f' + (x.id === cur ? ' on' : '') + '" data-act="liveCountry" data-arg="' + esc(x.id) + '">' + esc(x.name) + ' <small>' + x.count + '</small></button>';
     }).join('') + '</div>';
   }
   function secChips() {
