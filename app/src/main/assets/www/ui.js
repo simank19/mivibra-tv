@@ -860,6 +860,9 @@
       (MV.acct.canEdit() ? '<label class="field">Clave de TMDB (API Key o token de lectura)' + (MV.acct.isAdmin() ? ' · se comparte con todos los usuarios' : '') + '<input class="in f" id="tmdbKey" value="' + esc(P.tmdbKey || '') + '" autocomplete="off"></label><div class="btns"><button class="btn f" data-act="saveTmdb">Guardar</button><button class="btn ghost f" data-act="clearMeta">Volver a buscar todas las fichas</button></div>'
         : '<div class="line"><div class="t"><b>' + (P.tmdbKey ? 'Clave configurada por el administrador' : 'El administrador aún no ha puesto la clave') + '</b></div><button class="btn ghost sm f" data-act="clearMeta">Volver a buscar las fichas</button></div>') +
       '<p style="margin-top:14px;font-size:12px">Este producto usa la API de TMDB pero no está respaldado ni certificado por TMDB.</p></div>' +
+      '<div class="panel glass"><h2>Subtítulos externos</h2><p>Con una clave gratuita de subdl.com (crea tu cuenta y copia tu API Key en tu panel) el reproductor busca subtítulos en español para cada película o episodio, desde el menú ⚙ Audio y subtítulos.</p>' +
+      (MV.acct.canEdit() ? '<label class="field">Clave de SubDL' + (MV.acct.isAdmin() ? ' · se comparte con todos los usuarios' : '') + '<input class="in f" id="subKey" value="' + esc(P.subKey || '') + '" autocomplete="off"></label><div class="btns"><button class="btn f" data-act="saveSubKey">Guardar</button></div>'
+        : '<div class="line"><div class="t"><b>' + (P.subKey ? 'Clave configurada por el administrador' : 'El administrador aún no ha puesto la clave') + '</b></div></div>') + '</div>' +
       '<div class="panel glass"><h2>YouTube dentro de la app</h2><p>Con una clave gratuita de la API de YouTube (Google Cloud › APIs y servicios › YouTube Data API v3) puedes buscar y ver videos sin salir de MiVibra TV. El cupo gratis alcanza para unas 100 búsquedas al día entre todos los usuarios; las tendencias casi no gastan cupo.</p>' +
       (MV.acct.canEdit() ? '<label class="field">Clave de la API de YouTube' + (MV.acct.isAdmin() ? ' · se comparte con todos los usuarios' : '') + '<input class="in f" id="ytKey" value="' + esc(P.ytKey || '') + '" autocomplete="off" placeholder="AIza…"></label><div class="btns"><button class="btn f" data-act="saveYtKey">Guardar</button></div>'
         : '<div class="line"><div class="t"><b>' + (P.ytKey ? 'Clave configurada por el administrador' : 'El administrador aún no ha puesto la clave') + '</b></div></div>') + '</div>';
@@ -891,15 +894,20 @@
 
   // ---------- Reproducción ----------
   var playing = null;
+  /** Datos para buscar subtítulos externos de una película o episodio. */
+  function subInfo(it, season, ep) {
+    var m = it._meta || {};
+    return { sTitle: MV.cleanTitle(it.name), sYear: String(it.year || m.year || ''), sTmdb: m.tmdbId || '', sImdb: m.imdb || '', sKind: it.type === 'series' || season ? 'tv' : 'movie', sSeason: season || 0, sEpisode: ep || 0 };
+  }
   function q(it, extra) {
     var nn = it.type === 'live' ? MV.nowNext(it) : {};
-    return Object.assign({ id: it.key, url: it.url, title: it.name, subtitle: nn.now ? nn.now.t : (it.group || ''), num: it.num || '', ua: it.ua || '', ref: it.ref || '', alts: it.alts || [] }, extra || {});
+    return Object.assign({ id: it.key, url: it.url, title: it.name, subtitle: nn.now ? nn.now.t : (it.group || ''), num: it.num || '', ua: it.ua || '', ref: it.ref || '', alts: it.alts || [] }, it.type === 'live' ? {} : subInfo(it), extra || {});
   }
   function launch(req, ctx) {
     if (MV.isKids() && +P.kidsLimit > 0 && MV.kidsLeft() <= 0) { kidsTimeUp(); return; }
     if (MV.audio && MV.audio.current() && !ctx.noRecord) MV.audio.stop();
     playing = Object.assign({ started: Date.now() }, ctx);
-    req.audioLang = P.audioLang; req.subLang = P.subLang;
+    req.audioLang = P.audioLang; req.subLang = P.subLang; req.subKey = P.subKey || '';
     if (A) A.play(JSON.stringify(req));
     else { window.open(req.queue[req.index || 0].url, '_blank'); MV.onPlayerClosed({ id: ctx.item.key, position: 0, duration: 0, live: !!req.live }); }
   }
@@ -922,7 +930,7 @@
   };
   MV.playEpisode = function (series, i, resume) {
     var eps = series.episodes || []; var e = eps[i]; if (!e) return;
-    var queue = eps.slice(i).map(function (x) { return { id: series.key + '#' + x.season + 'x' + x.ep, url: x.url, title: series.name, subtitle: 'T' + x.season + ' E' + x.ep + ' · ' + x.title, ua: x.ua || '', ref: x.ref || '' }; });
+    var queue = eps.slice(i).map(function (x) { return Object.assign({ id: series.key + '#' + x.season + 'x' + x.ep, url: x.url, title: series.name, subtitle: 'T' + x.season + ' E' + x.ep + ' · ' + x.title, ua: x.ua || '', ref: x.ref || '' }, subInfo(series, x.season, x.ep)); });
     var k = series.key + '#' + e.season + 'x' + e.ep, prog = resume !== false ? MV.progressOf(k) : null;
     launch({ queue: queue, index: 0, live: false, startMs: prog ? prog.pos : 0 }, { item: series, episodes: eps, start: i });
   };
@@ -1302,6 +1310,7 @@
     },
     syncNow: function () { MV.sync.push().then(function () { MV.toast('Sincronizado'); }); },
     syncOut: function () { MV.sync.signOut().then(MV.rerender); },
+    saveSubKey: function () { P.subKey = document.getElementById('subKey').value.trim(); MV.savePrefs(); MV.toast('Clave de subtítulos guardada'); },
     saveYtKey: function () { P.ytKey = document.getElementById('ytKey').value.trim(); MV.savePrefs(); YT.key = ''; YT.list = null; MV.toast('Clave de YouTube guardada'); },
     saveTmdb: function () { P.tmdbKey = document.getElementById('tmdbKey').value.trim(); MV.savePrefs(); MV.toast('Clave guardada'); },
     clearMeta: function () { MV.toast('Las fichas se volverán a buscar'); S.items.forEach(function (i) { MV.idbDel('meta:' + i.key); }); },

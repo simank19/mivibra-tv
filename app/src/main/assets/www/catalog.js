@@ -16,7 +16,7 @@
   var P = S.prefs;
   var defaults = {
     theme: 'mv', glass: 'mid', anim: true, bgAnim: true, audioLang: 'es', subLang: '', xtFormat: 'm3u8',
-    tmdbKey: '', ytKey: '', covers: {}, kidsLimit: 60, parentPin: '', adult: null, romRoots: [], romSystem: {}, shader: 'default',
+    tmdbKey: '', ytKey: '', subKey: '', covers: {}, kidsLimit: 60, parentPin: '', adult: null, romRoots: [], romSystem: {}, shader: 'default',
     firebase: '', syncLists: true, updatedAt: 0, deviceName: ''
   };
   Object.keys(defaults).forEach(function (k) { if (P[k] === undefined) P[k] = defaults[k]; });
@@ -550,9 +550,9 @@
       return r;
     }).then(function (r) {
       if (!r) return null;
-      return tmdb('/' + kind + '/' + r.id, '&append_to_response=credits,images&include_image_language=es,en,null').then(function (d) {
+      return tmdb('/' + kind + '/' + r.id, '&append_to_response=credits,images,external_ids&include_image_language=es,en,null').then(function (d) {
         return {
-          source: 'TMDB', title: d.title || d.name, overview: d.overview || r.overview || '',
+          source: 'TMDB', tmdbId: d.id, kind: kind, imdb: (d.external_ids && d.external_ids.imdb_id) || d.imdb_id || '', title: d.title || d.name, overview: d.overview || r.overview || '',
           year: (d.release_date || d.first_air_date || '').slice(0, 4),
           runtime: d.runtime ? d.runtime + ' min' : (d.number_of_seasons ? d.number_of_seasons + ' temporadas' : ''),
           rating: d.vote_average ? d.vote_average.toFixed(1) : '',
@@ -693,7 +693,7 @@
       var pdata = {};
       S.profiles.forEach(function (p) { pdata[p.id] = MV.pdata(p.id); });
       var managed = MV.acct && MV.acct.managed();
-      var prefs = { theme: P.theme, glass: P.glass, anim: P.anim, bgAnim: P.bgAnim, tmdbKey: managed ? '' : P.tmdbKey, ytKey: managed ? '' : P.ytKey, covers: P.covers, kidsLimit: P.kidsLimit, parentPin: P.parentPin, adult: P.adult, audioLang: P.audioLang, subLang: P.subLang, updatedAt: P.updatedAt };
+      var prefs = { theme: P.theme, glass: P.glass, anim: P.anim, bgAnim: P.bgAnim, tmdbKey: managed ? '' : P.tmdbKey, ytKey: managed ? '' : P.ytKey, subKey: managed ? '' : P.subKey, covers: P.covers, kidsLimit: P.kidsLimit, parentPin: P.parentPin, adult: P.adult, audioLang: P.audioLang, subLang: P.subLang, updatedAt: P.updatedAt };
       return { v: 1, updatedAt: Date.now(), device: P.deviceName, profiles: S.profiles, pdata: pdata, prefs: prefs, lists: P.syncLists && !managed ? S.lists.map(function (l) { var c = Object.assign({}, l); delete c.error; return c; }) : null };
     },
     push: function () {
@@ -729,7 +729,7 @@
         MV.save('pdata:' + pid, ld);
       });
       var managed = MV.acct && MV.acct.managed();
-      if (managed) { if (r.prefs) { delete r.prefs.tmdbKey; delete r.prefs.ytKey; } r.lists = null; }
+      if (managed) { if (r.prefs) { delete r.prefs.tmdbKey; delete r.prefs.ytKey; delete r.prefs.subKey; } r.lists = null; }
       if (r.prefs && (r.prefs.updatedAt || 0) > (P.updatedAt || 0)) { Object.assign(P, r.prefs); MV.save('prefs', P); MV.applyLook && MV.applyLook(); }
       var listsChanged = false;
       (r.lists || []).forEach(function (rl) {

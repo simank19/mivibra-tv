@@ -80,6 +80,7 @@ class PlayerActivity : ComponentActivity() {
         live = req.optBoolean("live", false)
         audioLang = req.optString("audioLang", "es")
         subLang = req.optString("subLang", "")
+        subKey = req.optString("subKey", "")
 
         val root = FrameLayout(this)
         root.setBackgroundColor(Color.BLACK)
@@ -130,8 +131,7 @@ class PlayerActivity : ComponentActivity() {
             setOnClickListener { showTracks() }
             visibility = View.GONE
         }
-        root.addView(tracksBtn, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.END).apply { setMargins(40, 36, 40, 0) })
-        view.setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { v -> tracksBtn.visibility = v })
+
         // Los botones ⚙ y CC de la barra de controles abren el mismo menú de audio y subtítulos
         listOf(androidx.media3.ui.R.id.exo_settings, androidx.media3.ui.R.id.exo_subtitle).forEach { id ->
             view.findViewById<View>(id)?.setOnClickListener { showTracks() }
@@ -157,6 +157,10 @@ class PlayerActivity : ComponentActivity() {
     private var attempts = listOf<Attempt>()
     private var attemptIndex = 0
     private var startPosition = 0L
+    private var subKey = ""
+    private var extSub: java.io.File? = null
+    private var extSubName = ""
+    private var extOffset = 0L
 
     private val vlcUa = "VLC/3.0.20 LibVLC/3.0.20"
 
@@ -308,9 +312,11 @@ class PlayerActivity : ComponentActivity() {
             at.forceHls -> b.setMimeType(MimeTypes.APPLICATION_M3U8)
             lower.endsWith(".mpd") -> b.setMimeType(MimeTypes.APPLICATION_MPD)
         }
-        val sub = item.optString("sub")
+        val ext = extSub
+        val sub = if (ext != null) Uri.fromFile(Subtitles.shifted(ext, extOffset)).toString() else item.optString("sub")
         if (sub.isNotBlank()) {
-            val mime = if (sub.lowercase().endsWith(".vtt")) MimeTypes.TEXT_VTT else MimeTypes.APPLICATION_SUBRIP
+            val sl = sub.lowercase()
+            val mime = if (sl.endsWith(".vtt")) MimeTypes.TEXT_VTT else if (sl.endsWith(".ass") || sl.endsWith(".ssa")) MimeTypes.TEXT_SSA else MimeTypes.APPLICATION_SUBRIP
             b.setSubtitleConfigurations(
                 listOf(
                     MediaItem.SubtitleConfiguration.Builder(Uri.parse(sub))
@@ -344,6 +350,7 @@ class PlayerActivity : ComponentActivity() {
         if (item.optString("url").isBlank()) return
         val ref = item.optString("ref")
         http.setDefaultRequestProperties(if (ref.isNotBlank()) mapOf("Referer" to ref) else emptyMap())
+        extSub = null; extSubName = ""; extOffset = 0L
         attempts = buildAttempts(item)
         attemptIndex = 0
         retries = 0
@@ -442,7 +449,19 @@ class PlayerActivity : ComponentActivity() {
             toastInfo("Subtítulos desactivados")
         })
         text.forEach { item(it) }
-        if (text.isEmpty()) { labels.add("   Este video no trae subtítulos"); actions.add(null) }
+        if (text.isEmpty() && extSub == null) { labels.add("   Este video no trae subtítulos propios"); actions.add(null) }
+        if (extSub != null) {
+            labels.add("●  Externo: $extSubName"); actions.add(null)
+            labels.add("    ⏪  Que aparezcan antes (−0,5 s)" + offLabel()); actions.add({ extOffset -= 500; reloadExternal("Subtítulos " + offText()) })
+            labels.add("    ⏩  Que aparezcan después (+0,5 s)"); actions.add({ extOffset += 500; reloadExternal("Subtítulos " + offText()) })
+            labels.add("    ⏪⏪  Mucho antes (−5 s)"); actions.add({ extOffset -= 5000; reloadExternal("Subtítulos " + offText()) })
+            labels.add("    ⏩⏩  Mucho después (+5 s)"); actions.add({ extOffset += 5000; reloadExternal("Subtítulos " + offText()) })
+            labels.add("    ✕  Quitar el subtítulo externo"); actions.add({ extSub = null; extOffset = 0; reloadExternal("Subtítulo externo quitado") })
+        }
+        if (!live) {
+            labels.add(if (subKey.isNotBlank()) "🔎  Buscar subtítulos en internet" else "🔎  Buscar en internet (falta la clave de SubDL en Ajustes)")
+            actions.add(if (subKey.isNotBlank()) ({ searchSubs() }) else null)
+        }
 
         header("TAMAÑO DE LOS SUBTÍTULOS")
         val curSize = prefs.getInt("subSize", 1)
@@ -465,6 +484,48 @@ class PlayerActivity : ComponentActivity() {
 
     private val hideInfoRun = Runnable { info.animate().alpha(0f).setDuration(300).withEndAction { info.visibility = View.GONE }.start() }
     private fun hideInfo(delay: Long) { ui.removeCallbacks(hideInfoRun); ui.postDelayed(hideInfoRun, delay) }
+
+    private fun offText() = if (extOffset == 0L) "sincronizados como vienen" else String.format(Locale("es"), "%+.1f s", extOffset / 1000.0)
+    private fun offLabel() = if (extOffset != 0L) "   [ahora " + offText() + "]" else ""
+
+    /** Vuelve a cargar el video con el subtítulo externo (corrido), en el mismo punto. */
+    private fun reloadExternal(msg: String) {
+        val p = player ?: return
+        startPosition = p.currentPosition
+        p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, extSub == null).build()
+        startAttempt()
+        toastInfo(msg)
+    }
+
+    private fun searchSubs() {
+        val item = current()
+        val langs = when (subLang) { "en" -> "EN,ES"; "pt" -> "BR_PT,PT,ES"; else -> "ES,EN" }
+        toastInfo("Buscando subtítulos…")
+        Thread {
+            val res = try { Subtitles.search(subKey, item, langs) } catch (e: Exception) { ui.post { toastInfo(e.message ?: "No se pudo buscar") }; return@Thread }
+            ui.post {
+                if (res.isEmpty()) { toastInfo("No encontré subtítulos para este título"); return@post }
+                val names = res.map { r -> (if (r.lang.isNotBlank()) "[" + r.lang.uppercase() + "]  " else "") + r.name + (if (r.episode > 0) "  (T${r.season} E${r.episode})" else "") }.toTypedArray()
+                AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                    .setTitle("Elige un subtítulo (el que coincida con tu versión)")
+                    .setItems(names) { _, w -> applySub(res[w]) }
+                    .setNegativeButton("Cancelar", null)
+                    .show()
+            }
+        }.start()
+    }
+
+    private fun applySub(r: Subtitles.Result) {
+        toastInfo("Descargando subtítulo…")
+        Thread {
+            try {
+                val f = Subtitles.download(java.io.File(cacheDir, "subs"), r)
+                ui.post { extSub = f; extSubName = r.name.take(40); extOffset = 0; reloadExternal("Subtítulo listo. Si no coincide, ajústalo en ⚙") }
+            } catch (e: Exception) {
+                ui.post { toastInfo(e.message ?: "No se pudo descargar") }
+            }
+        }.start()
+    }
 
     private fun toastInfo(t: String) {
         info.text = t
