@@ -108,7 +108,7 @@
     kind = kind || (it.type === 'live' ? 'ch' : 'poster');
     var sub = '';
     if (it.type === 'live') { var nn = MV.nowNext(it); sub = nn.now ? nn.now.t : (it.group || ''); }
-    else sub = [it.year, it.type === 'series' ? 'Serie' : '', it.group].filter(Boolean).join(' · ');
+    else sub = [it.year, it.type === 'series' ? 'Serie' : '', it.type === 'tmdb' ? it.group : cleanGroup(it.group)].filter(Boolean).join(' · ');
     var prog = MV.progressOf(it.key), tag = it.type === 'tmdb' ? (it.have ? 'EN TUS LISTAS' : '') : it.platform ? D.platformName(it.platform).toUpperCase() : it.kdrama ? 'K-DRAMA' : it.anime ? 'ANIME' : it.ia ? 'CLÁSICO' : '';
     return '<button class="card ' + kind + ' f" style="--h:' + MV.hue(it.name) + ';animation-delay:' + Math.min(i || 0, 12) * 0.04 + 's" data-act="open" data-key="' + esc(it.key) + '" data-fid="c-' + MV.hash(it.key) + '">' +
       '<div class="th">' + thumbInner(it) + (it.num ? '<span class="num">' + esc(it.num) + '</span>' : '') + (tag ? '<span class="tag">' + tag + '</span>' : '') + '<div class="shine"></div></div>' +
@@ -393,28 +393,80 @@
   };
 
   // ---------- Películas, series, anime, k-drama, documentales ----------
-  var catSel = {}, genreSel = {}, platSel = {};
-  function genreChips(list, cur, vkey, act) {
+  var catSel = {}, genreSel = {}, platSel = {}, sortSel = MV.load('sortSel', {});
+  /** Nombre de categoría limpio: "|ES| ACCION 4K" → "Acción"; agrupa variantes del mismo nombre. */
+  var GROUP_CACHE = {};
+  function cleanGroup(g) {
+    g = String(g || '').trim();
+    if (GROUP_CACHE[g] !== undefined) return GROUP_CACHE[g];
+    var c = g.replace(/[\u{1F300}-\u{1FAFF}☀-➿]/gu, ' ')
+      .replace(/^\s*[\[|(]?\s*[A-Za-z]{2,5}\s*[\]|):]\s*/, '')
+      .replace(/^\s*(vod|movies?|pel[ií]culas?|series?)\s*[-|:]\s*/i, '')
+      .replace(/\b(4k|uhd|fhd|hd|sd|hevc|h265|x265|1080p?|720p?)\b/gi, ' ')
+      .replace(/[|_]+/g, ' ').replace(/\s{2,}/g, ' ').replace(/^[\s\-–:.]+|[\s\-–:.]+$/g, '').trim();
+    if (!c) c = g || 'Sin categoría';
+    if (c === c.toUpperCase() && /[A-ZÁÉÍÓÚÑ]{3}/.test(c)) c = c.toLowerCase().replace(/(^|\s)(\S)/g, function (m, a, b) { return a + b.toUpperCase(); });
+    c = c.replace(/\bAccion\b/g, 'Acción').replace(/\bAnimacion\b/g, 'Animación').replace(/\bCiencia Ficcion\b/gi, 'Ciencia ficción').replace(/\bComedia\b/g, 'Comedia').replace(/\bInfantil(es)?\b/g, 'Infantil');
+    GROUP_CACHE[g] = c;
+    return c;
+  }
+  function groupsClean(list) {
+    var m = {};
+    list.forEach(function (i) { var c = cleanGroup(i.group); m[c] = (m[c] || 0) + 1; });
+    return Object.keys(m).map(function (k) { return { name: k, count: m[k] }; }).sort(function (a, b) { return b.count - a.count || a.name.localeCompare(b.name); });
+  }
+  var SORTS = [['rec', 'Recientes'], ['az', 'A-Z'], ['year', 'Año'], ['rating', 'Calificación']];
+  function sortList(list, how) {
+    if (!how || how === 'rec') return list;
+    var l = list.slice();
+    if (how === 'az') l.sort(function (a, b) { return MV.cleanTitle(a.name).localeCompare(MV.cleanTitle(b.name), 'es'); });
+    if (how === 'year') l.sort(function (a, b) { return (+b.year || 0) - (+a.year || 0); });
+    if (how === 'rating') l.sort(function (a, b) { return (+b.rating || 0) - (+a.rating || 0); });
+    return l;
+  }
+  function genreChips(list, cur, vkey, act, label) {
     if (!list.length) return '';
-    return '<div class="chips" aria-label="Géneros"><span class="muted" style="align-self:center;font:700 12px var(--ui);letter-spacing:1px;padding:0 4px">GÉNERO</span>' +
+    return '<div class="chips filt" aria-label="' + (label || 'Género') + '"><span class="flabel">' + (label || 'GÉNERO') + '</span>' +
       [{ id: '', name: 'Todos' }].concat(list).map(function (g) {
-        return '<button class="chip f' + ((cur || '') === g.id ? ' on' : '') + '" data-act="' + (act || 'genre') + '" data-arg="' + g.id + '" data-v="' + vkey + '">' + esc(g.name) + (g.count ? ' <small>' + g.count + '</small>' : '') + '</button>';
+        return '<button class="chip f' + ((cur || '') === g.id ? ' on' : '') + '" data-act="' + (act || 'genre') + '" data-arg="' + esc(g.id) + '" data-v="' + vkey + '">' + esc(g.name) + (g.count ? ' <small>' + g.count + '</small>' : '') + '</button>';
       }).join('') + '</div>';
   }
+  var CAT_TOP = 10;
   function catalogView(vkey, title, items, kind) {
     if (!S.lists.length) return top(title) + emptyLists();
     var all = MV.visible(items);
-    var cats = [{ name: 'Todo', count: all.length }].concat(MV.groups(all).slice(0, 60));
-    var cur = catSel[vkey] || 'Todo', gen = genreSel[vkey] || '';
-    var list = cur === 'Todo' ? all : all.filter(function (i) { return i.group === cur; });
-    var plat = platSel[vkey] || '';
+    var cats = groupsClean(all);
+    var cur = catSel[vkey] || '', gen = genreSel[vkey] || '', plat = platSel[vkey] || '', sort = sortSel[vkey] || 'rec';
+    if (cur && !cats.some(function (c) { return c.name === cur; })) cur = catSel[vkey] = '';
+    var list = cur ? all.filter(function (i) { return cleanGroup(i.group) === cur; }) : all;
     var pm = {}; list.forEach(function (i) { if (i.platform) pm[i.platform] = (pm[i.platform] || 0) + 1; });
     var plats = vkey.indexOf('pl-') === 0 ? [] : D.PLATFORMS.filter(function (p) { return pm[p.id]; }).map(function (p) { return { id: p.id, name: p.name, count: pm[p.id] }; });
     if (plat) list = list.filter(function (i) { return i.platform === plat; });
     var genres = MV.genresOf(list);
     if (gen) list = list.filter(function (i) { return (i.genres || []).indexOf(gen) >= 0; });
-    return top(title, '<span class="muted">' + all.length + ' títulos</span>') + loadingBlock() + chips(cats, cur, 'cat', ' data-v="' + vkey + '"') + (plats.length ? genreChips(plats, plat, vkey, 'plat').replace('>GÉNERO<', '>PLATAFORMA<') : '') + genreChips(genres, gen, vkey) +
-      (list.length ? grid(list, kind, vkey) : '<div class="empty glass"><h2>No hay contenido aquí todavía</h2><p class="muted">Se llena con lo que traen tus listas M3U o tu cuenta Xtream.</p></div>');
+    list = sortList(list, sort);
+    MV._catAll = MV._catAll || {}; MV._catAll[vkey] = cats;
+
+    // Categorías: las más grandes a la vista; el resto en "Más categorías"
+    var shown = cats.slice(0, CAT_TOP);
+    if (cur && !shown.some(function (c) { return c.name === cur; })) shown = [cats.find(function (c) { return c.name === cur; })].concat(shown.slice(0, CAT_TOP - 1));
+    var catRow = '<div class="chips filt"><span class="flabel">CATEGORÍA</span><button class="chip f' + (!cur ? ' on' : '') + '" data-act="cat" data-arg="" data-v="' + vkey + '">Todas <small>' + all.length + '</small></button>' +
+      shown.map(function (c) { return '<button class="chip f' + (cur === c.name ? ' on' : '') + '" data-act="cat" data-arg="' + esc(c.name) + '" data-v="' + vkey + '">' + esc(c.name) + ' <small>' + c.count + '</small></button>'; }).join('') +
+      (cats.length > CAT_TOP ? '<button class="chip more f" data-act="catMore" data-arg="' + vkey + '">Más categorías (' + (cats.length - CAT_TOP) + ') ▾</button>' : '') + '</div>';
+    var sortSeg = '<div class="seg sortseg">' + SORTS.map(function (s) { return '<button class="chip f' + (sort === s[0] ? ' on' : '') + '" data-act="sortBy" data-arg="' + s[0] + '" data-v="' + vkey + '">' + s[1] + '</button>'; }).join('') + '</div>';
+    var active = [cur, plat ? D.platformName(plat) : '', gen ? D.genreName(gen) : ''].filter(Boolean);
+    var summary = '<div class="fsum"><b>' + list.length + '</b> <span>' + (list.length === 1 ? 'título' : 'títulos') + (active.length ? ' · ' + esc(active.join(' · ')) : '') + '</span>' +
+      (active.length ? '<button class="btn ghost sm f" data-act="clearFilters" data-arg="' + vkey + '">' + IC.close.replace('<svg', '<svg width="16" height="16"') + 'Limpiar filtros</button>' : '') + '</div>';
+    return top(title, sortSeg) + loadingBlock() + '<div class="filters glass">' + catRow +
+      (plats.length ? genreChips(plats, plat, vkey, 'plat', 'PLATAFORMA') : '') + genreChips(genres, gen, vkey) + '</div>' + summary +
+      (list.length ? grid(list, kind, vkey) : '<div class="empty glass"><h2>' + (active.length ? 'Nada con esos filtros' : 'No hay contenido aquí todavía') + '</h2><p class="muted">' + (active.length ? 'Prueba quitando algún filtro.' : 'Se llena con lo que traen tus listas M3U o tu cuenta Xtream.') + '</p>' + (active.length ? '<div class="btns" style="justify-content:center"><button class="btn f" data-act="clearFilters" data-arg="' + vkey + '">Limpiar filtros</button></div>' : '') + '</div>');
+  }
+  function catMoreModal(vkey, filter) {
+    var cats = (MV._catAll || {})[vkey] || [], q = MV.norm(filter || '');
+    var shown = q ? cats.filter(function (c) { return MV.norm(c.name).indexOf(q) >= 0; }) : cats;
+    return '<h2>Categorías</h2><input class="in f" id="catFind" placeholder="Buscar categoría" value="' + esc(filter || '') + '" autocomplete="off" style="margin:8px 0 12px">' +
+      '<div class="catgrid" id="catGrid">' + shown.map(function (c) { return '<button class="chip f' + ((catSel[vkey] || '') === c.name ? ' on' : '') + '" data-act="catPick" data-arg="' + esc(c.name) + '" data-v="' + vkey + '">' + esc(c.name) + ' <small>' + c.count + '</small></button>'; }).join('') +
+      (shown.length ? '' : '<p class="muted">No hay categorías con ese nombre.</p>') + '</div>';
   }
   // ---------- Plataformas (separadores por servicio, según las categorías de tus listas) ----------
   function platformCounts() {
@@ -508,27 +560,126 @@
 
   // ---------- Buscar ----------
   var query = '';
+  // ---------- Buscador: relevancia, tolerante a errores y por tipo ----------
+  var SIDX = { size: -1, rows: [] }, searchType = 'all', SEARCH_LIM = 60;
+  function searchIndex() {
+    if (SIDX.size === S.items.length && SIDX.ref === S.items) return SIDX.rows;
+    SIDX.rows = S.items.map(function (i) {
+      var title = MV.norm(MV.cleanTitle(i.name) || i.name);
+      return { it: i, title: title, words: title.split(' '), extra: MV.norm([i.name, i.group, i.year, (i.genres || []).map(D.genreName).join(' '), i.platform ? D.platformName(i.platform) : ''].join(' ')) };
+    });
+    SIDX.size = S.items.length; SIDX.ref = S.items;
+    return SIDX.rows;
+  }
+  /** ¿Se parecen dos palabras con un error de tipeo? (una letra de más, de menos o cambiada) */
+  function near(a, b) {
+    // Distancia de edición ≤ 1 (incluye dos letras invertidas: "jhon" ↔ "john")
+    if (a.length < 3 || Math.abs(a.length - b.length) > 1) return false;
+    if (a === b) return true;
+    var la = a.length, lb = b.length, prev2 = null, prev = [], cur;
+    for (var j = 0; j <= lb; j++) prev[j] = j;
+    for (var i = 1; i <= la; i++) {
+      cur = [i]; var rowMin = i;
+      for (var k = 1; k <= lb; k++) {
+        var c = a[i - 1] === b[k - 1] ? 0 : 1;
+        var v = Math.min(prev[k] + 1, cur[k - 1] + 1, prev[k - 1] + c);
+        if (prev2 && i > 1 && k > 1 && a[i - 1] === b[k - 2] && a[i - 2] === b[k - 1]) v = Math.min(v, prev2[k - 2] + 1);
+        cur[k] = v; if (v < rowMin) rowMin = v;
+      }
+      if (rowMin > 1) return false;
+      prev2 = prev; prev = cur;
+    }
+    return prev[lb] <= 1;
+  }
+  function scoreRow(r, q, qw) {
+    var t = r.title, sc = 0;
+    if (t === q) sc = 1000;
+    else if (t.indexOf(q) === 0) sc = 700;
+    else if ((' ' + t).indexOf(' ' + q) >= 0) sc = 500;
+    else if (t.indexOf(q) >= 0) sc = 300;
+    var all = true;
+    for (var k = 0; k < qw.length; k++) {
+      var w = qw[k], hit = 0;
+      for (var m = 0; m < r.words.length; m++) {
+        var rw = r.words[m];
+        if (rw === w) { hit = 60; break; }
+        if (rw.indexOf(w) === 0) hit = Math.max(hit, 45);
+        else if (w.length >= 3 && hit < 25 && (near(w, rw) || (rw.length > w.length && (near(w, rw.slice(0, w.length)) || near(w, rw.slice(0, w.length + 1)))))) hit = 25;
+        else if (rw.indexOf(w) >= 0) hit = Math.max(hit, 20);
+      }
+      if (!hit && r.extra.indexOf(w) >= 0) hit = 10;
+      if (!hit) { all = false; break; }
+      sc += hit;
+    }
+    if (!all && sc < 300) return 0;
+    if (r.it.type !== 'live' && r.it.poster) sc += 3;
+    return sc;
+  }
+  var STYPES = [['all', 'Todo'], ['live', 'Canales'], ['movie', 'Películas'], ['series', 'Series'], ['anime', 'Anime'], ['kdrama', 'K-Drama'], ['games', 'Juegos']];
+  function typeOk(i, t) {
+    if (t === 'all') return true;
+    if (t === 'anime') return i.anime && i.type !== 'live';
+    if (t === 'kdrama') return i.kdrama && i.type !== 'live';
+    return i.type === t;
+  }
+  function recentSearches() { return MV.load('recentSearch', []); }
+  function saveRecent(q) {
+    q = String(q || '').trim(); if (q.length < 2) return;
+    var r = recentSearches().filter(function (x) { return MV.norm(x) !== MV.norm(q); }); r.unshift(q);
+    MV.save('recentSearch', r.slice(0, 8));
+  }
+  var saveRecentLater = MV.debounce(saveRecent, 2500);
   VIEWS.search = function () {
     var kb = MV.device.tv ? '<div class="kbd glass" style="padding:10px;border-radius:20px">' + 'abcdefghijklmnñopqrstuvwxyz0123456789'.split('').map(function (c) { return '<button class="f" data-act="kb" data-arg="' + c + '">' + c.toUpperCase() + '</button>'; }).join('') +
       '<button class="f wide" data-act="kb" data-arg=" ">Espacio</button><button class="f wide" data-act="kbDel">Borrar</button><button class="f wide" data-act="kbClear">Limpiar</button></div>' : '';
-    return top('Buscar') + '<label class="field">Canales, películas, series, anime, k-drama y juegos<input class="in f" id="searchIn" value="' + esc(query) + '" placeholder="Escribe aquí o usa el celular como teclado" autocomplete="off" data-autofocus></label>' + kb + '<div id="results"></div>';
+    return top('Buscar') + '<div class="searchbar glass">' + IC.search + '<input class="in f" id="searchIn" value="' + esc(query) + '" placeholder="Título, canal, actor del título, género, año…" autocomplete="off" enterkeyhint="search" data-autofocus>' +
+      '<button class="iconbtn f" data-act="kbClear" aria-label="Borrar búsqueda">' + IC.close + '</button></div>' + kb +
+      '<div class="chips" id="stypes"></div><div id="results"></div>';
   };
   VIEWS.search.after = function () {
     var inp = document.getElementById('searchIn');
-    inp.addEventListener('input', MV.debounce(function () { query = inp.value; showResults(); }, 250));
+    inp.addEventListener('input', MV.debounce(function () { query = inp.value; showResults(); saveRecentLater(query); }, 180));
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { saveRecent(query); var f = document.querySelector('#results .card, #results .f'); if (f) f.focus(); } });
     showResults();
   };
   function showResults() {
-    var box = document.getElementById('results'); if (!box) return;
+    var box = document.getElementById('results'), tbox = document.getElementById('stypes'); if (!box) return;
     var q = MV.norm(query);
-    if (q.length < 2) { box.innerHTML = '<p class="muted">Escribe al menos 2 letras.</p>'; return; }
-    var words = q.split(' ');
-    var hits = MV.visible(S.items).filter(function (i) { var n = MV.norm(i.name + ' ' + (i.group || '')); return words.every(function (w) { return n.indexOf(w) >= 0; }); });
-    var roms = (MV.load('roms', []) || []).filter(function (r) { var n = MV.norm(r.name); return words.every(function (w) { return n.indexOf(w) >= 0; }); }).slice(0, 12);
-    var live = hits.filter(function (i) { return i.type === 'live'; }).slice(0, 30), vod = hits.filter(function (i) { return i.type !== 'live'; }).slice(0, 60);
-    box.innerHTML = (live.length ? row('Canales', live, 'ch', live.length + '') : '') + (vod.length ? row('Películas y series', vod, 'poster', vod.length + '') : '') +
-      (roms.length ? '<section class="row"><h3>Juegos</h3><div class="strip">' + roms.map(function (r, i) { return romCard(r, i); }).join('') + '</div></section>' : '') +
-      (!live.length && !vod.length && !roms.length ? '<p class="muted">Sin resultados para “' + esc(query) + '”.</p>' : '');
+    if (q.length < 2) {
+      tbox.innerHTML = '';
+      var rec = recentSearches();
+      var gens = MV.genresOf(MV.visible(S.items.filter(function (i) { return i.type !== 'live'; }))).slice(0, 10);
+      box.innerHTML = (rec.length ? '<section class="row"><h3>Búsquedas recientes <button class="btn ghost sm f" data-act="clearRecent" style="margin-left:8px">Borrar</button></h3><div class="chips">' + rec.map(function (r) { return '<button class="chip f" data-act="searchFor" data-arg="' + esc(r) + '">' + IC.history.replace('<svg', '<svg width="15" height="15"') + ' ' + esc(r) + '</button>'; }).join('') + '</div></section>' : '') +
+        (gens.length ? '<section class="row"><h3>Explora por género</h3><div class="chips">' + gens.map(function (g) { return '<button class="chip f" data-act="searchFor" data-arg="' + esc(g.name) + '">' + esc(g.name) + ' <small>' + g.count + '</small></button>'; }).join('') + '</div></section>' : '') +
+        '<p class="muted">Escribe al menos 2 letras. No importan las tildes ni las mayúsculas, y entiende pequeños errores de escritura.</p>';
+      return;
+    }
+    var qw = q.split(' ').filter(Boolean), vis = {};
+    MV.visible(S.items).forEach(function (i) { vis[i.key] = 1; });
+    var scored = [];
+    searchIndex().forEach(function (r) { if (!vis[r.it.key]) return; var sc = scoreRow(r, q, qw); if (sc > 0) scored.push({ it: r.it, sc: sc }); });
+    scored.sort(function (a, b) { return b.sc - a.sc; });
+    var roms = (MV.load('roms', []) || []).filter(function (r) { var n = MV.norm(r.name); return qw.every(function (w) { return n.indexOf(w) >= 0 || n.split(' ').some(function (x) { return near(w, x); }); }); }).slice(0, 30);
+    var counts = {}; STYPES.forEach(function (t) { counts[t[0]] = t[0] === 'games' ? roms.length : t[0] === 'all' ? scored.length + roms.length : scored.filter(function (x) { return typeOk(x.it, t[0]); }).length; });
+    if (searchType !== 'all' && !counts[searchType]) searchType = 'all';
+    tbox.innerHTML = STYPES.filter(function (t) { return t[0] === 'all' || counts[t[0]]; }).map(function (t) { return '<button class="chip f' + (searchType === t[0] ? ' on' : '') + '" data-act="stype" data-arg="' + t[0] + '">' + t[1] + ' <small>' + counts[t[0]] + '</small></button>'; }).join('');
+    if (!scored.length && !roms.length) { box.innerHTML = '<div class="empty glass"><h2>Sin resultados para “' + esc(query) + '”</h2><p class="muted">Revisa la escritura o prueba con menos palabras.' + (P.tmdbKey ? ' También puedes buscarlo en Descubrir.' : '') + '</p></div>'; return; }
+    var html = '';
+    if (searchType === 'all') {
+      var best = scored.filter(function (x) { return x.sc >= 700; }).slice(0, 12).map(function (x) { return x.it; });
+      var live = scored.filter(function (x) { return x.it.type === 'live'; }).map(function (x) { return x.it; });
+      var vod = scored.filter(function (x) { return x.it.type !== 'live'; }).map(function (x) { return x.it; });
+      if (best.length && scored.length > best.length) html += row('Mejores coincidencias', best, best.every(function (b) { return b.type === 'live'; }) ? 'ch' : 'poster');
+      if (live.length) html += row('Canales', live.slice(0, 30), 'ch', live.length + '');
+      if (vod.length) html += row('Películas y series', vod.slice(0, 40), 'poster', vod.length + '');
+      if (roms.length) html += '<section class="row"><h3>Juegos</h3><div class="strip">' + roms.slice(0, 12).map(function (r, i) { return romCard(r, i); }).join('') + '</div></section>';
+    } else if (searchType === 'games') {
+      html = '<div class="grid">' + roms.map(function (r, i) { return romCard(r, i); }).join('') + '</div>';
+    } else {
+      var items = scored.filter(function (x) { return typeOk(x.it, searchType); }).map(function (x) { return x.it; });
+      html = grid(items, searchType === 'live' ? 'ch' : 'poster', 'search');
+    }
+    box.innerHTML = html;
   }
   MV.remoteText = function (v) {
     var el = document.activeElement;
@@ -908,7 +1059,16 @@
     liveCat: function (c) { liveCat = c; limits.live = 150; MV.rerender(); },
     liveSec: function (x) { liveSec = x; liveCat = 'Todos'; limits.live = 150; MV.rerender(); },
     liveCountry: function (x) { liveCountry = x; liveCat = 'Todos'; limits.live = 150; MV.rerender(); },
-    cat: function (c, el) { catSel[el.dataset.v] = c; genreSel[el.dataset.v] = ''; limits[el.dataset.v] = 60; MV.rerender(); },
+    cat: function (c, el) { catSel[el.dataset.v] = c; genreSel[el.dataset.v] = ''; platSel[el.dataset.v] = ''; limits[el.dataset.v] = 60; MV.rerender(); },
+    catMore: function (vkey) {
+      MV.modal(catMoreModal(vkey, ''), { onOpen: function (root) {
+        var inp = root.querySelector('#catFind');
+        inp.addEventListener('input', MV.debounce(function () { var g = document.getElementById('catGrid'); var tmp = document.createElement('div'); tmp.innerHTML = catMoreModal(vkey, inp.value); g.innerHTML = tmp.querySelector('#catGrid').innerHTML; }, 150));
+      } });
+    },
+    catPick: function (c, el) { var v = el.dataset.v; MV.closeModal(true); catSel[v] = c; genreSel[v] = ''; platSel[v] = ''; limits[v] = 60; MV.rerender(); },
+    sortBy: function (s2, el) { sortSel[el.dataset.v] = s2; MV.save('sortSel', sortSel); MV.rerender(); },
+    clearFilters: function (v) { catSel[v] = ''; genreSel[v] = ''; platSel[v] = ''; limits[v] = 60; MV.rerender(); },
     plat: function (p, el) { platSel[el.dataset.v] = p; genreSel[el.dataset.v] = ''; limits[el.dataset.v] = 60; MV.rerender(); },
     platform: function (id) { MV.go('platforms', id); },
     back: function () { MV.onBack(); },
@@ -965,6 +1125,9 @@
     // Listas
     addList: function () { if (!MV.acct.canEdit()) return MV.toast('Solo el administrador puede agregar listas'); addListDialog('url'); },
     closeModal: function () { MV.closeModal(); },
+    stype: function (t) { searchType = t; showResults(); var el = document.querySelector('[data-act="stype"][data-arg="' + t + '"]'); if (el) el.focus(); },
+    searchFor: function (q) { query = q; var i = document.getElementById('searchIn'); if (i) i.value = q; saveRecent(q); showResults(); },
+    clearRecent: function () { MV.save('recentSearch', []); showResults(); },
     langMenu: function () {
       var aud = [['es', 'Español'], ['en', 'Inglés'], ['pt', 'Portugués'], ['ja', 'Japonés'], ['ko', 'Coreano'], ['fr', 'Francés']];
       var sub = [['', 'Desactivados'], ['es', 'Español'], ['en', 'Inglés'], ['pt', 'Portugués']];
@@ -1382,7 +1545,8 @@
     spotify: { name: 'Spotify', pkgs: ['com.spotify.tv.android', 'com.spotify.music'], web: 'https://open.spotify.com' },
     deezer: { name: 'Deezer', pkgs: ['deezer.android.tv', 'deezer.android.app'], web: 'https://www.deezer.com' },
     amazon: { name: 'Amazon Music', pkgs: ['com.amazon.mp3'], web: 'https://music.amazon.com' },
-    apple: { name: 'Apple Music', pkgs: ['com.apple.android.music'], web: 'https://music.apple.com' }
+    apple: { name: 'Apple Music', pkgs: ['com.apple.android.music'], web: 'https://music.apple.com' },
+    square: { name: 'Square', pkgs: ['dev.lelonio.square'], web: 'https://github.com/Lelonio/Square/releases/latest', noStore: true }
   };
   var installed = null;
   function appsInstalled() {
@@ -1395,12 +1559,14 @@
   function openApp(k, url) {
     if (AU.current()) AU.stop();
     var a = APPS[k];
+    // Apps que no están en la tienda: si no está instalada, abre su página de descargas
+    if (a.noStore && A && !hasApp(k)) { A.openExternal(a.web); return; }
     if (A && A.openApp) A.openApp(JSON.stringify({ pkgs: a.pkgs, url: url || '' }));
     else window.open(url || a.web, '_blank');
   }
   function appTile(k, sub) {
     var a = APPS[k], ok = !A || hasApp(k);
-    return '<button class="apptile glass f" data-act="openApp" data-arg="' + k + '"><b>' + esc(a.name) + '</b><span>' + esc(ok ? (sub || 'Abrir') : 'Instalar desde la tienda') + '</span></button>';
+    return '<button class="apptile glass f" data-act="openApp" data-arg="' + k + '"><b>' + esc(a.name) + '</b><span>' + esc(ok ? (sub || 'Abrir') : a.noStore ? 'Descargar desde GitHub' : 'Instalar desde la tienda') + '</span></button>';
   }
 
   // ---------- YouTube dentro de la app (reproductor oficial incrustado + YouTube Data API) ----------
@@ -1650,7 +1816,7 @@
     var tabs = [['mine', 'Mi música'], ['free', 'Música libre'], ['apps', 'Apps de música']];
     var html = top('Música') + '<div class="chips">' + tabs.map(function (t) { return '<button class="chip f' + (MUSIC.tab === t[0] ? ' on' : '') + '" data-act="musicTab" data-arg="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>';
     if (MUSIC.tab === 'apps') {
-      return html + '<div class="panel glass"><p>Abre tus apps de música con tu cuenta.</p><div class="apps">' + ['ytmusic', 'spotify', 'deezer', 'amazon', 'apple'].map(function (k) { return appTile(k); }).join('') + '</div></div>';
+      return html + '<div class="panel glass"><p>Abre tus apps de música con tu cuenta.</p><div class="apps">' + ['ytmusic', 'spotify', 'deezer', 'amazon', 'apple', 'square'].map(function (k) { return appTile(k); }).join('') + '</div></div>';
     }
     if (MUSIC.tab === 'free') {
       loadAudius();

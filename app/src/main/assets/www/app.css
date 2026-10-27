@@ -328,7 +328,29 @@ body.yt-open .mini { display: none; }
 .ytp .x { position: absolute; top: 14px; right: 14px; z-index: 2; background: rgba(0,0,0,.55); color: #fff; }
 .ytp.tv .x { display: none; }
 
+
+/* ---------- Filtros de categorías y buscador ---------- */
+.filters { border-radius: 22px; padding: 10px 12px 2px; margin-bottom: 10px; }
+.filters .chips { margin-bottom: 8px; }
+.chips.filt { align-items: center; }
+.flabel { align-self: center; font: 800 11px var(--ui); letter-spacing: 1.2px; color: var(--muted); padding: 0 6px 0 4px; flex: 0 0 auto; min-width: 86px; }
+.chip.more { border-style: dashed; color: var(--accent-text); }
+.fsum { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 2px 14px; font: 500 14px var(--ui); color: var(--muted); }
+.fsum b { font: 800 18px var(--brand); color: var(--text); }
+.fsum .btn { margin-left: auto; }
+.sortseg { display: flex; gap: 6px; flex-wrap: wrap; }
+.sortseg .chip { padding: 8px 14px; font-size: 13px; }
+.catgrid { display: flex; flex-wrap: wrap; gap: 8px; max-height: 55vh; overflow: auto; padding: 2px; }
+.searchbar { display: flex; align-items: center; gap: 10px; border-radius: 20px; padding: 6px 8px 6px 18px; margin-bottom: 14px; }
+.searchbar > svg { width: 22px; height: 22px; color: var(--muted); flex: 0 0 auto; }
+.searchbar .in { border: 0; background: transparent; font-size: 18px; padding: 12px 4px; flex: 1; min-width: 0; box-shadow: none; }
+#stypes { margin-bottom: 6px; }
+
 @media (max-width: 760px) {
+  .flabel { min-width: 0; width: 100%; padding: 2px 4px; }
+  .chips.filt { flex-wrap: nowrap; overflow-x: auto; }
+  .chips.filt .flabel { width: auto; }
+  .top .sortseg { width: 100%; }
   .vgrid { grid-template-columns: 1fr 1fr; gap: 10px; }
   .ytp .bar { flex-direction: column; align-items: stretch; padding: 18px 14px; }
   .ytp .ctl { justify-content: space-between; }
