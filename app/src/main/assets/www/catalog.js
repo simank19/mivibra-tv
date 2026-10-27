@@ -532,7 +532,12 @@
     // Elige el mejor resultado: título igual, año cercano y la más conocida (evita confundir "2012" con otra película parecida)
     function best(results) {
       var want = MV.norm(title);
-      var scored = (results || []).slice(0, 10).map(function (r, i) {
+      // Solo resultados cuyo título se parezca de verdad (evita poner la ficha de otra película)
+      var cand = (results || []).slice(0, 10).filter(function (r) {
+        var t = MV.norm(r.title || r.name), o = MV.norm(r.original_title || r.original_name);
+        return t.indexOf(want) >= 0 || o.indexOf(want) >= 0 || (t.length > 3 && want.indexOf(t) >= 0) || (o.length > 3 && want.indexOf(o) >= 0);
+      });
+      var scored = cand.map(function (r, i) {
         var t = MV.norm(r.title || r.name), o = MV.norm(r.original_title || r.original_name);
         var y = +((r.release_date || r.first_air_date || '').slice(0, 4)) || 0, sc = 0;
         if (t === want || o === want) sc += 100; else if (t.indexOf(want) === 0 || o.indexOf(want) === 0) sc += 20;
@@ -542,14 +547,23 @@
       }).sort(function (a, b) { return b.sc - a.sc; });
       return scored.length ? scored[0].r : null;
     }
+    // El año va como filtro, no dentro del título: "Alchemist (2016)" → "Alchemist" + 2016
+    var t0 = String(title || '').replace(/[(\[]\s*(19|20)\d{2}\s*[)\]]/g, ' ').replace(/\s{2,}/g, ' ').trim();
+    if (t0 && MV.norm(t0) !== String(year)) title = t0.replace(/\s+(19|20)\d{2}$/, '') || t0;
     // Si el "año" es el propio título (película "2012"), no se usa como filtro
     if (year && MV.norm(title) === String(year)) year = '';
-    return tmdb('/search/' + kind, '&query=' + encodeURIComponent(title) + (year ? (kind === 'tv' ? '&first_air_date_year=' : '&year=') + year : '')).then(function (s) {
-      var r = best(s.results);
-      if (!r && year) return tmdb('/search/' + kind, '&query=' + encodeURIComponent(title)).then(function (s2) { return best(s2.results); });
-      return r;
-    }).then(function (r) {
+    var other = kind === 'tv' ? 'movie' : 'tv';
+    function q(t, k, y, lang) {
+      return tmdb('/search/' + k, '&query=' + encodeURIComponent(t) + (y ? (k === 'tv' ? '&first_air_date_year=' : '&year=') + y : '') + (lang ? '&language=' + lang : '')).then(function (s) { var r = best(s.results); if (r) r._kind = k; return r; }).catch(function () { return null; });
+    }
+    // Intentos en orden: con año, sin año, solo la parte antes de ":" o " - ", en inglés y como el otro tipo (serie/película)
+    var short = title.split(/\s[-–:|]\s|:\s/)[0].trim();
+    var tries = [[title, kind, year], [title, kind, ''], short !== title ? [short, kind, year] : null, [title, kind, '', 'en-US'], [title, other, year], [title, other, '']].filter(Boolean);
+    var chain = Promise.resolve(null);
+    tries.forEach(function (tr) { chain = chain.then(function (r) { return r || q(tr[0], tr[1], tr[2], tr[3]); }); });
+    return chain.then(function (r) {
       if (!r) return null;
+      kind = r._kind || kind;
       return tmdb('/' + kind + '/' + r.id, '&append_to_response=credits,images,external_ids&include_image_language=es,en,null').then(function (d) {
         return {
           source: 'TMDB', tmdbId: d.id, kind: kind, imdb: (d.external_ids && d.external_ids.imdb_id) || d.imdb_id || '', title: d.title || d.name, overview: d.overview || r.overview || '',
@@ -558,7 +572,7 @@
           rating: d.vote_average ? d.vote_average.toFixed(1) : '',
           genres: (d.genres || []).map(function (g) { return g.name; }).slice(0, 3),
           cast: ((d.credits && d.credits.cast) || []).slice(0, 5).map(function (c) { return c.name; }),
-          poster: d.poster_path ? IMG + 'w500' + d.poster_path : '',
+          poster: d.poster_path ? IMG + 'w500' + d.poster_path : (d.images && d.images.posters && d.images.posters[0] ? IMG + 'w500' + d.images.posters[0].file_path : (r.poster_path ? IMG + 'w500' + r.poster_path : '')),
           backdrop: d.backdrop_path ? IMG + 'w1280' + d.backdrop_path : '',
           posters: ((d.images && d.images.posters) || []).slice(0, 12).map(function (p) { return IMG + 'w342' + p.file_path; })
         };

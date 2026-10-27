@@ -96,6 +96,19 @@
   MV.rerender = function () { var f = document.activeElement, fid = f && f.dataset && f.dataset.fid; render(true); var el = fid && document.querySelector('[data-fid="' + fid + '"]'); if (el) el.focus({ preventScroll: true }); else MV.focusFirst(); };
 
   // ---------- Piezas ----------
+  /** Imagen con respaldos: si una dirección falla, prueba la siguiente; si ninguna carga, muestra el nombre. */
+  function posterImg(urls, name) {
+    var list = (urls || []).filter(function (u, i, a) { return u && a.indexOf(u) === i; });
+    var mono = '<span class="mono" style="font:800 30px var(--brand)">' + esc(name) + '</span>';
+    if (!list.length) return mono;
+    return '<img src="' + esc(list[0]) + '" alt="" data-alt="' + esc(list.slice(1).join('|')) + '" data-name="' + esc(name) + '" onerror="MV.imgNext(this)">';
+  }
+  MV.imgNext = function (el) {
+    var alt = (el.getAttribute('data-alt') || '').split('|').filter(Boolean);
+    if (alt.length) { el.setAttribute('data-alt', alt.slice(1).join('|')); el.src = alt[0]; return; }
+    var sp = document.createElement('span'); sp.className = 'mono'; sp.style.font = '800 30px var(--brand)'; sp.textContent = el.getAttribute('data-name') || '';
+    el.replaceWith(sp);
+  };
   function thumbInner(it, big) {
     var img = MV.poster(it);
     var isLogo = it.type === 'live' && !big;
@@ -505,7 +518,7 @@
     var prog = MV.progressOf(it.key), fav = MV.isFav(it.key), img = MV.poster(it);
     var facts = [it.year, it.type === 'series' ? 'Serie' : 'Película', it.group, it.rating ? '★ ' + it.rating : ''].concat((it.genres || []).map(D.genreName)).filter(Boolean);
     return '<div class="detail"><div class="bd" id="bd"></div>' +
-      '<div class="ps" style="--h:' + MV.hue(it.name) + '" id="ps">' + (img ? '<img src="' + esc(img) + '" alt="">' : '<span class="mono" style="font:800 30px var(--brand)">' + esc(it.name) + '</span>') + '</div>' +
+      '<div class="ps" style="--h:' + MV.hue(it.name) + '" id="ps">' + posterImg([img], it.name) + '</div>' +
       '<div class="info"><span class="badge" id="metaSrc">' + (it.ia ? 'DOMINIO PÚBLICO · INTERNET ARCHIVE' : 'BUSCANDO FICHA…') + '</span>' +
       '<h1 id="mtitle">' + esc(MV.cleanTitle(it.name) || it.name) + '</h1>' +
       '<div class="facts" id="facts">' + facts.map(function (f) { return '<span class="pill">' + esc(f) + '</span>'; }).join('') + '</div>' +
@@ -534,7 +547,8 @@
       document.getElementById('facts').innerHTML = facts.map(function (f) { return '<span class="pill">' + esc(f) + '</span>'; }).join('');
       if (m.cast && m.cast.length) document.getElementById('cast').textContent = 'Reparto: ' + m.cast.join(', ');
       if (m.backdrop) document.getElementById('bd').style.backgroundImage = 'url("' + m.backdrop + '")';
-      if (m.poster && !(P.covers && P.covers[it.key]) && !it.poster) document.getElementById('ps').innerHTML = '<img src="' + esc(m.poster) + '" alt="">';
+      // Carátula: la elegida por ti, luego la de TMDB y luego la de la lista (si alguna no carga, pasa a la siguiente)
+      if (!(P.covers && P.covers[it.key])) { var ps = document.getElementById('ps'); if (ps) ps.innerHTML = posterImg([m.poster, it.poster, m.posters && m.posters[0]], it.name); }
       if (m.poster && !it.poster) it.poster = m.poster;
       if (m.posters && m.posters.length > 1) document.getElementById('coverBtn').classList.remove('hidden');
     });
