@@ -539,7 +539,69 @@
 
   VIEWS.movies = function () { return catalogView('movies', 'Películas', S.movies); };
   VIEWS.series = function () { return catalogView('series', 'Series', S.series); };
-  VIEWS.anime = function () { return catalogView('anime', 'Anime', S.items.filter(function (i) { return i.anime && i.type !== 'live'; })); };
+  // ---------- Anime: Todo · En emisión · Por año ----------
+  var animeMode = 'all', animeYear = '', AIRING = { list: null, loading: false, ts: 0, error: '' };
+  function itemYear(i) { return String(i.year || ((i.name || '').match(/\b(19|20)\d{2}\b/) || [''])[0] || ''); }
+  /** Anime que se está emitiendo esta temporada (MyAnimeList vía Jikan), cruzado con tus listas. */
+  function loadAiring() {
+    if (AIRING.loading || (AIRING.list && AIRING.ts > Date.now() - 12 * 3600e3)) return;
+    var cached = MV.load('airingNow', null);
+    if (cached && cached.ts > Date.now() - 12 * 3600e3) { AIRING.list = cached.titles; AIRING.ts = cached.ts; return; }
+    AIRING.loading = true; AIRING.error = '';
+    var titles = [];
+    function page(n) {
+      return MV.getJSON('https://api.jikan.moe/v4/seasons/now?sfw=true&page=' + n).then(function (j) {
+        (j.data || []).forEach(function (a) {
+          var names = [a.title, a.title_english, a.title_japanese].concat((a.titles || []).map(function (t) { return t.title; })).filter(Boolean);
+          titles.push({ keys: names.map(titleKey).filter(Boolean), title: a.title_english || a.title, eps: a.episodes, score: a.score });
+        });
+        if (j.pagination && j.pagination.has_next_page && n < 4) return new Promise(function (r) { setTimeout(r, 450); }).then(function () { return page(n + 1); });
+      });
+    }
+    page(1).then(function () { AIRING.list = titles; AIRING.ts = Date.now(); MV.save('airingNow', { ts: AIRING.ts, titles: titles }); })
+      .catch(function (e) { AIRING.list = AIRING.list || []; AIRING.error = e.message; })
+      .then(function () { AIRING.loading = false; if (view.name === 'anime') MV.rerender(); });
+  }
+  function airingMatches(items) {
+    var idx = {};
+    (AIRING.list || []).forEach(function (a) { a.keys.forEach(function (k) { idx[k] = a; }); });
+    return items.filter(function (i) {
+      var k = titleKey(i.name); if (idx[k]) return true;
+      // "Nombre Temporada 2" / "Nombre 2nd Season": compara sin la parte de temporada
+      var base = k.replace(/\b(temporada|season|part|parte|cour)\b.*$/, '').replace(/\b\d+(st|nd|rd|th)\b.*$/, '').trim();
+      return base.length > 3 && !!idx[base];
+    });
+  }
+  VIEWS.anime = function () {
+    var items = S.items.filter(function (i) { return i.anime && i.type !== 'live'; });
+    var modes = '<div class="chips filt" style="margin-bottom:10px"><span class="flabel">VER</span>' + [['all', 'Todo'], ['airing', '🔴 En emisión'], ['year', 'Por año']].map(function (m) {
+      return '<button class="chip f' + (animeMode === m[0] ? ' on' : '') + '" data-act="animeMode" data-arg="' + m[0] + '">' + m[1] + '</button>'; }).join('') + '</div>';
+    if (animeMode === 'all' || !S.lists.length) return catalogView('anime', 'Anime', items).replace('<div class="filters glass">', modes + '<div class="filters glass">');
+    var vis = MV.visible(items);
+    if (animeMode === 'airing') {
+      loadAiring();
+      var head = top('Anime') + modes + '<p class="muted" style="margin:0 0 12px">Lo que se está emitiendo esta temporada (según MyAnimeList) y ya está en tus listas.</p>';
+      if (!AIRING.list) return head + '<div class="panel glass" style="display:flex;gap:14px;align-items:center"><div class="spinner"></div><b>Revisando la temporada actual…</b></div>';
+      var m = airingMatches(vis);
+      if (!m.length) return head + '<div class="empty glass"><h2>Nada en emisión en tus listas</h2><p class="muted">' + (AIRING.error ? 'No se pudo consultar la temporada: ' + esc(AIRING.error) : 'Ninguno de los ' + AIRING.list.length + ' anime de esta temporada está en tus listas todavía.') + '</p></div>';
+      return head + '<div class="fsum"><b>' + m.length + '</b> <span>en emisión</span></div>' + grid(m, 'poster', 'anime-air');
+    }
+    // Por año
+    var by = {}; vis.forEach(function (i) { var y = itemYear(i) || 'Sin año'; (by[y] = by[y] || []).push(i); });
+    var years = Object.keys(by).sort(function (a, b) { return a === 'Sin año' ? 1 : b === 'Sin año' ? -1 : b - a; });
+    var chipsY = '<div class="chips filt"><span class="flabel">AÑO</span><button class="chip f' + (!animeYear ? ' on' : '') + '" data-act="animeYear" data-arg="">Todos</button>' +
+      years.map(function (y) { return '<button class="chip f' + (animeYear === y ? ' on' : '') + '" data-act="animeYear" data-arg="' + esc(y) + '">' + esc(y) + ' <small>' + by[y].length + '</small></button>'; }).join('') + '</div>';
+    var html = top('Anime') + modes + '<div class="filters glass">' + chipsY + '</div>';
+    if (animeYear && by[animeYear]) return html + '<div class="fsum"><b>' + by[animeYear].length + '</b> <span>de ' + esc(animeYear) + '</span></div>' + grid(by[animeYear], 'poster', 'anime-y');
+    var lim = rowLimit['anime-y'] || 14;
+    years.slice(0, lim).forEach(function (y) {
+      var list = by[y];
+      html += '<section class="row"><h3>' + esc(y) + ' <small>' + list.length + '</small>' + (list.length > 20 ? '<button class="btn ghost sm f rowall" data-act="animeYear" data-arg="' + esc(y) + '">Ver todo ›</button>' : '') + '</h3><div class="strip">' +
+        list.slice(0, 20).map(function (it, i) { return card(it, 'poster', i); }).join('') + '</div></section>';
+    });
+    if (years.length > lim) html += '<button class="btn ghost more f" data-act="moreRows" data-arg="anime-y">Ver más años (' + (years.length - lim) + ')</button>';
+    return html;
+  };
   VIEWS.kdrama = function () { return catalogView('kdrama', 'K-Drama', S.items.filter(function (i) { return i.kdrama && i.type !== 'live'; })); };
   VIEWS.docs = function () { return catalogView('docs', 'Documentales', S.items.filter(function (i) { return i.doc && i.type !== 'live'; })); };
 
@@ -1140,6 +1202,8 @@
     },
     catPick: function (c, el) { var v = el.dataset.v; MV.closeModal(true); catSel[v] = c; genreSel[v] = ''; platSel[v] = ''; limits[v] = 60; MV.rerender(); },
     sortBy: function (s2, el) { sortSel[el.dataset.v] = s2; MV.save('sortSel', sortSel); MV.rerender(); },
+    animeMode: function (m) { animeMode = m; animeYear = ''; MV.rerender(); },
+    animeYear: function (y) { animeYear = y; MV.rerender(); },
     viewMode: function (m, el) { viewMode[el.dataset.v] = m; MV.save('viewMode', viewMode); MV.rerender(); },
     moreRows: function (v) { rowLimit[v] = (rowLimit[v] || 14) + 14; MV.rerender(); },
     clearFilters: function (v) { catSel[v] = ''; genreSel[v] = ''; platSel[v] = ''; limits[v] = 60; MV.rerender(); },
