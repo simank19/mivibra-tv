@@ -164,7 +164,7 @@ class PlayerActivity : ComponentActivity() {
         val first = current()
         http = DefaultHttpDataSource.Factory()
             .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(15000)
+            .setConnectTimeoutMs(10000)
             .setReadTimeoutMs(20000)
             .setUserAgent(first.optString("ua").ifBlank { Net.UA })
         val referer = first.optString("ref")
@@ -185,34 +185,11 @@ class PlayerActivity : ComponentActivity() {
             }
             .build()
         p.addListener(object : Player.Listener {
-            override fun onPlayerError(error: PlaybackException) {
-                if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
-                    p.seekToDefaultPosition(); p.prepare(); return
-                }
-                val transient = error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ||
-                    error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
-                if (transient && retries < 1) {
-                    retries++
-                    ui.postDelayed({ p.prepare(); p.play() }, 1500)
-                    return
-                }
-                if (attemptIndex < attempts.size - 1) {
-                    attemptIndex++
-                    retries = 0
-                    info.text = (if (live) "Probando otra forma de abrir el canal… (" else "Probando otra forma de abrir el video… (") + (attemptIndex + 1) + "/" + attempts.size + ")"
-                    info.visibility = View.VISIBLE
-                    info.alpha = 1f
-                    hideInfo(6000)
-                    startAttempt()
-                    return
-                }
-                errorView.text = "No se pudo reproducir este contenido.\n\n" + explain(error) +
-                    (if (live) "\n\nPrueba otro canal con ▲ ▼." else "\n\nVuelve atrás e intenta de nuevo.")
-                errorView.visibility = View.VISIBLE
-            }
+            override fun onPlayerError(error: PlaybackException) { onFail(error) }
 
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_READY) {
+                    cancelWatchdog()
                     retries = 0
                     errorView.visibility = View.GONE
                     // Ya abrió: quita el aviso de "Probando otra forma…"
@@ -256,6 +233,37 @@ class PlayerActivity : ComponentActivity() {
         return why + "\n(código " + (if (http > 0) "HTTP $http" else e.errorCodeName) + ")"
     }
 
+
+    /** Si una forma de abrir falla (o se queda colgada), prueba la siguiente. */
+    private fun onFail(error: PlaybackException) {
+        cancelWatchdog()
+        val p = player ?: return
+
+        if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
+            p.seekToDefaultPosition(); p.prepare(); return
+        }
+        val transient = error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ||
+            error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
+        if (transient && retries < 1) {
+            retries++
+            ui.postDelayed({ p.prepare(); p.play(); armWatchdog() }, 1500)
+            return
+        }
+        if (attemptIndex < attempts.size - 1) {
+            attemptIndex++
+            retries = 0
+            info.text = (if (live) "Probando otra forma de abrir el canal… (" else "Probando otra forma de abrir el video… (") + (attemptIndex + 1) + "/" + attempts.size + ")"
+            info.visibility = View.VISIBLE
+            info.alpha = 1f
+            hideInfo(6000)
+            startAttempt()
+            return
+        }
+        errorView.text = "No se pudo reproducir este contenido.\n\n" + explain(error) +
+            (if (live) "\n\nPrueba otro canal con ▲ ▼." else "\n\nVuelve atrás e intenta de nuevo.")
+        errorView.visibility = View.VISIBLE
+    }
+
     private fun buildAttempts(item: JSONObject): List<Attempt> {
         val url = item.optString("url")
         val ua = item.optString("ua").ifBlank { null }
@@ -266,6 +274,14 @@ class PlayerActivity : ComponentActivity() {
             if (lower.endsWith(".m3u8")) urls.add(url.replaceFirst(Regex("\\.m3u8", RegexOption.IGNORE_CASE), ".ts"))
             else if (lower.endsWith(".ts")) urls.add(url.replaceFirst(Regex("\\.ts", RegexOption.IGNORE_CASE), ".m3u8"))
         }
+        // Xtream películas y series: el mismo archivo suele estar en otros formatos
+        val vod = Regex("(/(?:movie|series)/[^?]+/\\d+)\\.(\\w{2,4})(\\?.*)?$", RegexOption.IGNORE_CASE).find(url)
+        if (vod != null) {
+            val ext = vod.groupValues[2].lowercase()
+            for (e in listOf("mp4", "mkv", "m3u8", "ts", "avi")) if (e != ext) urls.add(url.replaceRange(vod.groups[2]!!.range, e))
+        }
+        // Mismo enlace con el otro protocolo (algunos servidores solo responden en http o en https)
+        if (url.startsWith("https://", true)) urls.add("http://" + url.substring(8)) else if (url.startsWith("http://", true)) urls.add("https://" + url.substring(7))
         val alts = item.optJSONArray("alts")
         if (alts != null) for (i in 0 until alts.length()) alts.optString(i).takeIf { it.isNotBlank() }?.let { urls.add(it) }
         val out = mutableListOf<Attempt>()
@@ -275,8 +291,10 @@ class PlayerActivity : ComponentActivity() {
             if (!isHls && live) out.add(Attempt(u, true, ua))     // HLS sin extensión .m3u8
             out.add(Attempt(u, isHls, vlcUa))                      // servidores que solo aceptan reproductores conocidos
             if (!live) out.add(Attempt(u, isHls, "IPTVSmartersPro"))
+            if (!live && u == url) out.add(Attempt(u, isHls, "okhttp/4.12.0"))
         }
-        return out.take(12)
+        // Primero todas las variantes con la identificación que ya funcionó; luego el resto
+        return out.distinctBy { it.url + "|" + it.forceHls + "|" + it.ua }.take(18)
     }
 
     private fun startAttempt() {
@@ -307,7 +325,18 @@ class PlayerActivity : ComponentActivity() {
         p.setMediaItem(b.build(), if (startPosition > 0) startPosition else C.TIME_UNSET)
         p.prepare()
         p.play()
+        armWatchdog()
     }
+
+    // Vigilante: si en 25 s no arranca, se toma como fallo y se prueba la siguiente forma
+    private val watchdog = Runnable {
+        val p = player
+        if (p != null && p.playbackState != Player.STATE_READY) {
+            onFail(PlaybackException("El servidor no respondió a tiempo", null, PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT))
+        }
+    }
+    private fun armWatchdog() { ui.removeCallbacks(watchdog); ui.postDelayed(watchdog, 25000) }
+    private fun cancelWatchdog() { ui.removeCallbacks(watchdog) }
 
     private fun playIndex(i: Int, startMs: Long) {
         index = (i + queue.length()) % maxOf(1, queue.length())
