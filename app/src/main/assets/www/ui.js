@@ -673,7 +673,7 @@
     var scored = [];
     searchIndex().forEach(function (r) { if (!vis[r.it.key]) return; var sc = scoreRow(r, q, qw); if (sc > 0) scored.push({ it: r.it, sc: sc }); });
     scored.sort(function (a, b) { return b.sc - a.sc; });
-    var roms = (MV.load('roms', []) || []).filter(function (r) { var n = MV.norm(r.name); return qw.every(function (w) { return n.indexOf(w) >= 0 || n.split(' ').some(function (x) { return near(w, x); }); }); }).slice(0, 30);
+    var roms = (MV.load('roms', []) || []).filter(isGame).filter(function (r) { var n = MV.norm(r.name); return qw.every(function (w) { return n.indexOf(w) >= 0 || n.split(' ').some(function (x) { return near(w, x); }); }); }).slice(0, 30);
     var counts = {}; STYPES.forEach(function (t) { counts[t[0]] = t[0] === 'games' ? roms.length : t[0] === 'all' ? scored.length + roms.length : scored.filter(function (x) { return typeOk(x.it, t[0]); }).length; });
     if (searchType !== 'all' && !counts[searchType]) searchType = 'all';
     tbox.innerHTML = STYPES.filter(function (t) { return t[0] === 'all' || counts[t[0]]; }).map(function (t) { return '<button class="chip f' + (searchType === t[0] ? ' on' : '') + '" data-act="stype" data-arg="' + t[0] + '">' + t[1] + ' <small>' + counts[t[0]] + '</small></button>'; }).join('');
@@ -738,6 +738,22 @@
   // ---------- Juegos y ports ----------
   var sysSel = 'all', gameGenre = '';
   function romGenres(r) { var s = romSystem(r); var g = D.classifyGenres(r.name, D.GAME_GENRES); if (s && s.port && g.indexOf('disparos') < 0 && /doom|quake|wolf/.test(s.id)) g.push('disparos'); if (s && s.id === 'cave' && g.indexOf('aventura') < 0) g.push('aventura'); return g; }
+  /** ¿Es de verdad un juego? Descarta APK, documentos (README.md), listas .m3u y .zip/.iso que no son de juegos. */
+  var ROM_DIR = /\/(roms?|juegos|games|emu|emul\w*|retro\w*|arcade|mame|fbneo|fba|neogeo|cps\d?|snes|nes|sfc|genesis|megadrive|mega drive|gba|gbc|gb|n64|nds|psx|ps1|playstation|sega|nintendo|atari|pce|ports?|doom|quake)\//i;
+  function isGame(r) {
+    var name = String(r.name || ''), low = name.toLowerCase(), path = String(r.path || '').toLowerCase(), size = +r.size || 0, ext = r.ext;
+    if (/\.apk|\.xapk|\.apks/i.test(low) || /\/android\/(data|obb)\//.test(path)) return false;
+    if (/^(readme|license|licence|changelog|copying|authors|contributing|notice|history|install)\b/i.test(low)) return false;
+    var mine = path.indexOf('/co.mivibra.tv/') >= 0 || ROM_DIR.test(path + '/');
+    if (ext === 'zip') return mine;                                 // .zip solo en carpetas de juegos (roms, arcade…)
+    if (ext === 'm3u') return /psx|ps1|playstation/.test(path);      // .m3u también son listas de TV
+    if (ext === 'iso') return size > 30e6 && (mine || /psx|ps1|playstation/.test(path));
+    if (ext === 'exe' || ext === 'pak') return true;                 // ya filtrados por nombre (Doukutsu.exe, pak0.pak)
+    if (['md', 'gen', 'smd', '32x'].indexOf(ext) >= 0 && size && size < 65536) return false; // un .md de 5 KB es un documento
+    if (size && size < 1024) return false;
+    return true;
+  }
+  MV.isGame = isGame;
   function romSystem(r) {
     var ov = P.romSystem[r.path]; if (ov) return D.SYSTEMS.find(function (s) { return s.id === ov; });
     var name = (r.name || '').toLowerCase(), path = (r.path || '').toLowerCase();
@@ -749,7 +765,7 @@
     return '<button class="card wide f" style="--h:' + (s ? s.color : '#6B7280') + ';animation-delay:' + Math.min(i, 12) * 0.04 + 's" data-act="playRom" data-key="' + esc(k) + '"><div class="th"><span class="mono">' + esc(s ? s.mono : '?') + '</span><span class="tag">' + esc(s ? s.name : 'Elegir sistema') + '</span></div><div class="meta"><b>' + esc(r.name.replace(/\.[^.]+$/, '')) + '</b><span>' + esc(r.path.split('/').slice(-2, -1)[0] || '') + '</span></div></button>';
   }
   VIEWS.games = function () {
-    var roms = (MV.load('roms', []) || []).filter(function (r) { return !r.ext || r.ext !== 'exe' || /doukutsu\.exe$/i.test(r.name); }).filter(function (r) { return r.ext !== 'pak' || /^pak0\.pak$/i.test(r.name); });
+    var roms = (MV.load('roms', []) || []).filter(function (r) { return !r.ext || r.ext !== 'exe' || /doukutsu\.exe$/i.test(r.name); }).filter(function (r) { return r.ext !== 'pak' || /^pak0\.pak$/i.test(r.name); }).filter(isGame);
     var counts = {}; roms.forEach(function (r) { var s = romSystem(r); var id = s ? s.id : 'unknown'; counts[id] = (counts[id] || 0) + 1; });
     var bySys = roms.filter(function (r) { var s = romSystem(r); if (sysSel === 'all') return true; if (sysSel === 'ports') return s && s.port; return s && s.id === sysSel; });
     var gcount = {}; bySys.forEach(function (r) { romGenres(r).forEach(function (g) { gcount[g] = (gcount[g] || 0) + 1; }); });
@@ -1362,7 +1378,7 @@
       MV.closeModal(true);
       MV.modal('<h2>Buscando juegos…</h2><div class="spinner" style="margin:20px auto"></div><p class="muted">Revisando ' + roots.length + ' ubicaciones (memoria, USB y discos).</p>');
       MV.call('scanRoms', [JSON.stringify(roots), JSON.stringify(D.ROM_EXTS)]).then(function (list) {
-        MV.save('roms', list); MV.closeModal(true); MV.toast(list.length + ' juegos encontrados'); MV.rerender();
+        list = list.filter(isGame); MV.save('roms', list); MV.closeModal(true); MV.toast(list.length + ' juegos encontrados'); MV.rerender();
       }).catch(function (e) { MV.closeModal(true); MV.toast(e.message); });
     },
     romDownload: function () {
