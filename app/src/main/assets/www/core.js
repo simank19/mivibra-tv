@@ -108,6 +108,8 @@
   };
   MV.device = (function () { try { return A ? JSON.parse(A.deviceInfo()) : { tv: false, touch: true, model: 'Navegador', version: 'web' }; } catch (e) { return { tv: false }; } })();
   MV.A = A;
+  // En TV la interfaz se compacta (html.tv)
+  try { if (MV.device.tv) document.documentElement.classList.add('tv'); } catch (e) {}
 
   // ---------- Avisos ----------
   MV.toast = function (msg, ms) {
@@ -172,18 +174,24 @@
     var el = root.querySelector('[data-autofocus].f') || root.querySelector('.f.on') || root.querySelector('.main .f') || root.querySelector('.f');
     if (el) { el.focus({ preventScroll: true }); reveal(el); }
   };
+  var fastMove = false;
   function reveal(el) {
-    try { el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: document.documentElement.classList.contains('no-anim') ? 'auto' : 'smooth' }); } catch (e) { el.scrollIntoView(false); }
+    // Al mantener presionada la flecha el desplazamiento es instantáneo (con animación se trababa)
+    var b = fastMove || document.documentElement.classList.contains('no-anim') ? 'instant' : 'smooth';
+    try { el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: b }); } catch (e) { el.scrollIntoView(false); }
   }
   MV.move = function (dir) {
     var root = MV.scope(), cur = document.activeElement;
     var all = Array.prototype.filter.call(root.querySelectorAll('.f'), function (el) { return !el.disabled && visible(el); });
     if (!cur || !root.contains(cur) || all.indexOf(cur) < 0) { if (all[0]) { all[0].focus(); reveal(all[0]); } return; }
     var c = cur.getBoundingClientRect(), cx = c.left + c.width / 2, cy = c.top + c.height / 2;
-    var best = null, bestScore = Infinity;
+    var best = null, bestScore = Infinity, vh = window.innerHeight, inSide = !!cur.closest('.side');
     all.forEach(function (el) {
       if (el === cur) return;
       var r = el.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+      if (Math.abs(y - cy) > vh * 1.6) return;                       // solo lo cercano: más rápido con miles de tarjetas
+      // Desde el contenido, el menú lateral solo se alcanza con ◀ (no saltando desde un botón a la derecha)
+      if (!inSide && dir !== 'left' && el.closest('.side')) return;
       var dx = x - cx, dy = y - cy, primary, secondary, overlap;
       if (dir === 'left') { if (r.right > c.left + 2 && dx >= -2) return; primary = c.left - r.right; secondary = Math.abs(dy); overlap = r.bottom > c.top && r.top < c.bottom; }
       else if (dir === 'right') { if (r.left < c.right - 2 && dx <= 2) return; primary = r.left - c.right; secondary = Math.abs(dy); overlap = r.bottom > c.top && r.top < c.bottom; }
@@ -209,7 +217,9 @@
         var atStart = t.selectionStart === 0, atEnd = t.selectionEnd === t.value.length;
         if ((k === 'ArrowLeft' && !atStart) || (k === 'ArrowRight' && !atEnd)) return;
       }
-      e.preventDefault(); MV.move(dirs[k]); return;
+      e.preventDefault();
+      if (e.repeat) { var now = Date.now(); if (now - (MV._lastMove || 0) < 70) return; MV._lastMove = now; }
+      fastMove = !!e.repeat; MV.move(dirs[k]); fastMove = false; return;
     }
     if (k === 'Enter' && !typing && t && t.classList && t.classList.contains('f') && t.tagName !== 'BUTTON' && t.tagName !== 'A') {
       e.preventDefault(); t.click(); return;

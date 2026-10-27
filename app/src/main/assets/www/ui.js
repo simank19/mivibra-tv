@@ -102,7 +102,7 @@
       var side = '<nav class="side glass" aria-label="Menú">' +
         '<img class="logo" src="img/isotipo.svg" alt="MiVibra TV">' +
         navItems().map(function (n) {
-          return '<button class="nav f' + (navOwner(view.name) === n[0] ? ' on' : '') + '" data-act="nav" data-arg="' + n[0] + '" data-fid="nav-' + n[0] + '">' + n[2] + n[1] + '</button>';
+          return '<button class="nav f' + (navOwner(view.name) === n[0] ? ' on' : '') + '" data-act="nav" data-arg="' + n[0] + '" data-fid="nav-' + n[0] + '">' + n[2] + '<span>' + n[1] + '</span></button>';
         }).join('') +
         '</nav>';
       // Botones flotantes arriba en todas las pestañas: Buscar, Favoritos, Historial y Perfil
@@ -492,10 +492,8 @@
     var lim = rowLimit[vkey] || 14;
     order.slice(0, lim).forEach(function (c) {
       var items = by[c];
-      html += '<section class="row"><h3>' + esc(c) + ' <small>' + items.length + '</small>' +
-        (items.length > 20 ? '<button class="btn ghost sm f rowall" data-act="cat" data-arg="' + esc(c) + '" data-v="' + vkey + '">Ver todo ›</button>' : '') + '</h3><div class="strip">' +
-        items.slice(0, 20).map(function (it, i) { return card(it, kind || 'poster', i); }).join('') +
-        (items.length > 20 ? '<button class="btn ghost sm f" style="align-self:center;flex:0 0 auto" data-act="cat" data-arg="' + esc(c) + '" data-v="' + vkey + '">Ver las ' + items.length + ' ›</button>' : '') + '</div></section>';
+      html += '<section class="row"><h3>' + (items.length > 20 ? '<button class="rowtitle f" data-act="cat" data-arg="' + esc(c) + '" data-v="' + vkey + '">' + esc(c) + ' <small>' + items.length + ' · Ver todo ›</small></button>' : esc(c) + ' <small>' + items.length + '</small>') + '</h3><div class="strip">' +
+        items.slice(0, 20).map(function (it, i) { return card(it, kind || 'poster', i); }).join('') + '</div></section>';
     });
     if (order.length > lim) html += '<button class="btn ghost more f" data-act="moreRows" data-arg="' + vkey + '">Ver más categorías (' + (order.length - lim) + ')</button>';
     return html;
@@ -526,8 +524,19 @@
     var active = [cur, plat ? D.platformName(plat) : '', gen ? D.genreName(gen) : ''].filter(Boolean);
     var summary = '<div class="fsum"><b>' + list.length + '</b> <span>' + (list.length === 1 ? 'título' : 'títulos') + (active.length ? ' · ' + esc(active.join(' · ')) : '') + '</span>' +
       (active.length ? '<button class="btn ghost sm f" data-act="clearFilters" data-arg="' + vkey + '">' + IC.close.replace('<svg', '<svg width="16" height="16"') + 'Limpiar filtros</button>' : '') + '</div>';
-    return top(title, sortSeg) + loadingBlock() + '<div class="filters glass">' + catRow +
-      (plats.length ? genreChips(plats, plat, vkey, 'plat', 'PLATAFORMA') : '') + genreChips(genres, gen, vkey) + '</div>' + summary +
+    // Filtros compactos en una sola línea; cada botón abre su selector
+    MV._pick = MV._pick || {};
+    MV._pick[vkey] = { cats: [{ id: '', name: 'Todas', count: all.length }].concat(cats.map(function (c) { return { id: c.name, name: c.name, count: c.count }; })), plats: [{ id: '', name: 'Todas' }].concat(plats), genres: [{ id: '', name: 'Todos' }].concat(genres), sort: SORTS.map(function (x) { return { id: x[0], name: x[1] }; }) };
+    var fb = function (kind, label, val, on) { return '<button class="fbtn f' + (on ? ' on' : '') + '" data-act="pick" data-arg="' + kind + '" data-v="' + vkey + '"><small>' + label + '</small> ' + esc(val) + ' ▾</button>'; };
+    var bar = '<div class="fbar">' + (MV._fbarPre || '') +
+      fb('cats', 'Categoría', cur || 'Todas', !!cur) +
+      (plats.length ? fb('plats', 'Plataforma', plat ? D.platformName(plat) : 'Todas', !!plat) : '') +
+      (genres.length ? fb('genres', 'Género', gen ? D.genreName(gen) : 'Todos', !!gen) : '') +
+      fb('sort', 'Orden', (SORTS.find(function (x) { return x[0] === sort; }) || SORTS[0])[1], false) +
+      (!cur ? '<button class="fbtn f" data-act="viewMode" data-arg="' + (mode === 'rows' ? 'grid' : 'rows') + '" data-v="' + vkey + '">' + (mode === 'rows' ? '▦ Cuadrícula' : '☰ Filas') + '</button>' : '') +
+      (active.length ? '<button class="fbtn f" data-act="clearFilters" data-arg="' + vkey + '">✕ Limpiar</button>' : '') + '</div>';
+    MV._fbarPre = '';
+    return top(title) + loadingBlock() + bar + (active.length || cur || mode !== 'rows' ? summary : '') +
       (list.length ? (mode === 'rows' && !cur ? catRows(vkey, list, kind) : grid(list, kind, vkey)) : '<div class="empty glass"><h2>' + (active.length ? 'Nada con esos filtros' : 'No hay contenido aquí todavía') + '</h2><p class="muted">' + (active.length ? 'Prueba quitando algún filtro.' : 'Se llena con lo que traen tus listas M3U o tu cuenta Xtream.') + '</p>' + (active.length ? '<div class="btns" style="justify-content:center"><button class="btn f" data-act="clearFilters" data-arg="' + vkey + '">Limpiar filtros</button></div>' : '') + '</div>');
   }
   function catMoreModal(vkey, filter) {
@@ -556,7 +565,7 @@
     }
     var list = platformCounts();
     return top('Plataformas', '<span class="muted">Según las categorías de tus listas</span>') + loadingBlock() +
-      (list.length ? '<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))">' + list.map(function (p, i) { return platformTile(p, i).replace('card wide', 'card wide" style="width:auto'); }).join('') + '</div>'
+      (list.length ? '<div class="pgrid">' + list.map(function (p, i) { return platformTile(p, i); }).join('') + '</div>'
         : '<div class="empty glass"><h2>No encontramos plataformas en tus listas</h2><p class="muted">Aparecen cuando las categorías de tus listas llevan el nombre del servicio, por ejemplo “Netflix Series” o “Disney+ Películas”.</p></div>');
   };
 
@@ -599,7 +608,10 @@
     var items = S.items.filter(function (i) { return i.anime && i.type !== 'live'; });
     var modes = '<div class="chips filt" style="margin-bottom:10px"><span class="flabel">VER</span>' + [['all', 'Todo'], ['airing', '🔴 En emisión'], ['year', 'Por año']].map(function (m) {
       return '<button class="chip f' + (animeMode === m[0] ? ' on' : '') + '" data-act="animeMode" data-arg="' + m[0] + '">' + m[1] + '</button>'; }).join('') + '</div>';
-    if (animeMode === 'all' || !S.lists.length) return catalogView('anime', 'Anime', items).replace('<div class="filters glass">', modes + '<div class="filters glass">');
+    if (animeMode === 'all' || !S.lists.length) {
+      MV._fbarPre = [['all', 'Todo'], ['airing', '🔴 En emisión'], ['year', 'Por año']].map(function (m) { return '<button class="fbtn f' + (animeMode === m[0] ? ' on' : '') + '" data-act="animeMode" data-arg="' + m[0] + '">' + m[1] + '</button>'; }).join('');
+      return catalogView('anime', 'Anime', items);
+    }
     var vis = MV.visible(items);
     if (animeMode === 'airing') {
       loadAiring();
@@ -905,7 +917,7 @@
       genreChips(ggList, gameGenre, 'games', 'gameGenre') +
       (sysSel === 'ports' ? '<div class="panel glass"><h2>Ports</h2><p>Juegos de PC que corren con motores libres: Doom (archivos .wad), Quake (pak0.pak), Wolfenstein 3D (.wl6) y Cave Story (Doukutsu.exe). Usa tus propios archivos del juego o empieza con Freedoom, que es libre y gratuito.</p><button class="btn f" data-act="getFreedoom">' + IC.download + 'Descargar Freedoom</button></div>' : '') +
       (recent.length && sysSel === 'all' ? '<section class="row"><h3>Jugados recientemente</h3><div class="strip">' + recent.slice(0, 12).map(function (r, i) { return romCard(r, i); }).join('') + '</div></section>' : '') +
-      (shown.length ? '<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(250px,1fr))">' + shown.slice(0, limits.games || 120).map(function (r, i) { return romCard(r, i % 12).replace('card wide', 'card wide" style="width:auto'); }).join('') + '</div>' +
+      (shown.length ? '<div class="pgrid">' + shown.slice(0, limits.games || 120).map(function (r, i) { return romCard(r, i % 12); }).join('') + '</div>' +
         (shown.length > (limits.games || 120) ? '<button class="btn ghost more f" data-act="more" data-arg="games">Ver más</button>' : '')
         : '<div class="empty glass"><h2>' + (roms.length ? 'No hay juegos de este sistema' : 'Aún no hay juegos') + '</h2><p class="muted">Conecta una USB o disco duro con tus ROMs (o cópialas a la memoria) y toca “Buscar juegos”. Los emuladores se descargan solos la primera vez que juegas cada sistema.</p></div>');
   };
@@ -1255,7 +1267,7 @@
     liveCat: function (c) { liveCat = c; limits.live = 150; MV.rerender(); },
     liveSec: function (x) { liveSec = x; liveCat = 'Todos'; limits.live = 150; MV.rerender(); },
     liveCountry: function (x) { liveCountry = x; liveCat = 'Todos'; limits.live = 150; MV.rerender(); },
-    cat: function (c, el) { catSel[el.dataset.v] = c; genreSel[el.dataset.v] = ''; platSel[el.dataset.v] = ''; limits[el.dataset.v] = 60; MV.rerender(); },
+    cat: function (c, el) { MV.closeModal(true); catSel[el.dataset.v] = c; genreSel[el.dataset.v] = ''; platSel[el.dataset.v] = ''; limits[el.dataset.v] = 60; MV.rerender(); },
     catMore: function (vkey) {
       MV.modal(catMoreModal(vkey, ''), { onOpen: function (root) {
         var inp = root.querySelector('#catFind');
@@ -1263,16 +1275,16 @@
       } });
     },
     catPick: function (c, el) { var v = el.dataset.v; MV.closeModal(true); catSel[v] = c; genreSel[v] = ''; platSel[v] = ''; limits[v] = 60; MV.rerender(); },
-    sortBy: function (s2, el) { sortSel[el.dataset.v] = s2; MV.save('sortSel', sortSel); MV.rerender(); },
+    sortBy: function (s2, el) { MV.closeModal(true); sortSel[el.dataset.v] = s2; MV.save('sortSel', sortSel); MV.rerender(); },
     animeMode: function (m) { animeMode = m; animeYear = ''; MV.rerender(); },
     animeYear: function (y) { animeYear = y; MV.rerender(); },
     viewMode: function (m, el) { viewMode[el.dataset.v] = m; MV.save('viewMode', viewMode); MV.rerender(); },
     moreRows: function (v) { rowLimit[v] = (rowLimit[v] || 14) + 14; MV.rerender(); },
     clearFilters: function (v) { catSel[v] = ''; genreSel[v] = ''; platSel[v] = ''; limits[v] = 60; MV.rerender(); },
-    plat: function (p, el) { platSel[el.dataset.v] = p; genreSel[el.dataset.v] = ''; limits[el.dataset.v] = 60; MV.rerender(); },
+    plat: function (p, el) { MV.closeModal(true); platSel[el.dataset.v] = p; genreSel[el.dataset.v] = ''; limits[el.dataset.v] = 60; MV.rerender(); },
     platform: function (id) { MV.go('platforms', id); },
     back: function () { MV.onBack(); },
-    genre: function (g, el) { genreSel[el.dataset.v] = g; limits[el.dataset.v] = 60; MV.rerender(); },
+    genre: function (g, el) { MV.closeModal(true); genreSel[el.dataset.v] = g; limits[el.dataset.v] = 60; MV.rerender(); },
     gameGenre: function (g) { gameGenre = g; MV.rerender(); },
     kidCat: function (c) { kidCat = c; MV.rerender(); },
     reloadEpg: function () { MV.toast('Actualizando guía…'); MV.loadEpg(true).then(function () { MV.rerender(); MV.toast('Guía actualizada'); }); },
@@ -1325,6 +1337,15 @@
     // Listas
     addList: function () { if (!MV.acct.canEdit()) return MV.toast('Solo el administrador puede agregar listas'); addListDialog('url'); },
     closeModal: function () { MV.closeModal(); },
+    pick: function (kind, el) {
+      var v = el.dataset.v, d = (MV._pick || {})[v]; if (!d) return;
+      var cur = kind === 'cats' ? (catSel[v] || '') : kind === 'plats' ? (platSel[v] || '') : kind === 'genres' ? (genreSel[v] || '') : (sortSel[v] || 'rec');
+      var act = { cats: 'cat', plats: 'plat', genres: 'genre', sort: 'sortBy' }[kind];
+      var title = { cats: 'Categoría', plats: 'Plataforma', genres: 'Género', sort: 'Ordenar por' }[kind];
+      MV.modal('<h2>' + title + '</h2>' + (d[kind].length > 14 ? '<input class="in f" id="pickFind" placeholder="Buscar" autocomplete="off" style="margin:6px 0 12px">' : '') +
+        '<div class="catgrid" id="pickGrid">' + d[kind].map(function (o) { return '<button class="chip f' + (String(cur) === String(o.id) ? ' on' : '') + '" data-act="' + act + '" data-arg="' + esc(o.id) + '" data-v="' + v + '" data-n="' + esc(MV.norm(o.name)) + '"' + (String(cur) === String(o.id) ? ' data-autofocus' : '') + '>' + esc(o.name) + (o.count != null ? ' <small>' + o.count + '</small>' : '') + '</button>'; }).join('') + '</div>',
+        { onOpen: function (root) { var f = root.querySelector('#pickFind'); if (f) f.addEventListener('input', function () { var q = MV.norm(f.value); root.querySelectorAll('#pickGrid .chip').forEach(function (b) { b.style.display = !q || b.dataset.n.indexOf(q) >= 0 ? '' : 'none'; }); }); } });
+    },
     pushNow: function () { MV.toast('Enviando listas y claves a tus usuarios…'); MV.acct.push({ forced: Date.now() }).then(function () { if (!MV.acct.pushError) MV.toast('Listo: tus usuarios ya tienen todo'); MV.rerender(); }); },
     recheck: function () { MV.toast('Revisando…'); MV.acct.retry().then(function () { MV.rerender(); MV.toast(S.lists.length ? 'Listas recibidas' : 'El administrador aún no ha enviado listas', 3500); }); },
     navMove: function (v) {
