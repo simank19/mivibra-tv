@@ -60,15 +60,15 @@
 
   function allNavItems() {
     return [
-      ['home', 'Inicio', IC.home], ['search', 'Buscar', IC.search], ['discover', 'Descubrir', IC.compass], ['live', 'En vivo', IC.live], ['youtube', 'YouTube', IC.yt], ['music', 'Música', IC.music], ['radio', 'Radio', IC.radio], ['browser', 'Navegador', IC.globe], ['guide', 'Guía', IC.guide],
+      ['home', 'Inicio', IC.home], ['discover', 'Descubrir', IC.compass], ['live', 'En vivo', IC.live], ['youtube', 'YouTube', IC.yt], ['music', 'Música', IC.music], ['radio', 'Radio', IC.radio], ['browser', 'Navegador', IC.globe], ['guide', 'Guía', IC.guide],
       ['movies', 'Películas', IC.movie], ['series', 'Series', IC.series], ['platforms', 'Plataformas', IC.platforms], ['anime', 'Anime', IC.anime], ['kdrama', 'K-Drama', IC.kdrama],
-      ['docs', 'Documentales', IC.doc], ['favs', 'Favoritos', IC.star], ['history', 'Historial', IC.history], ['games', 'Juegos', IC.games],
+      ['docs', 'Documentales', IC.doc], ['games', 'Juegos', IC.games],
       ['settings', 'Ajustes', IC.settings]
     ];
   }
   /** Menú en el orden que eligió el superadministrador (Inicio siempre primero y Ajustes siempre al final). */
   function navItems() {
-    if (MV.isKids()) return [['kids', 'Inicio', IC.home], ['search', 'Buscar', IC.search], ['youtube', 'YouTube Kids', IC.yt]];
+    if (MV.isKids()) return [['kids', 'Inicio', IC.home], ['youtube', 'YouTube Kids', IC.yt]];
     var all = allNavItems(), order = P.navOrder || [], hidden = P.navHidden || [];
     var mid = all.filter(function (n) { return n[0] !== 'home' && n[0] !== 'settings'; });
     mid.sort(function (a, b) {
@@ -97,10 +97,12 @@
         navItems().map(function (n) {
           return '<button class="nav f' + (view.name === n[0] ? ' on' : '') + '" data-act="nav" data-arg="' + n[0] + '" data-fid="nav-' + n[0] + '">' + n[2] + n[1] + '</button>';
         }).join('') +
-        '<div class="sp" style="flex:1"></div>' +
-        (p ? '<button class="nav f" data-act="go" data-arg="profiles" data-fid="nav-prof"><img class="avatar" src="' + esc(p.avatar) + '" alt="">' + esc(p.name) + '</button>' : '') +
         '</nav>';
-      app.innerHTML = '<div class="shell">' + side + '<main class="main"><div class="view-in">' + body + '</div></main></div>';
+      // Botones flotantes arriba en todas las pestañas: Buscar, Favoritos, Historial y Perfil
+      var q = function (id, icon, label) { return '<button class="qbtn f' + (view.name === id ? ' on' : '') + '" data-act="nav" data-arg="' + id + '" data-fid="q-' + id + '" aria-label="' + label + '" title="' + label + '">' + icon + '</button>'; };
+      var quick = '<div class="qbar">' + q('search', IC.search, 'Buscar') + (MV.isKids() ? '' : q('favs', IC.star, 'Favoritos') + q('history', IC.history, 'Historial')) +
+        (p ? '<button class="qprof f" data-act="go" data-arg="profiles" data-fid="q-prof" aria-label="Cambiar de perfil"><img class="avatar" src="' + esc(p.avatar) + '" alt=""><span>' + esc(p.name) + '</span></button>' : '') + '</div>';
+      app.innerHTML = '<div class="shell">' + side + '<main class="main">' + quick + '<div class="view-in">' + body + '</div></main></div>';
     }
     if (VIEWS[view.name] && VIEWS[view.name].after) VIEWS[view.name].after(view.arg);
     if (!keepFocus) setTimeout(function () { MV.focusFirst(); }, 30);

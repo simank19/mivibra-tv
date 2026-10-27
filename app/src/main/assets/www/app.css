@@ -355,7 +355,21 @@ body.yt-open .updpill { display: none; }
 .navline .navic svg { width: 24px; height: 24px; }
 .navline.off { opacity: .5; }
 .navline .iconbtn[disabled] { opacity: .3; }
+
+/* Botones flotantes arriba (Buscar, Favoritos, Historial, Perfil) */
+.qbar { position: sticky; top: 0; z-index: 30; display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin: -6px 0 6px; padding: 6px 0; pointer-events: none; }
+.qbar > * { pointer-events: auto; }
+.qbtn { width: 46px; height: 46px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line); background: rgba(20,18,16,.72); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); color: var(--text); padding: 0; box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+.qbtn svg { width: 22px; height: 22px; }
+.qbtn.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.qprof { display: flex; align-items: center; gap: 8px; height: 46px; padding: 0 14px 0 4px; border-radius: 999px; border: 1px solid var(--line); background: rgba(20,18,16,.72); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); color: var(--text); font: 700 14px var(--ui); box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+.qprof .avatar { width: 38px; height: 38px; border-radius: 50%; background: #F3EFEA; object-fit: cover; }
+.qbtn.f:focus-visible, .qbtn.f.kf, .qprof.f:focus-visible, .qprof.f.kf { outline: 3px solid var(--accent); outline-offset: 2px; transform: scale(1.08); }
+
 @media (max-width: 760px) {
+  .qprof span { display: none; }
+  .qprof { padding: 0 4px; }
+  .qbtn, .qprof { height: 42px; } .qbtn { width: 42px; }
   .flabel { min-width: 0; width: 100%; padding: 2px 4px; }
   .chips.filt { flex-wrap: nowrap; overflow-x: auto; }
   .chips.filt .flabel { width: auto; }
