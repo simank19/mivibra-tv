@@ -33,6 +33,11 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import androidx.media3.ui.SubtitleView
+import androidx.media3.ui.CaptionStyleCompat
+import androidx.media3.common.TrackSelectionOverride
+import android.app.AlertDialog
+import java.util.Locale
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -49,6 +54,7 @@ class PlayerActivity : ComponentActivity() {
     }
 
     private lateinit var view: PlayerView
+    private lateinit var tracksBtn: TextView
     private lateinit var info: TextView
     private lateinit var errorView: TextView
     private var player: ExoPlayer? = null
@@ -107,6 +113,26 @@ class PlayerActivity : ComponentActivity() {
             visibility = View.GONE
         }
         root.addView(errorView, FrameLayout.LayoutParams(-1, -2, Gravity.CENTER))
+
+        // Botón "Audio y subtítulos": aparece con los controles; en el control remoto también con MENÚ
+        tracksBtn = TextView(this).apply {
+            text = "🗨  Audio y subtítulos"
+            setTextColor(Color.WHITE)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(34, 20, 34, 20)
+            isFocusable = true
+            isClickable = true
+            background = android.graphics.drawable.StateListDrawable().apply {
+                addState(intArrayOf(android.R.attr.state_focused), android.graphics.drawable.GradientDrawable().apply { cornerRadius = 50f; setColor(0xFFFF6900.toInt()) })
+                addState(intArrayOf(), android.graphics.drawable.GradientDrawable().apply { cornerRadius = 50f; setColor(0xB30D0C0B.toInt()); setStroke(2, 0x55FFFFFF) })
+            }
+            setOnClickListener { showTracks() }
+            visibility = View.GONE
+        }
+        root.addView(tracksBtn, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.END).apply { setMargins(40, 36, 40, 0) })
+        view.setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { v -> tracksBtn.visibility = v })
+        applySubtitleStyle()
         setContentView(root)
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -310,6 +336,103 @@ class PlayerActivity : ComponentActivity() {
         playIndex(index + delta, 0)
     }
 
+    // ---------- Audio, subtítulos y pantalla ----------
+    private val prefs by lazy { getSharedPreferences("player", MODE_PRIVATE) }
+    private val subSizes = listOf("Pequeño" to 0.8f, "Mediano" to 1f, "Grande" to 1.3f, "Muy grande" to 1.6f)
+
+    private fun applySubtitleStyle() {
+        val f = subSizes.getOrNull(prefs.getInt("subSize", 1))?.second ?: 1f
+        view.subtitleView?.apply {
+            setFractionalTextSize(SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * f)
+            setApplyEmbeddedStyles(false)
+            setStyle(CaptionStyleCompat(Color.WHITE, 0x99000000.toInt(), Color.TRANSPARENT, CaptionStyleCompat.EDGE_TYPE_OUTLINE, Color.BLACK, null))
+        }
+    }
+
+    private fun langName(code: String?): String {
+        if (code.isNullOrBlank() || code == "und") return ""
+        val n = Locale.forLanguageTag(code).getDisplayLanguage(Locale("es"))
+        return if (n.isBlank() || n == code) code.uppercase() else n.replaceFirstChar { it.uppercase() }
+    }
+
+    private class Opt(val label: String, val selected: Boolean, val run: () -> Unit)
+
+    private fun showTracks() {
+        val p = player ?: return
+        val audio = mutableListOf<Opt>()
+        val text = mutableListOf<Opt>()
+        val textOff = p.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)
+        var anyTextSelected = false
+        for (g in p.currentTracks.groups) {
+            for (i in 0 until g.length) {
+                if (!g.isTrackSupported(i)) continue
+                val f = g.getTrackFormat(i)
+                val sel = g.isTrackSelected(i)
+                when (g.type) {
+                    C.TRACK_TYPE_AUDIO -> {
+                        val ch = when (f.channelCount) { 1 -> "Mono"; 2 -> "Estéreo"; 6 -> "5.1"; 8 -> "7.1"; else -> if (f.channelCount > 0) "${f.channelCount} canales" else "" }
+                        val name = listOf(langName(f.language), f.label ?: "", ch).filter { it.isNotBlank() }.distinct().joinToString(" · ").ifBlank { "Pista ${audio.size + 1}" }
+                        audio.add(Opt(name, sel) {
+                            p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setOverrideForType(TrackSelectionOverride(g.mediaTrackGroup, i)).build()
+                            toastInfo("Audio: $name")
+                        })
+                    }
+                    C.TRACK_TYPE_TEXT -> {
+                        if (sel && !textOff) anyTextSelected = true
+                        val name = listOf(langName(f.language), f.label ?: "").filter { it.isNotBlank() }.distinct().joinToString(" · ").ifBlank { "Subtítulos ${text.size + 1}" }
+                        text.add(Opt(name, sel && !textOff) {
+                            p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
+                                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                                .setOverrideForType(TrackSelectionOverride(g.mediaTrackGroup, i)).build()
+                            toastInfo("Subtítulos: $name")
+                        })
+                    }
+                }
+            }
+        }
+        val labels = mutableListOf<String>()
+        val actions = mutableListOf<(() -> Unit)?>()
+        fun header(t: String) { labels.add("— $t —"); actions.add(null) }
+        fun item(o: Opt) { labels.add((if (o.selected) "●  " else "○  ") + o.label); actions.add(o.run) }
+
+        header("IDIOMA DEL AUDIO")
+        if (audio.isEmpty()) { labels.add("   Este video no informa sus idiomas"); actions.add(null) } else audio.forEach { item(it) }
+        if (audio.size == 1) { labels.add("   Este video solo trae un idioma"); actions.add(null) }
+
+        header("SUBTÍTULOS")
+        item(Opt("Desactivados", text.isEmpty() || !anyTextSelected) {
+            p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build()
+            toastInfo("Subtítulos desactivados")
+        })
+        text.forEach { item(it) }
+        if (text.isEmpty()) { labels.add("   Este video no trae subtítulos"); actions.add(null) }
+
+        header("TAMAÑO DE LOS SUBTÍTULOS")
+        val curSize = prefs.getInt("subSize", 1)
+        subSizes.forEachIndexed { idx, sz -> item(Opt(sz.first, idx == curSize) { prefs.edit().putInt("subSize", idx).apply(); applySubtitleStyle(); toastInfo("Subtítulos: ${sz.first}") }) }
+
+        header("PANTALLA")
+        listOf(AspectRatioFrameLayout.RESIZE_MODE_FIT to "Original", AspectRatioFrameLayout.RESIZE_MODE_ZOOM to "Recortar (llenar pantalla)", AspectRatioFrameLayout.RESIZE_MODE_FILL to "Estirar").forEach { (m, n) ->
+            item(Opt(n, resizeMode == m) { resizeMode = m; view.resizeMode = m; toastInfo("Pantalla: $n") })
+        }
+
+        val dlg = AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle("Audio y subtítulos")
+            .setItems(labels.toTypedArray()) { d, which -> actions[which]?.let { it(); d.dismiss() } }
+            .setNegativeButton("Cerrar", null)
+            .create()
+        dlg.show()
+        // Enfoca la opción marcada, saltando los títulos de sección
+        dlg.listView?.post { val first = labels.indexOfFirst { it.startsWith("●") }; if (first >= 0) dlg.listView.setSelection(first) }
+    }
+
+    private fun toastInfo(t: String) {
+        info.text = t
+        info.visibility = View.VISIBLE
+        info.alpha = 1f
+        ui.postDelayed({ info.visibility = View.GONE }, 1800)
+    }
+
     private fun cycleResize() {
         resizeMode = when (resizeMode) {
             AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
@@ -336,7 +459,8 @@ class PlayerActivity : ComponentActivity() {
                 KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_PAGE_DOWN -> { zap(1); return true }
                 KeyEvent.KEYCODE_DPAD_UP -> if (live && !controllerVisible) { zap(-1); return true }
                 KeyEvent.KEYCODE_DPAD_DOWN -> if (live && !controllerVisible) { zap(1); return true }
-                KeyEvent.KEYCODE_BUTTON_Y, KeyEvent.KEYCODE_MENU -> { cycleResize(); return true }
+                KeyEvent.KEYCODE_BUTTON_Y -> { cycleResize(); return true }
+                KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_CAPTIONS, KeyEvent.KEYCODE_BUTTON_X, KeyEvent.KEYCODE_MEDIA_AUDIO_TRACK -> { showTracks(); return true }
                 KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_ESCAPE -> { finishWithResult(); return true }
                 KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_BUTTON_A -> if (!controllerVisible) {
                     player?.let { if (it.isPlaying) it.pause() else it.play() }

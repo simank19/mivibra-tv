@@ -529,9 +529,24 @@
     });
   };
   function tmdbMeta(title, year, kind) {
+    // Elige el mejor resultado: título igual, año cercano y la más conocida (evita confundir "2012" con otra película parecida)
+    function best(results) {
+      var want = MV.norm(title);
+      var scored = (results || []).slice(0, 10).map(function (r, i) {
+        var t = MV.norm(r.title || r.name), o = MV.norm(r.original_title || r.original_name);
+        var y = +((r.release_date || r.first_air_date || '').slice(0, 4)) || 0, sc = 0;
+        if (t === want || o === want) sc += 100; else if (t.indexOf(want) === 0 || o.indexOf(want) === 0) sc += 20;
+        if (year && y) sc += Math.max(0, 30 - Math.abs(y - +year) * 15);
+        sc += Math.min(40, Math.log(1 + (r.vote_count || 0)) * 5) - i * 2;
+        return { r: r, sc: sc };
+      }).sort(function (a, b) { return b.sc - a.sc; });
+      return scored.length ? scored[0].r : null;
+    }
+    // Si el "año" es el propio título (película "2012"), no se usa como filtro
+    if (year && MV.norm(title) === String(year)) year = '';
     return tmdb('/search/' + kind, '&query=' + encodeURIComponent(title) + (year ? (kind === 'tv' ? '&first_air_date_year=' : '&year=') + year : '')).then(function (s) {
-      var r = s.results && s.results[0];
-      if (!r && year) return tmdb('/search/' + kind, '&query=' + encodeURIComponent(title)).then(function (s2) { return s2.results && s2.results[0]; });
+      var r = best(s.results);
+      if (!r && year) return tmdb('/search/' + kind, '&query=' + encodeURIComponent(title)).then(function (s2) { return best(s2.results); });
       return r;
     }).then(function (r) {
       if (!r) return null;
