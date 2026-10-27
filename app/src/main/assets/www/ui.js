@@ -1336,7 +1336,13 @@
       MV.acct.startCode(function (c) { loginCode = c; MV.rerender(); }).then(afterLogin).catch(function (e) { loginCode = null; loginFail(e); });
     },
     loginCancel: function () { MV.acct.stopCode(); loginCode = null; MV.rerender(); },
-    loginRetry: function () { MV.acct.status = 'pending'; MV.acct.signOut().then(function () { MV.acct.error = 'Vuelve a entrar con tu cuenta.'; MV.go('login', null, { replace: true }); }); },
+    loginRetry: function () {
+      MV.toast('Revisando acceso…');
+      MV.acct.retry().then(function (ok) {
+        if (ok) { MV.toast('¡Listo, ya tienes acceso!'); afterLogin(); }
+        else { MV.toast('Todavía sin acceso. Pídele al administrador que agregue tu correo.', 4000); MV.rerender(); }
+      });
+    },
     loginOut: function () { MV.confirm('¿Cerrar sesión en este equipo?', 'Tus datos quedan guardados en tu cuenta.', 'Cerrar sesión').then(function (y) { if (!y) return; MV.acct.signOut().then(function () { S.pid = null; MV.save('pid', null); MV.go('login', null, { replace: true }); }); }); },
     acctAllow: function () {
       var m = (document.getElementById('acctMail').value || '').trim().toLowerCase();

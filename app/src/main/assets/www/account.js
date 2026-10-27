@@ -99,6 +99,20 @@
     });
   }
 
+  /** Vuelve a revisar si el administrador ya dio acceso, sin cerrar la sesión. */
+  acct.retry = function () {
+    if (!MV.sync.user) return Promise.resolve(false);
+    if (cfgUnsub) { cfgUnsub(); cfgUnsub = null; }
+    acct.status = 'pending';
+    // Reabre también la sincronización personal, que pudo fallar por falta de permiso
+    if (MV.sync.relisten) MV.sync.relisten();
+    listenConfig();
+    return new Promise(function (res) {
+      var t = setInterval(function () { if (acct.status !== 'pending') { clearInterval(t); res(acct.status === 'ok'); } }, 200);
+      setTimeout(function () { clearInterval(t); res(acct.status === 'ok'); }, 8000);
+    });
+  };
+
   MV.on('auth', function (u) {
     if (u) listenConfig();
     else {

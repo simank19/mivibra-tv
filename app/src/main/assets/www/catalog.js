@@ -721,6 +721,7 @@
         });
       }).then(function () { return MV.sync.push(); });
     },
+    relisten: function () { if (unsub) { unsub(); unsub = null; } if (MV.sync.user) MV.sync.listen(); },
     signOut: function () { if (unsub) unsub(); unsub = null; return fb ? fb.auth().signOut() : Promise.resolve(); },
     doc: function () { return fb.firestore().collection('mivibra').doc(MV.sync.user.uid); },
     snapshot: function () {
