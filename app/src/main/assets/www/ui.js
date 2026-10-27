@@ -869,7 +869,8 @@
   };
   SETTINGS.about = function () {
     return '<div class="panel glass"><h2>MiVibra TV</h2><p>Versión ' + esc(MV.device.version || '') + ' · ' + esc(MV.device.model || '') + '</p>' +
-      '<div class="btns" style="margin-bottom:12px"><button class="btn f" data-act="checkUpdate">' + IC.refresh + 'Buscar actualizaciones</button></div>' +
+      '<div class="line"><div class="t"><b>Versión instalada: ' + esc(MV.device.versionCode || '—') + '</b><span>' + (MV.latestVersion ? (MV.latestVersion > (MV.device.versionCode || 0) ? 'Hay una versión nueva: ' + MV.latestVersion : 'Estás al día (última publicada: ' + MV.latestVersion + ')') : 'Toca Buscar para comparar con la última publicada') + '</span></div>' +
+      '<button class="btn f" data-act="checkUpdate">' + IC.refresh + (MV.pendingUpdate ? 'Actualizar ahora' : 'Buscar actualizaciones') + '</button></div>' +
       '<p>Reproductor de listas IPTV para Android TV, celular y tablet. MiVibra TV no incluye ni vende contenido: reproduce las listas que tú agregas y canales gratuitos públicos.</p>' +
       '<h3>Licencias y créditos</h3><p style="font-size:13px;line-height:1.6">Código de MiVibra TV: GPL-3.0 · Emulación: LibretroDroid y núcleos libretro (GPL; algunos núcleos solo permiten uso no comercial) · Avatares: alohe/avatars (MIT) · Reproductor: AndroidX Media3 (Apache 2.0) · Servidor del mando: NanoHTTPD (BSD) · Código QR: qrcode-generator (MIT) · Canales gratis: Free-TV/IPTV e iptv-org · Fichas: TMDB y MyAnimeList (Jikan) · Cine clásico: Internet Archive · Freedoom (BSD).</p>' +
       '<p style="font-size:12px">Este producto usa la API de TMDB pero no está respaldado ni certificado por TMDB.</p></div>';
@@ -1193,7 +1194,7 @@
       }).catch(function () { MV.toast('No se pudo cargar el tráiler'); });
     },
     tmdbSearch: function (key) { var t = MV.reg[key]; if (!t) return; MV.closeModal(true); query = t.name; MV.go('search'); },
-    checkUpdate: function () { MV.toast('Buscando actualizaciones…'); MV.checkUpdate(true); },
+    checkUpdate: function () { if (MV.pendingUpdate) { MV.showUpdate(); return; } MV.toast('Buscando actualizaciones…'); MV.checkUpdate(true).then(function () { if (view.name === 'settings') MV.rerender(); }); },
     checkDupes: function () { MV.checkDupes(true); MV.toast('Probando las señales de los canales repetidos…'); setTimeout(MV.rerender, 300); },
     loginGoogle: function () {
       loginBusy = true; MV.acct.error = ''; MV.rerender();

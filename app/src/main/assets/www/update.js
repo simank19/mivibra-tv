@@ -8,7 +8,21 @@
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function current() { return +(MV.device.versionCode || 0); }
 
+  /** Plan B si la API de GitHub falla o llega al límite: la página de novedades (releases.atom). */
+  function fetchFromFeed() {
+    return MV.getText('https://github.com/' + REPO + '/releases.atom').then(function (t) {
+      var m = t.match(/releases\/tag\/build-(\d+)/);
+      if (!m) throw new Error('Sin versiones publicadas');
+      var n = +m[1];
+      var notes = ((t.split('<entry>')[1] || '').match(/<content[^>]*>([\s\S]*?)<\/content>/) || ['', ''])[1]
+        .replace(/&lt;[^&]*&gt;/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s{2,}/g, ' ').trim();
+      return { version: n, url: 'https://github.com/' + REPO + '/releases/download/build-' + n + '/MiVibraTV-' + n + '.apk', size: 0, notes: notes, mandatory: /\[obligatoria\]/i.test(notes) };
+    });
+  }
   function fetchLatest() {
+    return fetchApi().catch(function () { return fetchFromFeed(); });
+  }
+  function fetchApi() {
     return MV.getText('https://api.github.com/repos/' + REPO + '/releases/latest', { Accept: 'application/vnd.github+json' }).then(function (t) {
       var r = JSON.parse(t);
       var n = +(String(r.tag_name || '').replace(/\D+/g, '')) || 0;
@@ -26,9 +40,11 @@
     checking = true; lastCheck = Date.now();
     return fetchLatest().then(function (u) {
       checking = false;
+      MV.latestVersion = u.version;
       if (u.version > current()) {
+        MV.pendingUpdate = u; pill(u);
         if (manual || shownFor !== u.version) { shownFor = u.version; showPopup(u); }
-      } else if (manual) MV.toast('Ya tienes la versión más reciente (' + current() + ')');
+      } else { MV.pendingUpdate = null; pill(null); if (manual) MV.toast('Ya tienes la versión más reciente (' + current() + ')'); }
       return u;
     }).catch(function (e) {
       checking = false;
@@ -36,6 +52,15 @@
       return null;
     });
   };
+
+  /** Botón fijo "Actualizar" mientras haya una versión nueva sin instalar (aunque cierres el aviso). */
+  function pill(u) {
+    var el = document.getElementById('updPill');
+    if (!u) { if (el) el.remove(); return; }
+    if (!el) { el = document.createElement('button'); el.id = 'updPill'; el.className = 'updpill f'; document.body.appendChild(el); el.onclick = function () { if (MV.pendingUpdate) showPopup(MV.pendingUpdate); }; }
+    el.innerHTML = '⬆ Actualizar a la versión ' + u.version;
+  }
+  MV.showUpdate = function () { if (MV.pendingUpdate) showPopup(MV.pendingUpdate); else MV.checkUpdate(true); };
 
   function showPopup(u) {
     var notes = u.notes.replace(/\[obligatoria\]/ig, '').trim();
@@ -78,9 +103,9 @@
   }
 
   // Revisa al abrir la app y cada 6 horas mientras está abierta (también al volver a ella)
-  document.addEventListener('DOMContentLoaded', function () { setTimeout(function () { MV.checkUpdate(false); }, 6000); });
+  document.addEventListener('DOMContentLoaded', function () { setTimeout(function () { MV.checkUpdate(false); }, 2500); });
   setInterval(function () { MV.checkUpdate(false); }, 6 * 3600e3);
   document.addEventListener('visibilitychange', function () {
-    if (!document.hidden && Date.now() - lastCheck > 3600e3) MV.checkUpdate(false);
+    if (!document.hidden && Date.now() - lastCheck > 10 * 60e3) { shownFor = 0; MV.checkUpdate(false); }
   });
 })();
