@@ -132,6 +132,11 @@ class PlayerActivity : ComponentActivity() {
         }
         root.addView(tracksBtn, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.END).apply { setMargins(40, 36, 40, 0) })
         view.setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { v -> tracksBtn.visibility = v })
+        // Los botones ⚙ y CC de la barra de controles abren el mismo menú de audio y subtítulos
+        listOf(androidx.media3.ui.R.id.exo_settings, androidx.media3.ui.R.id.exo_subtitle).forEach { id ->
+            view.findViewById<View>(id)?.setOnClickListener { showTracks() }
+        }
+        view.setShowSubtitleButton(true)
         applySubtitleStyle()
         setContentView(root)
 
@@ -197,6 +202,7 @@ class PlayerActivity : ComponentActivity() {
                     info.text = (if (live) "Probando otra forma de abrir el canal… (" else "Probando otra forma de abrir el video… (") + (attemptIndex + 1) + "/" + attempts.size + ")"
                     info.visibility = View.VISIBLE
                     info.alpha = 1f
+                    hideInfo(6000)
                     startAttempt()
                     return
                 }
@@ -209,6 +215,8 @@ class PlayerActivity : ComponentActivity() {
                 if (state == Player.STATE_READY) {
                     retries = 0
                     errorView.visibility = View.GONE
+                    // Ya abrió: quita el aviso de "Probando otra forma…"
+                    if (info.visibility == View.VISIBLE && info.text.startsWith("Probando")) hideInfo(600)
                 }
                 if (state == Player.STATE_ENDED && !live) {
                     if (index < queue.length() - 1) playIndex(index + 1, 0) else finishWithResult()
@@ -425,6 +433,9 @@ class PlayerActivity : ComponentActivity() {
         // Enfoca la opción marcada, saltando los títulos de sección
         dlg.listView?.post { val first = labels.indexOfFirst { it.startsWith("●") }; if (first >= 0) dlg.listView.setSelection(first) }
     }
+
+    private val hideInfoRun = Runnable { info.animate().alpha(0f).setDuration(300).withEndAction { info.visibility = View.GONE }.start() }
+    private fun hideInfo(delay: Long) { ui.removeCallbacks(hideInfoRun); ui.postDelayed(hideInfoRun, delay) }
 
     private fun toastInfo(t: String) {
         info.text = t

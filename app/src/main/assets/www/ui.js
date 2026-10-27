@@ -462,6 +462,7 @@
         (prog ? '<button class="btn f" data-act="resume" data-key="' + esc(it.key) + '" data-autofocus>' + IC.play + 'Continuar · ' + MV.fmtDur(prog.pos) + '</button><button class="btn ghost f" data-act="play" data-key="' + esc(it.key) + '">Desde el inicio</button>'
           : '<button class="btn f" data-act="play" data-key="' + esc(it.key) + '" data-autofocus>' + IC.play + 'Reproducir</button>')) +
       '<button class="btn ghost f" data-act="fav" data-key="' + esc(it.key) + '">' + (fav ? IC.starFill : IC.star) + (fav ? 'En favoritos' : 'Favorito') + '</button>' +
+      '<button class="btn ghost f" data-act="langMenu">🗨 Audio y subtítulos</button>' +
       '<button class="btn ghost f hidden" id="coverBtn" data-act="covers" data-key="' + esc(it.key) + '">Cambiar carátula</button></div>' +
       (it.type === 'series' ? '<div id="eps" class="eps"><div class="spinner"></div></div>' : '') + '</div></div>';
   };
@@ -964,6 +965,20 @@
     // Listas
     addList: function () { if (!MV.acct.canEdit()) return MV.toast('Solo el administrador puede agregar listas'); addListDialog('url'); },
     closeModal: function () { MV.closeModal(); },
+    langMenu: function () {
+      var aud = [['es', 'Español'], ['en', 'Inglés'], ['pt', 'Portugués'], ['ja', 'Japonés'], ['ko', 'Coreano'], ['fr', 'Francés']];
+      var sub = [['', 'Desactivados'], ['es', 'Español'], ['en', 'Inglés'], ['pt', 'Portugués']];
+      MV.modal('<h2>Audio y subtítulos</h2><p class="muted">Se aplica al reproducir, si el video trae ese idioma. Durante la película puedes cambiarlo con el botón 🗨 o ⚙ del reproductor (en el control remoto, tecla Menú).</p>' +
+        '<h3 style="margin:14px 0 8px">Idioma del audio</h3><div class="chips">' + aud.map(function (a) { return '<button class="chip f' + (P.audioLang === a[0] ? ' on' : '') + '" data-act="langSet" data-arg="audioLang:' + a[0] + '">' + a[1] + '</button>'; }).join('') + '</div>' +
+        '<h3 style="margin:14px 0 8px">Subtítulos</h3><div class="chips">' + sub.map(function (a) { return '<button class="chip f' + ((P.subLang || '') === a[0] ? ' on' : '') + '" data-act="langSet" data-arg="subLang:' + a[0] + '">' + a[1] + '</button>'; }).join('') + '</div>' +
+        '<div class="btns"><button class="btn f" data-act="closeModal" data-autofocus>Listo</button></div>');
+    },
+    langSet: function (v) {
+      var k = v.split(':')[0], val = v.split(':')[1] || '';
+      P[k] = val; MV.savePrefs();
+      MV.closeModal(true); ACT.langMenu();
+      MV.toast(k === 'audioLang' ? 'Audio preferido guardado' : (val ? 'Subtítulos activados' : 'Subtítulos desactivados'));
+    },
     auToggle: function () { AU.toggle(); },
     auNext: function () { AU.next(); },
     auPrev: function () { AU.prev(); },
