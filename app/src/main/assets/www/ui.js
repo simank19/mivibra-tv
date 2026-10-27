@@ -895,6 +895,8 @@
     if (MV.acct.managed()) {
       tabs = tabs.map(function (t) { return t[0] === 'sync' ? ['account', 'Cuenta'] : t; });
       if (MV.acct.isAdmin()) tabs.splice(1, 0, ['users', 'Usuarios']);
+      // Las listas solo las ve y maneja el superadministrador
+      else { tabs = tabs.filter(function (t) { return t[0] !== 'lists'; }); if (setTab === 'lists' || setTab === 'users') setTab = 'profiles'; }
       if (setTab === 'sync') setTab = 'account';
     }
     var html = top('Ajustes') + '<div class="chips">' + tabs.map(function (t) { return '<button class="chip f' + (setTab === t[0] ? ' on' : '') + '" data-act="setTab" data-arg="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>';
