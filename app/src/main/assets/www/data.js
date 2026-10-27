@@ -76,7 +76,8 @@
   D.RX = {
     kids: /\b(kids?|infantil|niñ[oa]s|niñez|children|junior|jr\.?|cartoon|caricaturas|dibujos|baby|familia|family)\b/i,
     anime: /\b(anime|animes|animé|manga|otaku|japanimation|crunchy)\b/i,
-    doc: /\b(docu|documental(es)?|documentar(y|ies)|naturaleza|nature|historia|history|ciencia|science|wild|animal(es)?|viajes|travel)\b/i,
+    doc: /\b(docu|docus|documental(es)?|documentar(y|ies)|docuseries?|docu-?series|nat ?geo|national geographic|discovery|animal planet|vida salvaje|wildlife|naturaleza|nature doc)\b/i,
+    notDoc: /ficci[oó]n|fiction|sci-?fi|ciencia ?ficci|fantas|acci[oó]n|action|terror|horror|comedia|comedy|drama|thriller|suspenso|infantil|kids|anime/i,
     kdrama: /(k-?dramas?|doramas?|coreanas?|coreanos?|korean|korea|asian drama|c-?drama|j-?drama)/i,
     adult: /(xxx|\+18|18\+|\badult|porn|erotic|er[oó]tico|hentai|playboy|sexy)/i,
     movie: /\b(pel[ií]culas?|movies?|vod|cine|films?)\b/i,

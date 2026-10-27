@@ -39,15 +39,17 @@
   MV.adultOk = function () { return !MV.isKids() && S.adultUntil > Date.now(); };
 
   // Géneros aprendidos de las fichas (TMDB/Jikan), para clasificar mejor la próxima vez
-  var GCACHE = MV.load('gcache', {});
+  // Solo los géneros que dice TMDB/MyAnimeList (no los deducidos del nombre de la categoría)
+  var GCACHE = MV.load('gcache2', {});
   MV.learnGenres = function (item, names) {
     var ids = D.classifyGenres((names || []).join(' '));
     if (!ids.length) return;
     item.genres = item.genres || [];
     ids.forEach(function (x) { if (item.genres.indexOf(x) < 0) item.genres.push(x); });
-    GCACHE[item.key] = item.genres.slice(0, 6);
+    GCACHE[item.key] = ids.slice(0, 6);
+    if (item.type !== 'live' && ids.indexOf('documental') >= 0) item.doc = true;
     var keys = Object.keys(GCACHE); if (keys.length > 5000) delete GCACHE[keys[0]];
-    MV.save('gcache', GCACHE);
+    MV.save('gcache2', GCACHE);
   };
   MV.genresOf = function (arr) {
     var m = {};
@@ -137,7 +139,8 @@
     o.kdrama = RX.kdrama.test(g);
     o.platform = D.platformOf(o.group || '') || (o.type !== 'live' ? D.platformOf(o.name || '') : '');
     if (o.platform === 'viki' && !o.anime) o.kdrama = o.kdrama || /drama|corea|korea/i.test(g);
-    o.doc = RX.doc.test(o.group || '') || /document/i.test(o.name || '');
+    // Documental solo si la categoría lo dice claramente (no "Ciencia ficción", "Historia" o "Animales fantásticos")
+    o.doc = (RX.doc.test(o.group || '') && !RX.notDoc.test(o.group || '')) || /\bdocumental\b|\bdocumentary\b/i.test(o.name || '');
     o.adult = RX.adult.test(g);
     if (o.type === 'live') o.country = D.countryOf(o);
     if (o.type !== 'live' || o.doc || o.kids) {
@@ -146,7 +149,11 @@
       if (o.kids && o.genres.indexOf('infantil') < 0) o.genres.push('infantil');
       if (o.doc && o.genres.indexOf('documental') < 0) o.genres.push('documental');
       var learned = GCACHE[o.key];
-      if (learned) learned.forEach(function (x) { if (o.genres.indexOf(x) < 0) o.genres.push(x); });
+      if (learned) {
+        learned.forEach(function (x) { if (o.genres.indexOf(x) < 0) o.genres.push(x); });
+        // Lo que dice TMDB manda: documental si su género es Documental
+        if (o.type !== 'live' && learned.indexOf('documental') >= 0) o.doc = true;
+      }
     }
     return o;
   }
@@ -280,7 +287,7 @@
   function loadList(list, force) {
     var ck = 'list:' + list.id;
     return MV.idbGet(ck).then(function (cached) {
-      var fresh = cached && cached.ts > Date.now() - 12 * 3600e3 && cached.v === 5;
+      var fresh = cached && cached.ts > Date.now() - 12 * 3600e3 && cached.v === 6;
       if (cached && !force && fresh) return cached.items;
       var job;
       if (list.type === 'xtream') job = buildFromXtream(list);
@@ -291,7 +298,7 @@
       });
       return job.then(function (items) {
         list.count = items.length; list.updated = Date.now(); list.error = '';
-        MV.idbSet(ck, { ts: Date.now(), v: 5, items: items });
+        MV.idbSet(ck, { ts: Date.now(), v: 6, items: items });
         return items;
       }).catch(function (e) {
         list.error = e.message || 'Error';
