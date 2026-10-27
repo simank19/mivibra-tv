@@ -93,7 +93,7 @@ class BrowserActivity : ComponentActivity() {
         s.useWideViewPort = true
         s.builtInZoomControls = true
         s.displayZoomControls = false
-        s.setSupportMultipleWindows(false)          // sin ventanas emergentes
+        s.setSupportMultipleWindows(true)           // las ventanas nuevas se revisan en onCreateWindow (anuncios fuera)
         s.javaScriptCanOpenWindowsAutomatically = false
         s.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
         applyUserAgent()
@@ -114,7 +114,9 @@ class BrowserActivity : ComponentActivity() {
                 val u = request.url
                 val scheme = u.scheme ?: ""
                 if (scheme == "http" || scheme == "https" || scheme == "about" || scheme == "data") {
-                    if (adblock && AdBlock.blocks(u.host) && request.isForMainFrame && !request.isRedirect) { blockedCount++; updateShield(); return true }
+                    if (adblock && request.isForMainFrame && (AdBlock.blocks(u.host) || AdBlock.isAdRedirect(u, web.url))) {
+                        blockedCount++; updateShield(); toast("🛡 Anuncio bloqueado"); return true
+                    }
                     return false
                 }
                 // intent://, market://, whatsapp://… se abren en su app
@@ -125,6 +127,23 @@ class BrowserActivity : ComponentActivity() {
             override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
                 if (url != null && !url.startsWith("data:")) urlBox.setText(url)
                 blockedCount = 0; updateShield()
+            }
+
+            // Página de error propia (en vez de "Página web no disponible")
+            override fun onReceivedError(view: WebView, request: WebResourceRequest, error: android.webkit.WebResourceError) {
+                if (!request.isForMainFrame) return
+                val url = request.url.toString()
+                val ad = AdBlock.isAdRedirect(request.url, null) || AdBlock.blocks(request.url.host)
+                val why = when {
+                    ad -> "Era un anuncio o redireccionamiento publicitario de la página anterior."
+                    error.errorCode == ERROR_HOST_LOOKUP -> "No existe esa dirección o no hay internet."
+                    error.errorCode == ERROR_CONNECT || error.errorCode == ERROR_TIMEOUT -> "El sitio no respondió. Puede estar caído o bloqueado por tu red o tu DNS."
+                    else -> "El sitio no se pudo abrir (" + error.description + ")."
+                }
+                val html = "<!doctype html><html><head><meta name=viewport content='width=device-width,initial-scale=1'><style>body{margin:0;background:#0D0C0B;color:#F3EFEA;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px;box-sizing:border-box;text-align:center}h1{font-size:28px;margin:0 0 10px}p{color:#A39C94;max-width:620px;line-height:1.5}code{color:#FFB98A;word-break:break-all;font-size:13px}a{margin-top:18px;background:#FF6900;color:#0D0C0B;font-weight:800;padding:14px 28px;border-radius:40px;text-decoration:none}</style></head><body>" +
+                    "<h1>" + (if (ad) "🛡 Anuncio evitado" else "No se pudo abrir") + "</h1><p>" + why + "</p><code>" + esc(url.take(120)) + "</code>" +
+                    "<a href='javascript:history.back()'>Volver</a></body></html>"
+                view.loadDataWithBaseURL(url, html, "text/html", "utf-8", url)
             }
 
             override fun onPageFinished(view: WebView, url: String?) {
@@ -148,6 +167,27 @@ class BrowserActivity : ComponentActivity() {
             }
 
             override fun onReceivedTitle(view: WebView, title: String?) {}
+
+            /** Ventanas nuevas: sin toque del usuario se bloquean; con toque, se mira a dónde van y los anuncios se descartan. */
+            override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: android.os.Message): Boolean {
+                if (!isUserGesture) { blockedCount++; updateShield(); return false }
+                val probe = WebView(this@BrowserActivity)
+                probe.webViewClient = object : WebViewClient() {
+                    private var done = false
+                    override fun shouldOverrideUrlLoading(v: WebView, r: WebResourceRequest): Boolean { take(r.url); return true }
+                    override fun onPageStarted(v: WebView, url: String?, f: android.graphics.Bitmap?) { if (url != null) take(Uri.parse(url)) }
+                    private fun take(u: Uri) {
+                        if (done) return; done = true
+                        val ad = AdBlock.blocks(u.host) || AdBlock.isAdRedirect(u, web.url)
+                        if (adblock && ad) { blockedCount++; updateShield(); toast("🛡 Ventana de anuncio bloqueada") }
+                        else if (u.scheme == "http" || u.scheme == "https") web.loadUrl(u.toString())
+                        probe.stopLoading(); probe.post { probe.destroy() }
+                    }
+                }
+                (resultMsg.obj as WebView.WebViewTransport).webView = probe
+                resultMsg.sendToTarget()
+                return true
+            }
         }
         web.setDownloadListener { url, _, _, _, _ ->
             try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {}
@@ -422,6 +462,22 @@ object AdBlock {
         "doubleverify.com", "ad.atdmt.com", "atdmt.com", "ads.yahoo.com", "advertising.yahoo.com", "adtech.de", "adtechus.com", "unrulymedia.com",
         "vidazoo.com", "primis.tech", "connatix.com", "aniview.com", "ads.pubmatic.com", "securepubads.g.doubleclick.net", "adclick.g.doubleclick.net"
     )
+
+    /** Enlaces típicos de redes de anuncios que secuestran los clics (Adsterra, PropellerAds, Monetag, PopCash…). */
+    private val redirectQuery = Regex("[?&](key=[0-9a-f]{20,}|zoneid=\\d+|zone_id=\\d+|z=\\d{5,}|var=\\d{6,}|clickid=|cid=[0-9a-f]{16,}|subid=|campaign_id=)", RegexOption.IGNORE_CASE)
+    private val redirectPath = Regex("/(afu|pu|go|click|redirect|out|tds|pop|smartlink|jump)\\.php|/smartlink/|/4/\\d{6,}", RegexOption.IGNORE_CASE)
+    fun isAdRedirect(u: android.net.Uri, from: String?): Boolean {
+        val host = (u.host ?: "").lowercase()
+        if (host.isBlank()) return false
+        val q = "?" + (u.encodedQuery ?: "")
+        val path = u.encodedPath ?: ""
+        // Dominio de palabras al azar + ruta corta aleatoria + clave larga: "offspringthisscarcely.com/c6q2rq2qxx?key=…"
+        val randomPath = Regex("^/[a-z0-9]{8,14}/?$", RegexOption.IGNORE_CASE).matches(path)
+        if (redirectQuery.containsMatchIn(q) && (randomPath || redirectPath.containsMatchIn(path))) return true
+        if (redirectPath.containsMatchIn(path) && redirectQuery.containsMatchIn(q)) return true
+        if (randomPath && Regex("[?&]key=[0-9a-f]{24,}", RegexOption.IGNORE_CASE).containsMatchIn(q)) return true
+        return false
+    }
 
     fun blocks(host: String?): Boolean {
         if (host.isNullOrBlank()) return false
