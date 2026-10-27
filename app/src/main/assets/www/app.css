@@ -351,6 +351,10 @@ body.yt-open .mini { display: none; }
 body.yt-open .updpill { display: none; }
 .row h3 .rowall { margin-left: auto; padding: 6px 14px; font-size: 13px; }
 .row h3 { display: flex; align-items: center; gap: 8px; }
+.navline .navic { width: 26px; height: 26px; color: var(--accent-text); display: flex; flex: 0 0 auto; }
+.navline .navic svg { width: 24px; height: 24px; }
+.navline.off { opacity: .5; }
+.navline .iconbtn[disabled] { opacity: .3; }
 @media (max-width: 760px) {
   .flabel { min-width: 0; width: 100%; padding: 2px 4px; }
   .chips.filt { flex-wrap: nowrap; overflow-x: auto; }

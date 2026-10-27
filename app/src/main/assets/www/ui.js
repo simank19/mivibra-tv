@@ -58,8 +58,7 @@
     }
   };
 
-  function navItems() {
-    if (MV.isKids()) return [['kids', 'Inicio', IC.home], ['search', 'Buscar', IC.search], ['youtube', 'YouTube Kids', IC.yt]];
+  function allNavItems() {
     return [
       ['home', 'Inicio', IC.home], ['search', 'Buscar', IC.search], ['discover', 'Descubrir', IC.compass], ['live', 'En vivo', IC.live], ['youtube', 'YouTube', IC.yt], ['music', 'Música', IC.music], ['radio', 'Radio', IC.radio], ['browser', 'Navegador', IC.globe], ['guide', 'Guía', IC.guide],
       ['movies', 'Películas', IC.movie], ['series', 'Series', IC.series], ['platforms', 'Plataformas', IC.platforms], ['anime', 'Anime', IC.anime], ['kdrama', 'K-Drama', IC.kdrama],
@@ -67,6 +66,20 @@
       ['settings', 'Ajustes', IC.settings]
     ];
   }
+  /** Menú en el orden que eligió el superadministrador (Inicio siempre primero y Ajustes siempre al final). */
+  function navItems() {
+    if (MV.isKids()) return [['kids', 'Inicio', IC.home], ['search', 'Buscar', IC.search], ['youtube', 'YouTube Kids', IC.yt]];
+    var all = allNavItems(), order = P.navOrder || [], hidden = P.navHidden || [];
+    var mid = all.filter(function (n) { return n[0] !== 'home' && n[0] !== 'settings'; });
+    mid.sort(function (a, b) {
+      var ia = order.indexOf(a[0]), ib = order.indexOf(b[0]);
+      if (ia < 0) ia = 1000 + all.indexOf(a); if (ib < 0) ib = 1000 + all.indexOf(b);
+      return ia - ib;
+    });
+    mid = mid.filter(function (n) { return hidden.indexOf(n[0]) < 0; });
+    return [all[0]].concat(mid, [all[all.length - 1]]);
+  }
+  function navOrderIds() { return navItems().map(function (n) { return n[0]; }).filter(function (id) { return id !== 'home' && id !== 'settings'; }); }
 
   // ---------- Render ----------
   var VIEWS = {};
@@ -892,9 +905,10 @@
   VIEWS.settings = function (tab) {
     if (tab) setTab = tab;
     var tabs = [['lists', 'Listas'], ['profiles', 'Perfiles'], ['look', 'Temas'], ['playback', 'Reproducción'], ['parental', 'Control parental y +18'], ['remote', 'Mando con celular'], ['sync', 'Sincronización'], ['meta', 'Sinopsis y carátulas'], ['about', 'Acerca de']];
+    if (!MV.acct.managed()) tabs.splice(1, 0, ['menu', 'Menú']);
     if (MV.acct.managed()) {
       tabs = tabs.map(function (t) { return t[0] === 'sync' ? ['account', 'Cuenta'] : t; });
-      if (MV.acct.isAdmin()) tabs.splice(1, 0, ['users', 'Usuarios']);
+      if (MV.acct.isAdmin()) tabs.splice(1, 0, ['users', 'Usuarios'], ['menu', 'Menú']);
       // Las listas solo las ve y maneja el superadministrador
       else { tabs = tabs.filter(function (t) { return t[0] !== 'lists' && t[0] !== 'meta'; }); if (setTab === 'lists' || setTab === 'users' || setTab === 'meta') setTab = 'profiles'; }
       if (setTab === 'sync') setTab = 'account';
@@ -924,6 +938,23 @@
           '<button class="iconbtn f" data-act="listDelete" data-arg="' + l.id + '" aria-label="Eliminar">' + IC.trash + '</button></div>';
       }).join('') : '<p class="muted">No has agregado listas.</p>') +
       '<div class="btns" style="margin-top:14px"><button class="btn f" data-act="addList">' + IC.plus + 'Agregar lista</button><button class="btn ghost f" data-act="presets">Canales gratis</button><button class="btn ghost f" data-act="reloadAll">' + IC.refresh + 'Actualizar todo</button></div></div>' + dupesPanel();
+  };
+  SETTINGS.menu = function () {
+    var all = allNavItems().filter(function (n) { return n[0] !== 'home' && n[0] !== 'settings'; });
+    var hidden = P.navHidden || [];
+    var visible = navOrderIds(), off = all.filter(function (n) { return visible.indexOf(n[0]) < 0; }).map(function (n) { return n[0]; });
+    var ids = visible.concat(off), byId = {}; all.forEach(function (n) { byId[n[0]] = n; });
+    return '<div class="panel glass"><h2>Orden del menú</h2><p>Elige qué botón va después de Inicio y en qué orden' + (MV.acct.managed() ? '. Se aplica para todos los usuarios.' : '.') + ' Inicio va siempre primero y Ajustes siempre al final.</p>' +
+      '<div class="line"><div class="t"><b>1. Inicio</b><span>Fijo</span></div></div>' +
+      ids.map(function (id, i) {
+        var n = byId[id], hid = hidden.indexOf(id) >= 0;
+        return '<div class="line navline' + (hid ? ' off' : '') + '" data-fid="nav-' + id + '"><span class="navic">' + n[2] + '</span><div class="t"><b>' + (hid ? '' : (i + 2) + '. ') + esc(n[1]) + '</b><span>' + (hid ? 'Oculto' : 'Visible') + '</span></div>' +
+          '<button class="iconbtn f" data-act="navMove" data-arg="' + id + ':-1" aria-label="Subir"' + (i === 0 || hid ? ' disabled' : '') + '>▲</button>' +
+          '<button class="iconbtn f" data-act="navMove" data-arg="' + id + ':1" aria-label="Bajar"' + (i >= visible.length - 1 || hid ? ' disabled' : '') + '>▼</button>' +
+          '<button class="toggle f' + (hid ? '' : ' on') + '" data-act="navToggle" data-arg="' + id + '" aria-label="Mostrar"></button></div>';
+      }).join('') +
+      '<div class="line"><div class="t"><b>Ajustes</b><span>Fijo al final</span></div></div>' +
+      '<div class="btns" style="margin-top:12px"><button class="btn ghost f" data-act="navReset">Restablecer el orden original</button></div></div>';
   };
   SETTINGS.users = function () {
     var cfg = MV.acct.config || {}, list = cfg.allowed || [];
@@ -1265,6 +1296,19 @@
     // Listas
     addList: function () { if (!MV.acct.canEdit()) return MV.toast('Solo el administrador puede agregar listas'); addListDialog('url'); },
     closeModal: function () { MV.closeModal(); },
+    navMove: function (v) {
+      var id = v.split(':')[0], d = +v.split(':')[1], ids = navOrderIds(), i = ids.indexOf(id), j = i + d;
+      if (i < 0 || j < 0 || j >= ids.length) return;
+      ids.splice(i, 1); ids.splice(j, 0, id);
+      P.navOrder = ids; MV.savePrefs(); MV.rerender();
+      setTimeout(function () { var el = document.querySelector('[data-act="navMove"][data-arg="' + id + ':' + d + '"]'); if (el && !el.disabled) el.focus(); else { el = document.querySelector('[data-act="navMove"][data-arg="' + id + ':' + (-d) + '"]'); if (el) el.focus(); } }, 40);
+    },
+    navToggle: function (id) {
+      var h = (P.navHidden || []).slice(), i = h.indexOf(id);
+      if (i >= 0) h.splice(i, 1); else h.push(id);
+      P.navHidden = h; MV.savePrefs(); MV.rerender();
+    },
+    navReset: function () { P.navOrder = []; P.navHidden = []; MV.savePrefs(); MV.rerender(); MV.toast('Menú restablecido'); },
     webGo: function () { var v = ((document.getElementById('webIn') || {}).value || '').trim(); openBrowser(v); },
     webOpen: function (u) { openBrowser(u); },
     stype: function (t) { searchType = t; showResults(); var el = document.querySelector('[data-act="stype"][data-arg="' + t + '"]'); if (el) el.focus(); },

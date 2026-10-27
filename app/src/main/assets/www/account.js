@@ -39,7 +39,7 @@
   }
   function payload() {
     var cur = acct.config || {};
-    return { lists: sharedLists(), tmdbKey: P.tmdbKey || '', ytKey: P.ytKey || '', subKey: P.subKey || '', allowed: cur.allowed || [], open: !!cur.open };
+    return { lists: sharedLists(), tmdbKey: P.tmdbKey || '', ytKey: P.ytKey || '', subKey: P.subKey || '', navOrder: P.navOrder || [], navHidden: P.navHidden || [], allowed: cur.allowed || [], open: !!cur.open };
   }
 
   /** Guarda en la nube los cambios del superadministrador. */
@@ -62,6 +62,9 @@
       if (keyChanged) { P.tmdbKey = cfg.tmdbKey || ''; MV.save('prefs', P); }
       if ((cfg.ytKey || '') !== (P.ytKey || '')) { P.ytKey = cfg.ytKey || ''; MV.save('prefs', P); }
       if ((cfg.subKey || '') !== (P.subKey || '')) { P.subKey = cfg.subKey || ''; MV.save('prefs', P); }
+      // Orden del menú elegido por el superadministrador
+      var navSig = JSON.stringify([cfg.navOrder || [], cfg.navHidden || []]);
+      if (navSig !== JSON.stringify([P.navOrder || [], P.navHidden || []])) { P.navOrder = cfg.navOrder || []; P.navHidden = cfg.navHidden || []; MV.save('prefs', P); if (MV.rerender) setTimeout(MV.rerender, 0); }
       var mine = acct.isAdmin() ? S.lists.filter(function (l) { return l.type === 'file'; }) : [];
       var remote = (cfg.lists || []).map(function (rl) {
         var ll = S.lists.find(function (l) { return l.id === rl.id; });

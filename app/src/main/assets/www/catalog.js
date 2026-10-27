@@ -16,7 +16,7 @@
   var P = S.prefs;
   var defaults = {
     theme: 'mv', glass: 'mid', anim: true, bgAnim: true, audioLang: 'es', subLang: '', xtFormat: 'm3u8',
-    tmdbKey: '', ytKey: '', subKey: '', covers: {}, kidsLimit: 60, parentPin: '', adult: null, romRoots: [], romSystem: {}, shader: 'default',
+    tmdbKey: '', ytKey: '', subKey: '', navOrder: [], navHidden: [], covers: {}, kidsLimit: 60, parentPin: '', adult: null, romRoots: [], romSystem: {}, shader: 'default',
     firebase: '', syncLists: true, updatedAt: 0, deviceName: ''
   };
   Object.keys(defaults).forEach(function (k) { if (P[k] === undefined) P[k] = defaults[k]; });
