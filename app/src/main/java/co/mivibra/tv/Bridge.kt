@@ -168,6 +168,12 @@ class Bridge(private val a: MainActivity) {
 
     // ---------------- Reproductor ----------------
 
+    /** Navegador interno a pantalla completa (url vacío = página de inicio). */
+    @JavascriptInterface
+    fun openBrowser(url: String?) {
+        a.runOnUiThread { a.startActivity(Intent(a, BrowserActivity::class.java).putExtra("url", url ?: "")) }
+    }
+
     @JavascriptInterface
     fun play(json: String) {
         a.runOnUiThread { a.openPlayer(json) }

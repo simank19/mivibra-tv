@@ -61,7 +61,7 @@
   function navItems() {
     if (MV.isKids()) return [['kids', 'Inicio', IC.home], ['search', 'Buscar', IC.search], ['youtube', 'YouTube Kids', IC.yt]];
     return [
-      ['home', 'Inicio', IC.home], ['search', 'Buscar', IC.search], ['discover', 'Descubrir', IC.compass], ['live', 'En vivo', IC.live], ['youtube', 'YouTube', IC.yt], ['music', 'Música', IC.music], ['radio', 'Radio', IC.radio], ['guide', 'Guía', IC.guide],
+      ['home', 'Inicio', IC.home], ['search', 'Buscar', IC.search], ['discover', 'Descubrir', IC.compass], ['live', 'En vivo', IC.live], ['youtube', 'YouTube', IC.yt], ['music', 'Música', IC.music], ['radio', 'Radio', IC.radio], ['browser', 'Navegador', IC.globe], ['guide', 'Guía', IC.guide],
       ['movies', 'Películas', IC.movie], ['series', 'Series', IC.series], ['platforms', 'Plataformas', IC.platforms], ['anime', 'Anime', IC.anime], ['kdrama', 'K-Drama', IC.kdrama],
       ['docs', 'Documentales', IC.doc], ['favs', 'Favoritos', IC.star], ['history', 'Historial', IC.history], ['games', 'Juegos', IC.games],
       ['settings', 'Ajustes', IC.settings]
@@ -834,7 +834,7 @@
   var sysSel = 'all', gameGenre = '';
   function romGenres(r) { var s = romSystem(r); var g = D.classifyGenres(r.name, D.GAME_GENRES); if (s && s.port && g.indexOf('disparos') < 0 && /doom|quake|wolf/.test(s.id)) g.push('disparos'); if (s && s.id === 'cave' && g.indexOf('aventura') < 0) g.push('aventura'); return g; }
   /** ¿Es de verdad un juego? Descarta APK, documentos (README.md), listas .m3u y .zip/.iso que no son de juegos. */
-  var ROM_DIR = /\/(roms?|juegos|games|emu|emul\w*|retro\w*|arcade|mame|fbneo|fba|neogeo|cps\d?|snes|nes|sfc|genesis|megadrive|mega drive|gba|gbc|gb|n64|nds|psx|ps1|playstation|sega|nintendo|atari|pce|ports?|doom|quake)\//i;
+  var ROM_DIR = /\/(roms?|juegos|games|emuladore?s?|emulators?|emulation|retro\w*|arcade|mame|fbneo|fba|neogeo|cps\d?|snes|nes|sfc|genesis|megadrive|mega drive|gba|gbc|gb|n64|nds|psx|ps1|playstation|sega|nintendo|atari|pce|ports?|doom|quake)\//i;
   function isGame(r) {
     var name = String(r.name || ''), low = name.toLowerCase(), path = String(r.path || '').toLowerCase(), size = +r.size || 0, ext = r.ext;
     if (/\.apk|\.xapk|\.apks/i.test(low) || /\/android\/(data|obb)\//.test(path)) return false;
@@ -1263,6 +1263,8 @@
     // Listas
     addList: function () { if (!MV.acct.canEdit()) return MV.toast('Solo el administrador puede agregar listas'); addListDialog('url'); },
     closeModal: function () { MV.closeModal(); },
+    webGo: function () { var v = ((document.getElementById('webIn') || {}).value || '').trim(); openBrowser(v); },
+    webOpen: function (u) { openBrowser(u); },
     stype: function (t) { searchType = t; showResults(); var el = document.querySelector('[data-act="stype"][data-arg="' + t + '"]'); if (el) el.focus(); },
     searchFor: function (q) { query = q; var i = document.getElementById('searchIn'); if (i) i.value = q; saveRecent(q); showResults(); },
     clearRecent: function () { MV.save('recentSearch', []); showResults(); },
@@ -1685,7 +1687,7 @@
     deezer: { name: 'Deezer', pkgs: ['deezer.android.tv', 'deezer.android.app'], web: 'https://www.deezer.com' },
     amazon: { name: 'Amazon Music', pkgs: ['com.amazon.mp3'], web: 'https://music.amazon.com' },
     apple: { name: 'Apple Music', pkgs: ['com.apple.android.music'], web: 'https://music.apple.com' },
-    square: { name: 'Square', pkgs: ['dev.lelonio.square'], web: 'https://github.com/Lelonio/Square/releases/latest', noStore: true }
+    brave: { name: 'Brave', pkgs: ['com.brave.browser'], web: 'https://brave.com/download/' }
   };
   var installed = null;
   function appsInstalled() {
@@ -1749,7 +1751,7 @@
       return html + '<div class="empty glass"><h2>Ver YouTube aquí mismo</h2><p class="muted">Para buscar y ver videos dentro de MiVibra TV hace falta una clave gratuita de la API de YouTube. ' +
         (MV.acct.canEdit() ? 'Ponla en Ajustes › Sinopsis y carátulas.' : 'El administrador aún no la ha configurado.') + ' Mientras tanto puedes usar la app oficial.</p>' +
         '<div class="btns" style="justify-content:center">' + (MV.acct.canEdit() ? '<button class="btn f" data-act="ytKeySetup" data-autofocus>Configurar clave</button>' : '') + '<button class="btn ghost f" data-act="openApp" data-arg="youtube">Abrir app de YouTube</button></div></div>' +
-        '<h3 style="margin:18px 0 10px">Más apps de YouTube</h3><div class="apps">' + appTile('ytkids', 'Para niños') + appTile('ytmusic', 'Música') + '</div>';
+        '<h3 style="margin:18px 0 10px">Más apps de YouTube</h3><div class="apps">' + appTile('ytkids', 'Para niños') + '</div>';
     }
     loadYT();
     html += '<div style="display:flex;gap:10px;margin:0 0 12px;flex-wrap:wrap"><input class="in f" id="ytIn" value="' + esc(YT.q) + '" placeholder="Buscar en YouTube" style="flex:1;min-width:220px" autocomplete="off" enterkeyhint="search"><button class="btn f" data-act="ytSearch">' + IC.search + 'Buscar</button></div>' +
@@ -1854,6 +1856,23 @@
     };
   })();
 
+  // ---------- Navegador ----------
+  var BROWSER_SITES = [['Google', 'https://www.google.com'], ['YouTube', 'https://m.youtube.com'], ['Wikipedia', 'https://es.wikipedia.org'], ['Noticias', 'https://news.google.com/?hl=es-419&gl=CO&ceid=CO:es-419'], ['El Tiempo', 'https://www.eltiempo.com'], ['Clima', 'https://www.google.com/search?q=clima'], ['Mapas', 'https://www.google.com/maps'], ['Fútbol', 'https://www.google.com/search?q=resultados+futbol']];
+  function openBrowser(url) {
+    if (AU.current()) AU.stop();
+    if (A && A.openBrowser) A.openBrowser(url || ''); else window.open(url || 'https://www.google.com', '_blank');
+  }
+  VIEWS.browser = function () {
+    var brave = !A || hasApp('brave');
+    return top('Navegador') +
+      '<div class="searchbar glass">' + IC.search + '<input class="in f" id="webIn" placeholder="Buscar en Google o escribir una dirección" autocomplete="off" enterkeyhint="go" inputmode="url" data-autofocus><button class="btn f" data-act="webGo">Ir</button></div>' +
+      '<div class="apps" style="margin-bottom:18px"><button class="apptile glass f" data-act="webOpen" data-arg=""><b>🌐 Navegador MiVibra</b><span>Pantalla completa · bloqueador de anuncios · cursor con el control</span></button>' +
+      '<button class="apptile glass f" data-act="openApp" data-arg="brave"><b>🦁 Brave</b><span>' + (brave ? 'Abrir Brave' : 'Instalar Brave desde la tienda') + '</span></button></div>' +
+      '<h3 style="margin:6px 0 10px">Accesos rápidos</h3><div class="apps">' + BROWSER_SITES.map(function (x) { return '<button class="apptile glass f" data-act="webOpen" data-arg="' + esc(x[1]) + '"><b>' + esc(x[0]) + '</b><span>' + esc(x[1].replace(/^https?:\/\/(www\.|m\.)?/, '').split('/')[0]) + '</span></button>'; }).join('') + '</div>' +
+      '<p class="muted" style="margin-top:16px;font-size:13px">' + (MV.device.tv ? 'En la TV: las flechas mueven el cursor y OK hace clic. MENÚ muestra la barra (dirección, favoritos, bloqueador 🛡, modo escritorio 🖥 y cursor 🖱). Atrás vuelve a la página anterior.' : 'Toca 🛡 para ver cuántos anuncios se bloquearon o desactivar el bloqueador en una página que no cargue bien.') + '</p>';
+  };
+  VIEWS.browser.after = function () { var i = document.getElementById('webIn'); if (i) i.addEventListener('keydown', function (e) { if (e.key === 'Enter') ACT.webGo(); }); };
+
   // ---------- Radio (directorio abierto Radio Browser) ----------
   var RB_HOSTS = ['https://de1.api.radio-browser.info', 'https://de2.api.radio-browser.info', 'https://fi1.api.radio-browser.info', 'https://nl1.api.radio-browser.info'], rbI = 0;
   function RB() { return RB_HOSTS[rbI % RB_HOSTS.length] + '/json'; }
@@ -1952,11 +1971,9 @@
     }).join('') + '</div>';
   }
   VIEWS.music = function () {
-    var tabs = [['mine', 'Mi música'], ['free', 'Música libre'], ['apps', 'Apps de música']];
+    var tabs = [['mine', 'Mi música'], ['free', 'Música libre']];
     var html = top('Música') + '<div class="chips">' + tabs.map(function (t) { return '<button class="chip f' + (MUSIC.tab === t[0] ? ' on' : '') + '" data-act="musicTab" data-arg="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>';
-    if (MUSIC.tab === 'apps') {
-      return html + '<div class="panel glass"><p>Abre tus apps de música con tu cuenta.</p><div class="apps">' + ['ytmusic', 'spotify', 'deezer', 'amazon', 'apple', 'square'].map(function (k) { return appTile(k); }).join('') + '</div></div>';
-    }
+    if (MUSIC.tab === 'apps') MUSIC.tab = 'mine';
     if (MUSIC.tab === 'free') {
       loadAudius();
       html += '<div class="chips">' + AUD_GENRES.map(function (g) { return '<button class="chip f' + (!MUSIC.q && MUSIC.genre === g[0] ? ' on' : '') + '" data-act="musicGenre" data-arg="' + esc(g[0]) + '">' + esc(g[1]) + '</button>'; }).join('') + '</div>' +

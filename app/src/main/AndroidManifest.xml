@@ -36,7 +36,7 @@
         <package android:name="com.amazon.mp3" />
         <package android:name="com.apple.android.music" />
         <package android:name="com.android.vending" />
-        <package android:name="dev.lelonio.square" />
+        <package android:name="com.brave.browser" />
     </queries>
 
     <application
@@ -83,6 +83,13 @@
             android:exported="false"
             android:screenOrientation="sensorLandscape"
             android:supportsPictureInPicture="true"
+            android:theme="@style/Theme.MiVibra.Fullscreen" />
+
+        <activity
+            android:name=".BrowserActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.MiVibra.Fullscreen" />
 
         <activity
