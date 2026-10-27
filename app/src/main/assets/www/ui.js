@@ -69,7 +69,7 @@
     return [
       ['home', 'Inicio', IC.home], ['live', 'En vivo', IC.live],
       ['movies', 'Películas', IC.movie], ['series', 'Series', IC.series], ['platforms', 'Plataformas', IC.platforms], ['anime', 'Anime', IC.anime], ['kdrama', 'K-Drama', IC.kdrama],
-      ['docs', 'Documentales', IC.doc], ['utils', 'Utilidades', IC.grid],
+      ['docs', 'Documentales', IC.doc],
       ['settings', 'Ajustes', IC.settings]
     ];
   }
@@ -106,8 +106,8 @@
         }).join('') +
         '</nav>';
       // Botones flotantes arriba en todas las pestañas: Buscar, Favoritos, Historial y Perfil
-      var q = function (id, icon, label) { return '<button class="qbtn f' + (view.name === id ? ' on' : '') + '" data-act="nav" data-arg="' + id + '" data-fid="q-' + id + '" aria-label="' + label + '" title="' + label + '">' + icon + '</button>'; };
-      var quick = '<div class="qbar">' + (MV.isKids() ? '' : q('discover', IC.compass, 'Descubrir')) + q('search', IC.search, 'Buscar') + (MV.isKids() ? '' : q('favs', IC.star, 'Favoritos') + q('history', IC.history, 'Historial')) +
+      var q = function (id, icon, label) { return '<button class="qbtn f' + (navOwner(view.name) === id ? ' on' : '') + '" data-act="nav" data-arg="' + id + '" data-fid="q-' + id + '" aria-label="' + label + '" title="' + label + '">' + icon + '</button>'; };
+      var quick = '<div class="qbar">' + (MV.isKids() ? '' : q('utils', IC.grid, 'Utilidades') + q('discover', IC.compass, 'Descubrir')) + q('search', IC.search, 'Buscar') + (MV.isKids() ? '' : q('favs', IC.star, 'Favoritos') + q('history', IC.history, 'Historial')) +
         (p ? '<button class="qprof f" data-act="go" data-arg="profiles" data-fid="q-prof" aria-label="Cambiar de perfil"><img class="avatar" src="' + esc(p.avatar) + '" alt=""><span>' + esc(p.name) + '</span></button>' : '') + '</div>';
       app.innerHTML = '<div class="shell">' + side + '<main class="main">' + quick + '<div class="view-in">' + body + '</div></main></div>';
     }
