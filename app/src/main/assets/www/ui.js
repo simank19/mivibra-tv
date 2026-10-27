@@ -58,11 +58,18 @@
     }
   };
 
+  /** Qué botón del menú se ilumina: la Guía es parte de En vivo y YouTube, Música, Radio, Navegador y Juegos de Utilidades. */
+  var UTILS = [['youtube', 'YouTube', 'yt', 'Videos, tendencias y búsqueda'], ['music', 'Música', 'music', 'Tu música y música libre'], ['radio', 'Radio', 'radio', 'Emisoras de Colombia y el mundo'], ['browser', 'Navegador', 'globe', 'Con bloqueador de anuncios'], ['games', 'Juegos', 'games', 'Consolas clásicas y ports']];
+  function navOwner(name) {
+    if (name === 'guide') return 'live';
+    if (UTILS.some(function (u) { return u[0] === name; })) return 'utils';
+    return name;
+  }
   function allNavItems() {
     return [
-      ['home', 'Inicio', IC.home], ['discover', 'Descubrir', IC.compass], ['live', 'En vivo', IC.live], ['youtube', 'YouTube', IC.yt], ['music', 'Música', IC.music], ['radio', 'Radio', IC.radio], ['browser', 'Navegador', IC.globe], ['guide', 'Guía', IC.guide],
+      ['home', 'Inicio', IC.home], ['live', 'En vivo', IC.live],
       ['movies', 'Películas', IC.movie], ['series', 'Series', IC.series], ['platforms', 'Plataformas', IC.platforms], ['anime', 'Anime', IC.anime], ['kdrama', 'K-Drama', IC.kdrama],
-      ['docs', 'Documentales', IC.doc], ['games', 'Juegos', IC.games],
+      ['docs', 'Documentales', IC.doc], ['utils', 'Utilidades', IC.grid],
       ['settings', 'Ajustes', IC.settings]
     ];
   }
@@ -95,12 +102,12 @@
       var side = '<nav class="side glass" aria-label="Menú">' +
         '<img class="logo" src="img/isotipo.svg" alt="MiVibra TV">' +
         navItems().map(function (n) {
-          return '<button class="nav f' + (view.name === n[0] ? ' on' : '') + '" data-act="nav" data-arg="' + n[0] + '" data-fid="nav-' + n[0] + '">' + n[2] + n[1] + '</button>';
+          return '<button class="nav f' + (navOwner(view.name) === n[0] ? ' on' : '') + '" data-act="nav" data-arg="' + n[0] + '" data-fid="nav-' + n[0] + '">' + n[2] + n[1] + '</button>';
         }).join('') +
         '</nav>';
       // Botones flotantes arriba en todas las pestañas: Buscar, Favoritos, Historial y Perfil
       var q = function (id, icon, label) { return '<button class="qbtn f' + (view.name === id ? ' on' : '') + '" data-act="nav" data-arg="' + id + '" data-fid="q-' + id + '" aria-label="' + label + '" title="' + label + '">' + icon + '</button>'; };
-      var quick = '<div class="qbar">' + q('search', IC.search, 'Buscar') + (MV.isKids() ? '' : q('favs', IC.star, 'Favoritos') + q('history', IC.history, 'Historial')) +
+      var quick = '<div class="qbar">' + (MV.isKids() ? '' : q('discover', IC.compass, 'Descubrir')) + q('search', IC.search, 'Buscar') + (MV.isKids() ? '' : q('favs', IC.star, 'Favoritos') + q('history', IC.history, 'Historial')) +
         (p ? '<button class="qprof f" data-act="go" data-arg="profiles" data-fid="q-prof" aria-label="Cambiar de perfil"><img class="avatar" src="' + esc(p.avatar) + '" alt=""><span>' + esc(p.name) + '</span></button>' : '') + '</div>';
       app.innerHTML = '<div class="shell">' + side + '<main class="main">' + quick + '<div class="view-in">' + body + '</div></main></div>';
     }
@@ -373,14 +380,14 @@
     }).join('') + '</div>';
   }
   VIEWS.live = function () {
-    if (!S.lists.length) return top('En vivo') + emptyLists();
+    if (!S.lists.length) return top('En vivo', tvTabs('live')) + emptyLists();
     var filt = secChips() + countryChips();
     var all = liveBase();
     var cats = [{ name: 'Todos', count: all.length }].concat(MV.groups(all));
     if (liveCat !== 'Todos' && !cats.some(function (c) { return c.name === liveCat; })) liveCat = 'Todos';
     var list = channelsOf(liveCat, all);
     var lim = limits.live || 150;
-    return top('En vivo', '<button class="pill f" data-act="adultToggle">' + IC.lock.replace('<svg', '<svg width="18" height="18"') + (MV.adultOk() ? 'Bloquear +18' : '+18') + '</button>') + loadingBlock() + filt +
+    return top('En vivo', tvTabs('live') + '<button class="pill f" data-act="adultToggle">' + IC.lock.replace('<svg', '<svg width="18" height="18"') + (MV.adultOk() ? 'Bloquear +18' : '+18') + '</button>') + loadingBlock() + filt +
       '<div class="live"><div class="cats glass">' + cats.map(function (c) {
         return '<button class="cat f' + (c.name === liveCat ? ' on' : '') + '" data-act="liveCat" data-arg="' + esc(c.name) + '" data-fid="cat-' + MV.hash(c.name) + '"><span>' + esc(c.name) + '</span><small>' + c.count + '</small></button>';
       }).join('') + '</div><div class="chlist glass">' +
@@ -423,7 +430,7 @@
       }).join('') : '<button class="pr f" style="left:0;width:' + width + 'px" data-act="playLive" data-key="' + esc(it.key) + '"><div class="in"><b>' + esc(it.name) + '</b><span>Sin guía para este canal</span></div></button>';
       return '<div class="ln"><div class="who glass">' + (it.logo ? '<img loading="lazy" src="' + esc(it.logo) + '" alt="" onerror="this.remove()">' : '') + '<span>' + esc(it.name) + '</span></div><div class="tl" style="width:' + width + 'px">' + cells + '</div></div>';
     }).join('');
-    return top('Guía de programación', '<button class="pill f" data-act="reloadEpg">' + IC.refresh.replace('<svg', '<svg width="18" height="18"') + 'Actualizar guía</button>') +
+    return top('Guía de programación', tvTabs('guide') + '<button class="pill f" data-act="reloadEpg">' + IC.refresh.replace('<svg', '<svg width="18" height="18"') + 'Actualizar guía</button>') +
       filt + chips(cats, liveCat, 'liveCat') +
       (!anyEpg ? '<div class="panel glass"><p style="margin:0">Aún no hay guía cargada. Si tu lista trae una guía EPG (XMLTV) se carga sola; también puedes poner el enlace en Ajustes › Listas.</p></div>' : '') +
       '<div class="epg glass" style="--slot:' + slot + 'px">' + hdr + '<div style="position:relative">' + rows +
@@ -919,6 +926,7 @@
     return html + (SETTINGS[setTab] || SETTINGS.lists)();
   };
   var SETTINGS = {};
+  VIEWS.settings.after = function () { var x = SETTINGS[setTab]; if (x && x.after) x.after(); };
   function dupesPanel() {
     var d = S.dupes || {};
     var txt = !MV.native ? 'Disponible en la app instalada.' : d.running ? 'Probando señales… ' + d.done + ' de ' + d.total :
@@ -1927,6 +1935,17 @@
       touch: showBar
     };
   })();
+
+  function tvTabs(cur) {
+    return '<div class="seg sortseg">' + [['live', '📺 Canales'], ['guide', '🗓 Guía']].map(function (t) { return '<button class="chip f' + (cur === t[0] ? ' on' : '') + '" data-act="nav" data-arg="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>';
+  }
+  // ---------- Utilidades ----------
+  MV.remoteTab = function () { setTab = 'remote'; };
+  VIEWS.utils = function () {
+    return top('Utilidades') + '<div class="utilgrid">' + UTILS.map(function (u, i) {
+      return '<button class="utile glass f" data-act="nav" data-arg="' + u[0] + '" data-fid="u-' + u[0] + '" style="animation-delay:' + i * 0.05 + 's"><span class="uic">' + IC[u[2]] + '</span><b>' + u[1] + '</b><span>' + u[3] + '</span></button>';
+    }).join('') + '<button class="utile glass f" data-act="go" data-arg="settings" data-fid="u-remote" onclick="MV.remoteTab&&MV.remoteTab()"><span class="uic">' + IC.phone + '</span><b>Celular como control</b><span>Control remoto y mando de juegos</span></button></div>';
+  };
 
   // ---------- Navegador ----------
   var BROWSER_SITES = [['Google', 'https://www.google.com'], ['YouTube', 'https://m.youtube.com'], ['Wikipedia', 'https://es.wikipedia.org'], ['Noticias', 'https://news.google.com/?hl=es-419&gl=CO&ceid=CO:es-419'], ['El Tiempo', 'https://www.eltiempo.com'], ['Clima', 'https://www.google.com/search?q=clima'], ['Mapas', 'https://www.google.com/maps'], ['Fútbol', 'https://www.google.com/search?q=resultados+futbol']];
