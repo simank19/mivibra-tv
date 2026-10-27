@@ -1001,8 +1001,9 @@
         return v;
       }).then(function (v) {
         if (!v || !v.length) return MV.toast('No hay tráiler disponible');
-        var url = 'https://www.youtube.com/watch?v=' + v[0].key;
-        if (MV.A && MV.A.openExternal) MV.A.openExternal(url); else window.open(url, '_blank');
+        MV.closeModal(true);
+        // Se ve dentro de la app; con ▲ ▼ pasas entre los demás videos (teasers, clips)
+        YTP.play(v.slice(0, 8).map(function (x) { return { id: x.key, title: t.name + ' · ' + (x.name || 'Tráiler'), channel: (x.type === 'Trailer' ? 'Tráiler' : x.type || 'Video') + (x.iso_639_1 === 'es' ? ' · Español' : '') }; }), 0);
       }).catch(function () { MV.toast('No se pudo cargar el tráiler'); });
     },
     tmdbSearch: function (key) { var t = MV.reg[key]; if (!t) return; MV.closeModal(true); query = t.name; MV.go('search'); },
