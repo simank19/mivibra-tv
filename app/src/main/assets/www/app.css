@@ -432,6 +432,21 @@ html.tv .apptile { padding: 12px; } html.tv .apptile b { font-size: 14px; }
 html.tv .station .logo { width: 44px; height: 44px; }
 html.tv .hero { min-height: 0; }
 
+/* Última tarjeta de cada fila: "Ver todo" (con el control se llega con ▶ al final de la fila) */
+.card.seeall .th { height: 100% !important; flex-direction: column; gap: 6px; background: linear-gradient(160deg, rgba(255,105,0,.35), rgba(20,18,16,.9)); text-align: center; padding: 10px; }
+.card.seeall .th b { font: 800 16px var(--ui); color: var(--text); }
+.card.seeall .th span { font: 500 12px var(--ui); color: var(--muted); }
+html.tv .card.seeall { width: 112px; }
+/* TV: modo rendimiento — sin desenfoques ni animaciones costosas para que el control vaya fluido */
+html.tv #bg i { animation: none; }
+html.tv .glass, html.tv .btn.ghost, html.tv .qbtn { backdrop-filter: none; -webkit-backdrop-filter: none; }
+html.tv .glass { background: rgba(28,25,22,.86); }
+html.tv .main, html.tv .strip { scroll-behavior: auto; }
+html.tv .card, html.tv .chrow, html.tv .view-in, html.tv .hero { animation: none; }
+html.tv .card .shine { display: none !important; }
+html.tv .f:focus-visible, html.tv .f.kf { box-shadow: 0 0 0 3px var(--accent); }
+html.tv .card.f:focus-visible, html.tv .card.f.kf { transform: scale(1.06); }
+html.tv .row { content-visibility: auto; contain-intrinsic-size: auto 280px; }
 @media (max-width: 760px) {
   .nav { flex-direction: column; gap: 3px; padding: 0; justify-content: center; font-size: 10px; }
   .nav span { opacity: 1; }

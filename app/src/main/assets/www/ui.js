@@ -31,6 +31,10 @@
     render(opts.keepFocus);
   };
   MV.onBack = function () {
+    // Atrás mientras se escribe solo cierra el teclado; y justo después de buscar se ignora (el teclado de la TV manda un Atrás extra al cerrarse)
+    var ae = document.activeElement;
+    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) { ae.blur(); MV.focusFirst(); return true; }
+    if (Date.now() - (MV._typedAt || 0) < 900) return true;
     if (MV.ytPlayer && MV.ytPlayer.isOpen()) { MV.ytPlayer.close(); return true; }
     if (MV.modalOpen()) { MV.closeModal(); return true; }
     if (stack.length) {
@@ -492,8 +496,9 @@
     var lim = rowLimit[vkey] || 14;
     order.slice(0, lim).forEach(function (c) {
       var items = by[c];
-      html += '<section class="row"><h3>' + (items.length > 20 ? '<button class="rowtitle f" data-act="cat" data-arg="' + esc(c) + '" data-v="' + vkey + '">' + esc(c) + ' <small>' + items.length + ' · Ver todo ›</small></button>' : esc(c) + ' <small>' + items.length + '</small>') + '</h3><div class="strip">' +
-        items.slice(0, 20).map(function (it, i) { return card(it, kind || 'poster', i); }).join('') + '</div></section>';
+      html += '<section class="row"><h3>' + (items.length > 20 ? '<button class="rowtitle" data-act="cat" data-arg="' + esc(c) + '" data-v="' + vkey + '">' + esc(c) + ' <small>' + items.length + ' · Ver todo ›</small></button>' : esc(c) + ' <small>' + items.length + '</small>') + '</h3><div class="strip">' +
+        items.slice(0, 20).map(function (it, i) { return card(it, kind || 'poster', i); }).join('') +
+        (items.length > 20 ? '<button class="card poster f seeall" data-act="cat" data-arg="' + esc(c) + '" data-v="' + vkey + '"><div class="th"><b>Ver todo ›</b><span>' + items.length + ' títulos</span></div></button>' : '') + '</div></section>';
     });
     if (order.length > lim) html += '<button class="btn ghost more f" data-act="moreRows" data-arg="' + vkey + '">Ver más categorías (' + (order.length - lim) + ')</button>';
     return html;
@@ -631,8 +636,9 @@
     var lim = rowLimit['anime-y'] || 14;
     years.slice(0, lim).forEach(function (y) {
       var list = by[y];
-      html += '<section class="row"><h3>' + esc(y) + ' <small>' + list.length + '</small>' + (list.length > 20 ? '<button class="btn ghost sm f rowall" data-act="animeYear" data-arg="' + esc(y) + '">Ver todo ›</button>' : '') + '</h3><div class="strip">' +
-        list.slice(0, 20).map(function (it, i) { return card(it, 'poster', i); }).join('') + '</div></section>';
+      html += '<section class="row"><h3>' + esc(y) + ' <small>' + list.length + '</small>' + (list.length > 20 ? '<button class="btn ghost sm rowall" data-act="animeYear" data-arg="' + esc(y) + '">Ver todo ›</button>' : '') + '</h3><div class="strip">' +
+        list.slice(0, 20).map(function (it, i) { return card(it, 'poster', i); }).join('') +
+        (list.length > 20 ? '<button class="card poster f seeall" data-act="animeYear" data-arg="' + esc(y) + '"><div class="th"><b>Ver todo ›</b><span>' + list.length + ' títulos</span></div></button>' : '') + '</div></section>';
     });
     if (years.length > lim) html += '<button class="btn ghost more f" data-act="moreRows" data-arg="anime-y">Ver más años (' + (years.length - lim) + ')</button>';
     return html;
@@ -1385,7 +1391,7 @@
     auPrev: function () { AU.prev(); },
     auStop: function () { AU.stop(); if (view.name === 'radio' || view.name === 'music') MV.rerender(); },
     openApp: function (k) { openApp(k); },
-    ytSearch: function () { var v = ((document.getElementById('ytIn') || {}).value || '').trim(); if (!P.ytKey) { if (v) ytOpen(v); else openApp('youtube'); return; } YT.q = v; YT.list = null; MV.rerender(); },
+    ytSearch: function () { MV._typedAt = Date.now(); var v = ((document.getElementById('ytIn') || {}).value || '').trim(); if (!P.ytKey) { if (v) ytOpen(v); else openApp('youtube'); return; } YT.q = v; YT.list = null; MV.rerender(); },
     ytCat: function (c) { YT.cat = c; YT.q = ''; YT.list = null; MV.rerender(); },
     ytPlay: function (i) { YTP.play(MV._ytList || [], +i); },
     ytKeySetup: function () { setTab = 'meta'; MV.go('settings'); },

@@ -164,10 +164,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private var backDown = false
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         when (event.keyCode) {
             KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_ESCAPE -> {
+                // Solo cuenta un Atrás completo (bajar y soltar aquí): al cerrarse el teclado de la TV llega un "soltar" suelto
+                if (event.action == KeyEvent.ACTION_DOWN) { if (event.repeatCount == 0) backDown = true; return true }
                 if (event.action == KeyEvent.ACTION_UP) {
+                    if (!backDown) return true
+                    backDown = false
                     web.evaluateJavascript("(window.MV&&MV.onBack&&MV.onBack())?'1':'0'") { r ->
                         if (r == null || !r.contains("1")) finish()
                     }

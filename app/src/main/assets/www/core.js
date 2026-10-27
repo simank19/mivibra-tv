@@ -171,40 +171,88 @@
   MV.scope = function () { var m = document.getElementById('modal'); return m.classList.contains('on') ? m : document.getElementById('app'); };
   MV.focusFirst = function (root) {
     root = root || MV.scope();
-    var el = root.querySelector('[data-autofocus].f') || root.querySelector('.f.on') || root.querySelector('.main .f') || root.querySelector('.f');
+    // Primero el contenido (no el menú lateral): así el menú se cierra al elegir una sección
+    var el = root.querySelector('[data-autofocus].f') || root.querySelector('.view-in .f.on') || root.querySelector('.view-in .f') || root.querySelector('.main .f') || root.querySelector('.f');
     if (el) { el.focus({ preventScroll: true }); reveal(el); }
   };
   var fastMove = false;
   function reveal(el) {
     // Al mantener presionada la flecha el desplazamiento es instantáneo (con animación se trababa)
-    var b = fastMove || document.documentElement.classList.contains('no-anim') ? 'instant' : 'smooth';
+    var b = fastMove || document.documentElement.classList.contains('no-anim') || document.documentElement.classList.contains('tv') ? 'instant' : 'smooth';
     try { el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: b }); } catch (e) { el.scrollIntoView(false); }
   }
+  /** Contenedor que agrupa tarjetas (fila horizontal, cuadrícula, chips): se mide una vez en vez de medir cada tarjeta. */
+  var GROUP = '.strip, .grid, .vgrid, .pgrid, .chips, .apps, .qbar, .side';
+  function score(dir, c, cx, cy, r) {
+    var x = r.left + r.width / 2, y = r.top + r.height / 2, dx = x - cx, dy = y - cy, primary, secondary, overlap;
+    if (dir === 'left') { if (r.right > c.left + 2 && dx >= -2) return -1; primary = c.left - r.right; secondary = Math.abs(dy); overlap = r.bottom > c.top && r.top < c.bottom; }
+    else if (dir === 'right') { if (r.left < c.right - 2 && dx <= 2) return -1; primary = r.left - c.right; secondary = Math.abs(dy); overlap = r.bottom > c.top && r.top < c.bottom; }
+    else if (dir === 'up') { if (r.bottom > c.top + 2 && dy >= -2) return -1; primary = c.top - r.bottom; secondary = Math.abs(dx); overlap = r.right > c.left && r.left < c.right; }
+    else { if (r.top < c.bottom - 2 && dy <= 2) return -1; primary = r.top - c.bottom; secondary = Math.abs(dx); overlap = r.right > c.left && r.left < c.right; }
+    if (primary < -4) return -1;
+    return Math.max(primary, 0) + secondary * (overlap ? 0.3 : 2.2);
+  }
+  function usable(el, r) { return !el.disabled && r.width > 0 && r.height > 0; }
   MV.move = function (dir) {
     var root = MV.scope(), cur = document.activeElement;
-    var all = Array.prototype.filter.call(root.querySelectorAll('.f'), function (el) { return !el.disabled && visible(el); });
-    if (!cur || !root.contains(cur) || all.indexOf(cur) < 0) { if (all[0]) { all[0].focus(); reveal(all[0]); } return; }
+    if (!cur || !root.contains(cur) || !cur.classList || !cur.classList.contains('f')) {
+      var first = Array.prototype.find.call(root.querySelectorAll('.f'), function (el) { return usable(el, el.getBoundingClientRect()); });
+      if (first) { first.focus({ preventScroll: true }); reveal(first); }
+      return;
+    }
     var c = cur.getBoundingClientRect(), cx = c.left + c.width / 2, cy = c.top + c.height / 2;
-    var best = null, bestScore = Infinity, vh = window.innerHeight, inSide = !!cur.closest('.side');
-    all.forEach(function (el) {
+    var vh = window.innerHeight, inSide = !!cur.closest('.side'), best = null, bestScore = Infinity;
+    var myGroup = cur.closest(GROUP);
+    function consider(el, clip) {
       if (el === cur) return;
-      var r = el.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
-      if (Math.abs(y - cy) > vh * 1.6) return;                       // solo lo cercano: más rápido con miles de tarjetas
-      // Desde el contenido, el menú lateral solo se alcanza con ◀ (no saltando desde un botón a la derecha)
+      var r = el.getBoundingClientRect();
+      if (!usable(el, r)) return;
+      // En otras filas solo cuenta lo que se ve (no tarjetas escondidas por el desplazamiento de esa fila)
+      if (clip && (r.right <= clip.left + 4 || r.left >= clip.right - 4)) return;
+      var sc = score(dir, c, cx, cy, r);
+      if (sc >= 0 && sc < bestScore) { bestScore = sc; best = el; }
+    }
+    // 1) ◀ ▶ dentro de la misma fila: solo se miran las tarjetas de esa fila
+    if (myGroup && (dir === 'left' || dir === 'right')) {
+      Array.prototype.forEach.call(myGroup.querySelectorAll('.f'), function (el) { consider(el); });
+      if (best) { best.focus({ preventScroll: true }); reveal(best); return; }
+    }
+    // 2) El resto: se mide cada grupo una sola vez y solo se entra a los que están en esa dirección y cerca
+    var groups = [], seen = new Set();
+    Array.prototype.forEach.call(root.querySelectorAll('.f'), function (el) {
+      var g = el.closest(GROUP);
+      if (!g || !root.contains(g)) { consider2(el); return; }
+      if (seen.has(g)) return; seen.add(g); groups.push(g);
+    });
+    function consider2(el) {
       if (!inSide && dir !== 'left' && el.closest('.side')) return;
-      var dx = x - cx, dy = y - cy, primary, secondary, overlap;
-      if (dir === 'left') { if (r.right > c.left + 2 && dx >= -2) return; primary = c.left - r.right; secondary = Math.abs(dy); overlap = r.bottom > c.top && r.top < c.bottom; }
-      else if (dir === 'right') { if (r.left < c.right - 2 && dx <= 2) return; primary = r.left - c.right; secondary = Math.abs(dy); overlap = r.bottom > c.top && r.top < c.bottom; }
-      else if (dir === 'up') { if (r.bottom > c.top + 2 && dy >= -2) return; primary = c.top - r.bottom; secondary = Math.abs(dx); overlap = r.right > c.left && r.left < c.right; }
-      else { if (r.top < c.bottom - 2 && dy <= 2) return; primary = r.top - c.bottom; secondary = Math.abs(dx); overlap = r.right > c.left && r.left < c.right; }
-      if (primary < -4) return;
-      var score = Math.max(primary, 0) + secondary * (overlap ? 0.3 : 2.2);
-      if (score < bestScore) { bestScore = score; best = el; }
+      var r = el.getBoundingClientRect();
+      if (Math.abs(r.top + r.height / 2 - cy) > vh * 1.6) return;
+      consider(el);
+    }
+    groups.forEach(function (g) {
+      if (g === myGroup && (dir === 'left' || dir === 'right')) return;
+      // Desde el contenido, el menú lateral solo se alcanza con ◀
+      if (!inSide && dir !== 'left' && g.classList.contains('side')) return;
+      var r = g.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) return;
+      if (r.top - cy > vh * 1.6 || cy - r.bottom > vh * 1.6) return;
+      if (dir === 'down' && r.bottom <= c.bottom - 2 && g !== myGroup) return;
+      if (dir === 'up' && r.top >= c.top + 2 && g !== myGroup) return;
+      if (dir === 'left' && r.left >= c.left && g !== myGroup) return;
+      if (dir === 'right' && r.right <= c.right && g !== myGroup) return;
+      if (bestScore < Infinity) {
+        // Si el grupo entero está más lejos que lo mejor encontrado, no vale la pena medir sus tarjetas
+        var gap = dir === 'down' ? r.top - c.bottom : dir === 'up' ? c.top - r.bottom : dir === 'left' ? c.left - r.right : r.left - c.right;
+        if (gap > bestScore) return;
+      }
+      var clip = g === myGroup ? null : { left: Math.max(r.left, 0), right: Math.min(r.right, window.innerWidth) };
+      Array.prototype.forEach.call(g.querySelectorAll('.f'), function (el) { consider(el, clip); });
     });
     if (best) { best.focus({ preventScroll: true }); reveal(best); }
     else if (dir === 'down' || dir === 'up') {
       var main = document.querySelector('.main');
-      if (main && !MV.modalOpen()) main.scrollBy({ top: dir === 'down' ? 240 : -240, behavior: 'smooth' });
+      if (main && !MV.modalOpen()) main.scrollBy({ top: dir === 'down' ? 240 : -240, behavior: fastMove ? 'instant' : 'smooth' });
     }
   };
 
@@ -218,12 +266,22 @@
         if ((k === 'ArrowLeft' && !atStart) || (k === 'ArrowRight' && !atEnd)) return;
       }
       e.preventDefault();
-      if (e.repeat) { var now = Date.now(); if (now - (MV._lastMove || 0) < 70) return; MV._lastMove = now; }
-      fastMove = !!e.repeat; MV.move(dirs[k]); fastMove = false; return;
+      // Tecla sostenida: un paso por cuadro como máximo; si la TV va atrasada se descartan las repeticiones
+      // (antes se acumulaban y el foco "seguía andando" o se quedaba pegado)
+      if (e.repeat) {
+        var now = Date.now();
+        if (MV._movePending || now - (MV._lastMove || 0) < 85) return;
+        MV._lastMove = now;
+      }
+      fastMove = !!e.repeat; MV.move(dirs[k]); fastMove = false;
+      MV._movePending = true;
+      requestAnimationFrame(function () { requestAnimationFrame(function () { MV._movePending = false; }); });
+      return;
     }
     if (k === 'Enter' && !typing && t && t.classList && t.classList.contains('f') && t.tagName !== 'BUTTON' && t.tagName !== 'A') {
       e.preventDefault(); t.click(); return;
     }
+    if (k === 'Enter' && typing) MV._typedAt = Date.now();
     if (k === 'Enter' && typing && t.id === 'searchIn') { e.preventDefault(); t.blur(); MV.move('down'); return; }
     if (k === 'Escape' && !MV.native) { e.preventDefault(); MV.onBack(); }
   });
