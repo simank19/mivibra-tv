@@ -549,7 +549,9 @@
         var y = +((r.release_date || r.first_air_date || '').slice(0, 4)) || 0, sc = 0;
         if (t === want || o === want) sc += 100; else if (t.indexOf(want) === 0 || o.indexOf(want) === 0) sc += 20;
         if (year && y) sc += Math.max(0, 30 - Math.abs(y - +year) * 15);
-        sc += Math.min(40, Math.log(1 + (r.vote_count || 0)) * 5) - i * 2;
+        sc += Math.log(1 + (r.vote_count || 0)) * 5 - i * 2;
+        // Sin año en la lista: un estreno muy reciente o aún sin estrenar es menos probable que la versión conocida
+        if (!year) { var rd = Date.parse(r.release_date || r.first_air_date || '') || 0; if (!rd || rd > Date.now() - 150 * 86400e3) sc -= 25; }
         return { r: r, sc: sc };
       }).sort(function (a, b) { return b.sc - a.sc; });
       return scored.length ? scored[0].r : null;

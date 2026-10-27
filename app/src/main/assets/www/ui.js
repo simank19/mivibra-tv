@@ -1208,7 +1208,18 @@
     go: function (a) { MV.closeModal(true); if (a === 'profileEdit') { editSel = null; } MV.go(a); },
     more: function (k) { limits[k] = (limits[k] || (k === 'live' ? 150 : k === 'games' ? 120 : k === 'music' ? 200 : 60)) + (k === 'live' ? 150 : k === 'music' ? 200 : 60); MV.rerender(); },
     open: function (_, el) { var it = S.byKey[el.dataset.key] || MV.reg[el.dataset.key]; if (!it) return;
-      if (it.type === 'tmdb') { if (it.have && S.byKey[it.have]) MV.go('detail', it.have); else tmdbInfo(it); return; }
+      if (it.type === 'tmdb') {
+        var mine = it.have && S.byKey[it.have];
+        if (!mine) { tmdbInfo(it); return; }
+        if (!it.haveUnsure) { MV.go('detail', it.have); return; }
+        // Tu lista no dice el año: confirma con TMDB que sea la misma película antes de abrirla
+        MV.toast('Verificando que sea la misma versión…');
+        MV.meta(mine).then(function (m) {
+          if (m && m.tmdbId && String(m.tmdbId) === String(it.id)) { it.haveUnsure = false; MV.go('detail', it.have); }
+          else { it.have = ''; it.other = mine.key; it.otherYear = (m && m.year) || ''; tmdbInfo(it); MV.rerender(); }
+        });
+        return;
+      }
       if (it.type === 'live' || it.type === 'rom') MV.playItem(it); else MV.go('detail', it.key); },
     play: function (_, el) { MV.playItem(S.byKey[el.dataset.key] || MV.reg[el.dataset.key], false); },
     resume: function (_, el) {
@@ -1606,17 +1617,23 @@
     DISC.idx = idx; DISC.idxSize = vod.length;
     return idx;
   }
+  /** ¿Tienes ESTE título? Mismo nombre, mismo tipo y año compatible (no confunde un remake con la original). */
+  function itemYearOf(i) { return String(i.year || ((i.name || '').match(/\b(19|20)\d{2}\b/) || [''])[0] || ''); }
   function matchHave(t) {
-    var idx = haveIndex(), want = t.mtype === 'tv' ? 'series' : 'movie', best = null;
+    var idx = haveIndex(), want = t.mtype === 'tv' ? 'series' : 'movie', exact = null, unsure = null;
     [t.name, t.original].forEach(function (n) {
-      if (best || !n) return;
+      if (exact || !n) return;
       (idx[titleKey(n)] || []).forEach(function (i) {
-        if (i.type !== want) return;
-        if (!best || (t.year && String(i.year || '') === t.year)) best = i;
+        if (i.type !== want || exact) return;
+        var iy = itemYearOf(i);
+        if (t.year && iy) { if (Math.abs(+iy - +t.year) <= 1) exact = i; return; }   // año distinto = otra película
+        if (!unsure) unsure = i;                                                       // sin año: se verifica al abrir
       });
     });
-    return best ? best.key : '';
+    t.haveUnsure = !exact && !!unsure;
+    return exact ? exact.key : unsure ? unsure.key : '';
   }
+
   function toItem(r, forced) {
     var mtype = forced || r.media_type || (r.title ? 'movie' : 'tv');
     if (mtype !== 'movie' && mtype !== 'tv') return null;
@@ -1676,7 +1693,8 @@
       (t.poster ? '<img src="' + esc(t.poster) + '" alt="" style="width:130px;border-radius:14px;flex:0 0 auto">' : '') +
       '<div style="flex:1;min-width:200px"><h2 style="margin:0 0 4px">' + esc(t.name) + '</h2><p class="muted" style="margin:0 0 10px">' + esc([t.year, t.mtype === 'tv' ? 'Serie' : 'Película', t.rating ? '★ ' + t.rating : ''].filter(Boolean).join(' · ')) + '</p>' +
       '<p style="max-height:32vh;overflow:auto;font-size:14px;line-height:1.5">' + esc(t.overview || 'Sin sinopsis en español.') + '</p>' +
-      '<p class="muted" style="font-size:13px">No está en tus listas.</p></div></div>' +
+      '<p class="muted" style="font-size:13px">' + (t.other ? 'Esta versión no está en tus listas. Tienes otra con el mismo nombre' + (t.otherYear ? ' (' + esc(t.otherYear) + ')' : '') + '.' : 'No está en tus listas.') + '</p></div></div>' +
+      (t.other ? '<div class="btns" style="margin-bottom:0"><button class="btn ghost f" data-key2="' + esc(t.other) + '" onclick="MV.closeModal(true);MV.go(\'detail\',this.dataset.key2);event.stopPropagation()">Ver la versión que tienes' + (t.otherYear ? ' (' + esc(t.otherYear) + ')' : '') + '</button></div>' : '') +
       '<div class="btns"><button class="btn f" data-act="tmdbTrailer" data-arg="' + esc(t.key) + '" data-autofocus>' + IC.play + 'Ver tráiler</button><button class="btn ghost f" data-act="tmdbSearch" data-arg="' + esc(t.key) + '">' + IC.search + 'Buscar parecidos</button><button class="btn ghost f" data-act="closeModal">Cerrar</button></div>');
   }
 
