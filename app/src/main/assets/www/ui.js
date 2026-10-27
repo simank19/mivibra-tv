@@ -175,7 +175,8 @@
   }
   function emptyLists() {
     if (!MV.acct.canEdit()) return '<div class="empty glass"><img src="img/isotipo.svg" alt="" style="width:64px;height:64px"><h2>Preparando tu contenido</h2>' +
-      '<p class="muted">El administrador aún no ha agregado listas. Cuando lo haga, todo aparecerá aquí automáticamente.</p></div>';
+      '<p class="muted">El administrador aún no ha enviado listas a tu cuenta' + (MV.acct.user() ? ' (' + esc(MV.acct.user().email) + ')' : '') + '. Cuando lo haga, todo aparecerá aquí automáticamente.</p>' +
+      '<div class="btns" style="justify-content:center"><button class="btn f" data-act="recheck" data-autofocus>' + IC.refresh + 'Revisar de nuevo</button></div></div>';
     return '<div class="empty glass"><img src="img/isotipo.svg" alt="" style="width:64px;height:64px"><h2>Agrega tu primera lista</h2>' +
       '<p class="muted">Pega el enlace de tu lista M3U, inicia sesión con Xtream Codes o empieza con canales gratuitos.</p>' +
       '<div class="btns" style="justify-content:center"><button class="btn f" data-act="addList" data-autofocus>' + IC.plus + 'Agregar lista</button><button class="btn ghost f" data-act="presets">Canales gratis</button></div></div>';
@@ -940,7 +941,14 @@
         (S.lists.length ? S.lists.map(function (l) { return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.type === 'xtream' ? 'Xtream Codes' : 'Lista M3U') + ' · ' + (l.count || 0) + ' elementos</span></div></div>'; }).join('') : '<p class="muted">Aún no hay listas.</p>') +
         '<div class="btns" style="margin-top:14px"><button class="btn ghost f" data-act="reloadAll">' + IC.refresh + 'Actualizar todo</button></div></div>' + dupesPanel();
     }
-    return '<div class="panel glass"><h2>Tus listas</h2><p>Todo el contenido de tus listas se combina: los canales repetidos aparecen una sola vez y se queda la señal que funciona.' + (MV.acct.isAdmin() ? ' <b>Eres superadministrador:</b> lo que cambies aquí llega a todos los usuarios (las listas en archivo solo quedan en este equipo; usa enlaces para compartirlas).' : '') + '</p>' +
+    var share = '';
+    if (MV.acct.isAdmin()) {
+      var cl = ((MV.acct.config || {}).lists || []).length, mineN = S.lists.filter(function (l) { return l.type !== 'file'; }).length;
+      share = '<div class="panel glass"><h2>Compartidas con tus usuarios</h2>' +
+        '<div class="line"><div class="t"><b>' + (MV.acct.pushing ? 'Enviando…' : MV.acct.pushError ? '⚠ No se pudo enviar' : cl === mineN ? '✓ ' + cl + (cl === 1 ? ' lista en la nube' : ' listas en la nube') : '⚠ En la nube hay ' + cl + ' de ' + mineN + ' listas') + '</b><span>' + esc(MV.acct.pushError || (MV.acct.pushedAt ? 'Último envío: ' + MV.fmtTime(MV.acct.pushedAt) : 'Tus usuarios reciben estas listas, las claves y el orden del menú')) + '</span></div>' +
+        '<button class="btn sm f" data-act="pushNow">' + IC.refresh + 'Enviar a todos ahora</button></div></div>';
+    }
+    return share + '<div class="panel glass"><h2>Tus listas</h2><p>Todo el contenido de tus listas se combina: los canales repetidos aparecen una sola vez y se queda la señal que funciona.' + (MV.acct.isAdmin() ? ' <b>Eres superadministrador:</b> lo que cambies aquí llega a todos los usuarios (las listas en archivo solo quedan en este equipo; usa enlaces para compartirlas).' : '') + '</p>' +
       (S.lists.length ? S.lists.map(function (l) {
         return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.type === 'xtream' ? 'Xtream Codes · ' + esc(l.host) : l.type === 'file' ? 'Archivo' : esc(l.url)) + ' · ' + (l.count || 0) + ' elementos' + (l.epg ? ' · con guía' : '') + (l.error ? ' · ⚠ ' + esc(l.error) : '') + '</span></div>' +
           '<button class="toggle f' + (l.enabled !== false ? ' on' : '') + '" data-act="listToggle" data-arg="' + l.id + '" aria-label="Activar lista"></button>' +
@@ -1317,6 +1325,8 @@
     // Listas
     addList: function () { if (!MV.acct.canEdit()) return MV.toast('Solo el administrador puede agregar listas'); addListDialog('url'); },
     closeModal: function () { MV.closeModal(); },
+    pushNow: function () { MV.toast('Enviando listas y claves a tus usuarios…'); MV.acct.push({ forced: Date.now() }).then(function () { if (!MV.acct.pushError) MV.toast('Listo: tus usuarios ya tienen todo'); MV.rerender(); }); },
+    recheck: function () { MV.toast('Revisando…'); MV.acct.retry().then(function () { MV.rerender(); MV.toast(S.lists.length ? 'Listas recibidas' : 'El administrador aún no ha enviado listas', 3500); }); },
     navMove: function (v) {
       var id = v.split(':')[0], d = +v.split(':')[1], ids = navOrderIds(), i = ids.indexOf(id), j = i + d;
       if (i < 0 || j < 0 || j >= ids.length) return;

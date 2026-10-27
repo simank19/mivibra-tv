@@ -48,9 +48,16 @@
     var data = Object.assign(payload(), extra || {});
     var text = JSON.stringify(data);
     if (text === lastPushed && !extra) return Promise.resolve();
-    lastPushed = text;
     data.updatedAt = Date.now(); data.by = MV.sync.user.email;
-    return doc().set(JSON.parse(JSON.stringify(data))).catch(function (e) { MV.toast('No se pudo guardar la configuración: ' + (e.message || e.code), 5000); });
+    acct.pushing = true; MV.emit('acct');
+    return doc().set(JSON.parse(JSON.stringify(data))).then(function () {
+      // Solo se da por enviado cuando la nube lo confirma (si falla, se reintenta en el próximo cambio o al abrir)
+      lastPushed = text; acct.pushError = ''; acct.pushedAt = Date.now(); acct.pushing = false; MV.emit('acct');
+    }).catch(function (e) {
+      lastPushed = ''; acct.pushing = false;
+      acct.pushError = /permission/i.test(e.code || e.message) ? 'Firebase no dejó guardar: revisa que en las reglas de Firestore esté tu correo de superadministrador.' : (e.message || e.code || 'Error al guardar');
+      MV.toast('No se pudo enviar a tus usuarios: ' + acct.pushError, 6000); MV.emit('acct');
+    });
   };
   acct.changed = MV.debounce(function () { acct.push(); }, 1500);
 
@@ -65,18 +72,24 @@
       // Orden del menú elegido por el superadministrador
       var navSig = JSON.stringify([cfg.navOrder || [], cfg.navHidden || []]);
       if (navSig !== JSON.stringify([P.navOrder || [], P.navHidden || []])) { P.navOrder = cfg.navOrder || []; P.navHidden = cfg.navHidden || []; MV.save('prefs', P); if (MV.rerender) setTimeout(MV.rerender, 0); }
-      var mine = acct.isAdmin() ? S.lists.filter(function (l) { return l.type === 'file'; }) : [];
+      var admin = acct.isAdmin();
+      var mine = admin ? S.lists.filter(function (l) { return l.type === 'file'; }) : [];
       var remote = (cfg.lists || []).map(function (rl) {
         var ll = S.lists.find(function (l) { return l.id === rl.id; });
         return ll ? Object.assign({}, ll, rl) : rl;
       });
-      var next = remote.concat(mine);
+      // Superadministrador: las listas de este equipo que aún no están en la nube se conservan y se suben
+      var missing = admin ? S.lists.filter(function (l) {
+        return l.type !== 'file' && !remote.some(function (r) { return r.id === l.id || (l.url && r.url === l.url) || (l.type === 'xtream' && r.type === 'xtream' && r.host === l.host && r.user === l.user); });
+      }) : [];
+      var next = remote.concat(missing, mine);
       var sig = function (arr) { return JSON.stringify(arr.map(function (l) { return [l.id, l.url, l.host, l.user, l.pass, l.enabled, l.epg]; })); };
       var listsChanged = sig(next) !== sig(S.lists);
       if (listsChanged) { S.lists = next; MV.save('lists', S.lists); }
-      lastPushed = JSON.stringify(payload());
+      lastPushed = missing.length ? '' : JSON.stringify(payload());
       if (listsChanged) MV.reloadCatalog(false);
     } finally { applying = false; }
+    if (missing.length) setTimeout(function () { acct.push(); }, 500);
     MV.emit('acct');
   }
 
