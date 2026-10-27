@@ -1933,7 +1933,7 @@
   }
   function continueBoot() {
     if (!S.profiles.length) { editSel = null; MV.go('profileEdit', null, { replace: true }); }
-    else if (S.profiles.length === 1 && !S.profiles[0].pin) { S.pid = S.profiles[0].id; MV.save('pid', S.pid); MV.go(S.profiles[0].kids ? 'kids' : 'home', null, { replace: true }); }
+    // Siempre se empieza eligiendo perfil (la cuenta de Google se pide antes, si no hay sesión)
     else MV.go('profiles', null, { replace: true });
     if (S.lists.length) MV.reloadCatalog(false);
   }
