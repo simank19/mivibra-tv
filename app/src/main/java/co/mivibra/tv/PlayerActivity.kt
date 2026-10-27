@@ -168,14 +168,14 @@ class PlayerActivity : ComponentActivity() {
                 if (attemptIndex < attempts.size - 1) {
                     attemptIndex++
                     retries = 0
-                    info.text = "Probando otra forma de abrir el canal… (" + (attemptIndex + 1) + "/" + attempts.size + ")"
+                    info.text = (if (live) "Probando otra forma de abrir el canal… (" else "Probando otra forma de abrir el video… (") + (attemptIndex + 1) + "/" + attempts.size + ")"
                     info.visibility = View.VISIBLE
                     info.alpha = 1f
                     startAttempt()
                     return
                 }
-                errorView.text = "No se pudo reproducir este contenido.\n" +
-                    (if (live) "El canal puede estar caído o bloqueado en tu país. Prueba otro con ▲ ▼." else "Vuelve atrás e intenta de nuevo.")
+                errorView.text = "No se pudo reproducir este contenido.\n\n" + explain(error) +
+                    (if (live) "\n\nPrueba otro canal con ▲ ▼." else "\n\nVuelve atrás e intenta de nuevo.")
                 errorView.visibility = View.VISIBLE
             }
 
@@ -191,6 +191,35 @@ class PlayerActivity : ComponentActivity() {
         })
         view.player = p
         player = p
+    }
+
+    /** Explica en palabras simples por qué falló, con el código para poder revisarlo. */
+    private fun explain(e: PlaybackException): String {
+        var cause: Throwable? = e
+        var http = 0
+        while (cause != null) {
+            if (cause is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException) { http = cause.responseCode; break }
+            cause = cause.cause
+        }
+        val why = when {
+            http == 401 || http == 403 -> "El servidor rechazó la reproducción. Suele pasar cuando la cuenta ya tiene el máximo de pantallas abiertas (ciérrala en otros equipos o apps), está vencida o el proveedor bloquea esta app."
+            http == 404 -> "El servidor no tiene este archivo (puede haberlo borrado)."
+            http == 458 || http == 509 || http == 429 -> "El servidor tiene demasiadas conexiones con esta cuenta. Cierra la reproducción en otros equipos y vuelve a intentar."
+            http >= 500 -> "El servidor del proveedor tiene un problema en este momento."
+            http > 0 -> "El servidor respondió con un error."
+            e.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED || e.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
+                "No hay conexión con el servidor (revisa tu internet o el servidor está caído)."
+            e.errorCode == PlaybackException.ERROR_CODE_IO_CLEARTEXT_NOT_PERMITTED -> "El enlace usa una conexión no permitida."
+            e.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED || e.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED ||
+                e.errorCode == PlaybackException.ERROR_CODE_PARSING_MANIFEST_MALFORMED ->
+                "El servidor no entregó un video válido (puede ser una página de error o un formato no compatible)."
+            e.errorCode == PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED || e.errorCode == PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ||
+                e.errorCode == PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES ->
+                "Este equipo no puede decodificar el video (por ejemplo 4K o HEVC de 10 bits)."
+            e.errorCode == PlaybackException.ERROR_CODE_DRM_UNSPECIFIED || e.errorCode in 6000..6999 -> "El contenido está protegido (DRM) y no se puede reproducir aquí."
+            else -> "Error del reproductor."
+        }
+        return why + "\n(código " + (if (http > 0) "HTTP $http" else e.errorCodeName) + ")"
     }
 
     private fun buildAttempts(item: JSONObject): List<Attempt> {
@@ -211,8 +240,9 @@ class PlayerActivity : ComponentActivity() {
             out.add(Attempt(u, isHls, ua))
             if (!isHls && live) out.add(Attempt(u, true, ua))     // HLS sin extensión .m3u8
             out.add(Attempt(u, isHls, vlcUa))                      // servidores que solo aceptan reproductores conocidos
+            if (!live) out.add(Attempt(u, isHls, "IPTVSmartersPro"))
         }
-        return out.take(10)
+        return out.take(12)
     }
 
     private fun startAttempt() {
