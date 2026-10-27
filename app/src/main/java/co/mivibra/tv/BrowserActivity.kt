@@ -327,7 +327,7 @@ class BrowserActivity : ComponentActivity() {
         val ev = MotionEvent.obtain(t, t, if (down) MotionEvent.ACTION_DOWN else MotionEvent.ACTION_UP, x, y, 0)
         ev.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
         web.dispatchTouchEvent(ev); ev.recycle()
-        cursor.pressed = down; cursor.invalidate()
+        cursor.down = down; cursor.invalidate()
     }
 
     override fun dispatchKeyEvent(e: KeyEvent): Boolean {
@@ -387,13 +387,13 @@ class BrowserActivity : ComponentActivity() {
     class CursorView(ctx: Context) : View(ctx) {
         var px = 0f
         var py = 0f
-        var pressed = false
+        var down = false
         private val p = Paint(Paint.ANTI_ALIAS_FLAG)
         init { isFocusable = false; isClickable = false }
         override fun onTouchEvent(event: MotionEvent?) = false
         override fun onDraw(c: Canvas) {
-            val r = if (pressed) 14f else 18f
-            p.style = Paint.Style.FILL; p.color = if (pressed) 0xFFFF6900.toInt() else 0xCCFFFFFF.toInt()
+            val r = if (down) 14f else 18f
+            p.style = Paint.Style.FILL; p.color = if (down) 0xFFFF6900.toInt() else 0xCCFFFFFF.toInt()
             c.drawCircle(px, py, r, p)
             p.style = Paint.Style.STROKE; p.strokeWidth = 4f; p.color = 0xFF0D0C0B.toInt()
             c.drawCircle(px, py, r, p)
