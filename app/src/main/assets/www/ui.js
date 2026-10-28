@@ -147,7 +147,7 @@
       var q = function (id, icon, label) { return '<button class="qbtn f' + (navOwner(view.name) === id ? ' on' : '') + '" data-act="nav" data-arg="' + id + '" data-fid="q-' + id + '" aria-label="' + label + '" title="' + label + '">' + icon + '</button>'; };
       var quick = '<div class="qbar">' + (MV.isKids() ? '' : q('utils', IC.grid, 'Utilidades') + q('discover', IC.compass, 'Descubrir')) + q('search', IC.search, 'Buscar') + (MV.isKids() ? '' : q('favs', IC.star, 'Favoritos') + q('history', IC.history, 'Historial')) +
         (p ? '<button class="qprof f' + (view.name === 'settings' ? ' on' : '') + '" data-act="' + (MV.isKids() ? 'go' : 'profMenu') + '" data-arg="profiles" data-fid="q-prof" aria-label="Perfil y ajustes"><img class="avatar" src="' + esc(p.avatar) + '" alt=""><span>' + esc(p.name) + '</span></button>' : '') + '</div>';
-      app.innerHTML = '<div class="shell">' + side + '<main class="main">' + quick + '<div class="view-in">' + body + '</div></main></div>';
+      app.innerHTML = '<div class="shell">' + side + '<main class="main">' + quick + '<div class="view-in' + (still ? ' still' : '') + '">' + body + '</div></main></div>';
     }
     if (VIEWS[view.name] && VIEWS[view.name].after) VIEWS[view.name].after(view.arg);
     if (!keepFocus) setTimeout(function () { MV.focusFirst(); }, 30);
@@ -162,7 +162,19 @@
     var el = idx >= 0 ? document.querySelectorAll('.view-in .f')[idx] : null;
     if (el) { el.focus({ preventScroll: true }); try { el.scrollIntoView({ block: 'nearest', behavior: 'instant' }); } catch (e) {} }
   }
-  MV.rerender = function () { var f = document.activeElement, fid = f && f.dataset && f.dataset.fid; render(true); var el = fid && document.querySelector('[data-fid="' + fid + '"]'); if (el) el.focus({ preventScroll: true }); else MV.focusFirst(); };
+  /** Vuelve a dibujar la pantalla actual sin animación de entrada y en el mismo lugar (sin saltar arriba ni parpadear). */
+  MV.rerender = function () {
+    var f = document.activeElement, fid = f && f.dataset && f.dataset.fid, act = f && f.dataset && f.dataset.act, arg = f && f.dataset && f.dataset.arg;
+    var main = document.querySelector('.main'), top = main ? main.scrollTop : 0;
+    var strips = Array.prototype.map.call(document.querySelectorAll('.strip'), function (x) { return x.scrollLeft; });
+    still = true; render(true); still = false;
+    var m2 = document.querySelector('.main'); if (m2) { m2.style.scrollBehavior = 'auto'; m2.scrollTop = top; m2.style.scrollBehavior = ''; }
+    Array.prototype.forEach.call(document.querySelectorAll('.strip'), function (x, i) { if (strips[i]) x.scrollLeft = strips[i]; });
+    var el = (fid && document.querySelector('[data-fid="' + fid + '"]')) ||
+      (act && document.querySelector('[data-act="' + act + '"]' + (arg != null ? '[data-arg="' + String(arg).replace(/"/g, '\\"') + '"]' : '')));
+    if (el && !MV.modalOpen()) el.focus({ preventScroll: true }); else if (!MV.modalOpen()) MV.focusFirst();
+  };
+  var still = false;
 
   // ---------- Piezas ----------
   /** Imagen con respaldos: si una dirección falla, prueba la siguiente; si ninguna carga, muestra el nombre. */
@@ -1694,7 +1706,7 @@
         else { MV.toast('Todavía sin acceso. Pídele al administrador que agregue tu correo.', 4000); MV.rerender(); }
       });
     },
-    loginOut: function () { MV.confirm('¿Cerrar sesión en este equipo?', 'Tus datos quedan guardados en tu cuenta.', 'Cerrar sesión').then(function (y) { if (!y) return; MV.acct.signOut().then(function () { S.pid = null; MV.save('pid', null); MV.go('login', null, { replace: true }); }); }); },
+    loginOut: function () { while (MV.modalOpen()) MV.closeModal(true); MV.confirm('¿Cerrar sesión en este equipo?', 'Tus datos quedan guardados en tu cuenta.', 'Cerrar sesión').then(function (y) { if (!y) return; MV.acct.signOut().then(function () { S.pid = null; MV.save('pid', null); MV.go('login', null, { replace: true }); }); }); },
     acctAllow: function () {
       var m = (document.getElementById('acctMail').value || '').trim().toLowerCase();
       if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(m)) return MV.toast('Escribe un correo válido');
@@ -1766,7 +1778,12 @@
     setTab: function (t) { setTab = t; MV.rerender(); var s = SETTINGS[t]; if (s && s.after) s.after(); },
     theme: function (t) { P.theme = t; MV.savePrefs(); MV.rerender(); },
     glass: function (g) { P.glass = g; MV.savePrefs(); MV.rerender(); },
-    prefToggle: function (k) { P[k] = P[k] === false ? true : !P[k]; MV.savePrefs(); MV.rerender(); },
+    prefToggle: function (k, el) {
+      P[k] = P[k] === false ? true : !P[k]; MV.savePrefs();
+      if (el) el.classList.toggle('on', P[k] !== false);
+      MV.applyLook();
+      if (k === 'autoTheme') MV.rerender();
+    },
     pref: function (kv) { var i = kv.indexOf(':'), k = kv.slice(0, i), v = kv.slice(i + 1); P[k] = k === 'kidsLimit' ? +v : v; MV.savePrefs(); MV.rerender(); if (k === 'xtFormat') MV.reloadCatalog(true); },
     deviceName: function () { MV.prompt('Nombre de este dispositivo', 'Ej: TV de la sala', P.deviceName).then(function (v) { if (v) { P.deviceName = v.trim().slice(0, 30); MV.savePrefs(); MV.rerender(); } }); },
     setParentPin: function () { pinPad('Nuevo PIN parental', function (h) { P.parentPin = h; MV.savePrefs(); MV.closeModal(true); MV.toast('PIN guardado'); MV.rerender(); return true; }); },
@@ -2418,8 +2435,12 @@
   MV.on('acct', function () {
     if (view.name === 'login' && MV.acct.status === 'denied') MV.rerender();
     if (view.name !== 'login' && MV.acct.status === 'denied') MV.go('login', null, { replace: true });
-    if (view.name === 'settings') MV.rerender();
+    // Solo las pestañas que muestran el estado de la cuenta o del envío a la nube se redibujan (y una sola vez)
+    if (view.name === 'settings' && ['lists', 'users', 'account', 'menu', 'sync'].indexOf(setTab) >= 0 && !acctRedraw) {
+      acctRedraw = setTimeout(function () { acctRedraw = null; if (view.name === 'settings' && !MV.modalOpen()) MV.rerender(); }, 250);
+    }
   });
+  var acctRedraw = null;
   MV.onStorageChanged = function () { if (view.name === 'games') { MV.toast('Unidad conectada: buscando juegos…'); ACT.scanRoms(); } };
   MV.onResume = function () { if (view.name === 'games') MV.rerender(); };
   MV.onOpenFile = function (d) {

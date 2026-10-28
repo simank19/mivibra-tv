@@ -461,6 +461,8 @@ html.tv #deco span, html.no-anim #deco span { animation: none; }
 #heroVid.on { opacity: 1; }
 .herolive { position: absolute; left: 10px; bottom: 10px; display: none; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: rgba(0,0,0,.6); font: 700 11px var(--ui); color: #fff; }
 .herolive.on { display: inline-flex; }
+/* Al redibujar (cambiar un ajuste, Ver más…) no se repite la animación de entrada */
+.view-in.still, .view-in.still .card, .view-in.still .chrow, .view-in.still .hero, .view-in.still .detail, .view-in.still .utile, .view-in.still .prof { animation: none !important; }
 /* TV: modo rendimiento — sin desenfoques ni animaciones costosas para que el control vaya fluido */
 html.tv #bg i { animation: none; }
 html.tv .glass, html.tv .btn.ghost, html.tv .qbtn { backdrop-filter: none; -webkit-backdrop-filter: none; }
