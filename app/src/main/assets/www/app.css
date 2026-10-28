@@ -463,6 +463,13 @@ html.tv #deco span, html.no-anim #deco span { animation: none; }
 .herolive.on { display: inline-flex; }
 /* Al redibujar (cambiar un ajuste, Ver más…) no se repite la animación de entrada */
 .view-in.still, .view-in.still .card, .view-in.still .chrow, .view-in.still .hero, .view-in.still .detail, .view-in.still .utile, .view-in.still .prof { animation: none !important; }
+/* Creador de avatares 3D */
+.tones { display: flex; gap: 10px; flex-wrap: wrap; }
+.tone { width: 38px; height: 38px; border-radius: 50%; border: 3px solid rgba(255,255,255,.25); padding: 0; }
+.tone.on { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.avopt { position: relative; }
+.avopt .avname { position: absolute; left: 0; right: 0; bottom: 4px; font: 700 10px var(--ui); color: #5a4e45; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
+.avopt.av3d img { padding: 6px 6px 16px; object-fit: contain; }
 /* TV: modo rendimiento — sin desenfoques ni animaciones costosas para que el control vaya fluido */
 html.tv #bg i { animation: none; }
 html.tv .glass, html.tv .btn.ghost, html.tv .qbtn { backdrop-filter: none; -webkit-backdrop-filter: none; }

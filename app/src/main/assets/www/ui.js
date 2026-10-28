@@ -300,7 +300,7 @@
     var h = 0; for (var i = 0; i < a.length; i++) h = (h * 31 + a.charCodeAt(i)) >>> 0;
     return 'avatars/memo_' + (h % 35 + 1) + '.png';
   };
-  var editTab = 'memo', editSel = null, editKids = false;
+  var editTab = 'fluent', editSel = null, editKids = false;
   VIEWS.profileEdit = function (id) {
     var p = S.profiles.find(function (x) { return x.id === id; });
     if (editSel === null) { editSel = p ? MV.avatarOf(p.avatar) : D.DEFAULT_AVATARS[S.profiles.length % D.DEFAULT_AVATARS.length]; editKids = !!(p && p.kids); }
@@ -313,10 +313,29 @@
       '<div class="btns" style="width:100%"><button class="btn f" style="flex:1" data-act="saveProfile" data-arg="' + (p ? p.id : '') + '">Guardar perfil</button></div>' +
       (p ? '<div class="btns" style="width:100%"><button class="btn ghost sm f" style="flex:1" data-act="profilePin" data-arg="' + p.id + '">' + (p.pin ? 'Quitar PIN' : 'Proteger con PIN') + '</button><button class="btn danger sm f" data-act="deleteProfile" data-arg="' + p.id + '">' + IC.trash + '</button></div>' : '') +
       '</div><div class="glass" style="flex:1;min-width:280px;border-radius:26px;padding:16px">' +
-      chips(D.AVATAR_GROUPS.map(function (x) { return { name: x.id, label: x.name }; }).map(function (x) { return x.name; }), editTab, 'avTab').replace(/>(memo)</g, function (m, id) { return '>' + D.AVATAR_GROUPS.find(function (x) { return x.id === id; }).name + '<'; }) +
-      '<div class="avgrid">' + g.files.map(function (f, i) { return '<button class="avopt f' + (f === editSel ? ' on' : '') + '" style="animation-delay:' + Math.min(i, 20) * 0.02 + 's" data-act="avPick" data-arg="' + f + '" aria-label="Avatar ' + (i + 1) + '"><img loading="lazy" src="' + f + '" alt=""></button>'; }).join('') + '</div>' +
-      '<p class="muted" style="font-size:12px;margin:12px 0 0">Avatares de alohe/avatars · Licencia MIT</p></div></div>';
+      '<div class="chips">' + [['fluent', 'Personajes 3D'], ['memo', 'Memo']].map(function (t) { return '<button class="chip f' + (editTab === t[0] ? ' on' : '') + '" data-act="avTab" data-arg="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' +
+      (editTab === 'fluent' ? fluentPicker() :
+        '<div class="avgrid">' + g.files.map(function (f, i) { return '<button class="avopt f' + (f === editSel ? ' on' : '') + '" style="animation-delay:' + Math.min(i, 20) * 0.02 + 's" data-act="avPick" data-arg="' + f + '" aria-label="Avatar ' + (i + 1) + '"><img loading="lazy" src="' + f + '" alt=""></button>'; }).join('') + '</div>' +
+        '<p class="muted" style="font-size:12px;margin:12px 0 0">Avatares Memo de alohe/avatars · Licencia MIT</p>') + '</div></div>';
   };
+  /** Creador 3D: tono de piel + persona, cabello u oficio (Microsoft Fluent Emoji 3D, licencia MIT). */
+  var fluentTone = 'default';
+  function fluentPicker() {
+    var m = String(editSel || '').match(/^avatars\/fluent\/([a-z-]+)_([a-z-]+)\.webp$/);
+    if (m) fluentTone = m[2];
+    var cur = m ? m[1] : '';
+    var tones = '<div class="line" style="border:0;padding:4px 0 10px"><div class="t"><b>Tono de piel</b></div><div class="tones">' + D.FLUENT_TONES.map(function (t) {
+      return '<button class="tone f' + (fluentTone === t[0] ? ' on' : '') + '" data-act="avTone" data-arg="' + t[0] + '" aria-label="' + t[2] + '" title="' + t[2] + '" style="background:' + t[1] + '"></button>'; }).join('') + '</div></div>';
+    var sec = function (g, title) {
+      var list = D.FLUENT.filter(function (x) { return x[2] === g; });
+      return '<h3 style="margin:12px 0 8px;font-size:15px">' + title + '</h3><div class="avgrid">' + list.map(function (x) {
+        var f = 'avatars/fluent/' + x[0] + '_' + fluentTone + '.webp';
+        return '<button class="avopt av3d f' + (x[0] === cur ? ' on' : '') + '" data-act="avPick" data-arg="' + f + '" aria-label="' + esc(x[1]) + '" title="' + esc(x[1]) + '"><img loading="lazy" src="' + f + '" alt=""><span class="avname">' + esc(x[1]) + '</span></button>';
+      }).join('') + '</div>';
+    };
+    return tones + sec('p', 'Personas') + sec('h', 'Cabello y barba') + sec('r', 'Oficios y personajes') +
+      '<p class="muted" style="font-size:12px;margin:12px 0 0">Personajes 3D: Microsoft Fluent Emoji · Licencia MIT</p>';
+  }
 
   // ---------- Inicio ----------
   VIEWS.home = function () {
@@ -1593,7 +1612,14 @@
     },
     manageProfiles: function () { MV.go('settings', 'profiles'); },
     editProfile: function (id) { editSel = null; MV.go('profileEdit', id); },
-    avTab: function (t) { editTab = D.AVATAR_GROUPS.some(function (g) { return g.id === t; }) ? t : D.AVATAR_GROUPS.find(function (g) { return g.name === t; }).id; keepName(); MV.rerender(); },
+    avTab: function (t) { editTab = t === 'memo' ? 'memo' : 'fluent'; keepName(); MV.rerender(); },
+    avTone: function (t) {
+      fluentTone = t; keepName();
+      // Si ya hay un personaje 3D elegido, cambia su tono al instante
+      var m = String(editSel || '').match(/^avatars\/fluent\/([a-z-]+)_[a-z-]+\.webp$/);
+      if (m) editSel = 'avatars/fluent/' + m[1] + '_' + t + '.webp';
+      MV.rerender();
+    },
     avPick: function (f) { editSel = f; keepName(); MV.rerender(); },
     editKids: function () { editKids = !editKids; keepName(); MV.rerender(); },
     saveProfile: function (id) {
