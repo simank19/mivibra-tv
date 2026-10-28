@@ -309,13 +309,16 @@
   var FL_REPO = 'https://raw.githubusercontent.com/microsoft/fluentui-emoji/1ffb34c752ecf5d402f04cfb4b392c77f57c54bc/assets/';
   var TONE_DIR = { 'default': 'Default', light: 'Light', 'medium-light': 'Medium-Light', medium: 'Medium', 'medium-dark': 'Medium-Dark', dark: 'Dark' };
   var editTab = 'crear', editSel = null, editKids = false, AV = null, colCat = 'mujer', colLim = 60, FL_ALL = null, avBusy = false;
-  function avDefault() { return { t: 'woman', tone: 'light', hair: '', gl: '', acc: '' }; }
+  function avDefault() { return { t: 'woman', h: 'woman', tone: 'light', hair: '', gl: '', acc: '' }; }
+  function isRole(t) { var x = D.FLUENT.find(function (f) { return f[0] === t; }); return !!(x && x[2] === 'r'); }
   function avFile(c) { return 'avatars/fluent/' + c.t + '_' + c.tone + '.webp'; }
   function loadImg(src, cors) {
     return new Promise(function (res, rej) { var i = new Image(); if (cors) i.crossOrigin = 'anonymous'; i.onload = function () { res(i); }; i.onerror = rej; i.src = src; });
   }
   /** Dibuja el avatar con cabello recoloreado, lentes y accesorio; devuelve una imagen (data URL). */
   function avCompose(c, size) {
+    // Profesión con TU cara: la cabeza que creaste (peinado, barba, color de cabello y lentes) va sobre el cuerpo del oficio
+    if (c.h && c.h !== c.t && isRole(c.t) && D.FACE[c.t] && D.FACE[c.h]) return avRole(c, size);
     var face = D.FACE[c.t];
     if (!(c.hair && D.HAIR_MASKS.indexOf(c.t) >= 0) && !((c.gl || c.acc) && face)) return Promise.resolve(avFile(c));
     // Con sombrero, gorra, corona o birrete la cara se achica un poco para que quepa lo de arriba
@@ -362,24 +365,51 @@
       try { return cv.toDataURL('image/webp', 0.9); } catch (e) { return avFile(c); }
     }).catch(function () { return avFile(c); });
   }
+  function avRole(c, size) {
+    var S2 = size || 240, k = S2 / 160, fr = D.FACE[c.t], fh = D.FACE[c.h];
+    return Promise.all([
+      loadImg(avFile(c)),
+      avCompose({ t: c.h, tone: c.tone, hair: c.hair, gl: c.gl, acc: '' }, 160).then(function (src) { return loadImg(src); }),
+      D.HAT_MASKS.indexOf(c.t) >= 0 ? loadImg('avatars/fluent/mask/hat-' + c.t + '.png') : null
+    ]).then(function (im) {
+      var cv = document.createElement('canvas'); cv.width = cv.height = S2; var x = cv.getContext('2d');
+      x.drawImage(im[0], 0, 0, S2, S2);
+      var sr = (fr.r[0] - fr.l[0]) / (fh.r[0] - fh.l[0]);
+      x.drawImage(im[1], (fr.l[0] - fh.l[0] * sr) * k, (fr.l[1] - fh.l[1] * sr) * k, 160 * sr * k, 160 * sr * k);
+      if (im[2]) {   // el gorro, casco o sombrero del oficio vuelve a quedar encima
+        var hc = document.createElement('canvas'); hc.width = hc.height = S2; var hx = hc.getContext('2d');
+        hx.drawImage(im[2], 0, 0, S2, S2); hx.globalCompositeOperation = 'source-in'; hx.drawImage(im[0], 0, 0, S2, S2);
+        x.drawImage(hc, 0, 0);
+      }
+      try { return cv.toDataURL('image/webp', 0.9); } catch (e) { return avFile(c); }
+    }).catch(function () { return avFile(c); });
+  }
   // Miniaturas con el color de cabello y los lentes que estás eligiendo (así ves cada profesión con tu avatar)
   var thumbCache = {};
-  function thumbKey(t) { return [t, AV.tone, AV.hair, AV.gl].join('|'); }
+  function thumbKey(t) { return [t, AV.tone, AV.hair, AV.gl, isRole(t) ? AV.h : ''].join('|'); }
   function avThumbs() {
-    if (!AV || (!AV.hair && !AV.gl)) return;
+    if (!AV) return;
     var imgs = Array.prototype.slice.call(document.querySelectorAll('img[data-avt]')), i = 0;
     (function next() {
       if (i >= imgs.length || view.name !== 'profileEdit') return;
       var el = imgs[i++], t = el.getAttribute('data-avt'), key = thumbKey(t);
       if (thumbCache[key]) { el.src = thumbCache[key]; return next(); }
-      avCompose({ t: t, tone: AV.tone, hair: AV.hair, gl: AV.gl, acc: '' }, 160).then(function (src) {
+      if (!isRole(t) && !AV.hair && !AV.gl) return next();
+      avCompose({ t: t, h: AV.h, tone: AV.tone, hair: AV.hair, gl: AV.gl, acc: '' }, 160).then(function (src) {
         thumbCache[key] = src; if (el.isConnected) el.src = src; setTimeout(next, 0);
       });
     })();
   }
+  var avAgain = false;
   function avUpdate() {
-    if (avBusy) return; avBusy = true; AV.custom = null;
-    avCompose(AV).then(function (src) { avBusy = false; editSel = src; keepName(); MV.rerender(); });
+    // Si llega otro cambio mientras se dibuja, se vuelve a dibujar al terminar (no se pierde ningún toque)
+    if (avBusy) { avAgain = true; return; }
+    avBusy = true; AV.custom = null;
+    avCompose(AV).then(function (src) {
+      avBusy = false;
+      if (avAgain) { avAgain = false; return avUpdate(); }
+      editSel = src; keepName(); MV.rerender();
+    });
   }
   function avCreator() {
     var c = AV, people = D.FLUENT;
@@ -390,7 +420,8 @@
     };
     var tones = '<div class="avrow"><b>Tono de piel</b><div class="tones">' + D.FLUENT_TONES.map(function (t) {
       return '<button class="tone f' + (c.tone === t[0] ? ' on' : '') + '" data-act="avTone" data-arg="' + t[0] + '" aria-label="' + t[2] + '" title="' + t[2] + '" style="background:' + t[1] + '"></button>'; }).join('') + '</div></div>';
-    var canHair = D.HAIR_MASKS.indexOf(c.t) >= 0, face = !!D.FACE[c.t];
+    var role = isRole(c.t), head = role ? c.h : c.t;
+    var canHair = D.HAIR_MASKS.indexOf(head) >= 0, face = !!D.FACE[head];
     var sec = function (filter, title) {
       var list = people.filter(filter);
       return '<h3 class="avh">' + title + '</h3><div class="avgrid">' + list.map(function (x) {
@@ -402,7 +433,7 @@
     var isM = function (x) { return /^(man|boy|old-man|prince|santa-claus)/.test(x[0]); };
     return tones +
       (canHair ? chipsRow('Color de cabello', D.HAIR_COLORS, 'avHair', c.hair, true) : '<p class="muted avnote">Este personaje no permite cambiar el color de cabello (tiene un color o un casco propio).</p>') +
-      (face ? chipsRow('Lentes', D.GLASSES, 'avGl', c.gl) + chipsRow('Accesorio', D.ACCS, 'avAcc', c.acc) : '<p class="muted avnote">Lentes y accesorios: disponibles en las personas y peinados.</p>') +
+      (face ? chipsRow('Lentes', D.GLASSES, 'avGl', c.gl) + (role ? '<p class="muted avnote">Las profesiones usan tu cara (peinado, barba, cabello y lentes); el gorro o casco es el del oficio.</p>' : chipsRow('Accesorio', D.ACCS, 'avAcc', c.acc)) : '<p class="muted avnote">Lentes y accesorios: disponibles en las personas y peinados.</p>') +
       sec(function (x) { return x[2] === 'p' && isW(x); }, 'Mujeres') + sec(function (x) { return x[2] === 'p' && isM(x); }, 'Hombres') +
       sec(function (x) { return x[2] === 'p' && !isW(x) && !isM(x); }, 'Personas') +
       sec(function (x) { return x[2] === 'h'; }, 'Peinados y barba') +
@@ -442,7 +473,8 @@
     if (editSel === null) {
       editSel = p ? MV.avatarOf(p.avatar) : D.DEFAULT_AVATARS[S.profiles.length % D.DEFAULT_AVATARS.length]; editKids = !!(p && p.kids);
       AV = (p && p.avatarCfg) ? Object.assign(avDefault(), p.avatarCfg) : avDefault();
-      var m = String(editSel).match(/^avatars\/fluent\/([a-z-]+)_([a-z-]+)\.webp$/); if (m && !(p && p.avatarCfg)) { AV.t = m[1]; AV.tone = m[2]; }
+      var m = String(editSel).match(/^avatars\/fluent\/([a-z-]+)_([a-z-]+)\.webp$/); if (m && !(p && p.avatarCfg)) { AV.t = m[1]; AV.tone = m[2]; if (!isRole(m[1])) AV.h = m[1]; }
+      if (!AV.h || isRole(AV.h)) AV.h = isRole(AV.t) ? 'person' : AV.t;
     }
     return '<div style="width:min(1100px,100%);display:flex;gap:30px;flex-wrap:wrap;align-items:flex-start">' +
       '<div style="flex:0 0 260px;display:flex;flex-direction:column;gap:14px;align-items:center">' +
@@ -1787,7 +1819,7 @@
     editProfile: function (id) { editSel = null; pendingName = null; MV.go('profileEdit', id); },
     avTab: function (t) { editTab = t === 'coleccion' ? 'coleccion' : 'crear'; keepName(); MV.rerender(); },
     avTone: function (t) { AV.tone = t; avUpdate(); },
-    avType: function (t) { AV.t = t; avUpdate(); },
+    avType: function (t) { AV.t = t; if (!isRole(t)) AV.h = t; if (isRole(t)) AV.acc = ''; avUpdate(); },
     avHair: function (h) { AV.hair = h; avUpdate(); },
     avGl: function (g) { AV.gl = g; avUpdate(); },
     avAcc: function (a) { AV.acc = a; avUpdate(); },
@@ -1809,7 +1841,7 @@
       var p = S.profiles.find(function (x) { return x.id === id; });
       if (!p) { p = { id: 'p' + Date.now().toString(36) }; S.profiles.push(p); }
       p.name = name; p.avatar = editSel; p.kids = editKids; p.updatedAt = Date.now();
-      p.avatarCfg = AV && !AV.custom && /^avatars\/fluent\/|^data:image/.test(editSel) ? { t: AV.t, tone: AV.tone, hair: AV.hair, gl: AV.gl, acc: AV.acc } : null;
+      p.avatarCfg = AV && !AV.custom && /^avatars\/fluent\/|^data:image/.test(editSel) ? { t: AV.t, h: AV.h, tone: AV.tone, hair: AV.hair, gl: AV.gl, acc: AV.acc } : null;
       MV.saveProfiles(); editSel = null; pendingName = null;
       if (!S.pid) { S.pid = p.id; MV.save('pid', p.id); }
       stack = []; MV.go(S.profiles.length > 1 ? 'profiles' : (p.kids ? 'kids' : 'home'), null, { replace: true });
