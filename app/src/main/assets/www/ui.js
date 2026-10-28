@@ -292,50 +292,155 @@
     if (S.profiles.length) html += '<div class="btns"><button class="btn ghost f" data-act="manageProfiles">Administrar perfiles</button></div>';
     return html;
   };
-  /** Los sets de avatares anteriores se quitaron (solo queda Memo): un avatar viejo se muestra como uno Memo fijo. */
+  /** Avatares viejos (sets quitados) se muestran como un personaje 3D fijo. */
   MV.avatarOf = function (a) {
     a = String(a || '');
-    var m = a.match(/^avatars\/(?!memo_)([a-z0-9]+)_(\d+)\.png$/);
-    if (!m) return a || D.DEFAULT_AVATARS[0];
-    var h = 0; for (var i = 0; i < a.length; i++) h = (h * 31 + a.charCodeAt(i)) >>> 0;
-    return 'avatars/memo_' + (h % 35 + 1) + '.png';
+    if (!a) return D.DEFAULT_AVATARS[0];
+    if (/^avatars\/(?!fluent\/)[^/]+\.png$/.test(a)) {
+      var h = 0; for (var i = 0; i < a.length; i++) h = (h * 31 + a.charCodeAt(i)) >>> 0;
+      return D.DEFAULT_AVATARS[h % D.DEFAULT_AVATARS.length];
+    }
+    return a;
   };
-  var editTab = 'fluent', editSel = null, editKids = false;
+
+  // ---------- Estudio de avatares 3D ----------
+  // "Crear": persona + tono de piel + color de cabello + lentes + accesorio (se combina en una imagen).
+  // "Colección": toda la colección 3D de Microsoft Fluent Emoji (personas por género, caras, animales, plantas, comida, objetos…).
+  var FL_REPO = 'https://raw.githubusercontent.com/microsoft/fluentui-emoji/1ffb34c752ecf5d402f04cfb4b392c77f57c54bc/assets/';
+  var TONE_DIR = { 'default': 'Default', light: 'Light', 'medium-light': 'Medium-Light', medium: 'Medium', 'medium-dark': 'Medium-Dark', dark: 'Dark' };
+  var editTab = 'crear', editSel = null, editKids = false, AV = null, colCat = 'mujer', colLim = 60, FL_ALL = null, avBusy = false;
+  function avDefault() { return { t: 'woman', tone: 'light', hair: '', gl: '', acc: '' }; }
+  function avFile(c) { return 'avatars/fluent/' + c.t + '_' + c.tone + '.webp'; }
+  function loadImg(src, cors) {
+    return new Promise(function (res, rej) { var i = new Image(); if (cors) i.crossOrigin = 'anonymous'; i.onload = function () { res(i); }; i.onerror = rej; i.src = src; });
+  }
+  /** Dibuja el avatar con cabello recoloreado, lentes y accesorio; devuelve una imagen (data URL). */
+  function avCompose(c) {
+    var face = D.FACE[c.t];
+    if (!c.hair && !((c.gl || c.acc) && face)) return Promise.resolve(avFile(c));
+    // Con sombrero, gorra, corona o birrete la cara se achica un poco para que quepa lo de arriba
+    var hat = ['cap', 'tophat', 'crown', 'grad'].indexOf(c.acc) >= 0 && face;
+    var S2 = 240, sc = hat ? 0.8 : 1, bw = S2 * sc, ox = (S2 - bw) / 2, oy = S2 - bw, k = bw / 160;
+    var jobs = [loadImg(avFile(c))];
+    jobs.push(c.hair && D.HAIR_MASKS.indexOf(c.t) >= 0 ? loadImg('avatars/fluent/mask/' + c.t + '.png') : null);
+    jobs.push(c.gl && face ? loadImg('avatars/fluent/acc/' + c.gl + '.webp') : null);
+    jobs.push(c.acc && face ? loadImg('avatars/fluent/acc/' + c.acc + '.webp') : null);
+    return Promise.all(jobs).then(function (im) {
+      var cv = document.createElement('canvas'); cv.width = cv.height = S2;
+      var x = cv.getContext('2d');
+      x.drawImage(im[0], ox, oy, bw, bw);
+      if (im[1]) {
+        var mc = document.createElement('canvas'); mc.width = mc.height = S2; var mx = mc.getContext('2d'); mx.drawImage(im[1], ox, oy, bw, bw);
+        var md = mx.getImageData(0, 0, S2, S2).data, img = x.getImageData(0, 0, S2, S2), d = img.data, sum = 0, n = 0, i;
+        for (i = 0; i < d.length; i += 4) if (md[i] > 128) { sum += 0.3 * d[i] + 0.59 * d[i + 1] + 0.11 * d[i + 2]; n++; }
+        var mean = n ? sum / n : 1, hc = c.hair, tr = parseInt(hc.slice(0, 2), 16), tg = parseInt(hc.slice(2, 4), 16), tb = parseInt(hc.slice(4, 6), 16);
+        for (i = 0; i < d.length; i += 4) {
+          var a = md[i] / 255; if (a <= 0) continue;
+          var L = 0.3 * d[i] + 0.59 * d[i + 1] + 0.11 * d[i + 2], sh = Math.max(0.35, Math.min(1.8, L / mean));
+          d[i] += (Math.min(255, tr * sh) - d[i]) * a; d[i + 1] += (Math.min(255, tg * sh) - d[i + 1]) * a; d[i + 2] += (Math.min(255, tb * sh) - d[i + 2]) * a;
+        }
+        x.putImageData(img, 0, 0);
+      }
+      if (face) {
+        var lx = ox + face.l[0] * k, ly = oy + face.l[1] * k, rx = ox + face.r[0] * k, ry = oy + face.r[1] * k, top = oy + face.top * k;
+        var ed = rx - lx, cx = (lx + rx) / 2, cy = (ly + ry) / 2, headW = ed * 2.05;
+        var put = function (img, w, centerX, bottomOrCenterY, anchor) {
+          var h = w * img.height / img.width, y = anchor === 'bottom' ? bottomOrCenterY - h : bottomOrCenterY - h / 2;
+          x.drawImage(img, centerX - w / 2, y, w, h);
+        };
+        if (im[3]) {
+          var acc = c.acc;
+          if (acc === 'headphone') put(im[3], headW * 1.3, cx, cy - ed * 0.1, 'center');
+          else if (acc === 'ribbon') put(im[3], ed * 0.85, rx + ed * 0.25, top + ed * 0.45, 'center');
+          else if (acc === 'flower') put(im[3], ed * 0.8, lx - ed * 0.3, top + ed * 0.55, 'center');
+          else if (acc === 'cap') put(im[3], headW * 1.08, cx + ed * 0.12, top + (cy - top) * 0.62, 'bottom');
+          else if (acc === 'crown') put(im[3], headW * 0.8, cx, top + (cy - top) * 0.38, 'bottom');
+          else put(im[3], headW * (acc === 'tophat' ? 0.95 : 1.1), cx, top + (cy - top) * 0.5, 'bottom');
+        }
+        if (im[2]) put(im[2], ed * 1.95, cx, cy + ed * 0.04, 'center');
+      }
+      try { return cv.toDataURL('image/webp', 0.9); } catch (e) { return avFile(c); }
+    }).catch(function () { return avFile(c); });
+  }
+  function avUpdate() {
+    if (avBusy) return; avBusy = true; AV.custom = null;
+    avCompose(AV).then(function (src) { avBusy = false; editSel = src; keepName(); MV.rerender(); });
+  }
+  function avCreator() {
+    var c = AV, people = D.FLUENT;
+    var chipsRow = function (title, list, act, cur, swatch) {
+      return '<div class="avrow"><b>' + title + '</b><div class="chips">' + list.map(function (o) {
+        return '<button class="chip f' + (cur === o[0] ? ' on' : '') + '" data-act="' + act + '" data-arg="' + o[0] + '">' + (swatch && o[0] ? '<i class="sw" style="background:#' + o[0] + '"></i>' : '') + esc(o[1]) + '</button>';
+      }).join('') + '</div></div>';
+    };
+    var tones = '<div class="avrow"><b>Tono de piel</b><div class="tones">' + D.FLUENT_TONES.map(function (t) {
+      return '<button class="tone f' + (c.tone === t[0] ? ' on' : '') + '" data-act="avTone" data-arg="' + t[0] + '" aria-label="' + t[2] + '" title="' + t[2] + '" style="background:' + t[1] + '"></button>'; }).join('') + '</div></div>';
+    var canHair = D.HAIR_MASKS.indexOf(c.t) >= 0, face = !!D.FACE[c.t];
+    var sec = function (filter, title) {
+      var list = people.filter(filter);
+      return '<h3 class="avh">' + title + '</h3><div class="avgrid">' + list.map(function (x) {
+        var f = 'avatars/fluent/' + x[0] + '_' + c.tone + '.webp';
+        return '<button class="avopt av3d f' + (x[0] === c.t ? ' on' : '') + '" data-act="avType" data-arg="' + x[0] + '" title="' + esc(x[1]) + '"><img loading="lazy" src="' + f + '" alt=""><span class="avname">' + esc(x[1]) + '</span></button>';
+      }).join('') + '</div>';
+    };
+    var isW = function (x) { return /^(woman|girl|old-woman|princess|mrs-claus)/.test(x[0]); };
+    var isM = function (x) { return /^(man|boy|old-man|prince|santa-claus)/.test(x[0]); };
+    return tones +
+      (canHair ? chipsRow('Color de cabello', D.HAIR_COLORS, 'avHair', c.hair, true) : '<p class="muted avnote">El color de cabello se puede cambiar en Mujer, Hombre, Persona, Niño, Niña e Infante (también rizados y con barba).</p>') +
+      (face ? chipsRow('Lentes', D.GLASSES, 'avGl', c.gl) + chipsRow('Accesorio', D.ACCS, 'avAcc', c.acc) : '<p class="muted avnote">Lentes y accesorios: disponibles en las personas y peinados.</p>') +
+      sec(function (x) { return x[2] === 'p' && isW(x); }, 'Mujeres') + sec(function (x) { return x[2] === 'p' && isM(x); }, 'Hombres') +
+      sec(function (x) { return x[2] === 'p' && !isW(x) && !isM(x); }, 'Personas') +
+      sec(function (x) { return x[2] === 'h'; }, 'Peinados y barba') +
+      sec(function (x) { return x[2] === 'r' && isW(x); }, 'Profesiones y personajes · Mujer') +
+      sec(function (x) { return x[2] === 'r' && isM(x); }, 'Profesiones y personajes · Hombre') +
+      sec(function (x) { return x[2] === 'r' && !isW(x) && !isM(x); }, 'Otros personajes');
+  }
+  var COL_CATS = [['mujer', 'Mujeres'], ['hombre', 'Hombres'], ['persona', 'Personas'], ['caras', 'Caras'], ['animales', 'Animales y plantas'], ['comida', 'Comida'], ['actividades', 'Deportes y actividades'], ['objetos', 'Objetos'], ['lugares', 'Lugares y viajes'], ['simbolos', 'Símbolos'], ['banderas', 'Banderas']];
+  function colUrl(e, tone) {
+    var p = e[0];
+    if (e[2] && tone && tone !== 'default') p = p.replace('/Default/', '/' + TONE_DIR[tone] + '/').replace(/_default\.png$/, '_' + tone + '.png');
+    return FL_REPO + p.split('/').map(encodeURIComponent).join('/');
+  }
+  function colList() {
+    if (!FL_ALL) return [];
+    var sub = { mujer: 'w', hombre: 'm', persona: 'p' }[colCat];
+    return FL_ALL.filter(function (e) { return sub ? e[1] === 'personas' && e[4] === sub : e[1] === colCat; });
+  }
+  function avCollection() {
+    if (!FL_ALL) {
+      MV.getJSON('avatars/fluent-all.json').catch(function () { return fetch('avatars/fluent-all.json').then(function (r) { return r.json(); }); })
+        .then(function (j) { FL_ALL = j; if (view.name === 'profileEdit') MV.rerender(); }).catch(function () {});
+      return '<div class="panel glass" style="display:flex;gap:14px;align-items:center"><div class="spinner"></div><b>Cargando la colección…</b></div>';
+    }
+    var list = colList(), tone = AV.tone;
+    return '<div class="chips">' + COL_CATS.map(function (c) { return '<button class="chip f' + (colCat === c[0] ? ' on' : '') + '" data-act="colCat" data-arg="' + c[0] + '">' + c[1] + '</button>'; }).join('') + '</div>' +
+      (['mujer', 'hombre', 'persona'].indexOf(colCat) >= 0 ? '<div class="avrow"><b>Tono de piel</b><div class="tones">' + D.FLUENT_TONES.map(function (t) { return '<button class="tone f' + (tone === t[0] ? ' on' : '') + '" data-act="colTone" data-arg="' + t[0] + '" title="' + t[2] + '" style="background:' + t[1] + '"></button>'; }).join('') + '</div></div>' : '') +
+      '<div class="avgrid">' + list.slice(0, colLim).map(function (e, i) {
+        var u = colUrl(e, tone);
+        return '<button class="avopt av3d f" data-act="colPick" data-arg="' + esc(u) + '" title="' + esc(e[3]) + '"><img loading="lazy" src="' + esc(u) + '" alt=""></button>';
+      }).join('') + '</div>' +
+      (list.length > colLim ? '<div class="btns"><button class="btn ghost f" data-act="colMore">Ver más (' + (list.length - colLim) + ')</button></div>' : '') +
+      '<p class="muted" style="font-size:12px;margin:12px 0 0">Se necesita internet para ver la colección; el avatar elegido queda guardado en el perfil.</p>';
+  }
   VIEWS.profileEdit = function (id) {
     var p = S.profiles.find(function (x) { return x.id === id; });
-    if (editSel === null) { editSel = p ? MV.avatarOf(p.avatar) : D.DEFAULT_AVATARS[S.profiles.length % D.DEFAULT_AVATARS.length]; editKids = !!(p && p.kids); }
-    var g = D.AVATAR_GROUPS.find(function (x) { return x.id === editTab; }) || D.AVATAR_GROUPS[0];
+    if (editSel === null) {
+      editSel = p ? MV.avatarOf(p.avatar) : D.DEFAULT_AVATARS[S.profiles.length % D.DEFAULT_AVATARS.length]; editKids = !!(p && p.kids);
+      AV = (p && p.avatarCfg) ? Object.assign(avDefault(), p.avatarCfg) : avDefault();
+      var m = String(editSel).match(/^avatars\/fluent\/([a-z-]+)_([a-z-]+)\.webp$/); if (m && !(p && p.avatarCfg)) { AV.t = m[1]; AV.tone = m[2]; }
+    }
     return '<div style="width:min(1100px,100%);display:flex;gap:30px;flex-wrap:wrap;align-items:flex-start">' +
       '<div style="flex:0 0 260px;display:flex;flex-direction:column;gap:14px;align-items:center">' +
-      '<div style="width:200px;height:200px;border-radius:50px;overflow:hidden;background:#F3EFEA;box-shadow:0 0 0 4px var(--accent),0 30px 60px rgba(0,0,0,.5);animation:float 4s ease-in-out infinite"><img src="' + esc(editSel) + '" alt="" style="width:100%;height:100%;object-fit:cover"></div>' +
-      '<label class="field" style="width:100%">Nombre del perfil<input class="in f" id="profName" value="' + esc(p ? p.name : '') + '" placeholder="Ej: Papá" maxlength="20" data-autofocus></label>' +
+      '<div style="width:200px;height:200px;border-radius:50px;overflow:hidden;background:#F3EFEA;box-shadow:0 0 0 4px var(--accent),0 30px 60px rgba(0,0,0,.5);animation:float 4s ease-in-out infinite"><img src="' + esc(editSel) + '" alt="" style="width:100%;height:100%;object-fit:contain"></div>' +
+      '<label class="field" style="width:100%">Nombre del perfil<input class="in f" id="profName" value="' + esc(pendingName != null ? pendingName : (p ? p.name : '')) + '" placeholder="Ej: Papá" maxlength="20" data-autofocus></label>' +
       '<div class="line" style="width:100%"><div class="t"><b>Perfil infantil</b><span>Solo contenido para niños y límite de tiempo</span></div><button class="toggle f' + (editKids ? ' on' : '') + '" data-act="editKids" aria-label="Perfil infantil"></button></div>' +
       '<div class="btns" style="width:100%"><button class="btn f" style="flex:1" data-act="saveProfile" data-arg="' + (p ? p.id : '') + '">Guardar perfil</button></div>' +
       (p ? '<div class="btns" style="width:100%"><button class="btn ghost sm f" style="flex:1" data-act="profilePin" data-arg="' + p.id + '">' + (p.pin ? 'Quitar PIN' : 'Proteger con PIN') + '</button><button class="btn danger sm f" data-act="deleteProfile" data-arg="' + p.id + '">' + IC.trash + '</button></div>' : '') +
       '</div><div class="glass" style="flex:1;min-width:280px;border-radius:26px;padding:16px">' +
-      '<div class="chips">' + [['fluent', 'Personajes 3D'], ['memo', 'Memo']].map(function (t) { return '<button class="chip f' + (editTab === t[0] ? ' on' : '') + '" data-act="avTab" data-arg="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' +
-      (editTab === 'fluent' ? fluentPicker() :
-        '<div class="avgrid">' + g.files.map(function (f, i) { return '<button class="avopt f' + (f === editSel ? ' on' : '') + '" style="animation-delay:' + Math.min(i, 20) * 0.02 + 's" data-act="avPick" data-arg="' + f + '" aria-label="Avatar ' + (i + 1) + '"><img loading="lazy" src="' + f + '" alt=""></button>'; }).join('') + '</div>' +
-        '<p class="muted" style="font-size:12px;margin:12px 0 0">Avatares Memo de alohe/avatars · Licencia MIT</p>') + '</div></div>';
+      '<div class="chips">' + [['crear', 'Crear mi avatar 3D'], ['coleccion', 'Colección completa']].map(function (t) { return '<button class="chip f' + (editTab === t[0] ? ' on' : '') + '" data-act="avTab" data-arg="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' +
+      (editTab === 'coleccion' ? avCollection() : avCreator()) +
+      '<p class="muted" style="font-size:12px;margin:12px 0 0">Personajes 3D: Microsoft Fluent Emoji · Licencia MIT</p></div></div>';
   };
-  /** Creador 3D: tono de piel + persona, cabello u oficio (Microsoft Fluent Emoji 3D, licencia MIT). */
-  var fluentTone = 'default';
-  function fluentPicker() {
-    var m = String(editSel || '').match(/^avatars\/fluent\/([a-z-]+)_([a-z-]+)\.webp$/);
-    if (m) fluentTone = m[2];
-    var cur = m ? m[1] : '';
-    var tones = '<div class="line" style="border:0;padding:4px 0 10px"><div class="t"><b>Tono de piel</b></div><div class="tones">' + D.FLUENT_TONES.map(function (t) {
-      return '<button class="tone f' + (fluentTone === t[0] ? ' on' : '') + '" data-act="avTone" data-arg="' + t[0] + '" aria-label="' + t[2] + '" title="' + t[2] + '" style="background:' + t[1] + '"></button>'; }).join('') + '</div></div>';
-    var sec = function (g, title) {
-      var list = D.FLUENT.filter(function (x) { return x[2] === g; });
-      return '<h3 style="margin:12px 0 8px;font-size:15px">' + title + '</h3><div class="avgrid">' + list.map(function (x) {
-        var f = 'avatars/fluent/' + x[0] + '_' + fluentTone + '.webp';
-        return '<button class="avopt av3d f' + (x[0] === cur ? ' on' : '') + '" data-act="avPick" data-arg="' + f + '" aria-label="' + esc(x[1]) + '" title="' + esc(x[1]) + '"><img loading="lazy" src="' + f + '" alt=""><span class="avname">' + esc(x[1]) + '</span></button>';
-      }).join('') + '</div>';
-    };
-    return tones + sec('p', 'Personas') + sec('h', 'Cabello y barba') + sec('r', 'Oficios y personajes') +
-      '<p class="muted" style="font-size:12px;margin:12px 0 0">Personajes 3D: Microsoft Fluent Emoji · Licencia MIT</p>';
-  }
 
   // ---------- Inicio ----------
   VIEWS.home = function () {
@@ -1543,7 +1648,7 @@
         (u ? '<button class="line f" data-act="loginOut">' + IC.lock + '<div class="t"><b>Cerrar sesión</b><span>Salir de ' + esc(u.email || 'tu cuenta') + ' en este equipo</span></div></button>' : '') +
         '</div><div class="btns"><button class="btn ghost f" data-act="closeModal">Cerrar</button></div>');
     },
-    go: function (a) { MV.closeModal(true); if (a === 'profileEdit') { editSel = null; } MV.go(a); },
+    go: function (a) { MV.closeModal(true); if (a === 'profileEdit') { editSel = null; pendingName = null; } MV.go(a); },
     more: function (k) { limits[k] = (limits[k] || (k === 'live' ? 150 : k === 'games' ? 120 : k === 'music' ? 200 : 60)) + (k === 'live' ? 150 : k === 'music' ? 200 : 60); keepPlace(); },
     open: function (_, el) { var it = S.byKey[el.dataset.key] || MV.reg[el.dataset.key]; if (!it) return;
       if (it.type === 'tmdb') {
@@ -1611,14 +1716,23 @@
       else enter();
     },
     manageProfiles: function () { MV.go('settings', 'profiles'); },
-    editProfile: function (id) { editSel = null; MV.go('profileEdit', id); },
-    avTab: function (t) { editTab = t === 'memo' ? 'memo' : 'fluent'; keepName(); MV.rerender(); },
-    avTone: function (t) {
-      fluentTone = t; keepName();
-      // Si ya hay un personaje 3D elegido, cambia su tono al instante
-      var m = String(editSel || '').match(/^avatars\/fluent\/([a-z-]+)_[a-z-]+\.webp$/);
-      if (m) editSel = 'avatars/fluent/' + m[1] + '_' + t + '.webp';
-      MV.rerender();
+    editProfile: function (id) { editSel = null; pendingName = null; MV.go('profileEdit', id); },
+    avTab: function (t) { editTab = t === 'coleccion' ? 'coleccion' : 'crear'; keepName(); MV.rerender(); },
+    avTone: function (t) { AV.tone = t; avUpdate(); },
+    avType: function (t) { AV.t = t; avUpdate(); },
+    avHair: function (h) { AV.hair = h; avUpdate(); },
+    avGl: function (g) { AV.gl = g; avUpdate(); },
+    avAcc: function (a) { AV.acc = a; avUpdate(); },
+    colCat: function (c) { colCat = c; colLim = 60; keepName(); MV.rerender(); },
+    colTone: function (t) { AV.tone = t; keepName(); MV.rerender(); },
+    colMore: function () { colLim += 60; keepName(); MV.rerender(); },
+    colPick: function (u) {
+      keepName(); AV.custom = 'col';
+      // Se guarda como imagen dentro del perfil (así funciona sin internet)
+      loadImg(u, true).then(function (img) {
+        var cv = document.createElement('canvas'); cv.width = cv.height = 240; cv.getContext('2d').drawImage(img, 0, 0, 240, 240);
+        try { editSel = cv.toDataURL('image/webp', 0.9); } catch (e) { editSel = u; }
+      }).catch(function () { editSel = u; }).then(function () { MV.rerender(); });
     },
     avPick: function (f) { editSel = f; keepName(); MV.rerender(); },
     editKids: function () { editKids = !editKids; keepName(); MV.rerender(); },
@@ -1627,6 +1741,7 @@
       var p = S.profiles.find(function (x) { return x.id === id; });
       if (!p) { p = { id: 'p' + Date.now().toString(36) }; S.profiles.push(p); }
       p.name = name; p.avatar = editSel; p.kids = editKids; p.updatedAt = Date.now();
+      p.avatarCfg = AV && !AV.custom && /^avatars\/fluent\/|^data:image/.test(editSel) ? { t: AV.t, tone: AV.tone, hair: AV.hair, gl: AV.gl, acc: AV.acc } : null;
       MV.saveProfiles(); editSel = null; pendingName = null;
       if (!S.pid) { S.pid = p.id; MV.save('pid', p.id); }
       stack = []; MV.go(S.profiles.length > 1 ? 'profiles' : (p.kids ? 'kids' : 'home'), null, { replace: true });
