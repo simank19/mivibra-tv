@@ -74,7 +74,12 @@
 
   // Detección de categorías por palabras en el grupo o el nombre
   D.RX = {
-    kids: /\b(kids?|infantil|niñ[oa]s|niñez|children|junior|jr\.?|cartoon|caricaturas|dibujos|baby|familia|family)\b/i,
+    // Infantil: se mira la CATEGORÍA (no el título: "Crímenes de familia" o "Karate Kid" no son infantiles)
+    kids: /(\bkids?\b|infantil(es)?|\bniñ[oa]s\b|niñez|\bchildren|cartoons?|caricaturas|dibujos|animad[ao]s|animaci[oó]n|\banimation|\bfamiliar(es)?\b|\bfamily\b|disney ?(junior|jr|channel)|nick ?jr|nickelodeon|discovery ?kids|baby ?tv|boomerang|tooncast|pbs ?kids|zoomoo)/i,
+    // Nombres que sí son infantiles aunque la categoría no lo diga (canales y series conocidas)
+    kidsName: /(disney ?(junior|jr)|cartoon ?network|cartoonito|nick ?jr|nickelodeon|discovery ?kids|baby ?tv|babyfirst|boomerang|tooncast|pbs ?kids|zoomoo|duck ?tv|baby ?shark|peppa|paw patrol|patrulla canina|bluey|cocomelon|plim ?plim|mundo bita|pocoyo|barney|pinkfong|super ?wings|masha)/i,
+    // Nunca infantil aunque la categoría lo parezca ("Animación para adultos", "Terror familiar"…)
+    notKids: /(terror|horror|miedo|thriller|suspenso|crimen|crime|asesin|narco|mafia|guerra|\bwar\b|er[oó]tic|adult|\+18|18\+|xxx|gore|zombi|violen|polic[ií]ac|noticias|news)/i,
     anime: /\b(anime|animes|animé|manga|otaku|japanimation|crunchy)\b/i,
     doc: /\b(docu|docus|documental(es)?|documentar(y|ies)|docuseries?|docu-?series|nat ?geo|national geographic|discovery|animal planet|vida salvaje|wildlife|naturaleza|nature doc)\b/i,
     notDoc: /ficci[oó]n|fiction|sci-?fi|ciencia ?ficci|fantas|acci[oó]n|action|terror|horror|comedia|comedy|drama|thriller|suspenso|infantil|kids|anime/i,

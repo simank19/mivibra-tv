@@ -791,7 +791,7 @@
   VIEWS.search = function () {
     var kb = MV.device.tv ? '<div class="kbd glass" style="padding:10px;border-radius:20px">' + 'abcdefghijklmnñopqrstuvwxyz0123456789'.split('').map(function (c) { return '<button class="f" data-act="kb" data-arg="' + c + '">' + c.toUpperCase() + '</button>'; }).join('') +
       '<button class="f wide" data-act="kb" data-arg=" ">Espacio</button><button class="f wide" data-act="kbDel">Borrar</button><button class="f wide" data-act="kbClear">Limpiar</button></div>' : '';
-    return top('Buscar') + '<div class="searchbar glass">' + IC.search + '<input class="in f" id="searchIn" value="' + esc(query) + '" placeholder="Título, canal, actor del título, género, año…" autocomplete="off" enterkeyhint="search" data-autofocus>' +
+    return top('Buscar') + '<div class="searchbar glass">' + IC.search + '<input class="in f" id="searchIn" value="' + esc(query) + '" placeholder="' + (MV.isKids() ? 'Busca tus dibujos, películas y canales…' : 'Título, canal, actor del título, género, año…') + '" autocomplete="off" enterkeyhint="search" data-autofocus>' +
       '<button class="iconbtn f" data-act="kbClear" aria-label="Borrar búsqueda">' + IC.close + '</button></div>' + kb +
       '<div class="chips" id="stypes"></div><div id="results"></div>';
   };
@@ -818,7 +818,7 @@
     var scored = [];
     searchIndex().forEach(function (r) { if (!vis[r.it.key]) return; var sc = scoreRow(r, q, qw); if (sc > 0) scored.push({ it: r.it, sc: sc }); });
     scored.sort(function (a, b) { return b.sc - a.sc; });
-    var roms = (MV.load('roms', []) || []).filter(isGame).filter(function (r) { var n = MV.norm(r.name); return qw.every(function (w) { return n.indexOf(w) >= 0 || n.split(' ').some(function (x) { return near(w, x); }); }); }).slice(0, 30);
+    var roms = MV.isKids() ? [] : (MV.load('roms', []) || []).filter(isGame).filter(function (r) { var n = MV.norm(r.name); return qw.every(function (w) { return n.indexOf(w) >= 0 || n.split(' ').some(function (x) { return near(w, x); }); }); }).slice(0, 30);
     var counts = {}; STYPES.forEach(function (t) { counts[t[0]] = t[0] === 'games' ? roms.length : t[0] === 'all' ? scored.length + roms.length : scored.filter(function (x) { return typeOk(x.it, t[0]); }).length; });
     if (searchType !== 'all' && !counts[searchType]) searchType = 'all';
     tbox.innerHTML = STYPES.filter(function (t) { return t[0] === 'all' || counts[t[0]]; }).map(function (t) { return '<button class="chip f' + (searchType === t[0] ? ' on' : '') + '" data-act="stype" data-arg="' + t[0] + '">' + t[1] + ' <small>' + counts[t[0]] + '</small></button>'; }).join('');
@@ -877,8 +877,47 @@
     return '<div class="top"><img src="' + esc(p.avatar || '') + '" alt="" style="width:58px;height:58px;border-radius:50%;background:#F3EFEA;box-shadow:0 0 0 4px var(--accent)"><div><h1>¡Hola, ' + esc(p.name || '') + '!</h1><span class="muted">¿Qué quieres ver hoy?</span></div><div class="sp"></div>' +
       '<span class="pill">Te quedan ' + MV.kidsLeft() + ' min</span><button class="pill f" data-act="kidsExit">' + IC.lock.replace('<svg', '<svg width="18" height="18"') + 'Salir</button></div>' +
       '<div class="kidcats">' + cats.map(function (c) { return '<button class="kidcat f' + (kidCat === c[0] ? ' on' : '') + '" data-act="kidCat" data-arg="' + c[0] + '"><span class="bub" style="background:' + c[2] + '">' + c[3] + '</span>' + c[1] + '</button>'; }).join('') + '</div>' +
-      (list.length ? grid(list, 'poster', 'kids') : '<div class="empty glass"><h2>Aún no hay contenido infantil</h2><p class="muted">Pide a un adulto que agregue canales infantiles en Ajustes › Listas (hay una lista gratuita de canales para niños).</p></div>');
+      '<button class="kidsearch f" data-act="nav" data-arg="search">' + IC.search + '<span>Buscar dibujos, películas o canales</span></button>' +
+      (!list.length ? '<div class="empty glass"><h2>Aún no hay contenido infantil</h2><p class="muted">Pide a un adulto que agregue canales infantiles en Ajustes › Listas (hay una lista gratuita de canales para niños).</p></div>'
+        : kidCat === 'all' ? kidsRows(items) : grid(list, kidCat === 'live' ? 'ch' : 'poster', 'kids'));
   };
+  /** "Todo" en filas: lo que estaba viendo, canales, películas, series y anime. */
+  function kidsRows(items) {
+    var cont = (MV.continueList ? MV.continueList() : []).filter(function (i) { return MV.kidsOk(i); });
+    var live = items.filter(function (i) { return i.type === 'live'; });
+    var mov = items.filter(function (i) { return i.type === 'movie' && !i.anime; });
+    var ser = items.filter(function (i) { return i.type === 'series' && !i.anime; });
+    var ani = items.filter(function (i) { return i.anime && i.type !== 'live'; });
+    var r = function (t, arr, kind) { return arr.length ? row(t, arr.slice(0, 24), kind, arr.length + '') : ''; };
+    return r('Seguir viendo', cont, 'poster') + r('Canales infantiles', live, 'ch') + r('Películas', mov, 'poster') + r('Series', ser, 'poster') + r('Anime', ani, 'poster');
+  }
+  /** Revisa en segundo plano la edad recomendada (TMDB / MyAnimeList) para dejar solo lo apto para niños. */
+  var kidsChecked = {}, kidsChecking = false;
+  function kidsVerify() {
+    if (kidsChecking || !MV.isKids()) return;
+    var todo = S.items.filter(function (i) {
+      return i.type !== 'live' && i.age == null && !kidsChecked[i.key] && !i.adult &&
+        (i.kids || i.anime || i.platform === 'disney' || (i.genres || []).indexOf('infantil') >= 0) && (P.tmdbKey || i.anime);
+    }).slice(0, 60);
+    if (!todo.length) return;
+    kidsChecking = true;
+    var n = 0, changed = 0;
+    (function next() {
+      if (!MV.isKids() || n >= todo.length) {
+        kidsChecking = false;
+        if (changed && view.name === 'kids') MV.rerender();
+        return;
+      }
+      var it = todo[n++]; kidsChecked[it.key] = 1;
+      var before = MV.kidsOk(it);
+      MV.meta(it).then(function () {
+        if (MV.kidsOk(it) !== before) changed++;
+        if (changed >= 8 && view.name === 'kids') { changed = 0; MV.rerender(); }
+        setTimeout(next, it.anime ? 450 : 120);
+      });
+    })();
+  }
+  VIEWS.kids.after = function () { setTimeout(kidsVerify, 800); };
 
   // ---------- Juegos y ports ----------
   var sysSel = 'all', gameGenre = '';

@@ -41,8 +41,23 @@
   // Géneros aprendidos de las fichas (TMDB/Jikan), para clasificar mejor la próxima vez
   // Solo los géneros que dice TMDB/MyAnimeList (no los deducidos del nombre de la categoría)
   var GCACHE = MV.load('gcache2', {});
-  MV.learnGenres = function (item, names) {
+  // Edad recomendada aprendida de TMDB (certificación) o MyAnimeList (rating): 0 = todo público, 7 = niños
+  var AGES = MV.load('ages', {});
+  var NOT_FOR_KIDS = ['terror', 'suspenso', 'crimen', 'belico'];
+  /** ¿Lo puede ver un perfil infantil? Canales: categoría infantil. Películas, series y anime: edad ≤ 7 si se conoce; si no, categoría infantil. */
+  MV.kidsOk = function (i) {
+    if (i.adult) return false;
+    if (i.type === 'live') return !!i.kids;
+    if (i.age != null) return i.age <= 7 && !!(i.kids || i.anime || (i.genres || []).indexOf('infantil') >= 0);
+    return !!i.kids;
+  };
+  MV.learnGenres = function (item, names, age) {
+    if (age != null && item.key) {
+      item.age = age;
+      if (AGES[item.key] !== age) { AGES[item.key] = age; var ak = Object.keys(AGES); if (ak.length > 8000) delete AGES[ak[0]]; MV.save('ages', AGES); }
+    }
     var ids = D.classifyGenres((names || []).join(' '));
+    if (ids.some(function (x) { return NOT_FOR_KIDS.indexOf(x) >= 0; })) item.kids = false;
     if (!ids.length) return;
     item.genres = item.genres || [];
     ids.forEach(function (x) { if (item.genres.indexOf(x) < 0) item.genres.push(x); });
@@ -134,7 +149,8 @@
   }
   function tags(o) {
     var g = (o.group || '') + ' ' + (o.name || '');
-    o.kids = RX.kids.test(g);
+    o.kids = !RX.notKids.test(g) && !RX.adult.test(g) && (RX.kids.test(o.group || '') || RX.kidsName.test(o.name || ''));
+    if (AGES[o.key] != null) o.age = AGES[o.key];
     o.anime = RX.anime.test(g);
     o.kdrama = RX.kdrama.test(g);
     o.platform = D.platformOf(o.group || '') || (o.type !== 'live' ? D.platformOf(o.name || '') : '');
@@ -153,6 +169,7 @@
         learned.forEach(function (x) { if (o.genres.indexOf(x) < 0) o.genres.push(x); });
         // Lo que dice TMDB manda: documental si su género es Documental
         if (o.type !== 'live' && learned.indexOf('documental') >= 0) o.doc = true;
+        if (learned.some(function (x) { return NOT_FOR_KIDS.indexOf(x) >= 0; })) o.kids = false;
       }
     }
     return o;
@@ -402,7 +419,7 @@
     var kids = MV.isKids(), adult = MV.adultOk();
     return arr.filter(function (i) {
       if (i.adult && !adult) return false;
-      if (kids && !(i.kids || (i.anime && !i.adult))) return false;
+      if (kids && !MV.kidsOk(i)) return false;
       return true;
     });
   };
@@ -519,7 +536,9 @@
   MV.meta = function (item) {
     var ck = 'meta2:' + item.key;
     return MV.idbGet(ck).then(function (c) {
-      if (c && c.ts > Date.now() - 14 * 86400e3) { if (c.data) MV.learnGenres(item, c.data.genres); return c.data; }
+      // Fichas guardadas antes de saber la edad se vuelven a pedir en perfiles infantiles
+      var fresh = c && c.ts > Date.now() - 14 * 86400e3 && !(MV.isKids() && c.data && c.data.age === undefined);
+      if (fresh) { if (c.data) MV.learnGenres(item, c.data.genres, c.data.age); return c.data; }
       var title = MV.cleanTitle(item.name);
       var year = (item.year || (item.name.match(/\b(19|20)\d{2}\b/) || [''])[0]);
       var job;
@@ -530,7 +549,7 @@
         if (!data && item.anime && P.tmdbKey) return tmdbMeta(title, year, item.type === 'series' ? 'tv' : 'movie');
         return data;
       }).then(function (data) {
-        if (data) { MV.idbSet(ck, { ts: Date.now(), data: data }); MV.learnGenres(item, data.genres); }
+        if (data) { MV.idbSet(ck, { ts: Date.now(), data: data }); MV.learnGenres(item, data.genres, data.age); }
         return data;
       }).catch(function () { return null; });
     });
@@ -573,8 +592,12 @@
     return chain.then(function (r) {
       if (!r) return null;
       kind = r._kind || kind;
-      return tmdb('/' + kind + '/' + r.id, '&append_to_response=credits,images,external_ids&include_image_language=es,en,null').then(function (d) {
+      return tmdb('/' + kind + '/' + r.id, '&append_to_response=credits,images,external_ids,' + (kind === 'tv' ? 'content_ratings' : 'release_dates') + '&include_image_language=es,en,null').then(function (d) {
+        var certs = kind === 'tv'
+          ? ((d.content_ratings && d.content_ratings.results) || []).map(function (x) { return { c: x.iso_3166_1, cert: x.rating }; })
+          : ((d.release_dates && d.release_dates.results) || []).map(function (x) { var rd = (x.release_dates || []).filter(function (y) { return y.certification; })[0]; return { c: x.iso_3166_1, cert: rd ? rd.certification : '' }; });
         return {
+          age: certAge(certs),
           source: 'TMDB', tmdbId: d.id, kind: kind, imdb: (d.external_ids && d.external_ids.imdb_id) || d.imdb_id || '', title: d.title || d.name, overview: d.overview || r.overview || '',
           year: (d.release_date || d.first_air_date || '').slice(0, 4),
           runtime: d.runtime ? d.runtime + ' min' : (d.number_of_seasons ? d.number_of_seasons + ' temporadas' : ''),
@@ -588,6 +611,29 @@
       });
     });
   }
+  function jikanAge(r) {
+    r = String(r || '');
+    if (!r) return null;
+    if (/^G\b/.test(r)) return 0;
+    if (/^PG-13/.test(r)) return 13;
+    if (/^PG\b/.test(r)) return 7;
+    if (/^R\b.*17/.test(r)) return 17;
+    return 18;
+  }
+  /** Certificación (CO, MX, US, ES…) → edad mínima. */
+  var CERT = { G: 0, T: 0, TP: 0, AA: 0, A: 0, APT: 0, ATP: 0, L: 0, U: 0, 'TV-Y': 0, 'TV-G': 0, PG: 7, 'TV-Y7': 7, 'TV-Y7-FV': 7, 'TV-PG': 10, 'PG-13': 13, 'TV-14': 14, B: 12, B15: 15, R: 17, 'TV-MA': 17, 'NC-17': 18, C: 18, D: 18 };
+  function certAge(list) {
+    var by = {};
+    (list || []).forEach(function (x) { if (x.cert) by[x.c] = by[x.c] || x.cert; });
+    var order = ['CO', 'MX', 'US', 'ES', 'AR', 'CL', 'BR', 'GB', 'DE', 'FR'];
+    for (var k = 0; k < order.length; k++) {
+      var c = String(by[order[k]] || '').toUpperCase().trim();
+      if (!c) continue;
+      if (CERT[c] != null) return CERT[c];
+      var m = c.match(/\d+/); if (m) return +m[0];
+    }
+    return null;
+  }
   function jikan(title) {
     return MV.getJSON('https://api.jikan.moe/v4/anime?limit=1&sfw=true&q=' + encodeURIComponent(title)).then(function (j) {
       var a = j.data && j.data[0]; if (!a) return null;
@@ -596,7 +642,7 @@
         source: 'MyAnimeList (Jikan)', title: a.title_english || a.title, overview: a.synopsis || '',
         year: a.year || (a.aired && a.aired.from ? String(a.aired.from).slice(0, 4) : ''),
         runtime: a.episodes ? a.episodes + ' episodios' : '', rating: a.score ? String(a.score) : '',
-        genres: (a.genres || []).map(function (g) { return g.name; }).slice(0, 3), cast: [],
+        genres: (a.genres || []).map(function (g) { return g.name; }).slice(0, 3), cast: [], age: jikanAge(a.rating),
         poster: img.large_image_url || img.image_url || '', backdrop: '', posters: [img.large_image_url].filter(Boolean)
       };
     });
