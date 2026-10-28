@@ -699,6 +699,8 @@
   }
   function catOf(i) {
     if ((i.genres || []).indexOf('religiosa') >= 0) return 'Religiosas';   // clasificadas por TMDB o por su categoría
+    // Con ficha de TMDB, la categoría es su género principal (más estricto que la categoría de la lista)
+    if (i.tmdbG && i.genres && i.genres.length) return D.genreName(i.genres[0]);
     var g = i.group || '', c = cleanGroup(g), k = CAT_KEY[g];
     if (k === undefined) { k = CAT_KEY[g] = catKey(c); if (k && !CAT_NAME[k]) CAT_NAME[k] = c; }
     if (k) return CAT_NAME[k];
@@ -888,7 +890,7 @@
   var tmdbTried = {}, tmdbRunning = false;
   function tmdbClassify(list) {
     if (tmdbRunning || !P.tmdbKey || MV.isKids()) return;
-    var todo = MV.visible(list).filter(function (i) { return !tmdbTried[i.key] && !MV.hasLearned(i.key) && !i.anime; }).slice(0, 150);
+    var todo = MV.visible(list).filter(function (i) { return !tmdbTried[i.key] && !MV.hasLearned(i.key) && !i.anime; });
     if (!todo.length) return;
     tmdbRunning = true;
     var here = view.name, n = 0, changed = 0;

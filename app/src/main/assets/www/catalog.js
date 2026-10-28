@@ -58,7 +58,13 @@
   };
   var ANIM = MV.load('animated', {});
   MV.hasLearned = function (key) { return !!GCACHE[key]; };
-  MV.learnGenres = function (item, names, age) {
+  // Año según TMDB (manda sobre el de la lista)
+  var YEARS = MV.load('tmdbYears', {});
+  MV.learnGenres = function (item, names, age, year) {
+    if (year && item.key && item.type !== 'live' && +year >= 1900) {
+      item.year = String(year);
+      if (YEARS[item.key] !== item.year) { YEARS[item.key] = item.year; var yk = Object.keys(YEARS); if (yk.length > 20000) delete YEARS[yk[0]]; MV.save('tmdbYears', YEARS); }
+    }
     if (age != null && item.key) {
       item.age = age;
       if (AGES[item.key] !== age) { AGES[item.key] = age; var ak = Object.keys(AGES); if (ak.length > 8000) delete AGES[ak[0]]; MV.save('ages', AGES); }
@@ -68,16 +74,18 @@
       var nk = Object.keys(ANIM); if (nk.length > 8000) delete ANIM[nk[0]];
       MV.save('animated', ANIM);
     }
-    var ids = D.classifyGenres((names || []).join(' '));
+    // Géneros en el orden de TMDB (el primero es el principal y define la categoría)
+    var ids = [];
+    (names || []).forEach(function (n) { D.classifyGenres(n).forEach(function (x) { if (ids.indexOf(x) < 0) ids.push(x); }); });
     if (ids.some(function (x) { return NOT_FOR_KIDS.indexOf(x) >= 0; })) item.kids = false;
     if (ids.indexOf('infantil') >= 0) item.learnedKids = true;
     if (ids.indexOf('documental') >= 0) item.kids = false;
     if (!ids.length) return;
-    item.genres = item.genres || [];
-    ids.forEach(function (x) { if (item.genres.indexOf(x) < 0) item.genres.push(x); });
+    // Estricto: con ficha, los géneros son los de TMDB (no los adivinados por el nombre o la categoría de la lista)
+    item.genres = ids.slice(0, 6); item.tmdbG = true;
     GCACHE[item.key] = ids.slice(0, 6);
     if (item.type !== 'live' && ids.indexOf('documental') >= 0) item.doc = true;
-    var keys = Object.keys(GCACHE); if (keys.length > 5000) delete GCACHE[keys[0]];
+    var keys = Object.keys(GCACHE); if (keys.length > 20000) delete GCACHE[keys[0]];
     MV.save('gcache2', GCACHE);
   };
   MV.genresOf = function (arr) {
@@ -187,8 +195,9 @@
       if (o.kids && o.genres.indexOf('infantil') < 0) o.genres.push('infantil');
       if (o.doc && o.genres.indexOf('documental') < 0) o.genres.push('documental');
       var learned = GCACHE[o.key];
+      if (learned && o.type !== 'live') { o.genres = learned.slice(); o.tmdbG = true; }   // TMDB manda
+      if (o.type !== 'live' && YEARS[o.key]) o.year = YEARS[o.key];
       if (learned) {
-        learned.forEach(function (x) { if (o.genres.indexOf(x) < 0) o.genres.push(x); });
         // Lo que dice TMDB manda: documental si su género es Documental
         if (o.type !== 'live' && learned.indexOf('documental') >= 0) o.doc = true;
         if (learned.some(function (x) { return NOT_FOR_KIDS.indexOf(x) >= 0; })) o.kids = false;
@@ -564,7 +573,7 @@
     return MV.idbGet(ck).then(function (c) {
       // Fichas guardadas antes de saber la edad se vuelven a pedir en perfiles infantiles
       var fresh = c && c.ts > Date.now() - 14 * 86400e3 && !(MV.isKids() && c.data && c.data.age === undefined);
-      if (fresh) { if (c.data) MV.learnGenres(item, c.data.genres, c.data.age); return c.data; }
+      if (fresh) { if (c.data) MV.learnGenres(item, c.data.genres, c.data.age, c.data.year); return c.data; }
       var title = MV.cleanTitle(item.name);
       var year = (item.year || (item.name.match(/\((19|20)\d{2}\)/) || [''])[0].replace(/[()]/g, ''));
       var job;
@@ -575,7 +584,7 @@
         if (!data && item.anime && P.tmdbKey) return tmdbMeta(title, year, item.type === 'series' ? 'tv' : 'movie');
         return data;
       }).then(function (data) {
-        if (data) { MV.idbSet(ck, { ts: Date.now(), data: data }); MV.learnGenres(item, data.genres, data.age); }
+        if (data) { MV.idbSet(ck, { ts: Date.now(), data: data }); MV.learnGenres(item, data.genres, data.age, data.year); }
         return data;
       }).catch(function () { return null; });
     });

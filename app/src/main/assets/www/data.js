@@ -189,7 +189,7 @@
     { id: 'religiosa', name: 'Religiosas', rx: /\b(religios[ao]s?|religi[oó]n|religion|cristian[ao]s?|christian(ity)?|b[ií]blic[ao]s?|biblical|biblia|bible|jes[uú]s de nazaret|jesus christ|jesucristo|pasi[oó]n de cristo|faith[- ]based|gospel|evangeli\w*|cat[oó]lic[ao]s?|catholic)\b/i },
     { id: 'documental', name: 'Documental', rx: /\b(documental(es)?|documentar(y|ies)|docu|naturaleza|nature|historia real|biograf[ií]a|biography)\b/i },
     { id: 'belico', name: 'Bélico', rx: /\b(b[eé]lic[ao]s?|guerra|war|militar|military)\b/i },
-    { id: 'historica', name: 'Histórica', rx: /\b(hist[oó]ric[ao]s?|historical|[eé]poca|period)\b/i },
+    { id: 'historica', name: 'Histórica', rx: /\b(hist[oó]ric[ao]s?|historical|historia|history|[eé]poca|period)\b/i },
     { id: 'musical', name: 'Musical', rx: /\b(musical(es)?|m[uú]sica|music|conciertos?|concert)\b/i },
     { id: 'deportes', name: 'Deportes', rx: /\b(deportes?|sports?|f[uú]tbol|soccer|boxeo|boxing|ufc|nba|nfl)\b/i },
     { id: 'western', name: 'Western', rx: /\b(western|vaqueros?|oeste)\b/i },
