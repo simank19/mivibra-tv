@@ -63,35 +63,35 @@
     { name: 'Música (iptv-org)', url: 'https://iptv-org.github.io/iptv/categories/music.m3u', note: 'Videos y conciertos' }
   ];
 
-  // Películas ganadoras del Óscar (Mejor película, Animada, Internacional y grandes ganadoras). [año, títulos posibles separados por |]
+  // Películas ganadoras del Óscar. [año, títulos posibles separados por |, premio: p = Mejor película, a = Animada, i = Internacional, o = otros premios]
   D.OSCARS = [
-    [1939, "Gone with the Wind|Lo que el viento se llevó"], [1942, "Casablanca"], [1959, "Ben-Hur"], [1965, "The Sound of Music|La novicia rebelde|Sonrisas y lágrimas"],
-    [1972, "The Godfather|El padrino"], [1974, "The Godfather Part II|El padrino II|El padrino parte II"], [1975, "One Flew Over the Cuckoo's Nest|Atrapado sin salida|Alguien voló sobre el nido del cuco"],
-    [1976, "Rocky"], [1977, "Annie Hall"], [1978, "The Deer Hunter|El francotirador|El cazador"], [1979, "Kramer vs. Kramer|Kramer contra Kramer"], [1982, "Gandhi"],
-    [1984, "Amadeus"], [1985, "Out of Africa|África mía|Memorias de África"], [1986, "Platoon|Pelotón"], [1987, "The Last Emperor|El último emperador"], [1988, "Rain Man|Cuando los hermanos se encuentran"],
-    [1989, "Driving Miss Daisy|Conduciendo a Miss Daisy|Paseando a Miss Daisy"], [1990, "Dances with Wolves|Danza con lobos|Bailando con lobos"], [1991, "The Silence of the Lambs|El silencio de los inocentes|El silencio de los corderos"],
-    [1992, "Unforgiven|Los imperdonables|Sin perdón"], [1993, "Schindler's List|La lista de Schindler"], [1994, "Forrest Gump"], [1995, "Braveheart|Corazón valiente"],
-    [1996, "The English Patient|El paciente inglés"], [1997, "Titanic"], [1998, "Shakespeare in Love|Shakespeare apasionado|Shakespeare enamorado"], [1999, "American Beauty|Belleza americana"],
-    [1999, "All About My Mother|Todo sobre mi madre"], [2000, "Gladiator|Gladiador"], [2001, "A Beautiful Mind|Una mente brillante"], [2001, "Shrek"], [2002, "Chicago"],
-    [2002, "Spirited Away|El viaje de Chihiro|Sen to Chihiro no kamikakushi"], [2003, "The Lord of the Rings: The Return of the King|El señor de los anillos: El retorno del rey|El señor de los anillos: el regreso del rey"],
-    [2003, "Finding Nemo|Buscando a Nemo"], [2004, "Million Dollar Baby|Golpes del destino"], [2004, "The Incredibles|Los increíbles"], [2004, "The Sea Inside|Mar adentro"],
-    [2005, "Crash|Vidas cruzadas|Alto impacto"], [2005, "Wallace & Gromit: The Curse of the Were-Rabbit|Wallace y Gromit: La batalla de los vegetales|Wallace y Gromit: la maldición de las verduras"],
-    [2006, "The Departed|Los infiltrados"], [2006, "Happy Feet|Happy Feet: El pingüino"], [2006, "Pan's Labyrinth|El laberinto del fauno"], [2007, "No Country for Old Men|Sin lugar para los débiles|No es país para viejos"],
-    [2007, "Ratatouille"], [2008, "Slumdog Millionaire|¿Quién quiere ser millonario?|Quisiera ser millonario"], [2008, "WALL-E|WALL·E"], [2008, "The Dark Knight|Batman: El caballero de la noche|El caballero oscuro"],
-    [2009, "The Hurt Locker|Vivir al límite|En tierra hostil"], [2009, "Up|Up: Una aventura de altura"], [2009, "The Secret in Their Eyes|El secreto de sus ojos"], [2009, "Avatar"],
-    [2010, "The King's Speech|El discurso del rey"], [2010, "Toy Story 3"], [2010, "Inception|El origen|Origen"], [2011, "The Artist|El artista"], [2011, "Rango"], [2012, "Argo"],
-    [2012, "Brave|Valiente"], [2012, "Life of Pi|Una aventura extraordinaria|La vida de Pi"], [2013, "12 Years a Slave|12 años de esclavitud"], [2013, "Frozen|Frozen: Una aventura congelada|Frozen: El reino del hielo"],
-    [2013, "Gravity|Gravedad"], [2014, "Birdman|Birdman o (La inesperada virtud de la ignorancia)"], [2014, "Big Hero 6|Grandes héroes"], [2014, "Whiplash|Whiplash: Música y obsesión"],
-    [2015, "Spotlight|En primera plana"], [2015, "Inside Out|Intensa-mente|Intensamente|Del revés"], [2015, "Mad Max: Fury Road|Mad Max: Furia en el camino|Mad Max: Furia en la carretera"],
-    [2015, "The Revenant|El renacido|El renacido (The Revenant)"], [2016, "Moonlight|Luz de luna"], [2016, "Zootopia|Zootrópolis"], [2016, "La La Land|La La Land: Una historia de amor|La ciudad de las estrellas"],
-    [2017, "The Shape of Water|La forma del agua"], [2017, "Coco"], [2017, "A Fantastic Woman|Una mujer fantástica"], [2018, "Green Book|Green Book: Una amistad sin fronteras"],
-    [2018, "Spider-Man: Into the Spider-Verse|Spider-Man: Un nuevo universo"], [2018, "Roma"], [2018, "Bohemian Rhapsody"], [2018, "Black Panther|Pantera Negra"], [2019, "Parasite|Parásitos|Parásito"],
-    [2019, "Toy Story 4"], [2019, "Joker|Guasón"], [2020, "Nomadland|País de nómadas"], [2020, "Soul"], [2021, "CODA|CODA: Señales del corazón|CODA: Los sonidos del silencio"],
-    [2021, "Encanto"], [2021, "Dune|Duna"], [2021, "Drive My Car"], [2022, "Everything Everywhere All at Once|Todo en todas partes al mismo tiempo|Todo a la vez en todas partes"],
-    [2022, "Guillermo del Toro's Pinocchio|Pinocho de Guillermo del Toro|Pinocho"], [2022, "All Quiet on the Western Front|Sin novedad en el frente"], [2022, "The Whale|La ballena"],
-    [2023, "Oppenheimer"], [2023, "The Boy and the Heron|El niño y la garza|El chico y la garza"], [2023, "Poor Things|Pobres criaturas"], [2023, "The Zone of Interest|Zona de interés|La zona de interés"],
-    [2024, "Anora"], [2024, "Flow|Flow: Un mundo que salvar"], [2024, "I'm Still Here|Aún estoy aquí|Ainda Estou Aqui"], [2024, "Dune: Part Two|Duna: Parte dos"], [2024, "Wicked"], [2024, "The Brutalist|El brutalista"],
-    [2025, "One Battle After Another|Una batalla tras otra"], [2025, "KPop Demon Hunters|Las guerreras K-pop|Guerreras del K-pop"], [2025, "Sentimental Value|Valor sentimental"], [2025, "Sinners|Pecadores"], [2025, "Frankenstein"]
+    [1939, "Gone with the Wind|Lo que el viento se llevó", "p"], [1942, "Casablanca", "p"], [1959, "Ben-Hur", "p"], [1965, "The Sound of Music|La novicia rebelde|Sonrisas y lágrimas", "p"],
+    [1972, "The Godfather|El padrino", "p"], [1974, "The Godfather Part II|El padrino II|El padrino parte II", "p"], [1975, "One Flew Over the Cuckoo's Nest|Atrapado sin salida|Alguien voló sobre el nido del cuco", "p"],
+    [1976, "Rocky", "p"], [1977, "Annie Hall", "p"], [1978, "The Deer Hunter|El francotirador|El cazador", "p"], [1979, "Kramer vs. Kramer|Kramer contra Kramer", "p"], [1982, "Gandhi", "p"],
+    [1984, "Amadeus", "p"], [1985, "Out of Africa|África mía|Memorias de África", "p"], [1986, "Platoon|Pelotón", "p"], [1987, "The Last Emperor|El último emperador", "p"], [1988, "Rain Man|Cuando los hermanos se encuentran", "p"],
+    [1989, "Driving Miss Daisy|Conduciendo a Miss Daisy|Paseando a Miss Daisy", "p"], [1990, "Dances with Wolves|Danza con lobos|Bailando con lobos", "p"], [1991, "The Silence of the Lambs|El silencio de los inocentes|El silencio de los corderos", "p"],
+    [1992, "Unforgiven|Los imperdonables|Sin perdón", "p"], [1993, "Schindler's List|La lista de Schindler", "p"], [1994, "Forrest Gump", "p"], [1995, "Braveheart|Corazón valiente", "p"],
+    [1996, "The English Patient|El paciente inglés", "p"], [1997, "Titanic", "p"], [1998, "Shakespeare in Love|Shakespeare apasionado|Shakespeare enamorado", "p"], [1999, "American Beauty|Belleza americana", "p"],
+    [1999, "All About My Mother|Todo sobre mi madre", "i"], [2000, "Gladiator|Gladiador", "p"], [2001, "A Beautiful Mind|Una mente brillante", "p"], [2001, "Shrek", "a"], [2002, "Chicago", "p"],
+    [2002, "Spirited Away|El viaje de Chihiro|Sen to Chihiro no kamikakushi", "a"], [2003, "The Lord of the Rings: The Return of the King|El señor de los anillos: El retorno del rey|El señor de los anillos: el regreso del rey", "p"],
+    [2003, "Finding Nemo|Buscando a Nemo", "a"], [2004, "Million Dollar Baby|Golpes del destino", "p"], [2004, "The Incredibles|Los increíbles", "a"], [2004, "The Sea Inside|Mar adentro", "i"],
+    [2005, "Crash|Vidas cruzadas|Alto impacto", "p"], [2005, "Wallace & Gromit: The Curse of the Were-Rabbit|Wallace y Gromit: La batalla de los vegetales|Wallace y Gromit: la maldición de las verduras", "a"],
+    [2006, "The Departed|Los infiltrados", "p"], [2006, "Happy Feet|Happy Feet: El pingüino", "a"], [2006, "Pan's Labyrinth|El laberinto del fauno", "i"], [2007, "No Country for Old Men|Sin lugar para los débiles|No es país para viejos", "p"],
+    [2007, "Ratatouille", "a"], [2008, "Slumdog Millionaire|¿Quién quiere ser millonario?|Quisiera ser millonario", "p"], [2008, "WALL-E|WALL·E", "a"], [2008, "The Dark Knight|Batman: El caballero de la noche|El caballero oscuro", "o"],
+    [2009, "The Hurt Locker|Vivir al límite|En tierra hostil", "p"], [2009, "Up|Up: Una aventura de altura", "a"], [2009, "The Secret in Their Eyes|El secreto de sus ojos", "i"], [2009, "Avatar", "o"],
+    [2010, "The King's Speech|El discurso del rey", "p"], [2010, "Toy Story 3", "a"], [2010, "Inception|El origen|Origen", "o"], [2011, "The Artist|El artista", "p"], [2011, "Rango", "a"], [2012, "Argo", "p"],
+    [2012, "Brave|Valiente", "a"], [2012, "Life of Pi|Una aventura extraordinaria|La vida de Pi", "o"], [2013, "12 Years a Slave|12 años de esclavitud", "p"], [2013, "Frozen|Frozen: Una aventura congelada|Frozen: El reino del hielo", "a"],
+    [2013, "Gravity|Gravedad", "o"], [2014, "Birdman|Birdman o (La inesperada virtud de la ignorancia)", "p"], [2014, "Big Hero 6|Grandes héroes", "a"], [2014, "Whiplash|Whiplash: Música y obsesión", "o"],
+    [2015, "Spotlight|En primera plana", "p"], [2015, "Inside Out|Intensa-mente|Intensamente|Del revés", "a"], [2015, "Mad Max: Fury Road|Mad Max: Furia en el camino|Mad Max: Furia en la carretera", "o"],
+    [2015, "The Revenant|El renacido|El renacido (The Revenant)", "o"], [2016, "Moonlight|Luz de luna", "p"], [2016, "Zootopia|Zootrópolis", "a"], [2016, "La La Land|La La Land: Una historia de amor|La ciudad de las estrellas", "o"],
+    [2017, "The Shape of Water|La forma del agua", "p"], [2017, "Coco", "a"], [2017, "A Fantastic Woman|Una mujer fantástica", "i"], [2018, "Green Book|Green Book: Una amistad sin fronteras", "p"],
+    [2018, "Spider-Man: Into the Spider-Verse|Spider-Man: Un nuevo universo", "a"], [2018, "Roma", "i"], [2018, "Bohemian Rhapsody", "o"], [2018, "Black Panther|Pantera Negra", "o"], [2019, "Parasite|Parásitos|Parásito", "p"],
+    [2019, "Toy Story 4", "a"], [2019, "Joker|Guasón", "o"], [2020, "Nomadland|País de nómadas", "p"], [2020, "Soul", "a"], [2021, "CODA|CODA: Señales del corazón|CODA: Los sonidos del silencio", "p"],
+    [2021, "Encanto", "a"], [2021, "Dune|Duna", "o"], [2021, "Drive My Car", "i"], [2022, "Everything Everywhere All at Once|Todo en todas partes al mismo tiempo|Todo a la vez en todas partes", "p"],
+    [2022, "Guillermo del Toro's Pinocchio|Pinocho de Guillermo del Toro|Pinocho", "a"], [2022, "All Quiet on the Western Front|Sin novedad en el frente", "i"], [2022, "The Whale|La ballena", "o"],
+    [2023, "Oppenheimer", "p"], [2023, "The Boy and the Heron|El niño y la garza|El chico y la garza", "a"], [2023, "Poor Things|Pobres criaturas", "o"], [2023, "The Zone of Interest|Zona de interés|La zona de interés", "i"],
+    [2024, "Anora", "p"], [2024, "Flow|Flow: Un mundo que salvar", "a"], [2024, "I'm Still Here|Aún estoy aquí|Ainda Estou Aqui", "i"], [2024, "Dune: Part Two|Duna: Parte dos", "o"], [2024, "Wicked", "o"], [2024, "The Brutalist|El brutalista", "o"],
+    [2025, "One Battle After Another|Una batalla tras otra", "p"], [2025, "KPop Demon Hunters|Las guerreras K-pop|Guerreras del K-pop", "a"], [2025, "Sentimental Value|Valor sentimental", "i"], [2025, "Sinners|Pecadores", "o"], [2025, "Frankenstein", "o"]
   ];
 
   // Temas automáticos por celebración (fechas de Colombia). Se activan solos si "Temas por celebración" está encendido.

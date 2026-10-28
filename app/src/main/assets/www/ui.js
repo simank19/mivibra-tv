@@ -202,7 +202,7 @@
     kind = kind || (it.type === 'live' ? 'ch' : 'poster');
     var sub = '';
     if (it.type === 'live') { var nn = MV.nowNext(it); sub = nn.now ? nn.now.t : (it.group || ''); }
-    else sub = [it.year, it.type === 'series' ? 'Serie' : '', it.type === 'tmdb' ? it.group : cleanGroup(it.group)].filter(Boolean).join(' · ');
+    else sub = [it.year, it.type === 'series' ? 'Serie' : '', it.type === 'tmdb' ? it.group : catOf(it)].filter(Boolean).join(' · ');
     var prog = MV.progressOf(it.key), tag = it.type === 'tmdb' ? (it.have ? 'EN TUS LISTAS' : '') : it.platform ? D.platformName(it.platform).toUpperCase() : it.kdrama ? 'K-DRAMA' : it.anime ? 'ANIME' : it.ia ? 'CLÁSICO' : '';
     return '<button class="card ' + kind + ' f" style="--h:' + MV.hue(it.name) + ';animation-delay:' + Math.min(i || 0, 12) * 0.04 + 's" data-act="open" data-key="' + esc(it.key) + '" data-fid="c-' + MV.hash(it.key) + '">' +
       '<div class="th">' + thumbInner(it) + (it.num ? '<span class="num">' + esc(it.num) + '</span>' : '') + (tag ? '<span class="tag">' + tag + '</span>' : '') + '<div class="shine"></div></div>' +
@@ -542,9 +542,24 @@
     GROUP_CACHE[g] = c;
     return c;
   }
+  /** Categoría de un título para filtros y filas: sin categorías genéricas ("Películas", "VOD", "Series 2024"…)
+      y uniendo las repetidas ("ACCION", "Acción HD", "Películas - Acción" → "Acción"). Las genéricas usan el género. */
+  var GENERIC_W = /^(peliculas?|pelis?|movies?|cine|films?|vod|series?|shows?|tv|anime|animes?|estrenos?|latino|latinos|latam|castellano|espanol|subtitulad[oa]s?|sub|dual|audio|internet|todas?|todos?|todo|varias?|varios?|otras?|otros?|mix|full|general|coleccion|completas?|completos?|nuevas?|nuevos?|y|de|del|la|las|los|el|en|para|con|hd|online|lat|esp|eng|vose|multi|ultimas?|ultimos?|recientes?|agregad[oa]s?|top|\d{2,4})$/;
+  var CAT_KEY = {}, CAT_NAME = {};
+  function catKey(c) {
+    return MV.norm(c).split(' ').filter(function (w) { return w && !GENERIC_W.test(w); })
+      .map(function (w) { return w.length > 4 ? w.replace(/(es|s)$/, '') : w; }).join(' ');
+  }
+  function catOf(i) {
+    var g = i.group || '', c = cleanGroup(g), k = CAT_KEY[g];
+    if (k === undefined) { k = CAT_KEY[g] = catKey(c); if (k && !CAT_NAME[k]) CAT_NAME[k] = c; }
+    if (k) return CAT_NAME[k];
+    var gen = (i.genres || []).filter(function (x) { return x !== 'infantil' || i.kids; })[0];
+    return gen ? D.genreName(gen) : 'Otras';
+  }
   function groupsClean(list) {
     var m = {};
-    list.forEach(function (i) { var c = cleanGroup(i.group); m[c] = (m[c] || 0) + 1; });
+    list.forEach(function (i) { var c = catOf(i); m[c] = (m[c] || 0) + 1; });
     return Object.keys(m).map(function (k) { return { name: k, count: m[k] }; }).sort(function (a, b) { return b.count - a.count || a.name.localeCompare(b.name); });
   }
   var SORTS = [['rec', 'Recientes'], ['az', 'A-Z'], ['year', 'Año'], ['rating', 'Calificación']];
@@ -567,8 +582,9 @@
   /** Vista por filas: una fila por categoría (como Inicio), con "Ver todo" que abre la categoría completa. */
   function catRows(vkey, list, kind) {
     var by = {}, order = [];
-    list.forEach(function (i) { var c = cleanGroup(i.group); if (!by[c]) { by[c] = []; order.push(c); } by[c].push(i); });
+    list.forEach(function (i) { var c = catOf(i); if (!by[c]) { by[c] = []; order.push(c); } by[c].push(i); });
     order.sort(function (a, b) { return by[b].length - by[a].length; });
+    if (by['Otras']) { order.splice(order.indexOf('Otras'), 1); order.push('Otras'); }   // "Otras" al final
     var html = '', K = kind || 'poster';
     // Anime: primero lo que está en emisión esta temporada
     if (vkey === 'anime') {
@@ -591,9 +607,13 @@
         (items.length > 20 ? '<button class="card poster f seeall" data-act="yearAll" data-arg="' + y + '" data-v="' + vkey + '"><div class="th"><b>Ver todo ›</b><span>' + items.length + ' títulos</span></div></button>' : '') + '</div></section>';
     });
     if (years.length > ylim) html += '<button class="btn ghost more f" data-act="moreRows" data-arg="' + vkey + ':y">Ver más años (' + (years.length - ylim) + ')</button>';
-    // Ganadoras del Óscar (solo películas)
-    var osc = list.filter(function (i) { return i.type === 'movie' && isOscar(i); });
-    if (osc.length >= 2) html += row('Ganadoras del Óscar', osc.sort(function (a, b) { return (+itemYear(b) || 0) - (+itemYear(a) || 0); }).slice(0, 30), K, osc.length + '');
+    // Ganadoras del Óscar (solo películas), una fila por premio
+    var oscBy = { p: [], a: [], i: [], o: [] };
+    list.forEach(function (i) { if (i.type !== 'movie') return; var c = isOscar(i); if (c) oscBy[c].push(i); });
+    [['p', 'Óscar a Mejor película'], ['a', 'Óscar a Mejor película animada'], ['i', 'Óscar a Mejor película internacional'], ['o', 'Otras ganadoras del Óscar']].forEach(function (r) {
+      var arr = oscBy[r[0]].sort(function (a, b) { return (+itemYear(b) || 0) - (+itemYear(a) || 0); });
+      if (arr.length) html += row(r[1], arr.slice(0, 30), K, arr.length + '');
+    });
     var top = list.filter(function (i) { return +i.rating >= 7; }).sort(function (a, b) { return (+b.rating || 0) - (+a.rating || 0); }).slice(0, 20);
     if (top.length >= 6) html += row('Mejor calificadas', top, K);
     var lim = rowLimit[vkey] || 14;
@@ -611,13 +631,14 @@
   function isOscar(i) {
     if (!OSC_IDX) {
       OSC_IDX = {};
-      D.OSCARS.forEach(function (o) { o[1].split('|').forEach(function (t) { var k = MV.norm(t); if (k) (OSC_IDX[k] = OSC_IDX[k] || []).push(o[0]); }); });
+      D.OSCARS.forEach(function (o) { o[1].split('|').forEach(function (t) { var k = MV.norm(t); if (k) (OSC_IDX[k] = OSC_IDX[k] || []).push(o); }); });
     }
-    var k = MV.norm(MV.cleanTitle(i.name)), ys = OSC_IDX[k];
-    if (!ys) return false;
+    var k = MV.norm(MV.cleanTitle(i.name)), os = OSC_IDX[k];
+    if (!os) return '';
     var y = +itemYear(i);
-    if (!y) return k.length >= 6;                       // sin año: solo títulos largos (evita "Up", "Soul"…)
-    return ys.some(function (oy) { return Math.abs(oy - y) <= 1; });
+    if (!y) return k.length >= 6 ? os[0][2] : '';        // sin año: solo títulos largos (evita "Up", "Soul"…)
+    var hit = os.find(function (o) { return Math.abs(o[0] - y) <= 1; });
+    return hit ? hit[2] : '';
   }
   var yearSel = {};
   /** Del oeste / vaqueros / western: por género (categoría o ficha de TMDB) o por el nombre. */
@@ -629,7 +650,7 @@
     var cats = groupsClean(all);
     var cur = catSel[vkey] || '', gen = genreSel[vkey] || '', plat = platSel[vkey] || '', sort = sortSel[vkey] || 'rec';
     if (cur && !cats.some(function (c) { return c.name === cur; })) cur = catSel[vkey] = '';
-    var list = cur ? all.filter(function (i) { return cleanGroup(i.group) === cur; }) : all;
+    var list = cur ? all.filter(function (i) { return catOf(i) === cur; }) : all;
     var pm = {}; list.forEach(function (i) { if (i.platform) pm[i.platform] = (pm[i.platform] || 0) + 1; });
     var plats = vkey.indexOf('pl-') === 0 ? [] : D.PLATFORMS.filter(function (p) { return pm[p.id]; }).map(function (p) { return { id: p.id, name: p.name, count: pm[p.id] }; });
     if (plat) list = list.filter(function (i) { return i.platform === plat; });
@@ -814,7 +835,7 @@
   /** Relacionadas: misma saga, mismos géneros (de la ficha), misma categoría o plataforma y años cercanos. */
   function relatedOf(it) {
     var pool = MV.visible(it.type === 'series' ? S.series : S.movies);
-    var g = it.genres || [], grp = cleanGroup(it.group), y = +itemYear(it) || 0;
+    var g = it.genres || [], grp = catOf(it), y = +itemYear(it) || 0;
     var me = MV.norm(MV.cleanTitle(it.name)), w = me.split(' ').filter(function (x) { return x.length > 2; }).slice(0, 2).join(' ');
     var scored = [];
     pool.forEach(function (o) {
@@ -823,7 +844,7 @@
       var sc = 0;
       if (w.length > 4 && on.indexOf(w) === 0) sc += 8;                        // misma saga: "Toy Story", "Rápidos y furiosos"…
       var shared = (o.genres || []).filter(function (x) { return g.indexOf(x) >= 0; }).length; sc += shared * 3;
-      if (grp && cleanGroup(o.group) === grp) sc += 2;
+      if (grp && grp !== 'Otras' && catOf(o) === grp) sc += 2;
       if (it.platform && o.platform === it.platform) sc += 2;
       if (it.anime && o.anime) sc += 4; if (it.kdrama && o.kdrama) sc += 4; if (it.doc && o.doc) sc += 4;
       var oy = +itemYear(o) || 0; if (y && oy && Math.abs(oy - y) <= 3) sc += 1;
