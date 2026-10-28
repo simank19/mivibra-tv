@@ -174,6 +174,10 @@ class Bridge(private val a: MainActivity) {
         a.runOnUiThread { a.startActivity(Intent(a, BrowserActivity::class.java).putExtra("url", url ?: "")) }
     }
 
+    /** Fila de recomendados en el inicio de Android TV. */
+    @JavascriptInterface
+    fun publishHome(json: String) { HomeChannel.publish(a, json) }
+
     @JavascriptInterface
     fun play(json: String) {
         a.runOnUiThread { a.openPlayer(json) }

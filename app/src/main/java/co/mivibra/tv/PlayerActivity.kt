@@ -55,6 +55,7 @@ class PlayerActivity : ComponentActivity() {
         private var active: java.lang.ref.WeakReference<PlayerActivity>? = null
     }
     private var replacedBy = false
+    private var session: androidx.media3.session.MediaSession? = null
 
     private lateinit var view: PlayerView
     private lateinit var tracksBtn: TextView
@@ -253,6 +254,11 @@ class PlayerActivity : ComponentActivity() {
                 if (subLang.isNotBlank()) setPreferredTextLanguage(subLang).setSelectUndeterminedTextLanguage(true)
             }
             .build()
+        // Sesión de medios: la ventana flotante y el sistema muestran el título (no "Programa sin título")
+        try {
+            session?.release()
+            session = androidx.media3.session.MediaSession.Builder(this, p).setId("mv" + System.nanoTime()).build()
+        } catch (_: Throwable) {}
         p.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) { onFail(error) }
             override fun onIsPlayingChanged(isPlaying: Boolean) { updateCenterPlay(); WatchNext.update(this@PlayerActivity, current(), p, live) }
@@ -373,6 +379,11 @@ class PlayerActivity : ComponentActivity() {
         val at = attempts.getOrNull(attemptIndex) ?: return
         http.setUserAgent(at.ua ?: Net.UA)
         val b = MediaItem.Builder().setUri(Uri.parse(at.url)).setMediaId(item.optString("id", at.url))
+            .setMediaMetadata(androidx.media3.common.MediaMetadata.Builder()
+                .setTitle(item.optString("title"))
+                .setSubtitle(item.optString("subtitle"))
+                .setArtworkUri(item.optString("poster").takeIf { it.startsWith("http") }?.let { Uri.parse(it) })
+                .build())
         val lower = at.url.lowercase().substringBefore('?')
         when {
             at.forceHls -> b.setMimeType(MimeTypes.APPLICATION_M3U8)
@@ -692,6 +703,8 @@ class PlayerActivity : ComponentActivity() {
 
     override fun onDestroy() {
         ui.removeCallbacksAndMessages(null)
+        try { session?.release() } catch (_: Throwable) {}
+        session = null
         player?.release()
         player = null
         super.onDestroy()

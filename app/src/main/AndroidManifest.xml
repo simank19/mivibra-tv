@@ -71,6 +71,8 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="mivibra" android:host="play" />
+                <data android:scheme="mivibra" android:host="open" />
+                <data android:scheme="mivibra" android:host="home" />
             </intent-filter>
             <!-- Abrir listas .m3u desde el administrador de archivos -->
             <intent-filter>

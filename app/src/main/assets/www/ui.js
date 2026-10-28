@@ -1185,11 +1185,12 @@
     launch({ queue: queue, index: 0, live: false, startMs: prog ? prog.pos : 0 }, { item: series, episodes: eps, start: i });
   };
   /** Desde "Continuar viendo" del inicio de Android TV: sigue donde iba (espera a que cargue el catálogo). */
-  MV.openFromHome = function (id, tries) {
+  MV.openFromHome = function (id, tries, detail) {
     tries = tries || 0;
     var base = String(id).split('#')[0], it = S.byKey[base] || (MV.reg && MV.reg[base]);
-    if (!it || !MV.profile()) { if (tries < 60) setTimeout(function () { MV.openFromHome(id, tries + 1); }, 500); return; }
+    if (!it || !MV.profile()) { if (tries < 60) setTimeout(function () { MV.openFromHome(id, tries + 1, detail); }, 500); return; }
     if (MV.isKids() && !MV.kidsOk(it)) return;
+    if (detail) { MV.go('detail', it.key); return; }
     var m = String(id).match(/#(\d+)x(\d+)$/);
     if (it.type === 'series' && m) {
       MV.loadEpisodes(it).then(function (eps) {
@@ -1374,7 +1375,7 @@
     // Perfiles
     pickProfile: function (id) {
       var p = S.profiles.find(function (x) { return x.id === id; });
-      var enter = function () { S.pid = id; MV.save('pid', id); stack = []; MV.applyLook(); MV.go(p.kids ? 'kids' : 'home', null, { replace: true }); };
+      var enter = function () { S.pid = id; MV.save('pid', id); stack = []; MV.applyLook(); MV.go(p.kids ? 'kids' : 'home', null, { replace: true }); MV.emit('profile'); };
       if (p.pin) pinPad('PIN de ' + p.name, function (h) { if (h === p.pin) { MV.closeModal(true); enter(); return true; } return false; });
       else enter();
     },
@@ -2195,6 +2196,27 @@
   VIEWS.music.after = function () { var i = document.getElementById('musicIn'); if (i) i.addEventListener('keydown', function (e) { if (e.key === 'Enter') ACT.musicSearch(); }); };
 
   // ---------- Eventos de la app ----------
+  /** Fila "MiVibra · Recomendado" en el inicio de Android TV: seguir viendo + sugeridos del perfil (con carátula). */
+  var homeSig = '';
+  var publishHome = MV.debounce(function () {
+    if (!A || !A.publishHome || !MV.device.tv || !MV.profile() || S.loading) return;
+    var kids = MV.isKids(), seen = {}, out = [];
+    var cont = (MV.continueList ? MV.continueList() : []).filter(function (i) { return i.type !== 'live' && (!kids || MV.kidsOk(i)); });
+    var pool = cont.concat(kids ? MV.visible(S.items).filter(function (i) { return i.type !== 'live'; }) : suggested());
+    pool.forEach(function (i) {
+      if (out.length >= 20) return;
+      var key = i.parent || i.key, base = S.byKey[key] || i, poster = MV.poster(base);
+      if (seen[key] || !/^https?:/.test(poster || '')) return;
+      seen[key] = 1;
+      out.push({ key: key, title: base.name, desc: base.plot || base.group || '', poster: poster, type: base.type });
+    });
+    var sig = JSON.stringify(out.map(function (x) { return x.key; }));
+    if (!out.length || sig === homeSig) return;
+    homeSig = sig;
+    try { A.publishHome(JSON.stringify(out)); } catch (e) {}
+  }, 4000);
+  MV.on('catalog', publishHome);
+  MV.on('profile', publishHome);
   MV.on('catalog', function () { if (['boot', 'profiles', 'profileEdit', 'settings', 'games'].indexOf(view.name) < 0) MV.rerender(); });
   MV.on('epg', function () { if (view.name === 'guide' || view.name === 'live' || view.name === 'home') MV.rerender(); });
   MV.on('synced', function () { if (view.name === 'home' || view.name === 'history' || view.name === 'favs') MV.rerender(); });
