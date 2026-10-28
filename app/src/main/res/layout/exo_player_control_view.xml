@@ -76,6 +76,13 @@
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:layoutDirection="ltr">
+      <ImageButton android:id="@+id/mv_channels" style="@style/MvCtl"
+          android:src="@drawable/mv_ic_list"
+          android:visibility="gone"
+          android:contentDescription="Lista de canales" />
+      <ImageButton android:id="@+id/mv_mute" style="@style/MvCtl"
+          android:src="@drawable/mv_vol_on"
+          android:contentDescription="Silenciar" />
       <ImageButton android:id="@id/exo_subtitle" style="@style/MvCtl"
           android:src="@drawable/exo_styled_controls_subtitle_off"
           android:contentDescription="@string/exo_controls_cc_disabled_description" />

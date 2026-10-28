@@ -129,7 +129,7 @@
             android:name=".PlayerActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode"
             android:exported="false"
-            android:screenOrientation="sensorLandscape"
+            android:screenOrientation="fullUser"
             android:supportsPictureInPicture="true"
             android:theme="@style/Theme.MiVibra.Fullscreen" />
 

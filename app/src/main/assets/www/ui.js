@@ -1275,7 +1275,7 @@
   }
   function q(it, extra) {
     var nn = it.type === 'live' ? MV.nowNext(it) : {};
-    return Object.assign({ id: it.key, url: it.url, title: it.name, subtitle: nn.now ? nn.now.t : (it.group || ''), num: it.num || '', ua: it.ua || '', ref: it.ref || '', alts: it.alts || [], poster: it.type === 'live' ? '' : MV.poster(it) }, it.type === 'live' ? {} : subInfo(it), extra || {});
+    return Object.assign({ id: it.key, url: it.url, title: it.name, subtitle: nn.now ? nn.now.t : (it.group || ''), num: it.num || '', ua: it.ua || '', ref: it.ref || '', alts: it.alts || [], poster: it.type === 'live' ? '' : MV.poster(it), logo: it.type === 'live' ? (it.logo || '') : '', fav: it.type === 'live' ? MV.isFav(it.key) : false }, it.type === 'live' ? {} : subInfo(it), extra || {});
   }
   function launch(req, ctx) {
     stopHeroPreview();
@@ -1296,7 +1296,9 @@
       var list = channelsOf(liveCat, liveBase());
       if (list.indexOf(it) < 0) list = MV.visible(S.live);
       var idx = Math.max(0, list.indexOf(it)), from = Math.max(0, idx - 200), slice = list.slice(from, from + 400);
-      launch({ queue: slice.map(function (c) { return q(c); }), index: slice.indexOf(it) < 0 ? 0 : slice.indexOf(it), live: true }, { item: it, list: slice });
+      // Recientes para la lista de canales del reproductor
+      var recent = (MV.pdata().history || []).filter(function (h) { return h.type === 'live'; }).slice(0, 30).map(function (h) { return h.key; });
+      launch({ queue: slice.map(function (c) { return q(c); }), index: slice.indexOf(it) < 0 ? 0 : slice.indexOf(it), live: true, recent: recent }, { item: it, list: slice });
       return;
     }
     var prog = resume ? MV.progressOf(it.key) : null;

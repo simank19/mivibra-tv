@@ -56,6 +56,10 @@ class PlayerActivity : ComponentActivity() {
     }
     private var replacedBy = false
     private var session: androidx.media3.session.MediaSession? = null
+    private var panel: ChannelPanel? = null
+    private var panelOpen = false
+    private lateinit var root: FrameLayout
+    private val hidePanel = Runnable { closePanel() }
 
     private lateinit var view: PlayerView
     private lateinit var tracksBtn: TextView
@@ -89,7 +93,7 @@ class PlayerActivity : ComponentActivity() {
         subLang = req.optString("subLang", "")
         subKey = req.optString("subKey", "")
 
-        val root = FrameLayout(this)
+        root = FrameLayout(this)
         root.setBackgroundColor(Color.BLACK)
         view = PlayerView(this)
         view.setShowSubtitleButton(true)
@@ -145,12 +149,16 @@ class PlayerActivity : ComponentActivity() {
         }
         view.setShowSubtitleButton(true)
         arrangeControls()
+        setupPanel(req)
         applySubtitleStyle()
         setContentView(root)
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             // Atrás: primero esconde los controles; con los controles ocultos, sale del reproductor
-            override fun handleOnBackPressed() { if (view.isControllerFullyVisible) view.hideController() else finishWithResult() }
+            override fun handleOnBackPressed() {
+                if (panelOpen && !portraitPanel()) closePanel()
+                else if (view.isControllerFullyVisible) view.hideController() else finishWithResult()
+            }
         })
 
         createPlayer()
@@ -173,6 +181,17 @@ class PlayerActivity : ComponentActivity() {
             setUnplayedColor(0x33FFFFFF)
         }
         view.findViewById<View>(R.id.mv_center_play)?.setOnClickListener { player?.play() }
+        // Silenciar / quitar silencio
+        view.findViewById<android.widget.ImageButton>(R.id.mv_mute)?.let { b ->
+            b.setOnClickListener {
+                val p = player ?: return@setOnClickListener
+                val muted = p.volume > 0f
+                p.volume = if (muted) 0f else 1f
+                b.setImageResource(if (muted) R.drawable.mv_vol_off else R.drawable.mv_vol_on)
+                b.contentDescription = if (muted) "Quitar silencio" else "Silenciar"
+                view.showController()
+            }
+        }
 
         val left = view.findViewById<android.widget.LinearLayout>(R.id.mv_left) ?: return
         if (live) return
@@ -212,6 +231,78 @@ class PlayerActivity : ComponentActivity() {
         val c = view.findViewById<View>(R.id.mv_center_play) ?: return
         val p = player
         c.visibility = if (p != null && !p.isPlaying && p.playbackState == Player.STATE_READY) View.VISIBLE else View.GONE
+    }
+
+    // ---------- Lista de canales (TV en vivo) ----------
+    private fun portrait() = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
+    private fun portraitPanel() = portrait() && panel != null
+    private fun panelShowing() = panel != null && (panelOpen || portrait())
+
+    private fun setupPanel(req: JSONObject) {
+        if (!live || queue.length() < 2) return
+        val recent = mutableListOf<String>()
+        req.optJSONArray("recent")?.let { r -> for (i in 0 until r.length()) recent.add(r.optString(i)) }
+        val touch = packageManager.hasSystemFeature("android.hardware.touchscreen") && !packageManager.hasSystemFeature("android.software.leanback")
+        val p = ChannelPanel(this, queue, recent, touch,
+            onPick = { i ->
+                playIndex(i, 0, announce = true)
+                panel?.setCurrent(i)
+                if (!portrait()) closePanel()
+            },
+            onActivity = { if (panelOpen && !portrait()) { ui.removeCallbacks(hidePanel); ui.postDelayed(hidePanel, 12_000) } })
+        p.setCurrent(index)
+        panel = p
+        root.addView(p.root)
+        view.findViewById<View>(R.id.mv_channels)?.apply {
+            visibility = View.VISIBLE
+            setOnClickListener { if (panelOpen) closePanel() else openPanel() }
+        }
+        layoutForOrientation()
+    }
+
+    /** Celular vertical: video arriba (16:9) y lista abajo. Horizontal / TV: video completo y lista a la izquierda al abrirla. */
+    private fun layoutForOrientation() {
+        val p = panel
+        val w = resources.displayMetrics.widthPixels
+        if (portrait()) {
+            val vh = w * 9 / 16
+            view.layoutParams = FrameLayout.LayoutParams(-1, if (p != null || live) vh else -1, Gravity.TOP or Gravity.CENTER_HORIZONTAL)
+            if (!live) view.layoutParams = FrameLayout.LayoutParams(-1, -1)
+            p?.root?.let { r ->
+                r.layoutParams = FrameLayout.LayoutParams(-1, -1).apply { topMargin = vh }
+                r.visibility = View.VISIBLE
+            }
+        } else {
+            view.layoutParams = FrameLayout.LayoutParams(-1, -1)
+            p?.root?.let { r ->
+                r.layoutParams = FrameLayout.LayoutParams(maxOf(dp(380), (w * 0.44f).toInt()), -1, Gravity.START)
+                r.visibility = if (panelOpen) View.VISIBLE else View.GONE
+            }
+        }
+        view.requestLayout()
+    }
+
+    private fun openPanel() {
+        val p = panel ?: return
+        panelOpen = true
+        view.hideController()
+        p.root.visibility = View.VISIBLE
+        p.setCurrent(index)
+        p.focusCurrent()
+        if (!portrait()) { ui.removeCallbacks(hidePanel); ui.postDelayed(hidePanel, 12_000) }
+    }
+
+    private fun closePanel() {
+        ui.removeCallbacks(hidePanel)
+        panelOpen = false
+        if (!portrait()) panel?.root?.visibility = View.GONE
+        view.requestFocus()
+    }
+
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        layoutForOrientation()
+        hideSystemBars()
     }
 
     private fun current(): JSONObject = queue.optJSONObject(index) ?: JSONObject()
@@ -632,12 +723,17 @@ class PlayerActivity : ComponentActivity() {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val controllerVisible = view.isControllerFullyVisible
+        if (panelOpen && !portraitPanel()) { ui.removeCallbacks(hidePanel); ui.postDelayed(hidePanel, 12_000) }
         if (event.action == KeyEvent.ACTION_DOWN) {
             when (event.keyCode) {
                 KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_PAGE_UP -> { zap(-1); return true }
                 KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_PAGE_DOWN -> { zap(1); return true }
-                KeyEvent.KEYCODE_DPAD_UP -> if (live && !controllerVisible) { zap(-1); return true }
-                KeyEvent.KEYCODE_DPAD_DOWN -> if (live && !controllerVisible) { zap(1); return true }
+                KeyEvent.KEYCODE_DPAD_UP -> if (live && !controllerVisible && !panelShowing()) { zap(-1); return true }
+                KeyEvent.KEYCODE_DPAD_DOWN -> if (live && !controllerVisible && !panelShowing()) { zap(1); return true }
+                // TV en vivo: OK o ◀ abren la lista de canales; ▶ la cierra
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_LEFT ->
+                    if (panel != null && !controllerVisible && !panelShowing()) { openPanel(); return true }
+                KeyEvent.KEYCODE_DPAD_RIGHT -> if (panelOpen && !portraitPanel() && panel?.hasFocus() == true && currentFocus is android.widget.ListView) { closePanel(); return true }
                 KeyEvent.KEYCODE_BUTTON_Y -> { cycleResize(); return true }
                 KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_CAPTIONS, KeyEvent.KEYCODE_BUTTON_X, KeyEvent.KEYCODE_MEDIA_AUDIO_TRACK -> { showTracks(); return true }
                 KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_ESCAPE -> { if (controllerVisible) view.hideController() else finishWithResult(); return true }
