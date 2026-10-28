@@ -579,9 +579,13 @@
   MV.reloadCatalog = function (force) {
     S.loading = true; S.loadMsg = 'Cargando tus listas…'; MV.emit('catalog');
     var lists = S.lists.filter(function (l) { return l.enabled !== false; });
+    var failed = [];
     return Promise.all(lists.map(function (l) {
-      return loadList(l, force).catch(function (e) { MV.toast('“' + l.name + '”: ' + e.message, 4000); return []; });
+      return loadList(l, force).catch(function (e) { failed.push(l.name + ': ' + e.message); return []; });
     })).then(function (all) {
+      // Un solo aviso aunque fallen muchas (con 27 MAC no se llena la pantalla de mensajes)
+      if (failed.length === 1) MV.toast('“' + failed[0].replace(': ', '”: '), 4000);
+      else if (failed.length > 1) MV.toast(failed.length + ' listas no cargaron. Revísalas en Ajustes › Listas (puedes borrarlas juntas con "Seleccionar varias" › "Las que fallan").', 6000);
       MV.saveLists();
       lastAll = all;
       combine(all);
@@ -813,6 +817,12 @@
       MV.saveLists();
       return MV.reloadCatalog(false).then(function () { return { added: fresh.length, skipped: arr.length - fresh.length, failed: failed }; });
     });
+  };
+  /** Borra varias listas de una vez (una sola recarga del contenido). */
+  MV.removeLists = function (ids) {
+    S.lists = S.lists.filter(function (l) { return ids.indexOf(l.id) < 0; });
+    ids.forEach(function (id) { MV.idbDel('list:' + id); MV.idbDel('raw:' + id); });
+    MV.saveLists(); return MV.reloadCatalog(false);
   };
   MV.removeList = function (id) {
     S.lists = S.lists.filter(function (l) { return l.id !== id; });

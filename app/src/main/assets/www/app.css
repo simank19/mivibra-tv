@@ -586,3 +586,15 @@ html.tv #tour .tour-tip h3 { font-size: 16px; } html.tv #tour .tour-tip p { font
 /* Ventana flotante: solo el video, sin barras ni botones */
 html.pip .ytp .bar, html.pip .ytp .x, html.pip .streambar, html.pip #tour, html.pip #modal, html.pip #toast { display: none !important; }
 html.pip .streambox { padding: 0 !important; }
+
+/* Selección de varias listas */
+.selbar { padding: 12px 14px; border-radius: 16px; margin: 4px 0 12px; display: flex; flex-direction: column; gap: 8px; }
+.selbar .btns { margin: 0; }
+.btn.danger { background: #D93838; color: #fff; }
+.btn.danger[disabled] { opacity: .45; }
+.line.selrow { width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--line); color: var(--text); cursor: pointer; border-radius: 12px; }
+.line.selrow .chk { flex: 0 0 26px; width: 26px; height: 26px; border-radius: 8px; border: 2px solid rgba(255,255,255,.45); position: relative; transition: background .2s, border-color .2s; }
+.line.selrow.on .chk { background: var(--accent); border-color: var(--accent); }
+.line.selrow.on .chk::after { content: ""; position: absolute; left: 7px; top: 2px; width: 7px; height: 13px; border: solid #fff; border-width: 0 3px 3px 0; transform: rotate(45deg); }
+.line.selrow.on { background: rgba(255,255,255,.05); }
+.line.selrow:focus-visible, .line.selrow.kf { outline: 3px solid var(--accent); outline-offset: -3px; }

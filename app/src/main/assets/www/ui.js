@@ -1457,6 +1457,20 @@
     return '<div class="panel glass"><h2>Canales repetidos</h2><p>Si un canal está en varias listas, la app prueba todas sus señales y se queda con la que responde más rápido. Las que no funcionan se descartan; las demás quedan de respaldo por si la principal se cae.</p>' +
       '<div class="line"><div class="t"><b id="dupesTxt">' + esc(txt) + '</b><span>Se vuelve a revisar cada 6 horas</span></div><button class="btn ghost sm f" data-act="checkDupes"' + (d.running ? ' disabled' : '') + '>' + IC.refresh + 'Verificar ahora</button></div></div>';
   }
+  // Selección de varias listas para borrarlas juntas (null = modo normal)
+  var LSEL = null;
+  function listKind(l) { return l.type === 'xtream' ? 'Xtream Codes' : l.type === 'stalker' ? 'Portal MAC · ' + (l.mac || '') : l.type === 'file' ? 'Archivo' : 'Lista M3U'; }
+  function selBar() {
+    if (S.lists.length < 2) return '';
+    if (!LSEL) return '<div class="btns" style="margin:4px 0 10px"><button class="btn ghost sm f" data-act="lselStart">' + IC.check + 'Seleccionar varias</button></div>';
+    var n = Object.keys(LSEL).length, hasErr = S.lists.some(function (l) { return l.error; }), hasMac = S.lists.some(function (l) { return l.type === 'stalker'; }), hasOff = S.lists.some(function (l) { return l.enabled === false; });
+    return '<div class="selbar glass"><b>' + (n ? n + (n === 1 ? ' seleccionada' : ' seleccionadas') : 'Toca las listas que quieres borrar') + '</b><div class="chips">' +
+      '<button class="chip f" data-act="lselPick" data-arg="all">Todas</button><button class="chip f" data-act="lselPick" data-arg="none">Ninguna</button>' +
+      (hasErr ? '<button class="chip f" data-act="lselPick" data-arg="err">Las que fallan</button>' : '') +
+      (hasOff ? '<button class="chip f" data-act="lselPick" data-arg="off">Desactivadas</button>' : '') +
+      (hasMac ? '<button class="chip f" data-act="lselPick" data-arg="mac">Portal MAC</button>' : '') + '</div>' +
+      '<div class="btns"><button class="btn danger f" data-act="lselDelete"' + (n ? '' : ' disabled') + '>' + IC.trash + 'Eliminar' + (n ? ' (' + n + ')' : '') + '</button><button class="btn ghost f" data-act="lselCancel">Cancelar</button></div></div>';
+  }
   SETTINGS.lists = function () {
     if (!MV.acct.canEdit()) {
       return '<div class="panel glass"><h2>Listas</h2><p>Las listas y claves las administra ' + esc((window.MV_CONFIG || {}).admin ? 'el superadministrador' : 'el administrador') + '. Se cargan solas en este equipo.</p>' +
@@ -1471,7 +1485,12 @@
         '<button class="btn sm f" data-act="pushNow">' + IC.refresh + 'Enviar a todos ahora</button></div></div>';
     }
     return share + '<div class="panel glass"><h2>Tus listas</h2><p>Todo el contenido de tus listas se combina: los canales repetidos aparecen una sola vez y se queda la señal que funciona.' + (MV.acct.isAdmin() ? ' <b>Eres superadministrador:</b> lo que cambies aquí llega a todos los usuarios (las listas en archivo solo quedan en este equipo; usa enlaces para compartirlas).' : '') + '</p>' +
+      selBar() +
       (S.lists.length ? S.lists.map(function (l) {
+        if (LSEL) {
+          var on = !!LSEL[l.id];
+          return '<button class="line selrow f' + (on ? ' on' : '') + '" data-act="lselToggle" data-arg="' + l.id + '" data-fid="ls-' + l.id + '" aria-pressed="' + on + '"><i class="chk"></i><div class="t"><b>' + esc(l.name) + '</b><span>' + esc(listKind(l)) + ' · ' + (l.count || 0) + ' elementos' + (l.enabled === false ? ' · desactivada' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div></button>';
+        }
         return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.type === 'xtream' ? 'Xtream Codes · ' + esc(l.host) : l.type === 'stalker' ? 'Portal MAC · ' + esc(l.mac) + ((l.macs || []).length > 1 ? ' (+' + (l.macs.length - 1) + ' de respaldo)' : '') : l.type === 'file' ? 'Archivo' : esc(l.url)) + ' · ' + (l.count || 0) + ' elementos' + ((S.hiddenDupes || {})[l.id] ? ' · ' + S.hiddenDupes[l.id] + ' repetidos ocultos' : '') + (l.epg ? ' · con guía' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div>' +
           '<button class="toggle f' + (l.enabled !== false ? ' on' : '') + '" data-act="listToggle" data-arg="' + l.id + '" aria-label="Activar lista"></button>' +
           '<button class="iconbtn f" data-act="listEpg" data-arg="' + l.id + '" aria-label="Guía EPG">' + IC.guide + '</button>' +
@@ -2140,6 +2159,31 @@
     },
     listToggle: function (id) {
       if (!MV.acct.canEdit()) return; var l = S.lists.find(function (x) { return x.id === id; }); l.enabled = l.enabled === false; l.updatedAt = Date.now(); MV.saveLists(); MV.reloadCatalog(false).then(MV.rerender); MV.rerender(); },
+    lselStart: function () { LSEL = {}; MV.rerender(); var r = document.querySelector('.selrow'); if (r) r.focus(); },
+    lselCancel: function () { LSEL = null; MV.rerender(); },
+    lselToggle: function (id, el) {
+      if (!LSEL) return;
+      if (LSEL[id]) delete LSEL[id]; else LSEL[id] = 1;
+      // Se marca en su sitio (sin redibujar la página) y se actualiza la barra
+      if (el) { el.classList.toggle('on', !!LSEL[id]); el.setAttribute('aria-pressed', !!LSEL[id]); }
+      var bar = document.querySelector('.selbar'); if (bar) bar.outerHTML = selBar();
+    },
+    lselPick: function (k) {
+      if (!LSEL) return;
+      LSEL = {};
+      S.lists.forEach(function (l) { if (k === 'all' || (k === 'err' && l.error) || (k === 'off' && l.enabled === false) || (k === 'mac' && l.type === 'stalker')) LSEL[l.id] = 1; });
+      MV.rerender();
+    },
+    lselDelete: function () {
+      var ids = Object.keys(LSEL || {}); if (!ids.length || !MV.acct.canEdit()) return;
+      MV.confirm('¿Eliminar ' + ids.length + (ids.length === 1 ? ' lista?' : ' listas?'), 'Se quitan de este equipo' + (MV.acct.isAdmin() ? ' y de todos tus usuarios' : '') + '. No se puede deshacer.', 'Eliminar').then(function (y) {
+        if (!y) return;
+        LSEL = null;
+        MV.toast(ids.length + (ids.length === 1 ? ' lista eliminada' : ' listas eliminadas'));
+        MV.removeLists(ids).then(function () { if (view.name === 'settings') MV.rerender(); });
+        MV.rerender();
+      });
+    },
     listDelete: function (id, btn) {
       if (!MV.acct.canEdit()) return;
       var row = btn && btn.closest ? btn.closest('.line') : null;
