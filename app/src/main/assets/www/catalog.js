@@ -440,14 +440,14 @@
     return origin + (u.charAt(0) === '/' ? '' : '/') + u;
   }
   /** Recorre todas las páginas de un listado del portal (14 por página normalmente), varias a la vez. */
-  // Categorías de películas/series ya descargadas en esta sesión por otra MAC del mismo portal: no se repiten
-  // (mismo portal + misma categoría = mismo contenido; así 27 MAC no descargan 27 veces lo mismo)
+  // Categorías ya descargadas en esta sesión por otra MAC del mismo portal. De cada categoría SIEMPRE se pide la primera página
+  // y solo se salta el resto si es idéntica a la de la otra MAC (mismo total de títulos y los mismos títulos en la primera página).
+  // Si la categoría se llama igual pero trae otro contenido (otro paquete), se descarga completa.
   var STK_SEEN = {}, STK_API = {};
   function stkPages(list, type, cats, budget) {
     var out = [], jobs = [], portalKey = list.api.toLowerCase();
-    cats = cats.filter(function (c) { var k = portalKey + '|' + type + '|' + c.id + '|' + c.title; if (STK_SEEN[k]) return false; STK_SEEN[k] = 1; return true; });
     cats.forEach(function (c) { jobs.push({ c: c, p: 1 }); });
-    var used = 0, total = cats.length, label = type === 'series' ? 'Series' : 'Películas', lastEmit = 0;
+    var used = 0, skipped = 0, total = cats.length, label = type === 'series' ? 'Series' : 'Películas', lastEmit = 0;
     function worker() {
       var j = jobs.shift(); if (!j || used >= budget) return Promise.resolve();
       used++;
@@ -455,6 +455,13 @@
       return stkGet(list, 'type=' + type + '&action=get_ordered_list&category=' + encodeURIComponent(j.c.id) + '&genre=' + encodeURIComponent(j.c.id) + '&p=' + j.p + '&sortby=added&fav=0').then(function (js) {
         var data = (js && js.data) || [];
         data.forEach(function (d) { d._cat = j.c.title; out.push(d); });
+        if (j.p === 1) {
+          var k = portalKey + '|' + type + '|' + j.c.id + '|' + j.c.title;
+          var sig = (+(js && js.total_items) || data.length) + ':' + data.map(function (d) { return d.id; }).join(',');
+          var seen = STK_SEEN[k] || (STK_SEEN[k] = {});
+          if (seen[sig]) { skipped++; return; }   // idéntica a la de otra MAC: el resto ya está descargado
+          seen[sig] = 1;
+        }
         if (j.p === 1 && js && +js.total_items > data.length && data.length) {
           var pages = Math.min(Math.ceil(+js.total_items / Math.max(1, +js.max_page_items || data.length)), 80);
           for (var p = 2; p <= pages; p++) jobs.push({ c: j.c, p: p });
