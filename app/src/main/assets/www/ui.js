@@ -1138,6 +1138,32 @@
     }
   };
 
+  // ---------- Teclado en pantalla para TV (QWERTY compacto) ----------
+  /** Teclado pequeño para el control remoto. "target" es el id de la caja de texto que escribe. */
+  // Teclado en pantalla: se pliega al bajar a los resultados y vuelve al enfocar la caja de texto
+  document.addEventListener('focusin', function (e) {
+    var t = e.target, kb = document.querySelector('.kbd2'); if (!kb || !t) return;
+    if (kb.contains(t)) return;
+    if (t.id && t.id === kb.dataset.v) kb.classList.remove('fold');
+    else kb.classList.add('fold');
+  });
+  function tvKbd(target, first) {
+    var rows = ['1234567890', 'qwertyuiop', 'asdfghjklñ', 'zxcvbnm'];
+    var k = function (c, n) { return '<button class="f"' + (first !== false && n === 'q' ? ' data-autofocus' : '') + ' data-act="kb" data-arg="' + esc(c) + '" data-v="' + target + '">' + esc(c.toUpperCase()) + '</button>'; };
+    return '<div class="kbd2 glass" data-v="' + target + '">' + rows.map(function (r, ri) {
+      return '<div class="kr">' + r.split('').map(function (c) { return k(c, c); }).join('') +
+        (ri === 3 ? '<button class="f w2" data-act="kbDel" data-v="' + target + '" aria-label="Borrar letra">⌫</button>' : '') + '</div>';
+    }).join('') +
+      '<div class="kr"><button class="f w3" data-act="kbClear" data-v="' + target + '">Limpiar</button><button class="f w5" data-act="kb" data-arg=" " data-v="' + target + '">Espacio</button><button class="f w3 go" data-act="kbGo" data-v="' + target + '">Listo</button></div></div>';
+  }
+  /** Escribe en la caja indicada (el buscador general busca mientras escribes). */
+  function kbSet(target, fn) {
+    var i = document.getElementById(target); if (!i) return;
+    i.value = fn(i.value || '');
+    if (target === 'searchIn') { query = i.value; showResults(); }
+    else if (target === 'ytmIn' || target === 'ytIn' || target === 'musicIn') { /* se busca con Listo */ }
+  }
+
   // ---------- Buscar ----------
   var query = '';
   // ---------- Buscador: relevancia, tolerante a errores y por tipo ----------
@@ -1210,8 +1236,7 @@
   }
   var saveRecentLater = MV.debounce(saveRecent, 2500);
   VIEWS.search = function () {
-    var kb = MV.device.tv ? '<div class="kbd glass" style="padding:10px;border-radius:20px">' + 'abcdefghijklmnñopqrstuvwxyz0123456789'.split('').map(function (c, n) { return '<button' + (n === 0 ? ' data-autofocus' : '') + ' class="f" data-act="kb" data-arg="' + c + '">' + c.toUpperCase() + '</button>'; }).join('') +
-      '<button class="f wide" data-act="kb" data-arg=" ">Espacio</button><button class="f wide" data-act="kbDel">Borrar</button><button class="f wide" data-act="kbClear">Limpiar</button></div>' : '';
+    var kb = MV.device.tv ? tvKbd('searchIn') : '';
     return top('Buscar') + '<div class="searchbar glass">' + IC.search + '<input class="in f" id="searchIn" value="' + esc(query) + '" placeholder="' + (MV.isKids() ? 'Busca tus dibujos, películas y canales…' : 'Título, canal, actor del título, género, año…') + '" autocomplete="off" enterkeyhint="search"' + (MV.device.tv ? ' inputmode="none"' : ' data-autofocus') + '>' +
       '<button class="iconbtn f" data-act="kbClear" aria-label="Borrar búsqueda">' + IC.close + '</button></div>' + kb +
       '<div class="chips" id="stypes"></div><div id="results"></div>';
@@ -1534,7 +1559,13 @@
         : '<div class="line"><div class="t"><b>' + (P.subKey ? 'Clave configurada por el administrador' : 'El administrador aún no ha puesto la clave') + '</b></div></div>') + '</div>' +
       '<div class="panel glass"><h2>YouTube dentro de la app</h2><p>Con una clave gratuita de la API de YouTube (Google Cloud › APIs y servicios › YouTube Data API v3) puedes buscar y ver videos sin salir de MiVibra TV. El cupo gratis alcanza para unas 100 búsquedas al día entre todos los usuarios; las tendencias casi no gastan cupo.</p>' +
       (MV.acct.canEdit() ? '<label class="field">Clave de la API de YouTube' + (MV.acct.isAdmin() ? ' · se comparte con todos los usuarios' : '') + '<input class="in f" id="ytKey" value="' + esc(P.ytKey || '') + '" autocomplete="off" placeholder="AIza…"></label><div class="btns"><button class="btn f" data-act="saveYtKey">Guardar</button></div>'
-        : '<div class="line"><div class="t"><b>' + (P.ytKey ? 'Clave configurada por el administrador' : 'El administrador aún no ha puesto la clave') + '</b></div></div>') + '</div>';
+        : '<div class="line"><div class="t"><b>' + (P.ytKey ? 'Clave configurada por el administrador' : 'El administrador aún no ha puesto la clave') + '</b></div></div>') + '</div>' +
+      (function () {
+        var k = P.streamKeys || {}, fld = function (id, label, v) { return '<label class="field">' + label + '<input class="in f" id="' + id + '" value="' + esc(v || '') + '" autocomplete="off"></label>'; };
+        return '<div class="panel glass"><h2>Canales en vivo de Twitch y Kick</h2><p>Para ver la lista de canales que están transmitiendo ahora, registra una aplicación gratis: en dev.twitch.tv › Console › Register Your Application (URL de redirección: http://localhost), y en kick.com › Ajustes › Developer › Crear aplicación. Copia aquí el Client ID y el Client Secret de cada una.' + (MV.acct.isAdmin() ? ' Se comparten con todos los usuarios.' : '') + '</p>' +
+          (MV.acct.canEdit() ? fld('twId', 'Twitch · Client ID', k.twitchId) + fld('twSec', 'Twitch · Client Secret', k.twitchSecret) + fld('kkId', 'Kick · Client ID', k.kickId) + fld('kkSec', 'Kick · Client Secret', k.kickSecret) + '<div class="btns"><button class="btn f" data-act="saveStreamKeys">Guardar</button></div>'
+            : '<div class="line"><div class="t"><b>' + (k.twitchId || k.kickId ? 'Configurado por el administrador' : 'El administrador aún no lo ha configurado') + '</b></div></div>') + '</div>';
+      })();
   };
   SETTINGS.about = function () {
     return '<div class="panel glass"><h2>MiVibra TV</h2><p>Versión ' + esc(MV.device.version || '') + ' · ' + esc(MV.device.model || '') + '</p>' +
@@ -1943,6 +1974,7 @@
     },
     musicTab: function (t) { MUSIC.tab = t; MV.rerender(); },
     streamTab: function (t) { STREAM.tab = t; MV.rerender(); },
+    liveLang: function (a) { LIVE.lang = a; MV.rerender(); },
     streamGo: function (a) { var i = a.indexOf(':'); streamPlay(a.slice(0, i), a.slice(i + 1)); },
     streamOpenIn: function () { var v = ((document.getElementById('streamIn') || {}).value || '').trim(); if (!v) { MV.toast('Escribe el nombre del canal'); return; } streamPlay(STREAM.tab, v); },
     streamClose: function () { MV.streamClose(); },
@@ -2115,13 +2147,24 @@
     syncNow: function () { MV.sync.push().then(function () { MV.toast('Sincronizado'); }); },
     syncOut: function () { MV.sync.signOut().then(MV.rerender); },
     saveSubKey: function () { P.subKey = document.getElementById('subKey').value.trim(); MV.savePrefs(); MV.toast('Clave de subtítulos guardada'); },
+    saveStreamKeys: function () {
+      var g = function (id) { return ((document.getElementById(id) || {}).value || '').trim(); };
+      P.streamKeys = { twitchId: g('twId'), twitchSecret: g('twSec'), kickId: g('kkId'), kickSecret: g('kkSec') };
+      MV.savePrefs(); MV.streamReset(); MV.toast('Claves de Twitch y Kick guardadas');
+    },
     saveYtKey: function () { P.ytKey = document.getElementById('ytKey').value.trim(); MV.savePrefs(); YT.key = ''; YT.list = null; MV.toast('Clave de YouTube guardada'); },
     saveTmdb: function () { P.tmdbKey = document.getElementById('tmdbKey').value.trim(); MV.savePrefs(); MV.toast('Clave guardada'); },
     clearMeta: function () { MV.toast('Las fichas se volverán a buscar'); S.items.forEach(function (i) { MV.idbDel('meta2:' + i.key); }); },
     // Búsqueda con teclado en pantalla
-    kb: function (c) { query += c; var i = document.getElementById('searchIn'); if (i) i.value = query; showResults(); },
-    kbDel: function () { query = query.slice(0, -1); var i = document.getElementById('searchIn'); if (i) i.value = query; showResults(); },
-    kbClear: function () { query = ''; var i = document.getElementById('searchIn'); if (i) i.value = ''; showResults(); },
+    kb: function (c, el) { kbSet((el && el.dataset.v) || 'searchIn', function (v) { return v + c; }); },
+    kbDel: function (_, el) { kbSet((el && el.dataset.v) || 'searchIn', function (v) { return v.slice(0, -1); }); },
+    kbClear: function (_, el) { kbSet((el && el.dataset.v) || 'searchIn', function () { return ''; }); },
+    kbGo: function (_, el) {
+      var t = (el && el.dataset.v) || 'searchIn';
+      if (t === 'searchIn') { saveRecent(query); var f = document.querySelector('#results .card, #results .f'); if (f) f.focus(); }
+      else if (t === 'streamIn') ACT.streamOpenIn();
+      else if (t === 'ytmIn') ACT.ytmSearch();
+    },
     clearHistory: function () { MV.confirm('¿Borrar el historial?', 'También se borra “Continuar viendo” de este perfil.', 'Borrar').then(function (y) { if (!y) return; var d = MV.pdata(); d.history = []; d.progress = {}; MV.savePdata(d); MV.rerender(); }); },
     // Juegos
     sysSel: function (s) { sysSel = s; MV.rerender(); },
@@ -2573,7 +2616,15 @@
   }
   var streamBox = null;
   MV.streamOpen = function () { return !!(streamBox && streamBox.isConnected); };
-  MV.streamClose = function () { if (streamBox) { streamBox.remove(); streamBox = null; } MV.focusFirst(); };
+  var barT = null;
+  function streamBarShow() {
+    if (!streamBox) return;
+    streamBox.classList.remove('hidebar');
+    clearTimeout(barT);
+    barT = setTimeout(function () { if (streamBox) streamBox.classList.add('hidebar'); }, 3500);
+  }
+  MV.streamKey = function () { if (!MV.streamOpen()) return false; var hidden = streamBox.classList.contains('hidebar'); streamBarShow(); return hidden; };
+  MV.streamClose = function () { clearTimeout(barT); if (streamBox) { streamBox.remove(); streamBox = null; } MV.focusFirst(); };
   function streamPlay(tab, ch) {
     if (!ch) return;
     if (AU.current()) AU.stop();
@@ -2584,13 +2635,80 @@
       '<div class="streambar"><b>' + esc(ch) + ' · ' + (tab === 'kick' ? 'Kick' : 'Twitch') + '</b><button class="btn ghost sm f" data-act="streamFav" data-arg="' + esc(tab + ':' + ch) + '">' + IC.star + 'Guardar canal</button><button class="btn sm f" data-act="streamClose" data-autofocus>' + IC.close + 'Cerrar</button></div>';
     document.body.appendChild(streamBox);
     var b = streamBox.querySelector('[data-autofocus]'); if (b) b.focus();
+    ['mousemove', 'touchstart', 'pointerdown'].forEach(function (ev) { streamBox.addEventListener(ev, streamBarShow, { passive: true }); });
+    streamBarShow();
+  }
+  // Canales en vivo ahora (APIs oficiales con las claves del administrador)
+  var LIVE = { tok: {}, data: {}, at: {}, loading: {}, err: {}, lang: 'es' };
+  MV.streamReset = function () { LIVE.tok = {}; LIVE.data = {}; LIVE.at = {}; LIVE.err = {}; };
+  function postForm(url, body) {
+    if (MV.native) return MV.call('httpPost', [url, body, 'application/x-www-form-urlencoded']).then(function (d) { return JSON.parse(d.text || '{}'); });
+    return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body }).then(function (r) { return r.json(); });
+  }
+  function liveToken(tab) {
+    var k = P.streamKeys || {}, id = tab === 'kick' ? k.kickId : k.twitchId, sec = tab === 'kick' ? k.kickSecret : k.twitchSecret;
+    if (!id || !sec) return Promise.reject(new Error('nokey'));
+    var t = LIVE.tok[tab]; if (t && t.exp > Date.now()) return Promise.resolve(t.v);
+    var url = tab === 'kick' ? 'https://id.kick.com/oauth/token' : 'https://id.twitch.tv/oauth2/token';
+    return postForm(url, 'grant_type=client_credentials&client_id=' + encodeURIComponent(id) + '&client_secret=' + encodeURIComponent(sec)).then(function (j) {
+      if (!j.access_token) throw new Error(j.message || j.error_description || j.error || 'Clave rechazada');
+      LIVE.tok[tab] = { v: j.access_token, exp: Date.now() + Math.max(60, (j.expires_in || 3600) - 120) * 1000 };
+      return j.access_token;
+    });
+  }
+  function liveHasKey(tab) { var k = P.streamKeys || {}; return tab === 'kick' ? !!(k.kickId && k.kickSecret) : !!(k.twitchId && k.twitchSecret); }
+  function loadLive(tab) {
+    var key = tab + '|' + LIVE.lang;
+    if (LIVE.loading[key] || (LIVE.data[key] && Date.now() - LIVE.at[key] < 120000) || !liveHasKey(tab)) return;
+    LIVE.loading[key] = true; delete LIVE.err[key];
+    var k = P.streamKeys || {}, es = LIVE.lang === 'es';
+    liveToken(tab).then(function (tok) {
+      if (tab === 'kick') {
+        return MV.getText('https://api.kick.com/public/v1/livestreams?limit=60&sort=viewer_count' + (es ? '&language=es' : ''), { Authorization: 'Bearer ' + tok, Accept: 'application/json' }).then(function (t) {
+          return (JSON.parse(t).data || []).map(function (s) {
+            var ch = s.slug || (s.channel && s.channel.slug) || '';
+            return ch ? { ch: ch, name: s.username || s.slug, title: s.stream_title || s.title || '', viewers: s.viewer_count || 0, thumb: typeof s.thumbnail === 'string' ? s.thumbnail : (s.thumbnail && s.thumbnail.url) || s.profile_picture || '', game: (s.category && s.category.name) || '' } : null;
+          }).filter(Boolean);
+        });
+      }
+      return MV.getText('https://api.twitch.tv/helix/streams?first=60' + (es ? '&language=es' : ''), { 'Client-Id': k.twitchId, Authorization: 'Bearer ' + tok }).then(function (t) {
+        return (JSON.parse(t).data || []).map(function (s) {
+          return { ch: s.user_login, name: s.user_name || s.user_login, title: s.title || '', viewers: s.viewer_count || 0, thumb: (s.thumbnail_url || '').replace('{width}', '440').replace('{height}', '248'), game: s.game_name || '' };
+        });
+      });
+    }).then(function (list) {
+      list.sort(function (a, b) { return b.viewers - a.viewers; });
+      LIVE.data[key] = list; LIVE.at[key] = Date.now();
+    }).catch(function (e) { LIVE.err[key] = e.message === 'nokey' ? '' : (e.message || 'Error'); LIVE.data[key] = LIVE.data[key] || []; LIVE.at[key] = Date.now(); })
+      .then(function () { LIVE.loading[key] = false; if (view.name === 'streams' && !MV.streamOpen()) MV.rerender(); });
+  }
+  function fmtViewers(n) { return n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace('.0', '') + ' mil' : String(n); }
+  function liveHtml(tab) {
+    var name = tab === 'kick' ? 'Kick' : 'Twitch';
+    var head = '<div style="display:flex;align-items:center;gap:12px;margin:14px 0 8px;flex-wrap:wrap"><h3 style="margin:0">En vivo ahora en ' + name + '</h3><div class="chips" style="margin:0">' +
+      [['es', 'Español'], ['all', 'Todos']].map(function (l) { return '<button class="chip f' + (LIVE.lang === l[0] ? ' on' : '') + '" data-act="liveLang" data-arg="' + l[0] + '">' + l[1] + '</button>'; }).join('') + '</div></div>';
+    if (!liveHasKey(tab)) {
+      return '<h3 style="margin:14px 0 8px">En vivo ahora</h3><div class="panel glass"><p class="muted" style="margin:0">Para ver aquí los canales que están transmitiendo ahora, el administrador debe poner las claves gratuitas de ' + name + ' en Ajustes › Sinopsis y carátulas.</p>' +
+        (MV.acct.canEdit() ? '<div class="btns"><button class="btn ghost sm f" data-act="ytKeySetup">Configurar claves</button></div>' : '') + '</div>';
+    }
+    var key = tab + '|' + LIVE.lang, list = LIVE.data[key];
+    loadLive(tab);
+    if (!list) return head + '<div class="panel glass" style="display:flex;gap:14px;align-items:center"><div class="spinner"></div><b>Buscando canales en vivo…</b></div>';
+    if (LIVE.err[key]) return head + '<div class="panel glass"><p>' + name + ' respondió: ' + esc(LIVE.err[key]) + '</p><p class="muted" style="font-size:13px">Revisa el Client ID y el Client Secret en Ajustes.</p></div>';
+    if (!list.length) return head + '<div class="empty glass"><p class="muted">No hay canales en vivo con este filtro.</p></div>';
+    return head + '<div class="vgrid">' + list.map(function (v, i) {
+      return '<button class="vcard f" data-act="streamGo" data-arg="' + esc(tab + ':' + v.ch) + '" data-fid="lv-' + esc(v.ch) + '" style="animation-delay:' + Math.min(i, 12) * 0.03 + 's"><div class="th">' + (v.thumb ? '<img loading="lazy" src="' + esc(v.thumb) + '" alt="" onerror="this.remove()">' : '') +
+        '<span class="tag">EN VIVO · ' + fmtViewers(v.viewers) + '</span></div><b>' + esc(v.title || v.name) + '</b><span>' + esc(v.name) + (v.game ? ' · ' + esc(v.game) : '') + '</span></button>';
+    }).join('') + '</div>';
   }
   VIEWS.streams = function () {
     var tab = STREAM.tab, favs = streamFavs()[tab] || [];
     var chip = function (ch, label) { return '<button class="chip f" data-act="streamGo" data-arg="' + esc(tab + ':' + ch) + '">' + esc(label || ch) + '</button>'; };
     return top('Twitch y Kick') + '<div class="chips">' + [['twitch', 'Twitch'], ['kick', 'Kick']].map(function (t) { return '<button class="chip f' + (tab === t[0] ? ' on' : '') + '" data-act="streamTab" data-arg="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' +
-      '<div style="display:flex;gap:10px;margin:6px 0 16px;flex-wrap:wrap"><input class="in f" id="streamIn" placeholder="Nombre del canal (ej: ' + (tab === 'kick' ? 'westcol' : 'ibai') + ')" style="flex:1;min-width:220px" autocomplete="off" enterkeyhint="go"' + (MV.device.tv ? ' inputmode="none"' : '') + '><button class="btn f" data-act="streamOpenIn">' + IC.play + 'Ver en vivo</button></div>' +
+      '<div style="display:flex;gap:10px;margin:6px 0 10px;flex-wrap:wrap"><input class="in f" id="streamIn" placeholder="Nombre del canal (ej: ' + (tab === 'kick' ? 'westcol' : 'ibai') + ')" style="flex:1;min-width:220px" autocomplete="off" enterkeyhint="go"' + (MV.device.tv ? ' inputmode="none"' : '') + '><button class="btn f" data-act="streamOpenIn">' + IC.play + 'Ver en vivo</button></div>' +
+      (MV.device.tv ? tvKbd('streamIn', false) : '') +
       (favs.length ? '<h3 style="margin:8px 0">Tus canales</h3><div class="chips">' + favs.map(function (c) { return chip(c) + '<button class="chip f" data-act="streamUnfav" data-arg="' + esc(tab + ':' + c) + '" aria-label="Quitar">' + IC.close + '</button>'; }).join('') + '</div>' : '') +
+      liveHtml(tab) +
       '<h3 style="margin:14px 0 8px">Canales populares</h3><div class="chips">' + STREAM_SUGGEST[tab].map(function (c) { return chip(c[0], c[1]); }).join('') + '</div>' +
       '<p class="muted" style="font-size:13px;margin-top:16px">Se ve con el reproductor oficial de ' + (tab === 'kick' ? 'Kick' : 'Twitch') + ' dentro de MiVibra. Si el canal no está en vivo, aparece su pantalla de "desconectado". Atrás o Cerrar vuelve aquí.</p>' +
       '<div class="btns"><button class="btn ghost f" data-act="streamBrowse">Explorar ' + (tab === 'kick' ? 'Kick' : 'Twitch') + ' en el navegador de la app</button></div>';

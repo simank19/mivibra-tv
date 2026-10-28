@@ -487,9 +487,23 @@ html.lite * { transition-duration: 0s !important; }
 html.lite #deco { display: none; }
 /* Twitch / Kick a pantalla completa */
 .streambox { position: fixed; inset: 0; z-index: 60; background: #000; display: flex; flex-direction: column; }
+html.tv .streambox { padding: 18px 40px 22px; }
+.streambox .streambar { position: absolute; left: 0; right: 0; bottom: 0; transition: transform .3s var(--ease), opacity .3s; }
+html.tv .streambox .streambar { left: 40px; right: 40px; bottom: 22px; border-radius: 12px; }
+.streambox.hidebar .streambar { opacity: 0; transform: translateY(110%); pointer-events: none; }
 .streambox iframe { flex: 1; width: 100%; border: 0; }
 .streambar { display: flex; align-items: center; gap: 10px; padding: 8px 16px; background: rgba(13,12,11,.92); }
 .streambar b { flex: 1; font: 700 15px var(--ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Teclado QWERTY compacto (TV) */
+.kbd2 { display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 16px; margin: 8px 0 12px; max-width: 560px; }
+.kbd2 .kr { display: flex; gap: 4px; }
+.kbd2.fold { display: none; }
+html.tv .kbd2 { gap: 3px; padding: 6px; margin: 6px 0 8px; max-width: 500px; }
+html.tv .kbd2 .kr { gap: 3px; }
+html.tv .kbd2 .f { height: 27px; font-size: 12px; border-radius: 8px; }
+.kbd2 .f { flex: 1 1 0; min-width: 0; height: 32px; border-radius: 9px; border: 1px solid var(--line); background: rgba(255,255,255,.06); color: var(--text); font: 700 13px var(--ui); padding: 0; }
+.kbd2 .w2 { flex-grow: 2; } .kbd2 .w3 { flex-grow: 3; } .kbd2 .w5 { flex-grow: 5; }
+.kbd2 .go { background: var(--accent); color: var(--on-accent); border-color: transparent; }
 /* TV: modo rendimiento — sin desenfoques ni animaciones costosas para que el control vaya fluido */
 html.tv #bg i { animation: none; }
 html.tv .glass, html.tv .btn.ghost, html.tv .qbtn { backdrop-filter: none; -webkit-backdrop-filter: none; }

@@ -267,6 +267,8 @@
     var typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT');
     var dirs = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
     MV._lastKey = Date.now();
+    // Reproductor de Twitch/Kick: la primera tecla solo vuelve a mostrar la barra (Atrás sigue cerrando)
+    if (MV.streamKey && k !== 'Escape' && k !== 'GoBack' && k !== 'BrowserBack' && MV.streamKey()) { e.preventDefault(); return; }
     if (dirs[k]) {
       if (typing && (k === 'ArrowLeft' || k === 'ArrowRight') && t.value && t.selectionStart != null) {
         var atStart = t.selectionStart === 0, atEnd = t.selectionEnd === t.value.length;

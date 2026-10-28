@@ -39,7 +39,7 @@
   }
   function payload() {
     // "allowed" y "open" no van aquí: solo se escriben al cambiarlos (así un envío automático nunca los revierte)
-    return { lists: sharedLists(), tmdbKey: P.tmdbKey || '', ytKey: P.ytKey || '', subKey: P.subKey || '', navOrder: P.navOrder || [], navHidden: P.navHidden || [] };
+    return { lists: sharedLists(), tmdbKey: P.tmdbKey || '', ytKey: P.ytKey || '', subKey: P.subKey || '', streamKeys: P.streamKeys || {}, navOrder: P.navOrder || [], navHidden: P.navHidden || [] };
   }
 
   /** Guarda en la nube los cambios del superadministrador. */
@@ -69,6 +69,7 @@
       if (keyChanged) { P.tmdbKey = cfg.tmdbKey || ''; MV.save('prefs', P); }
       if ((cfg.ytKey || '') !== (P.ytKey || '')) { P.ytKey = cfg.ytKey || ''; MV.save('prefs', P); }
       if ((cfg.subKey || '') !== (P.subKey || '')) { P.subKey = cfg.subKey || ''; MV.save('prefs', P); }
+      if (JSON.stringify(cfg.streamKeys || {}) !== JSON.stringify(P.streamKeys || {})) { P.streamKeys = cfg.streamKeys || {}; MV.save('prefs', P); MV.streamReset && MV.streamReset(); }
       // Orden del menú elegido por el superadministrador
       var navSig = JSON.stringify([cfg.navOrder || [], cfg.navHidden || []]);
       if (navSig !== JSON.stringify([P.navOrder || [], P.navHidden || []])) { P.navOrder = cfg.navOrder || []; P.navHidden = cfg.navHidden || []; MV.save('prefs', P); if (MV.rerender) setTimeout(MV.rerender, 0); }

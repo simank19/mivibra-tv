@@ -16,7 +16,7 @@
   var P = S.prefs;
   var defaults = {
     theme: 'mv', glass: 'mid', anim: true, bgAnim: true, autoTheme: true, audioLang: 'es', subLang: '', xtFormat: 'm3u8',
-    tmdbKey: '', ytKey: '', subKey: '', navOrder: [], navHidden: [], covers: {}, kidsLimit: 60, parentPin: '', adult: null, romRoots: [], romSystem: {}, shader: 'default',
+    tmdbKey: '', ytKey: '', subKey: '', streamKeys: {}, navOrder: [], navHidden: [], covers: {}, kidsLimit: 60, parentPin: '', adult: null, romRoots: [], romSystem: {}, shader: 'default',
     firebase: '', syncLists: true, updatedAt: 0, deviceName: ''
   };
   Object.keys(defaults).forEach(function (k) { if (P[k] === undefined) P[k] = defaults[k]; });
@@ -833,7 +833,7 @@
       var pdata = {};
       S.profiles.forEach(function (p) { pdata[p.id] = MV.pdata(p.id); });
       var managed = MV.acct && MV.acct.managed();
-      var prefs = { theme: P.theme, autoTheme: P.autoTheme, glass: P.glass, anim: P.anim, bgAnim: P.bgAnim, tmdbKey: managed ? '' : P.tmdbKey, ytKey: managed ? '' : P.ytKey, subKey: managed ? '' : P.subKey, covers: P.covers, kidsLimit: P.kidsLimit, parentPin: P.parentPin, adult: P.adult, audioLang: P.audioLang, subLang: P.subLang, updatedAt: P.updatedAt };
+      var prefs = { theme: P.theme, autoTheme: P.autoTheme, glass: P.glass, anim: P.anim, bgAnim: P.bgAnim, tmdbKey: managed ? '' : P.tmdbKey, ytKey: managed ? '' : P.ytKey, subKey: managed ? '' : P.subKey, streamKeys: managed ? {} : P.streamKeys, covers: P.covers, kidsLimit: P.kidsLimit, parentPin: P.parentPin, adult: P.adult, audioLang: P.audioLang, subLang: P.subLang, updatedAt: P.updatedAt };
       return { v: 1, updatedAt: Date.now(), device: P.deviceName, profiles: S.profiles, pdata: pdata, prefs: prefs, lists: P.syncLists && !managed ? S.lists.map(function (l) { var c = Object.assign({}, l); delete c.error; return c; }) : null };
     },
     push: function () {
@@ -869,7 +869,7 @@
         MV.save('pdata:' + pid, ld);
       });
       var managed = MV.acct && MV.acct.managed();
-      if (managed) { if (r.prefs) { delete r.prefs.tmdbKey; delete r.prefs.ytKey; delete r.prefs.subKey; } r.lists = null; }
+      if (managed) { if (r.prefs) { delete r.prefs.tmdbKey; delete r.prefs.ytKey; delete r.prefs.subKey; delete r.prefs.streamKeys; } r.lists = null; }
       if (r.prefs && (r.prefs.updatedAt || 0) > (P.updatedAt || 0)) { Object.assign(P, r.prefs); MV.save('prefs', P); MV.applyLook && MV.applyLook(); }
       var listsChanged = false;
       (r.lists || []).forEach(function (rl) {
