@@ -878,7 +878,7 @@
       '<span class="pill">Te quedan ' + MV.kidsLeft() + ' min</span><button class="pill f" data-act="kidsExit">' + IC.lock.replace('<svg', '<svg width="18" height="18"') + 'Salir</button></div>' +
       '<div class="kidcats">' + cats.map(function (c) { return '<button class="kidcat f' + (kidCat === c[0] ? ' on' : '') + '" data-act="kidCat" data-arg="' + c[0] + '"><span class="bub" style="background:' + c[2] + '">' + c[3] + '</span>' + c[1] + '</button>'; }).join('') + '</div>' +
       '<button class="kidsearch f" data-act="nav" data-arg="search">' + IC.search + '<span>Buscar dibujos, películas o canales</span></button>' +
-      (!list.length ? '<div class="empty glass"><h2>' + (kidsChecking ? 'Buscando contenido para tu edad…' : 'Aún no hay contenido infantil') + '</h2><p class="muted">' + (kidsChecking ? 'Estamos revisando en TMDB qué películas y series son para niños de 0 a 7 años.' : 'Pide a un adulto que agregue canales infantiles en Ajustes › Listas (hay una lista gratuita de canales para niños).') + '</p></div>'
+      (!list.length ? '<div class="empty glass"><h2>' + (kidsChecking ? 'Buscando contenido para tu edad…' : 'Aún no hay contenido infantil') + '</h2><p class="muted">' + (kidsChecking ? 'Estamos revisando en TMDB qué películas y series son para niños (0 a 7 años, y animación hasta 13).' : 'Pide a un adulto que agregue canales infantiles en Ajustes › Listas (hay una lista gratuita de canales para niños).') + '</p></div>'
         : kidCat === 'all' ? kidsRows(items) : grid(list, kidCat === 'live' ? 'ch' : 'poster', 'kids'));
   };
   /** "Todo" en filas: lo que estaba viendo, canales, películas, series y anime. */

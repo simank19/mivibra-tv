@@ -51,12 +51,20 @@
     if (i.type === 'live') return !!i.kids;
     if (i.anime) return false;
     if (i.age == null) return false;
+    // Animación (no anime) se permite hasta 13 años; lo demás, solo de 0 a 7 años y que sea infantil o familiar
+    if (i.animated && i.age <= 13) return true;
     return i.age <= 7 && !!(i.kids || i.platform === 'disney' || (i.genres || []).indexOf('infantil') >= 0);
   };
+  var ANIM = MV.load('animated', {});
   MV.learnGenres = function (item, names, age) {
     if (age != null && item.key) {
       item.age = age;
       if (AGES[item.key] !== age) { AGES[item.key] = age; var ak = Object.keys(AGES); if (ak.length > 8000) delete AGES[ak[0]]; MV.save('ages', AGES); }
+    }
+    if (item.key && /animaci[oó]n|animation/i.test((names || []).join(' ')) && !ANIM[item.key]) {
+      item.animated = true; ANIM[item.key] = 1;
+      var nk = Object.keys(ANIM); if (nk.length > 8000) delete ANIM[nk[0]];
+      MV.save('animated', ANIM);
     }
     var ids = D.classifyGenres((names || []).join(' '));
     if (ids.some(function (x) { return NOT_FOR_KIDS.indexOf(x) >= 0; })) item.kids = false;
@@ -153,6 +161,7 @@
     var g = (o.group || '') + ' ' + (o.name || '');
     o.kids = !RX.notKids.test(g) && !RX.adult.test(g) && (RX.kids.test(o.group || '') || RX.kidsName.test(o.name || ''));
     if (AGES[o.key] != null) o.age = AGES[o.key];
+    if (ANIM[o.key]) o.animated = true;
     o.anime = RX.anime.test(g);
     o.kdrama = RX.kdrama.test(g);
     o.platform = D.platformOf(o.group || '') || (o.type !== 'live' ? D.platformOf(o.name || '') : '');
