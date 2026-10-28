@@ -104,7 +104,7 @@
   function allNavItems() {
     return [
       ['home', 'Inicio', IC.home], ['live', 'En vivo', IC.live],
-      ['movies', 'Películas', IC.movie], ['series', 'Series', IC.series], ['platforms', 'Plataformas', IC.platforms], ['anime', 'Anime', IC.anime], ['kdrama', 'K-Drama', IC.kdrama],
+      ['movies', 'Películas', IC.movie], ['series', 'Series', IC.series], ['platforms', 'Plataformas', IC.platforms], ['anime', 'Anime', IC.anime], ['kdrama', 'K-Drama', IC.kdrama], ['infantil', 'Infantil', IC.kids],
       ['docs', 'Documentales', IC.doc],
       ['settings', 'Ajustes', IC.settings]
     ];
@@ -750,6 +750,13 @@
     return html;
   };
   VIEWS.kdrama = function () { return catalogView('kdrama', 'K-Drama', S.items.filter(function (i) { return i.kdrama && i.type !== 'live'; })); };
+  /** Infantil (perfiles de adultos): películas y series para niños, sin anime. */
+  VIEWS.infantil = function () {
+    return catalogView('infantil', 'Infantil', S.items.filter(function (i) {
+      if (i.type === 'live' || i.anime || i.adult || i.doc) return false;
+      return !!(i.kids || (i.age != null && i.age <= 7 && i.learnedKids) || (i.animated && i.age != null && i.age <= 13));
+    }));
+  };
   VIEWS.docs = function () { return catalogView('docs', 'Documentales', S.items.filter(function (i) { return i.doc && i.type !== 'live'; })); };
 
   // ---------- Ficha ----------
