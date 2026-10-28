@@ -566,7 +566,7 @@
       var fresh = c && c.ts > Date.now() - 14 * 86400e3 && !(MV.isKids() && c.data && c.data.age === undefined);
       if (fresh) { if (c.data) MV.learnGenres(item, c.data.genres, c.data.age); return c.data; }
       var title = MV.cleanTitle(item.name);
-      var year = (item.year || (item.name.match(/\b(19|20)\d{2}\b/) || [''])[0]);
+      var year = (item.year || (item.name.match(/\((19|20)\d{2}\)/) || [''])[0].replace(/[()]/g, ''));
       var job;
       if (item.anime && item.type !== 'live') job = jikan(title);
       else if (P.tmdbKey && item.type !== 'live') job = tmdbMeta(title, year, item.type === 'series' ? 'tv' : 'movie');

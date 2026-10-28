@@ -796,7 +796,12 @@
     return hit ? hit[2] : '';
   }
   var yearSel = {};
-  function isEstreno(i) { var y = +itemYear(i), now = new Date().getFullYear(); return (y && y >= now - 1) || /\bestrenos?\b/i.test(i.group || ''); }
+  // Estreno: del año actual o del anterior (con año confirmado); "Estrenos" en la categoría solo cuenta si no se sabe el año
+  function isEstreno(i) {
+    var y = +itemYear(i), now = new Date().getFullYear();
+    if (y) return y >= now - 1;
+    return /\bestrenos?\b/i.test(i.group || '');
+  }
   /** Del oeste / vaqueros / western: por género (categoría o ficha de TMDB) o por el nombre. */
   var WEST_RX = /\b(western|westerns|wéstern|vaqueros?|cowboys?|del oeste|lejano oeste|far west|pistoleros?)\b/i;
   function isWestern(i) { return (i.genres || []).indexOf('western') >= 0 || WEST_RX.test(i.group || '') || WEST_RX.test(i.name || ''); }
@@ -901,7 +906,14 @@
   VIEWS.series.after = function () { setTimeout(function () { tmdbClassify(S.series); }, 1500); };
   // ---------- Anime: Todo · En emisión · Por año ----------
   var animeMode = 'all', animeYear = '', AIRING = { list: null, loading: false, ts: 0, error: '' };
-  function itemYear(i) { return String(i.year || ((i.name || '').match(/\b(19|20)\d{2}\b/) || [''])[0] || ''); }
+  /** Año del título: el de la lista o el de la ficha; del nombre solo "(2024)" o "2024" al final (no "2097" o "2067" del título). */
+  function itemYear(i) {
+    var now = new Date().getFullYear(), ok = function (y) { y = +y; return y >= 1900 && y <= now + 1 ? String(y) : ''; };
+    var y = ok(i.year) || ok(i._meta && i._meta.year);
+    if (y) return y;
+    var n = String(i.name || ''), m = n.match(/[([]\s*((?:19|20)\d{2})\s*[)\]]/) || n.match(/[\s\-–]((?:19|20)\d{2})\s*$/);
+    return m ? ok(m[1]) : '';
+  }
   /** Anime que se está emitiendo esta temporada (MyAnimeList vía Jikan), cruzado con tus listas. */
   function loadAiring() {
     if (AIRING.loading || (AIRING.list && AIRING.ts > Date.now() - 12 * 3600e3)) return;
