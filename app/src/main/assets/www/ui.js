@@ -1208,9 +1208,9 @@
   }
   var saveRecentLater = MV.debounce(saveRecent, 2500);
   VIEWS.search = function () {
-    var kb = MV.device.tv ? '<div class="kbd glass" style="padding:10px;border-radius:20px">' + 'abcdefghijklmnñopqrstuvwxyz0123456789'.split('').map(function (c) { return '<button class="f" data-act="kb" data-arg="' + c + '">' + c.toUpperCase() + '</button>'; }).join('') +
+    var kb = MV.device.tv ? '<div class="kbd glass" style="padding:10px;border-radius:20px">' + 'abcdefghijklmnñopqrstuvwxyz0123456789'.split('').map(function (c, n) { return '<button' + (n === 0 ? ' data-autofocus' : '') + ' class="f" data-act="kb" data-arg="' + c + '">' + c.toUpperCase() + '</button>'; }).join('') +
       '<button class="f wide" data-act="kb" data-arg=" ">Espacio</button><button class="f wide" data-act="kbDel">Borrar</button><button class="f wide" data-act="kbClear">Limpiar</button></div>' : '';
-    return top('Buscar') + '<div class="searchbar glass">' + IC.search + '<input class="in f" id="searchIn" value="' + esc(query) + '" placeholder="' + (MV.isKids() ? 'Busca tus dibujos, películas y canales…' : 'Título, canal, actor del título, género, año…') + '" autocomplete="off" enterkeyhint="search" data-autofocus>' +
+    return top('Buscar') + '<div class="searchbar glass">' + IC.search + '<input class="in f" id="searchIn" value="' + esc(query) + '" placeholder="' + (MV.isKids() ? 'Busca tus dibujos, películas y canales…' : 'Título, canal, actor del título, género, año…') + '" autocomplete="off" enterkeyhint="search"' + (MV.device.tv ? ' inputmode="none"' : ' data-autofocus') + '>' +
       '<button class="iconbtn f" data-act="kbClear" aria-label="Borrar búsqueda">' + IC.close + '</button></div>' + kb +
       '<div class="chips" id="stypes"></div><div id="results"></div>';
   };
