@@ -607,6 +607,9 @@
     return ys.some(function (oy) { return Math.abs(oy - y) <= 1; });
   }
   var yearSel = {};
+  /** Del oeste / vaqueros / western: por género (categoría o ficha de TMDB) o por el nombre. */
+  var WEST_RX = /\b(western|westerns|wéstern|vaqueros?|cowboys?|del oeste|lejano oeste|far west|pistoleros?)\b/i;
+  function isWestern(i) { return (i.genres || []).indexOf('western') >= 0 || WEST_RX.test(i.group || '') || WEST_RX.test(i.name || ''); }
   function catalogView(vkey, title, items, kind) {
     if (!S.lists.length) return top(title) + emptyLists();
     var all = MV.visible(items);
@@ -618,7 +621,7 @@
     var plats = vkey.indexOf('pl-') === 0 ? [] : D.PLATFORMS.filter(function (p) { return pm[p.id]; }).map(function (p) { return { id: p.id, name: p.name, count: pm[p.id] }; });
     if (plat) list = list.filter(function (i) { return i.platform === plat; });
     var genres = MV.genresOf(list);
-    if (gen) list = list.filter(function (i) { return (i.genres || []).indexOf(gen) >= 0; });
+    if (gen) list = list.filter(function (i) { return gen === 'western' ? isWestern(i) : (i.genres || []).indexOf(gen) >= 0; });
     var ysel = yearSel[vkey] || '';
     if (ysel) list = list.filter(function (i) { return itemYear(i) === ysel; });
     list = sortList(list, sort);
@@ -644,6 +647,8 @@
       (plats.length ? fb('plats', 'Plataforma', plat ? D.platformName(plat) : 'Todas', !!plat) : '') +
       (genres.length ? fb('genres', 'Género', gen ? D.genreName(gen) : 'Todos', !!gen) : '') +
       fb('sort', 'Orden', (SORTS.find(function (x) { return x[0] === sort; }) || SORTS[0])[1], false) +
+      // Filtro rápido: Western (del oeste, vaqueros) en Películas y Series
+      ((vkey === 'movies' || vkey === 'series') && (gen === 'western' || all.some(isWestern)) ? '<button class="fbtn f' + (gen === 'western' ? ' on' : '') + '" data-act="westernToggle" data-v="' + vkey + '">🤠 Western</button>' : '') +
       (!cur ? '<button class="fbtn f" data-act="viewMode" data-arg="' + (mode === 'rows' ? 'grid' : 'rows') + '" data-v="' + vkey + '">' + (mode === 'rows' ? '▦ Cuadrícula' : '☰ Filas') + '</button>' : '') +
       (active.length ? '<button class="fbtn f" data-act="clearFilters" data-arg="' + vkey + '">✕ Limpiar</button>' : '') + '</div>';
     MV._fbarPre = '';
@@ -1513,6 +1518,7 @@
     viewMode: function (m, el) { viewMode[el.dataset.v] = m; MV.save('viewMode', viewMode); MV.rerender(); },
     moreRows: function (v) { rowLimit[v] = (rowLimit[v] || 14) + 14; keepPlace(); },
     clearFilters: function (v) { catSel[v] = ''; genreSel[v] = ''; platSel[v] = ''; yearSel[v] = ''; limits[v] = 60; MV.rerender(); },
+    westernToggle: function (_, el) { var v = el.dataset.v; genreSel[v] = genreSel[v] === 'western' ? '' : 'western'; limits[v] = 60; MV.rerender(); },
     yearAll: function (y, el) { var v = el.dataset.v; yearSel[v] = String(y); limits[v] = 60; MV.go(view.name, view.arg, { replace: true }); },
     plat: function (p, el) { MV.closeModal(true); platSel[el.dataset.v] = p; genreSel[el.dataset.v] = ''; limits[el.dataset.v] = 60; MV.rerender(); },
     platform: function (id) { MV.go('platforms', id); },
