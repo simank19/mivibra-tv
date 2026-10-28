@@ -737,7 +737,18 @@
     return Object.keys(f).map(function (k) { return f[k]; }).filter(function (x) { return !x.del; }).sort(function (a, b) { return b.ts - a.ts; });
   };
   MV.resolve = function (m) { return S.byKey[m.key] || m; };
+  /** ¿Es contenido +18? (también episodios de una serie +18) */
+  function isAdultKey(it) { var b = S.byKey[it.key] || {}, pa = it.parent ? (S.byKey[it.parent] || {}) : {}; return !!(it.adult || b.adult || pa.adult); }
+  /** Quita del historial y de "Continuar viendo" lo que sea +18 (de antes de este cambio o de otro equipo). */
+  MV.purgeAdult = function () {
+    var d = MV.pdata(), changed = false;
+    var h = d.history.filter(function (x) { return !isAdultKey(x); }); if (h.length !== d.history.length) { d.history = h; changed = true; }
+    Object.keys(d.progress).forEach(function (k) { if (isAdultKey(d.progress[k])) { delete d.progress[k]; changed = true; } });
+    if (changed) MV.savePdata(d);
+  };
   MV.recordPlay = function (it, res) {
+    // Lo que se ve en +18 no queda en el historial, ni en "Continuar viendo", ni en Inicio
+    if (isAdultKey(it)) return;
     var d = MV.pdata(), now = Date.now();
     var entry = Object.assign(mini(it), { ts: now, device: P.deviceName });
     d.history = [entry].concat(d.history.filter(function (h) { return h.key !== it.key; })).slice(0, 150);

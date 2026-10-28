@@ -23,7 +23,7 @@ object WatchNext {
     fun update(c: Context, item: JSONObject, p: Player?, live: Boolean) {
         if (live || p == null || !supported(c)) return
         val key = item.optString("id")
-        if (key.isBlank() || key.startsWith("radio:")) return
+        if (key.isBlank() || key.startsWith("radio:") || item.optBoolean("private")) return   // +18 nunca va al inicio de la TV
         val pos = p.currentPosition
         val dur = p.duration
         val title = item.optString("title")
