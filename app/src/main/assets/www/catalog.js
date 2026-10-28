@@ -578,7 +578,8 @@
     var ck = 'meta2:' + item.key;
     return MV.idbGet(ck).then(function (c) {
       // Fichas guardadas antes de saber la edad se vuelven a pedir en perfiles infantiles
-      var fresh = c && c.ts > Date.now() - 14 * 86400e3 && !(MV.isKids() && c.data && c.data.age === undefined);
+      // Fichas guardadas sin fecha de estreno (versiones anteriores) se vuelven a pedir una vez
+      var fresh = c && c.ts > Date.now() - 14 * 86400e3 && !(MV.isKids() && c.data && c.data.age === undefined) && !(c.data && c.data.source === 'TMDB' && c.data.date === undefined);
       if (fresh) { if (c.data) MV.learnGenres(item, c.data.genres, c.data.age, c.data.year, c.data.date); return c.data; }
       var title = MV.cleanTitle(item.name);
       var year = (item.year || (item.name.match(/\((19|20)\d{2}\)/) || [''])[0].replace(/[()]/g, ''));

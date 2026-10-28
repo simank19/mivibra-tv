@@ -896,7 +896,9 @@
   var tmdbTried = {}, tmdbRunning = false;
   function tmdbClassify(list) {
     if (tmdbRunning || !P.tmdbKey || MV.isKids()) return;
-    var todo = MV.visible(list).filter(function (i) { return !tmdbTried[i.key] && !MV.hasLearned(i.key) && !i.anime; });
+    // Primero lo que no tiene ficha; luego lo que falta por fecha de estreno (lo más nuevo primero)
+    var todo = MV.visible(list).filter(function (i) { return !tmdbTried[i.key] && !i.anime && (!MV.hasLearned(i.key) || !i.rdate); })
+      .sort(function (a, b) { return (MV.hasLearned(a.key) ? 1 : 0) - (MV.hasLearned(b.key) ? 1 : 0) || (+itemYear(b) || 0) - (+itemYear(a) || 0); });
     if (!todo.length) return;
     tmdbRunning = true;
     var here = view.name, n = 0, changed = 0;
