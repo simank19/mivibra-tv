@@ -1576,6 +1576,7 @@
     auPrev: function () { AU.prev(); },
     auStop: function () { AU.stop(); if (view.name === 'radio' || view.name === 'music') MV.rerender(); },
     openApp: function (k) { openApp(k); },
+    openDiag: function () { if (AU.current()) AU.stop(); if (A && A.openDiag) A.openDiag(); else MV.toast('Disponible en la app instalada'); },
     ytSearch: function () { MV._typedAt = Date.now(); var v = ((document.getElementById('ytIn') || {}).value || '').trim(); if (!P.ytKey) { if (v) ytOpen(v); else openApp('youtube'); return; } YT.q = v; YT.list = null; MV.rerender(); },
     ytCat: function (c) { YT.cat = c; YT.q = ''; YT.list = null; MV.rerender(); },
     ytPlay: function (i) { YTP.play(MV._ytList || [], +i); },
@@ -1989,9 +1990,7 @@
     deezer: { name: 'Deezer', pkgs: ['deezer.android.tv', 'deezer.android.app'], web: 'https://www.deezer.com' },
     amazon: { name: 'Amazon Music', pkgs: ['com.amazon.mp3'], web: 'https://music.amazon.com' },
     apple: { name: 'Apple Music', pkgs: ['com.apple.android.music'], web: 'https://music.apple.com' },
-    brave: { name: 'Brave', pkgs: ['com.brave.browser'], web: 'https://brave.com/download/' },
-    // App de diagnóstico y optimización de MiVibra (APK propia, no está en la tienda)
-    diag: { name: 'MiVibra Diagnóstico', pkgs: ['co.mivibra.diagnostico'], web: '', noStore: true }
+    brave: { name: 'Brave', pkgs: ['com.brave.browser'], web: 'https://brave.com/download/' }
   };
   var installed = null;
   function appsInstalled() {
@@ -2173,7 +2172,7 @@
     return top('Utilidades') + '<div class="utilgrid">' + UTILS.map(function (u, i) {
       return '<button class="utile glass f" data-act="nav" data-arg="' + u[0] + '" data-fid="u-' + u[0] + '" style="animation-delay:' + i * 0.05 + 's"><span class="uic">' + IC[u[2]] + '</span><b>' + u[1] + '</b><span>' + u[3] + '</span></button>';
     }).join('') +
-      '<button class="utile glass f" data-act="openApp" data-arg="diag" data-fid="u-diag"><span class="uic">' + IC.settings + '</span><b>Diagnóstico MiVibra</b><span>' + (!A || hasApp('diag') ? 'Revisa y optimiza este equipo' : 'No instalada en este equipo') + '</span></button>' +
+      '<button class="utile glass f" data-act="openDiag" data-fid="u-diag"><span class="uic">' + IC.settings + '</span><b>Diagnóstico MiVibra</b><span>Revisa y optimiza este equipo</span></button>' +
       '<button class="utile glass f" data-act="go" data-arg="settings" data-fid="u-remote" onclick="MV.remoteTab&&MV.remoteTab()"><span class="uic">' + IC.phone + '</span><b>Celular como control</b><span>Control remoto y mando de juegos</span></button></div>';
   };
 

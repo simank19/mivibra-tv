@@ -174,6 +174,12 @@ class Bridge(private val a: MainActivity) {
         a.runOnUiThread { a.startActivity(Intent(a, BrowserActivity::class.java).putExtra("url", url ?: "")) }
     }
 
+    /** Diagnóstico y optimización MiVibra (integrado, sin instalar nada aparte). */
+    @JavascriptInterface
+    fun openDiag() {
+        a.runOnUiThread { a.startActivity(Intent(a, co.mivibra.tv.diag.DiagActivity::class.java)) }
+    }
+
     /** Fila de recomendados en el inicio de Android TV. */
     @JavascriptInterface
     fun publishHome(json: String) { HomeChannel.publish(a, json) }
