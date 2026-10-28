@@ -382,7 +382,7 @@
   }
   /** Texto o .txt con varias cuentas de portal: "Portal: http://…/c/" y debajo una o varias "MAC: 00:1A:79:…".
       Se agrupan por portal: una lista por portal y las demás MAC quedan de respaldo. */
-  MV.parseMacList = function (text) {
+  MV.parseMacList = function (text, backup) {
     var groups = {}, order = [], portal = '', pending = [];
     String(text || '').split(/\r?\n/).forEach(function (line) {
       var u = line.match(/https?:\/\/[^\s"'<>|,]+/i);
@@ -401,11 +401,16 @@
       if (!groups[k]) { groups[k] = { type: 'stalker', portal: p, macs: [] }; order.push(k); }
       if (groups[k].macs.indexOf(m) < 0) groups[k].macs.push(m);
     }
-    return order.map(function (k, i) {
+    var out = [];
+    order.forEach(function (k, i) {
       var g = groups[k], host = (g.portal.match(/^https?:\/\/([^\/:]+)/i) || [])[1] || 'Portal';
-      g.mac = g.macs[0]; g.name = 'Portal ' + (order.length > 1 ? (i + 1) + ' · ' : '') + host;
-      return g;
+      var pre = 'Portal ' + (order.length > 1 ? (i + 1) + ' · ' : '') + host;
+      // Con "respaldo": una lista por portal y las demás MAC de reserva. Si no, cada MAC es una lista (cada una con su propio contenido)
+      if (backup || g.macs.length === 1) { g.mac = g.macs[0]; g.name = pre; out.push(g); return; }
+      g.macs.forEach(function (m, j) { out.push({ type: 'stalker', portal: g.portal, mac: m, macs: [m], name: pre + ' · MAC ' + (j + 1) + ' (' + m.slice(-5) + ')' }); });
     });
+    out.groups = order.length;
+    return out;
   };
   /** Prueba la dirección del portal y la MAC: encuentra la ruta correcta (portal.php o server/load.php). */
   MV.stkLogin = function (list) {

@@ -267,7 +267,7 @@
 
   document.addEventListener('keydown', function (e) {
     var k = e.key, t = e.target;
-    var typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT');
+    var typing = t && ((t.tagName === 'INPUT' && t.type !== 'checkbox') || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT');
     var dirs = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
     MV._lastKey = Date.now();
     // Reproductor de Twitch/Kick: la primera tecla solo vuelve a mostrar la barra (Atrás sigue cerrando)
