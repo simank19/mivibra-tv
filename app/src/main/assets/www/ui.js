@@ -67,6 +67,7 @@
     // Con el cursor en una caja de texto: se suelta la caja y Atrás sigue normal (antes volvía a enfocarla y el teclado se abría y cerraba sin salir)
     if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) ae.blur();
     if (Date.now() - (MV._typedAt || 0) < 900) return true;
+    if (MV.tourOpen && MV.tourOpen()) { MV.tourClose(); return true; }
     if (MV.ytPlayer && MV.ytPlayer.isOpen()) { MV.ytPlayer.close(); return true; }
     if (MV.streamOpen && MV.streamOpen()) { MV.streamClose(); return true; }
     if (MV.modalOpen()) { MV.closeModal(); return true; }
@@ -153,6 +154,7 @@
     }
     if (VIEWS[view.name] && VIEWS[view.name].after) VIEWS[view.name].after(view.arg);
     if (!keepFocus) setTimeout(function () { MV.focusFirst(); }, 30);
+    tourCheck();
   }
   MV.render = render;
   /** "Ver más": vuelve a dibujar sin perder el lugar; el foco queda en el primer elemento nuevo (donde estaba el botón). */
@@ -1511,7 +1513,8 @@
   };
   SETTINGS.look = function () {
     var ss = D.seasonFor(new Date());
-    return '<div class="panel glass"><h2>Temas por celebración</h2>' +
+    return '<div class="panel glass"><h2>Tutorial</h2><div class="line"><div class="t"><b>Volver a ver el tutorial</b><span>Explica de nuevo cada botón la próxima vez que entres a cada sección</span></div><button class="btn sm f" data-act="tourAgain">Ver de nuevo</button></div></div>' +
+      '<div class="panel glass"><h2>Temas por celebración</h2>' +
       '<div class="line"><div class="t"><b>Cambiar el tema solo en fechas especiales</b><span>Halloween, Navidad, Amor y Amistad, Día de la Madre, del Padre, del Niño, 20 de julio, Año Nuevo…' + (ss ? ' Hoy: ' + esc(ss.name) + ' ' + ss.deco[0] : '') + '</span></div><button class="toggle f' + (P.autoTheme !== false ? ' on' : '') + '" data-act="prefToggle" data-arg="autoTheme"></button></div></div>' +
       '<div class="panel glass"><h2>Tema</h2>' + (ss && P.autoTheme !== false ? '<p class="muted">Ahora se ve el tema de ' + esc(ss.name) + '; el que elijas aquí vuelve cuando termine la celebración.</p>' : '') + '<div class="themes">' + D.THEMES.map(function (t) {
       return '<button class="theme f' + (P.theme === t.id ? ' on' : '') + '" data-act="theme" data-arg="' + t.id + '"><i style="background:linear-gradient(135deg,' + t.a + ',' + t.b + ')"></i>' + t.name + '</button>';
@@ -1605,6 +1608,7 @@
     return Object.assign({ id: it.key, url: it.url, title: it.name, subtitle: nn.now ? nn.now.t : (it.group || ''), num: it.num || '', ua: it.ua || '', ref: it.ref || '', alts: it.alts || [], poster: it.type === 'live' ? '' : MV.poster(it), logo: it.type === 'live' ? (it.logo || '') : '', cn: it.type === 'live' && it.country ? D.countryName(it.country) : '', sp: it.type === 'live' && (D.RX.sports.test(it.group || '') || /\b(espn|fox sports|tyc|dsports|directv sports|win sports|bein|gol ?tv|tudn|claro sports|sky sports|eurosport|dazn|nba|nfl|f1)\b/i.test(it.name || '')), fav: MV.isFav(it.key), private: !!it.adult }, it.type === 'live' ? {} : subInfo(it), extra || {});
   }
   function launch(req, ctx) {
+    if (!ctx.hinted && A && !(ctx.item && ctx.item.type === 'rom')) { ctx.hinted = true; return playerHint(!!req.live, function () { launch(req, ctx); }); }
     stopHeroPreview();
     if (MV.isKids() && +P.kidsLimit > 0 && MV.kidsLeft() <= 0) { kidsTimeUp(); return; }
     if (MV.audio && MV.audio.current() && !ctx.noRecord) MV.audio.stop();
@@ -1786,6 +1790,8 @@
         (u ? '<button class="line f" data-act="loginOut">' + IC.lock + '<div class="t"><b>Cerrar sesión</b><span>Salir de ' + esc(u.email || 'tu cuenta') + ' en este equipo</span></div></button>' : '') +
         '</div><div class="btns"><button class="btn ghost f" data-act="closeModal">Cerrar</button></div>');
     },
+    hintGo: function () { MV.closeModal(); },
+    tourAgain: function () { MV.tourReset(); MV.toast('Listo: el tutorial aparecerá otra vez en cada sección'); MV.go('home'); },
     go: function (a) { MV.closeModal(true); if (a === 'profileEdit') { editSel = null; pendingName = null; } MV.go(a); },
     more: function (k) { limits[k] = (limits[k] || (k === 'live' ? 150 : k === 'games' ? 120 : k === 'music' ? 200 : 60)) + (k === 'live' ? 150 : k === 'music' ? 200 : 60); keepPlace(); },
     open: function (_, el) { var it = S.byKey[el.dataset.key] || MV.reg[el.dataset.key]; if (!it) return;
@@ -2961,6 +2967,190 @@
     // Siempre se empieza eligiendo perfil (la cuenta de Google se pide antes, si no hay sesión)
     else MV.go('profiles', null, { replace: true });
     if (S.lists.length) MV.reloadCatalog(false);
+  }
+
+  // ---------- Tutorial guiado (una sola vez por sección y por perfil) ----------
+  // Cada paso resalta un botón real de la pantalla y explica para qué sirve. Si el botón no existe, el paso se salta.
+  var TV = MV.device.tv, PRESS = TV ? 'Presiona' : 'Toca';
+  var TOUR = {
+    shell: [
+      ['.side', 'Menú principal', TV ? 'Con la flecha izquierda abres el menú: Inicio, En vivo, Películas, Series, Plataformas, Anime, K-Drama, Infantil y Documentales.' : 'Aquí cambias de sección: Inicio, En vivo, Películas, Series, Plataformas, Anime, K-Drama, Infantil y Documentales.'],
+      ['[data-fid="q-utils"]', 'Utilidades', 'YouTube, música, radio, navegador, juegos, Twitch y Kick, el diagnóstico de la app y el contenido +18 protegido con PIN.'],
+      ['[data-fid="q-discover"]', 'Descubrir', 'Estrenos y tendencias del momento. Te marca cuáles ya están en tus listas para verlos al instante.'],
+      ['[data-fid="q-search"]', 'Buscar', 'Busca en canales, películas, series y anime a la vez. No importan las tildes y entiende pequeños errores.'],
+      ['[data-fid="q-favs"]', 'Favoritos', 'Todo lo que marques con la estrella queda guardado aquí.'],
+      ['[data-fid="q-history"]', 'Historial', 'Lo último que viste, para retomarlo donde lo dejaste.'],
+      ['[data-fid="q-prof"]', 'Tu perfil', 'Ajustes, cambiar de perfil y cerrar sesión. Desde Ajustes puedes volver a ver este tutorial.']
+    ],
+    home: [
+      ['.hero', 'Recuadro principal', 'Muestra el último canal que viste (o uno recomendado) con vista previa. ' + PRESS + ' para abrirlo de una.'],
+      ['.view-in .row', 'Filas de contenido', 'Continuar viendo, tus favoritos y recomendaciones. Muévete a los lados para ver más.']
+    ],
+    live: [
+      ['.sortseg', 'Canales y Guía', 'Cambia entre la lista de canales y la guía de programación (qué están dando ahora y después).'],
+      ['.view-in .chips', 'Secciones y países', 'Filtra por tipo de canal (noticias, deportes, infantiles…) y por país.'],
+      ['.cats', 'Categorías', 'Las categorías de tu lista. Elige una para ver solo esos canales.'],
+      ['.chlist', 'Canales', PRESS + ' un canal para verlo. Dentro del reproductor ' + (TV ? 'la flecha izquierda o OK abre la lista de canales; arriba y abajo cambian de canal.' : 'el botón de lista abre todos los canales, con filtros de países y deportes.')]
+    ],
+    catalog: [
+      ['.fbar', 'Filtros', 'Filtra por categoría, plataforma o género, y cambia el orden. "Western" muestra solo películas del oeste.'],
+      ['[data-act="viewMode"]', 'Filas o cuadrícula', 'Cambia entre ver el contenido por filas (Estrenos, por año, Oscar, géneros…) o todo en cuadrícula.'],
+      ['.view-in .row', 'Estrenos primero', 'Lo más nuevo aparece arriba y se actualiza solo. Más abajo: por año, ganadoras del Oscar y por género.']
+    ],
+    detail: [
+      ['.detail [data-act="resume"], .detail [data-act="play"]', 'Reproducir', 'Empieza a ver o continúa donde quedaste. En series, al terminar un capítulo el siguiente arranca solo.'],
+      ['.detail [data-act="fav"]', 'Favorito', 'Guárdalo en tus favoritos para encontrarlo rápido.'],
+      ['.detail [data-act="langMenu"]', 'Audio y subtítulos', 'Elige el idioma del audio y los subtítulos antes de empezar.'],
+      ['#eps', 'Temporadas y capítulos', 'Elige la temporada y el capítulo que quieras ver.'],
+      ['#related', 'Relacionadas', 'Más títulos parecidos a este.']
+    ],
+    search: [
+      ['#searchIn', 'Escribe lo que buscas', TV ? 'Usa el teclado de la pantalla. Al bajar a los resultados el teclado se esconde; vuelve a la caja para que aparezca.' : 'Los resultados aparecen mientras escribes.'],
+      ['#stypes', 'Tipo de contenido', 'Filtra los resultados: todo, canales, películas, series…']
+    ],
+    utils: [
+      ['.utilgrid', 'Herramientas', 'Cada recuadro abre una herramienta. El contenido +18 pide el PIN de control parental y no aparece en Inicio ni en el historial.']
+    ],
+    streams: [
+      ['[data-act="streamTab"]', 'Twitch o Kick', 'Elige la plataforma.'],
+      ['#streamIn', 'Buscar un canal', 'Escribe el nombre del canal y presiona "Ver en vivo" o "Listo".'],
+      ['.view-in .vgrid', 'En vivo ahora', 'Canales transmitiendo en este momento, ordenados por espectadores. ' + PRESS + ' uno para verlo.'],
+      ['[data-act="streamFav"], .view-in h3', 'Tus canales', 'Al ver un canal puedes guardarlo para tenerlo siempre a mano.']
+    ],
+    youtube: [
+      ['#ytIn', 'Buscar en YouTube', 'Busca videos y míralos sin salir de MiVibra.'],
+      ['.view-in .chips', 'Categorías', 'Tendencias, música, noticias, deportes y más.']
+    ],
+    music: [
+      ['.view-in .chips', 'Fuentes de música', 'YouTube Music, tu música guardada en el equipo y música libre.'],
+      ['#musicIn', 'Buscar', 'Busca canciones o artistas.']
+    ],
+    radio: [
+      ['#radioIn', 'Buscar emisoras', 'Busca por nombre o ciudad.'],
+      ['.view-in .chips', 'Filtros', 'Colombia o el mundo, y por género musical. La estrella guarda tus emisoras.']
+    ],
+    games: [
+      ['[data-act="remoteQR"]', 'Celular como mando', 'Escanea el código con tu celular y úsalo como control para jugar.'],
+      ['.view-in .pgrid, .view-in .row', 'Tus juegos', 'Los juegos encontrados en el equipo, por consola.']
+    ],
+    discover: [
+      ['[data-act="discOnly"]', 'Solo lo que tienes', 'Muestra únicamente títulos que están en tus listas.'],
+      ['.view-in .row', 'Tendencias y estrenos', 'Lo más visto de la semana. ' + PRESS + ' un título para ver su ficha.']
+    ],
+    favs: [['.view-in .row, .view-in .grid', 'Tus favoritos', 'Todo lo que marcaste con la estrella, separado por tipo.']],
+    history: [['.view-in .row, .view-in .line', 'Tu historial', 'Lo último que viste. El botón de la papelera, arriba, lo borra.']],
+    settings: [
+      ['.view-in .chips', 'Secciones de ajustes', 'Listas, apariencia, reproducción, control parental, perfiles, cuenta y más.']
+    ],
+    profiles: [
+      ['.profiles', '¿Quién está viendo?', 'Cada perfil tiene sus favoritos, historial y avatar. Los perfiles infantiles solo muestran contenido para niños.'],
+      ['[data-act="manageProfiles"]', 'Administrar perfiles', 'Crea perfiles, cambia nombres y diseña tu avatar 3D.']
+    ],
+    kids: [
+      ['.view-in .row', 'Para niños', 'Solo contenido infantil animado y seguro.']
+    ]
+  };
+  ['movies', 'series', 'anime', 'kdrama', 'infantil', 'docs', 'platforms'].forEach(function (k) { TOUR[k] = TOUR.catalog; });
+  var TOUR_KEY = { movies: 'catalog', series: 'catalog', anime: 'catalog', kdrama: 'catalog', infantil: 'catalog', docs: 'catalog', platforms: 'catalog' };
+  function tourSeen() { return MV.load('tour:' + (S.pid || 'default'), {}); }
+  function tourMark(k) { var t = tourSeen(); t[k] = 1; MV.save('tour:' + (S.pid || 'default'), t); }
+  MV.tourReset = function () { MV.save('tour:' + (S.pid || 'default'), {}); };
+  var tour = null, tourT = null;
+  MV.tourOpen = function () { return !!tour; };
+  function tourCheck() {
+    clearTimeout(tourT);
+    if (tour) { if (tour.view !== view.name) tourEnd(false); else { setTimeout(tourShow, 60); return; } }
+    var name = view.name, seen = tourSeen();
+    if (seen._off || !TOUR[name] || !S.pid && name !== 'profiles') return;
+    var keys = [];
+    if (name !== 'profiles' && !MV.isKids() && !seen.shell) keys.push('shell');
+    var k = TOUR_KEY[name] || name;
+    if (!seen[k]) keys.push(k);
+    if (!keys.length) return;
+    tourT = setTimeout(function () {
+      if (view.name !== name || MV.modalOpen() || (MV.streamOpen && MV.streamOpen()) || (MV.ytPlayer && MV.ytPlayer.isOpen())) return;
+      var steps = [];
+      keys.forEach(function (kk) { (kk === 'shell' ? TOUR.shell : TOUR[name]).forEach(function (st) { if (document.querySelector(st[0])) steps.push(st); }); });
+      keys.forEach(tourMark);
+      if (!steps.length) return;
+      tour = { view: name, steps: steps, i: 0, back: document.activeElement };
+      tourShow();
+    }, 900);
+  }
+  function tourShow() {
+    if (!tour) return;
+    var st = tour.steps[tour.i], el = document.querySelector(st[0]);
+    if (!el) { if (tour.i < tour.steps.length - 1) { tour.i++; return tourShow(); } return tourEnd(true); }
+    try { el.scrollIntoView({ block: 'nearest', behavior: 'instant' }); } catch (e) {}
+    var box = document.getElementById('tour');
+    if (!box) { box = document.createElement('div'); box.id = 'tour'; document.body.appendChild(box); }
+    var last = tour.i === tour.steps.length - 1;
+    box.innerHTML = '<div class="tour-hole"></div><div class="tour-tip glass" role="dialog" aria-live="polite"><small>' + (tour.i + 1) + ' de ' + tour.steps.length + '</small><h3>' + esc(st[1]) + '</h3><p>' + esc(st[2]) + '</p>' +
+      '<div class="btns"><button class="btn f tour-b" data-t="next">' + (last ? 'Entendido' : 'Siguiente') + '</button>' + (tour.i ? '<button class="btn ghost f tour-b" data-t="prev">Atrás</button>' : '') +
+      (!last ? '<button class="btn ghost f tour-b" data-t="skip">Saltar</button>' : '') + '</div>' +
+      (tour.i === 0 ? '<button class="tour-off tour-b f" data-t="off">No volver a mostrar tutoriales</button>' : '') + '</div>';
+    Array.prototype.forEach.call(box.querySelectorAll('.tour-b'), function (b) { b.addEventListener('click', function (e) { e.stopPropagation(); tourBtn(b.dataset.t); }); });
+    requestAnimationFrame(function () { tourPlace(el, box); box.querySelector('.tour-b').focus({ preventScroll: true }); });
+  }
+  function tourPlace(el, box) {
+    var r = el.getBoundingClientRect(), W = innerWidth, H = innerHeight, pad = 6;
+    var x = Math.max(4, r.left - pad), y = Math.max(4, r.top - pad), w = Math.min(W - 8, r.width + pad * 2), h = Math.min(H - 8, r.height + pad * 2);
+    if (y + h > H - 4) h = H - 4 - y;
+    var hole = box.querySelector('.tour-hole'), tip = box.querySelector('.tour-tip');
+    hole.style.cssText = 'left:' + x + 'px;top:' + y + 'px;width:' + w + 'px;height:' + h + 'px';
+    var tw = Math.min(360, W - 24), th = tip.offsetHeight || 170, tx, ty;
+    if (r.right + 16 + tw < W && h > H * 0.45) { tx = r.right + 16; ty = Math.min(Math.max(12, r.top), H - th - 12); }   // elemento alto (menú lateral, listas): al lado
+    else {
+      tx = Math.min(Math.max(12, r.left), W - tw - 12);
+      ty = y + h + 12 + th < H ? y + h + 12 : y - th - 12 >= 8 ? y - th - 12 : Math.max(12, H - th - 12);
+    }
+    tip.style.cssText = 'left:' + tx + 'px;top:' + ty + 'px;width:' + tw + 'px';
+  }
+  function tourBtn(t) {
+    if (!tour) return;
+    if (t === 'next') { if (tour.i < tour.steps.length - 1) { tour.i++; tourShow(); } else tourEnd(true); }
+    else if (t === 'prev') { tour.i = Math.max(0, tour.i - 1); tourShow(); }
+    else if (t === 'skip') tourEnd(true);
+    else if (t === 'off') { var s2 = tourSeen(); s2._off = 1; MV.save('tour:' + (S.pid || 'default'), s2); tourEnd(true); MV.toast('Puedes volver a verlo en Ajustes › Temas'); }
+  }
+  function tourEnd(refocus) {
+    var box = document.getElementById('tour'); if (box) box.remove();
+    var back = tour && tour.back; tour = null;
+    if (refocus) { if (back && document.body.contains(back)) back.focus({ preventScroll: true }); else MV.focusFirst(); }
+  }
+  MV.tourClose = function () { if (tour) tourEnd(true); };
+  // Mientras está abierto, el control solo maneja los botones del tutorial
+  window.addEventListener('keydown', function (e) {
+    if (!tour) return;
+    var bs = Array.prototype.slice.call(document.querySelectorAll('#tour .tour-b')), i = bs.indexOf(document.activeElement), k = e.key;
+    if (k === 'ArrowLeft' || k === 'ArrowRight' || k === 'ArrowUp' || k === 'ArrowDown') {
+      var d = k === 'ArrowRight' || k === 'ArrowDown' ? 1 : -1;
+      (bs[(Math.max(i, 0) + d + bs.length) % bs.length] || bs[0]).focus({ preventScroll: true });
+    } else if (k === 'Enter' || k === ' ' || k === 'NumpadEnter') { (bs[i] || bs[0]).click(); }
+    else if (k === 'Escape' || k === 'GoBack' || k === 'BrowserBack') tourEnd(true);
+    else return;
+    e.preventDefault(); e.stopImmediatePropagation();
+  }, true);
+  window.addEventListener('resize', function () { if (tour) tourShow(); });
+  // Primera vez que se abre el reproductor: cómo se maneja (el reproductor es nativo y no se puede señalar)
+  function playerHint(isLive, go) {
+    var seen = tourSeen();
+    if (seen._off || seen.player) return go();
+    tourMark('player');
+    var li = TV ? [
+      'OK muestra u oculta los controles; se esconden solos.',
+      isLive ? 'Flecha izquierda u OK abre la lista de canales, con buscador, favoritos, países y deportes.' : 'Izquierda y derecha retroceden o adelantan; el botón +1:30 salta la intro.',
+      isLive ? 'Arriba y abajo cambian de canal.' : 'En series, el siguiente capítulo empieza solo al terminar.',
+      'Inicio te deja seguir viendo en ventana flotante. Atrás cierra el reproductor.'
+    ] : [
+      'Toca la pantalla para ver los controles; se esconden solos.',
+      isLive ? 'El botón de lista abre todos los canales, con buscador, favoritos, países y deportes. En vertical, la lista queda debajo del video.' : 'Los botones de los lados retroceden o adelantan; +1:30 salta la intro.',
+      'La estrella guarda el canal o título en favoritos y el altavoz silencia.',
+      'Gira el celular para pantalla completa. Al salir de la app sigue en ventana flotante.'
+    ];
+    MV._hintGo = go;
+    MV.modal('<h2>Cómo usar el reproductor</h2><ul class="hintlist">' + li.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul><div class="btns"><button class="btn f" data-act="hintGo" data-autofocus>' + IC.play + 'Entendido, reproducir</button></div>',
+      { onClose: function () { var g = MV._hintGo; MV._hintGo = null; if (g) setTimeout(g, 50); } });
   }
   document.addEventListener('DOMContentLoaded', boot);
 })();
