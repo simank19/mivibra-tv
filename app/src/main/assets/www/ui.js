@@ -119,6 +119,15 @@
     if (!keepFocus) setTimeout(function () { MV.focusFirst(); }, 30);
   }
   MV.render = render;
+  /** "Ver más": vuelve a dibujar sin perder el lugar; el foco queda en el primer elemento nuevo (donde estaba el botón). */
+  function keepPlace() {
+    var main = document.querySelector('.main'), top = main ? main.scrollTop : 0;
+    var all = Array.prototype.slice.call(document.querySelectorAll('.view-in .f')), idx = all.indexOf(document.activeElement);
+    render(true);
+    var m2 = document.querySelector('.main'); if (m2) { m2.style.scrollBehavior = 'auto'; m2.scrollTop = top; m2.style.scrollBehavior = ''; }
+    var el = idx >= 0 ? document.querySelectorAll('.view-in .f')[idx] : null;
+    if (el) { el.focus({ preventScroll: true }); try { el.scrollIntoView({ block: 'nearest', behavior: 'instant' }); } catch (e) {} }
+  }
   MV.rerender = function () { var f = document.activeElement, fid = f && f.dataset && f.dataset.fid; render(true); var el = fid && document.querySelector('[data-fid="' + fid + '"]'); if (el) el.focus({ preventScroll: true }); else MV.focusFirst(); };
 
   // ---------- Piezas ----------
@@ -1240,7 +1249,7 @@
     },
     nav: function (a) { stack = []; MV.go(a, null, { replace: true }); },
     go: function (a) { MV.closeModal(true); if (a === 'profileEdit') { editSel = null; } MV.go(a); },
-    more: function (k) { limits[k] = (limits[k] || (k === 'live' ? 150 : k === 'games' ? 120 : k === 'music' ? 200 : 60)) + (k === 'live' ? 150 : k === 'music' ? 200 : 60); MV.rerender(); },
+    more: function (k) { limits[k] = (limits[k] || (k === 'live' ? 150 : k === 'games' ? 120 : k === 'music' ? 200 : 60)) + (k === 'live' ? 150 : k === 'music' ? 200 : 60); keepPlace(); },
     open: function (_, el) { var it = S.byKey[el.dataset.key] || MV.reg[el.dataset.key]; if (!it) return;
       if (it.type === 'tmdb') {
         var mine = it.have && S.byKey[it.have];
@@ -1285,7 +1294,7 @@
     animeMode: function (m) { animeMode = m; animeYear = ''; MV.rerender(); },
     animeYear: function (y) { animeYear = y; MV.rerender(); },
     viewMode: function (m, el) { viewMode[el.dataset.v] = m; MV.save('viewMode', viewMode); MV.rerender(); },
-    moreRows: function (v) { rowLimit[v] = (rowLimit[v] || 14) + 14; MV.rerender(); },
+    moreRows: function (v) { rowLimit[v] = (rowLimit[v] || 14) + 14; keepPlace(); },
     clearFilters: function (v) { catSel[v] = ''; genreSel[v] = ''; platSel[v] = ''; limits[v] = 60; MV.rerender(); },
     plat: function (p, el) { MV.closeModal(true); platSel[el.dataset.v] = p; genreSel[el.dataset.v] = ''; limits[el.dataset.v] = 60; MV.rerender(); },
     platform: function (id) { MV.go('platforms', id); },
