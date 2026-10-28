@@ -151,6 +151,7 @@ class PlayerActivity : ComponentActivity() {
         view.setShowSubtitleButton(true)
         arrangeControls()
         setupPanel(req)
+        if (panel == null) compactControls()
         if (!live && queue.length() > 1) ui.postDelayed(nextTick, 1000)
         applySubtitleStyle()
         setContentView(root)
@@ -316,6 +317,7 @@ class PlayerActivity : ComponentActivity() {
             },
             onActivity = { if (panelOpen && !portrait()) { ui.removeCallbacks(hidePanel); ui.postDelayed(hidePanel, 12_000) } })
         p.setCurrent(index)
+        p.startCountry(index)
         panel = p
         root.addView(p.root)
         view.findViewById<View>(R.id.mv_channels)?.apply {
@@ -325,8 +327,35 @@ class PlayerActivity : ComponentActivity() {
         layoutForOrientation()
     }
 
+    /**
+     * Barra de controles según el ancho: en pantallas angostas (celular vertical) quedan solo los botones
+     * principales y más pequeños, para que nada quede encima de otra cosa.
+     */
+    private fun compactControls() {
+        val wDp = resources.configuration.screenWidthDp
+        val narrow = wDp < 600
+        val size = dp(if (narrow) 38 else 44)
+        val hideNarrow = listOf(androidx.media3.ui.R.id.exo_rew, androidx.media3.ui.R.id.exo_ffwd, androidx.media3.ui.R.id.exo_prev, androidx.media3.ui.R.id.exo_subtitle, R.id.mv_channels)
+        listOf(androidx.media3.ui.R.id.exo_play_pause, androidx.media3.ui.R.id.exo_prev, androidx.media3.ui.R.id.exo_rew, androidx.media3.ui.R.id.exo_ffwd, androidx.media3.ui.R.id.exo_next,
+            androidx.media3.ui.R.id.exo_subtitle, androidx.media3.ui.R.id.exo_settings, R.id.mv_fav, R.id.mv_mute, R.id.mv_channels).forEach { id ->
+            val v = view.findViewById<View>(id) ?: return@forEach
+            v.layoutParams = v.layoutParams.apply { width = size; height = size }
+            v.setPadding(dp(if (narrow) 8 else 10), dp(if (narrow) 8 else 10), dp(if (narrow) 8 else 10), dp(if (narrow) 8 else 10))
+            if (narrow && id in hideNarrow) v.alpha = 0f
+            if (narrow && id in hideNarrow) v.layoutParams = v.layoutParams.apply { width = 0 }
+            if (!narrow && v.alpha == 0f) v.alpha = 1f
+            v.isFocusable = !(narrow && id in hideNarrow)
+        }
+        // La lista de canales no hace falta como botón cuando ya está fija debajo del video
+        view.findViewById<View>(R.id.mv_channels)?.visibility = if (panel != null && !portrait()) View.VISIBLE else View.GONE
+        listOf(androidx.media3.ui.R.id.exo_position, androidx.media3.ui.R.id.exo_duration).forEach { id ->
+            view.findViewById<TextView>(id)?.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (narrow) 12f else 14f)
+        }
+    }
+
     /** Celular vertical: video arriba (16:9) y lista abajo. Horizontal / TV: video completo y lista a la izquierda al abrirla. */
     private fun layoutForOrientation() {
+        compactControls()
         val p = panel
         val w = resources.displayMetrics.widthPixels
         if (portrait()) {

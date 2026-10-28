@@ -1299,7 +1299,7 @@
   }
   function q(it, extra) {
     var nn = it.type === 'live' ? MV.nowNext(it) : {};
-    return Object.assign({ id: it.key, url: it.url, title: it.name, subtitle: nn.now ? nn.now.t : (it.group || ''), num: it.num || '', ua: it.ua || '', ref: it.ref || '', alts: it.alts || [], poster: it.type === 'live' ? '' : MV.poster(it), logo: it.type === 'live' ? (it.logo || '') : '', fav: MV.isFav(it.key) }, it.type === 'live' ? {} : subInfo(it), extra || {});
+    return Object.assign({ id: it.key, url: it.url, title: it.name, subtitle: nn.now ? nn.now.t : (it.group || ''), num: it.num || '', ua: it.ua || '', ref: it.ref || '', alts: it.alts || [], poster: it.type === 'live' ? '' : MV.poster(it), logo: it.type === 'live' ? (it.logo || '') : '', cn: it.type === 'live' && it.country ? D.countryName(it.country) : '', sp: it.type === 'live' && (D.RX.sports.test(it.group || '') || /\b(espn|fox sports|tyc|dsports|directv sports|win sports|bein|gol ?tv|tudn|claro sports|sky sports|eurosport|dazn|nba|nfl|f1)\b/i.test(it.name || '')), fav: MV.isFav(it.key) }, it.type === 'live' ? {} : subInfo(it), extra || {});
   }
   function launch(req, ctx) {
     stopHeroPreview();
@@ -1317,9 +1317,9 @@
     if (it.type === 'series') { MV.go('detail', it.key); return; }
     if (it.type === 'rom') { playRom(it.rom); return; }
     if (it.type === 'live') {
-      var list = channelsOf(liveCat, liveBase());
-      if (list.indexOf(it) < 0) list = it.adult ? adultItems().filter(function (i) { return i.type === 'live'; }) : MV.visible(S.live);
-      var idx = Math.max(0, list.indexOf(it)), from = Math.max(0, idx - 200), slice = list.slice(from, from + 400);
+      // En el reproductor van todos los canales (con su país y si son de deportes) para la lista lateral
+      var list = it.adult ? adultItems().filter(function (i) { return i.type === 'live'; }) : MV.visible(S.live);
+      var idx = Math.max(0, list.indexOf(it)), from = Math.max(0, Math.min(idx - 1500, list.length - 3000)), slice = list.slice(from, from + 3000);
       // Recientes para la lista de canales del reproductor
       var recent = (MV.pdata().history || []).filter(function (h) { return h.type === 'live'; }).slice(0, 30).map(function (h) { return h.key; });
       launch({ queue: slice.map(function (c) { return q(c); }), index: slice.indexOf(it) < 0 ? 0 : slice.indexOf(it), live: true, recent: recent }, { item: it, list: slice });

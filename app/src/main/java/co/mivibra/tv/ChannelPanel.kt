@@ -37,7 +37,7 @@ import java.util.concurrent.Executors
 
 /**
  * Lista de canales dentro del reproductor de TV en vivo (estilo de las apps IPTV):
- * a la izquierda los íconos Buscar, Recientes, Favoritos y Lista; a la derecha los canales con logo y número.
+ * a la izquierda los íconos Buscar, Recientes, Favoritos, Lista, Deportes y Países; a la derecha los canales con logo y número.
  * En TV se abre con OK o ◀; en el celular vertical queda fija debajo del video.
  */
 class ChannelPanel(
@@ -55,6 +55,8 @@ class ChannelPanel(
     private val list = ListView(a)
     private val hintView = TextView(a)
     private var shown: List<Int> = emptyList()
+    private var countries: List<Pair<String, Int>> = emptyList()   // (país, canales) en modo "countries"
+    private var country = ""                                         // filtro de país ("" = todos)
     private var mode = "all"
     private var current = -1
     private val railBtns = mutableMapOf<String, ImageButton>()
@@ -70,9 +72,10 @@ class ChannelPanel(
         // Íconos de secciones
         rail.orientation = LinearLayout.VERTICAL
         rail.gravity = Gravity.CENTER_HORIZONTAL
-        rail.setPadding(0, dp(28), 0, dp(12))
+        rail.setPadding(0, dp(16), 0, dp(8))
         rail.setBackgroundColor(0xFF06080F.toInt())
-        listOf("search" to R.drawable.mv_ic_search, "recent" to R.drawable.mv_ic_clock, "fav" to R.drawable.mv_ic_star, "all" to R.drawable.mv_ic_list).forEach { (m, ic) ->
+        listOf("search" to R.drawable.mv_ic_search, "recent" to R.drawable.mv_ic_clock, "fav" to R.drawable.mv_ic_star, "all" to R.drawable.mv_ic_list,
+            "sports" to R.drawable.mv_ic_sports, "countries" to R.drawable.mv_ic_grid).forEach { (m, ic) ->
             val b = ImageButton(a).apply {
                 setImageResource(ic)
                 scaleType = ImageView.ScaleType.FIT_CENTER
@@ -82,12 +85,12 @@ class ChannelPanel(
                     addState(intArrayOf(), ColorDrawable(Color.TRANSPARENT))
                 }
                 isFocusable = true
-                contentDescription = when (m) { "search" -> "Buscar"; "recent" -> "Recientes"; "fav" -> "Favoritos"; else -> "Lista de canales" }
+                contentDescription = when (m) { "search" -> "Buscar"; "recent" -> "Recientes"; "fav" -> "Favoritos"; "sports" -> "Deportes"; "countries" -> "Países"; else -> "Lista de canales" }
                 setOnClickListener { setMode(m); if (m == "search") focusSearch() else list.requestFocus() }
                 setOnFocusChangeListener { _, has -> if (has && m != "search") setMode(m) }
             }
             railBtns[m] = b
-            rail.addView(b, LinearLayout.LayoutParams(dp(52), dp(52)).apply { bottomMargin = dp(18) })
+            rail.addView(b, LinearLayout.LayoutParams(dp(48), dp(48)).apply { bottomMargin = dp(10) })
         }
         root.addView(rail, LinearLayout.LayoutParams(dp(68), ViewGroup.LayoutParams.MATCH_PARENT))
 
@@ -129,7 +132,13 @@ class ChannelPanel(
             isFocusable = true
             itemsCanFocus = false
             adapter = Adapter()
-            onItemClickListener = AdapterView.OnItemClickListener { _, _, pos, _ -> shown.getOrNull(pos)?.let { onPick(it) } }
+            onItemClickListener = AdapterView.OnItemClickListener { _, _, pos, _ ->
+                if (mode == "countries") {
+                    country = countries.getOrNull(pos)?.first ?: ""
+                    setMode("all", force = true)
+                    list.setSelection(0)
+                } else shown.getOrNull(pos)?.let { onPick(it) }
+            }
             setOnKeyListener { _, _, e -> onActivity(); if (e.action == KeyEvent.ACTION_DOWN) onActivity(); false }
         }
         col.addView(list, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
@@ -148,9 +157,12 @@ class ChannelPanel(
 
     fun setCurrent(i: Int) { current = i; (list.adapter as BaseAdapter).notifyDataSetChanged() }
 
+    /** Empieza mostrando el país del canal actual (con "Todos los países" en el ícono de cuadrícula). */
+    fun startCountry(i: Int) { country = items.optJSONObject(i)?.optString("cn") ?: ""; setMode("all", force = true) }
+
     /** Abre la lista con el canal actual seleccionado. */
     fun focusCurrent() {
-        if (mode == "search") setMode("all")
+        if (mode == "search" || mode == "countries") setMode("all")
         val pos = shown.indexOf(current).coerceAtLeast(0)
         list.setSelection(pos)
         list.requestFocus()
@@ -164,8 +176,8 @@ class ChannelPanel(
         im.showSoftInput(search, 0)
     }
 
-    private fun setMode(m: String) {
-        if (mode == m && shown.isNotEmpty()) return
+    private fun setMode(m: String, force: Boolean = false) {
+        if (!force && mode == m && (shown.isNotEmpty() || m == "countries")) return
         mode = m
         search.visibility = if (m == "search") View.VISIBLE else View.GONE
         refresh()
@@ -174,13 +186,24 @@ class ChannelPanel(
     private fun norm(s: String) = Normalizer.normalize(s.lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
 
     private fun refresh() {
-        val all = (0 until items.length()).toList()
+        val every = (0 until items.length()).toList()
+        val all = if (country.isEmpty()) every else every.filter { items.optJSONObject(it)?.optString("cn") == country }
+        if (mode == "countries") {
+            val m = linkedMapOf<String, Int>()
+            every.forEach { val c = items.optJSONObject(it)?.optString("cn").orEmpty().ifBlank { "Otros" }; m[c] = (m[c] ?: 0) + 1 }
+            countries = listOf("" to every.size) + m.entries.sortedByDescending { it.value }.map { it.key to it.value }
+            shown = countries.indices.toList()
+            title.text = "Elige un país"
+            (list.adapter as BaseAdapter).notifyDataSetChanged()
+            return
+        }
         shown = when (mode) {
+            "sports" -> all.filter { items.optJSONObject(it)?.optBoolean("sp") == true }
             "fav" -> all.filter { items.optJSONObject(it)?.optBoolean("fav") == true }
             "recent" -> recentIds.mapNotNull { id -> all.firstOrNull { items.optJSONObject(it)?.optString("id") == id } }
             "search" -> {
                 val q = norm(search.text.toString().trim())
-                if (q.isEmpty()) all else all.filter { norm(items.optJSONObject(it)?.optString("title") ?: "").contains(q) }
+                if (q.isEmpty()) every else every.filter { norm(items.optJSONObject(it)?.optString("title") ?: "").contains(q) }
             }
             else -> all
         }
@@ -188,7 +211,8 @@ class ChannelPanel(
             "fav" -> "Favoritos" + if (shown.isEmpty()) " · aún no tienes" else ""
             "recent" -> "Vistos recientemente" + if (shown.isEmpty()) " · aún no hay" else ""
             "search" -> "Buscar · ${shown.size} canales"
-            else -> "Lista de canales · ${shown.size}"
+            "sports" -> "Deportes" + (if (country.isNotEmpty()) " · $country" else "") + " · ${shown.size}"
+            else -> (if (country.isNotEmpty()) country else "Todos los países") + " · ${shown.size}"
         }
         (list.adapter as BaseAdapter).notifyDataSetChanged()
     }
@@ -210,10 +234,19 @@ class ChannelPanel(
                     setPadding(dp(16), 0, 0, 0)
                 }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             }
-            val idx = shown[p]
-            val o = items.optJSONObject(idx) ?: JSONObject()
             val img = row.getChildAt(0) as ImageView
             val tv = row.getChildAt(1) as TextView
+            if (mode == "countries") {
+                val (c, n) = countries[shown[p]]
+                img.setImageResource(R.drawable.mv_ic_grid); img.tag = null
+                tv.text = (if (c.isEmpty()) "Todos los países" else c) + "  ·  " + n
+                val on = c == country
+                tv.setTextColor(if (on) accent else Color.WHITE)
+                tv.typeface = if (on) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+                return row
+            }
+            val idx = shown[p]
+            val o = items.optJSONObject(idx) ?: JSONObject()
             val num = o.optString("num").ifBlank { (idx + 1).toString() }
             tv.text = num + "  " + o.optString("title")
             val playing = idx == current
