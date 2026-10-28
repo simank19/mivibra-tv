@@ -54,11 +54,12 @@
   };
 
   /** Botón fijo "Actualizar" mientras haya una versión nueva sin instalar (aunque cierres el aviso). */
+  // Ahora es una campana en la barra de arriba (antes era un botón flotante que en TV tapaba los demás y no se podía elegir)
   function pill(u) {
-    var el = document.getElementById('updPill');
-    if (!u) { if (el) el.remove(); return; }
-    if (!el) { el = document.createElement('button'); el.id = 'updPill'; el.className = 'updpill f'; document.body.appendChild(el); el.onclick = function () { if (MV.pendingUpdate) showPopup(MV.pendingUpdate); }; }
-    el.innerHTML = 'Actualizar a la versión ' + u.version;
+    var old = document.getElementById('updPill'); if (old && !old.closest('.qbar')) old.remove();
+    var bell = document.querySelector('.qbar [data-fid="q-upd"]');
+    if (!u) { if (bell) bell.remove(); return; }
+    if (!bell && MV.updBell) { var bar = document.querySelector('.qbar'); if (bar) bar.insertAdjacentHTML('afterbegin', MV.updBell()); }
   }
   MV.showUpdate = function () { if (MV.pendingUpdate) showPopup(MV.pendingUpdate); else MV.checkUpdate(true); };
 

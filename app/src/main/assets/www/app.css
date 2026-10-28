@@ -598,3 +598,11 @@ html.pip .streambox { padding: 0 !important; }
 .line.selrow.on .chk::after { content: ""; position: absolute; left: 7px; top: 2px; width: 7px; height: 13px; border: solid #fff; border-width: 0 3px 3px 0; transform: rotate(45deg); }
 .line.selrow.on { background: rgba(255,255,255,.05); }
 .line.selrow:focus-visible, .line.selrow.kf { outline: 3px solid var(--accent); outline-offset: -3px; }
+
+/* Campana de actualización en la barra de arriba */
+.qbtn.bell { position: relative; color: var(--accent); }
+.qbtn.bell .dot { position: absolute; top: 4px; right: 4px; width: 9px; height: 9px; border-radius: 50%; background: #E0242B; box-shadow: 0 0 0 2px rgba(0,0,0,.6); animation: belldot 1.6s ease-in-out infinite; }
+@keyframes belldot { 50% { transform: scale(1.35); } }
+.qbtn.bell svg { animation: bellring 4s ease-in-out infinite; transform-origin: 50% 10%; }
+@keyframes bellring { 0%, 86%, 100% { transform: rotate(0); } 89% { transform: rotate(14deg); } 92% { transform: rotate(-12deg); } 95% { transform: rotate(8deg); } }
+html.lite .qbtn.bell svg, html.lite .qbtn.bell .dot { animation: none; }

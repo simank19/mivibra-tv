@@ -148,7 +148,7 @@
         '</nav>';
       // Botones flotantes arriba en todas las pestañas: Buscar, Favoritos, Historial y Perfil
       var q = function (id, icon, label) { return '<button class="qbtn f' + (navOwner(view.name) === id ? ' on' : '') + '" data-act="nav" data-arg="' + id + '" data-fid="q-' + id + '" aria-label="' + label + '" title="' + label + '">' + icon + '</button>'; };
-      var quick = '<div class="qbar">' + (MV.isKids() ? '' : q('utils', IC.grid, 'Utilidades') + q('discover', IC.compass, 'Descubrir')) + q('search', IC.search, 'Buscar') + (MV.isKids() ? '' : q('favs', IC.star, 'Favoritos') + q('history', IC.history, 'Historial')) +
+      var quick = '<div class="qbar">' + MV.updBell() + (MV.isKids() ? '' : q('utils', IC.grid, 'Utilidades') + q('discover', IC.compass, 'Descubrir')) + q('search', IC.search, 'Buscar') + (MV.isKids() ? '' : q('favs', IC.star, 'Favoritos') + q('history', IC.history, 'Historial')) +
         (p ? '<button class="qprof f' + (view.name === 'settings' ? ' on' : '') + '" data-act="' + (MV.isKids() ? 'go' : 'profMenu') + '" data-arg="profiles" data-fid="q-prof" aria-label="Perfil y ajustes"><img class="avatar" src="' + esc(MV.avatarOf(p.avatar)) + '" alt=""><span>' + esc(p.name) + '</span></button>' : '') + '</div>';
       app.innerHTML = '<div class="shell">' + side + '<main class="main">' + quick + '<div class="view-in' + (still ? ' still' : '') + '">' + body + '</div></main></div>';
     }
@@ -237,6 +237,11 @@
       return '<button class="chip f' + (cur === id ? ' on' : '') + '" data-act="' + act + '" data-arg="' + esc(id) + '"' + (extra || '') + '>' + esc(label) + (c.count != null ? ' <small>' + c.count + '</small>' : '') + '</button>';
     }).join('') + '</div>';
   }
+  /** Campana de actualización disponible (solo aparece si hay una versión nueva sin instalar). */
+  MV.updBell = function () {
+    var u = MV.pendingUpdate; if (!u) return '';
+    return '<button class="qbtn bell f" data-act="showUpdate" data-fid="q-upd" aria-label="Actualización disponible" title="Actualizar a la versión ' + esc(u.version) + '">' + IC.bell + '<i class="dot"></i></button>';
+  };
   function top(title, right) {
     return '<div class="top"><h1>' + esc(title) + '</h1><div class="sp"></div>' + (right || '') + '</div>';
   }
@@ -2066,6 +2071,7 @@
       }).catch(function () { MV.toast('No se pudo cargar el tráiler'); });
     },
     tmdbSearch: function (key) { var t = MV.reg[key]; if (!t) return; MV.closeModal(true); query = t.name; MV.go('search'); },
+    showUpdate: function () { MV.showUpdate(); },
     checkUpdate: function () { if (MV.pendingUpdate) { MV.showUpdate(); return; } MV.toast('Buscando actualizaciones…'); MV.checkUpdate(true).then(function () { if (view.name === 'settings') MV.rerender(); }); },
     checkDupes: function () { MV.checkDupes(true); MV.toast('Probando las señales de los canales repetidos…'); setTimeout(MV.rerender, 300); },
     loginGoogle: function () {
