@@ -743,7 +743,7 @@
           : '<button class="btn f" data-act="play" data-key="' + esc(it.key) + '" data-autofocus>' + IC.play + 'Reproducir</button>')) +
       '<button class="btn ghost f" data-act="fav" data-key="' + esc(it.key) + '">' + (fav ? IC.starFill : IC.star) + (fav ? 'En favoritos' : 'Favorito') + '</button>' +
       '<button class="btn ghost f" data-act="langMenu">🗨 Audio y subtítulos</button>' +
-      '<button class="btn ghost f hidden" id="coverBtn" data-act="covers" data-key="' + esc(it.key) + '">Cambiar carátula</button></div>' +
+      '</div>' +
       (it.type === 'series' ? '<div id="eps" class="eps"><div class="spinner"></div></div>' : '') + '</div></div>' +
       '<div id="related">' + relatedHtml(it) + '</div>';
   };
@@ -793,7 +793,6 @@
       // Carátula: la elegida por ti, luego la de TMDB y luego la de la lista (si alguna no carga, pasa a la siguiente)
       if (!(P.covers && P.covers[it.key])) { var ps = document.getElementById('ps'); if (ps) ps.innerHTML = posterImg([m.poster, it.poster, m.posters && m.posters[0]], it.name); }
       if (m.poster && !it.poster) it.poster = m.poster;
-      if (m.posters && m.posters.length > 1) document.getElementById('coverBtn').classList.remove('hidden');
     });
     if (it.type === 'series') {
       MV.loadEpisodes(it).then(function (eps) {
