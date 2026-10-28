@@ -3,22 +3,13 @@
   'use strict';
   var D = {};
 
-  // Avatares de alohe/avatars (Licencia MIT)
-  D.AVATAR_GROUPS = [
-    ['vibrent', 'Coloridos', 27],
-    ['upstream', 'Ilustrados', 22],
-    ['toon', 'Caricatura', 10],
-    ['3d', '3D', 5],
-    ['memo', 'Memo', 35],
-    ['teams', 'Equipo', 9],
-    ['notion', 'Boceto', 15],
-    ['bluey', 'Línea', 10]
-  ].map(function (g) {
+  // Avatares Memo de alohe/avatars (Licencia MIT). El resto se crea con DiceBear (creador de avatares).
+  D.AVATAR_GROUPS = [['memo', 'Memo', 35]].map(function (g) {
     var files = [];
     for (var i = 1; i <= g[2]; i++) files.push('avatars/' + g[0] + '_' + i + '.png');
     return { id: g[0], name: g[1], files: files };
   });
-  D.DEFAULT_AVATARS = ['avatars/vibrent_1.png', 'avatars/upstream_12.png', 'avatars/toon_2.png', 'avatars/3d_4.png', 'avatars/vibrent_6.png', 'avatars/upstream_20.png'];
+  D.DEFAULT_AVATARS = ['avatars/memo_1.png', 'avatars/memo_7.png', 'avatars/memo_12.png', 'avatars/memo_18.png', 'avatars/memo_24.png', 'avatars/memo_30.png'];
 
   // Sistemas de juego → núcleo libretro (LemuroidCores)
   D.SYSTEMS = [

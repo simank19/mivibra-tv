@@ -146,7 +146,7 @@
       // Botones flotantes arriba en todas las pestañas: Buscar, Favoritos, Historial y Perfil
       var q = function (id, icon, label) { return '<button class="qbtn f' + (navOwner(view.name) === id ? ' on' : '') + '" data-act="nav" data-arg="' + id + '" data-fid="q-' + id + '" aria-label="' + label + '" title="' + label + '">' + icon + '</button>'; };
       var quick = '<div class="qbar">' + (MV.isKids() ? '' : q('utils', IC.grid, 'Utilidades') + q('discover', IC.compass, 'Descubrir')) + q('search', IC.search, 'Buscar') + (MV.isKids() ? '' : q('favs', IC.star, 'Favoritos') + q('history', IC.history, 'Historial')) +
-        (p ? '<button class="qprof f' + (view.name === 'settings' ? ' on' : '') + '" data-act="' + (MV.isKids() ? 'go' : 'profMenu') + '" data-arg="profiles" data-fid="q-prof" aria-label="Perfil y ajustes"><img class="avatar" src="' + esc(p.avatar) + '" alt=""><span>' + esc(p.name) + '</span></button>' : '') + '</div>';
+        (p ? '<button class="qprof f' + (view.name === 'settings' ? ' on' : '') + '" data-act="' + (MV.isKids() ? 'go' : 'profMenu') + '" data-arg="profiles" data-fid="q-prof" aria-label="Perfil y ajustes"><img class="avatar" src="' + esc(MV.avatarOf(p.avatar)) + '" alt=""><span>' + esc(p.name) + '</span></button>' : '') + '</div>';
       app.innerHTML = '<div class="shell">' + side + '<main class="main">' + quick + '<div class="view-in' + (still ? ' still' : '') + '">' + body + '</div></main></div>';
     }
     if (VIEWS[view.name] && VIEWS[view.name].after) VIEWS[view.name].after(view.arg);
@@ -284,7 +284,7 @@
   VIEWS.profiles = function () {
     var html = '<img src="img/logo-corto-oscuro.svg" alt="MiVibra" style="height:36px"><h1>¿Quién está viendo?</h1><div class="profiles">';
     html += S.profiles.map(function (p, i) {
-      return '<button class="prof f" style="animation-delay:' + i * 0.08 + 's" data-act="pickProfile" data-arg="' + p.id + '" data-fid="p-' + p.id + '"><div class="av"><img src="' + esc(p.avatar) + '" alt="">' +
+      return '<button class="prof f" style="animation-delay:' + i * 0.08 + 's" data-act="pickProfile" data-arg="' + p.id + '" data-fid="p-' + p.id + '"><div class="av"><img src="' + esc(MV.avatarOf(p.avatar)) + '" alt="">' +
         (p.pin ? '<span class="lock">' + IC.lock.replace('<svg', '<svg width="18" height="18" style="color:var(--accent)"') + '</span>' : '') +
         (p.kids ? '<span class="kid">NIÑOS</span>' : '') + '</div><b>' + esc(p.name) + '</b></button>';
     }).join('');
@@ -292,10 +292,18 @@
     if (S.profiles.length) html += '<div class="btns"><button class="btn ghost f" data-act="manageProfiles">Administrar perfiles</button></div>';
     return html;
   };
-  var editTab = 'vibrent', editSel = null, editKids = false;
+  /** Los sets de avatares anteriores se quitaron (solo queda Memo): un avatar viejo se muestra como uno Memo fijo. */
+  MV.avatarOf = function (a) {
+    a = String(a || '');
+    var m = a.match(/^avatars\/(?!memo_)([a-z0-9]+)_(\d+)\.png$/);
+    if (!m) return a || D.DEFAULT_AVATARS[0];
+    var h = 0; for (var i = 0; i < a.length; i++) h = (h * 31 + a.charCodeAt(i)) >>> 0;
+    return 'avatars/memo_' + (h % 35 + 1) + '.png';
+  };
+  var editTab = 'memo', editSel = null, editKids = false;
   VIEWS.profileEdit = function (id) {
     var p = S.profiles.find(function (x) { return x.id === id; });
-    if (editSel === null) { editSel = p ? p.avatar : D.DEFAULT_AVATARS[S.profiles.length % D.DEFAULT_AVATARS.length]; editKids = !!(p && p.kids); }
+    if (editSel === null) { editSel = p ? MV.avatarOf(p.avatar) : D.DEFAULT_AVATARS[S.profiles.length % D.DEFAULT_AVATARS.length]; editKids = !!(p && p.kids); }
     var g = D.AVATAR_GROUPS.find(function (x) { return x.id === editTab; }) || D.AVATAR_GROUPS[0];
     return '<div style="width:min(1100px,100%);display:flex;gap:30px;flex-wrap:wrap;align-items:flex-start">' +
       '<div style="flex:0 0 260px;display:flex;flex-direction:column;gap:14px;align-items:center">' +
@@ -305,7 +313,7 @@
       '<div class="btns" style="width:100%"><button class="btn f" style="flex:1" data-act="saveProfile" data-arg="' + (p ? p.id : '') + '">Guardar perfil</button></div>' +
       (p ? '<div class="btns" style="width:100%"><button class="btn ghost sm f" style="flex:1" data-act="profilePin" data-arg="' + p.id + '">' + (p.pin ? 'Quitar PIN' : 'Proteger con PIN') + '</button><button class="btn danger sm f" data-act="deleteProfile" data-arg="' + p.id + '">' + IC.trash + '</button></div>' : '') +
       '</div><div class="glass" style="flex:1;min-width:280px;border-radius:26px;padding:16px">' +
-      chips(D.AVATAR_GROUPS.map(function (x) { return { name: x.id, label: x.name }; }).map(function (x) { return x.name; }), editTab, 'avTab').replace(/>(vibrent|upstream|toon|3d|memo|teams|notion|bluey)</g, function (m, id) { return '>' + D.AVATAR_GROUPS.find(function (x) { return x.id === id; }).name + '<'; }) +
+      chips(D.AVATAR_GROUPS.map(function (x) { return { name: x.id, label: x.name }; }).map(function (x) { return x.name; }), editTab, 'avTab').replace(/>(memo)</g, function (m, id) { return '>' + D.AVATAR_GROUPS.find(function (x) { return x.id === id; }).name + '<'; }) +
       '<div class="avgrid">' + g.files.map(function (f, i) { return '<button class="avopt f' + (f === editSel ? ' on' : '') + '" style="animation-delay:' + Math.min(i, 20) * 0.02 + 's" data-act="avPick" data-arg="' + f + '" aria-label="Avatar ' + (i + 1) + '"><img loading="lazy" src="' + f + '" alt=""></button>'; }).join('') + '</div>' +
       '<p class="muted" style="font-size:12px;margin:12px 0 0">Avatares de alohe/avatars · Licencia MIT</p></div></div>';
   };
@@ -1056,7 +1064,7 @@
     var cats = [['all', 'Todo', '#FF6900', '★'], ['live', 'Canales de TV', '#2F6FEB', 'TV'], ['movie', 'Películas', '#E0447C', '▶'], ['series', 'Series', '#14A38B', '◆']];
     var list = items.filter(function (i) { if (kidCat === 'live') return i.type === 'live'; if (i.type === 'live') return false; return kidCat === 'all' || i.type === kidCat; });
     var p = MV.profile() || {};
-    return '<div class="top"><img src="' + esc(p.avatar || '') + '" alt="" style="width:58px;height:58px;border-radius:50%;background:#F3EFEA;box-shadow:0 0 0 4px var(--accent)"><div><h1>¡Hola, ' + esc(p.name || '') + '!</h1><span class="muted">¿Qué quieres ver hoy?</span></div><div class="sp"></div>' +
+    return '<div class="top"><img src="' + esc(MV.avatarOf(p.avatar)) + '" alt="" style="width:58px;height:58px;border-radius:50%;background:#F3EFEA;box-shadow:0 0 0 4px var(--accent)"><div><h1>¡Hola, ' + esc(p.name || '') + '!</h1><span class="muted">¿Qué quieres ver hoy?</span></div><div class="sp"></div>' +
       '<span class="pill">Te quedan ' + MV.kidsLeft() + ' min</span><button class="pill f" data-act="kidsExit">' + IC.lock.replace('<svg', '<svg width="18" height="18"') + 'Salir</button></div>' +
       '<div class="kidcats">' + cats.map(function (c) { return '<button class="kidcat f' + (kidCat === c[0] ? ' on' : '') + '" data-act="kidCat" data-arg="' + c[0] + '"><span class="bub" style="background:' + c[2] + '">' + c[3] + '</span>' + c[1] + '</button>'; }).join('') + '</div>' +
       seasonBanner() + '<button class="kidsearch f" data-act="nav" data-arg="search">' + IC.search + '<span>Buscar dibujos, películas o canales</span></button>' +
@@ -1242,7 +1250,7 @@
   };
   SETTINGS.profiles = function () {
     return '<div class="panel glass"><h2>Perfiles</h2>' + S.profiles.map(function (p) {
-      return '<div class="line"><img src="' + esc(p.avatar) + '" alt="" style="width:44px;height:44px;border-radius:14px;background:#F3EFEA"><div class="t"><b>' + esc(p.name) + '</b><span>' + (p.kids ? 'Infantil · ' : '') + (p.pin ? 'Con PIN' : 'Sin PIN') + '</span></div><button class="btn ghost sm f" data-act="editProfile" data-arg="' + p.id + '">Editar</button></div>';
+      return '<div class="line"><img src="' + esc(MV.avatarOf(p.avatar)) + '" alt="" style="width:44px;height:44px;border-radius:14px;background:#F3EFEA"><div class="t"><b>' + esc(p.name) + '</b><span>' + (p.kids ? 'Infantil · ' : '') + (p.pin ? 'Con PIN' : 'Sin PIN') + '</span></div><button class="btn ghost sm f" data-act="editProfile" data-arg="' + p.id + '">Editar</button></div>';
     }).join('') + '<div class="btns" style="margin-top:12px"><button class="btn f" data-act="go" data-arg="profileEdit">' + IC.plus + 'Nuevo perfil</button></div></div>';
   };
   SETTINGS.look = function () {
@@ -1509,7 +1517,7 @@
     /** Botón del perfil arriba: Ajustes, cambiar de perfil y cuenta. */
     profMenu: function () {
       var p = MV.profile() || {}, u = MV.acct && MV.acct.user ? MV.acct.user() : null;
-      MV.modal('<div style="display:flex;gap:14px;align-items:center;margin-bottom:14px"><img class="avatar" src="' + esc(p.avatar || '') + '" alt="" style="width:54px;height:54px;border-radius:50%"><div><h2 style="margin:0">' + esc(p.name || 'Perfil') + '</h2>' + (u && u.email ? '<span class="muted" style="font-size:13px">' + esc(u.email) + '</span>' : '') + '</div></div>' +
+      MV.modal('<div style="display:flex;gap:14px;align-items:center;margin-bottom:14px"><img class="avatar" src="' + esc(MV.avatarOf(p.avatar)) + '" alt="" style="width:54px;height:54px;border-radius:50%"><div><h2 style="margin:0">' + esc(p.name || 'Perfil') + '</h2>' + (u && u.email ? '<span class="muted" style="font-size:13px">' + esc(u.email) + '</span>' : '') + '</div></div>' +
         '<div class="menulist">' +
         '<button class="line f" data-act="go" data-arg="settings" data-autofocus>' + IC.settings + '<div class="t"><b>Ajustes</b><span>Tema, reproducción, listas, cuenta…</span></div></button>' +
         '<button class="line f" data-act="go" data-arg="profiles">' + IC.user + '<div class="t"><b>Cambiar de perfil</b><span>Elige otro perfil de esta cuenta</span></div></button>' +
