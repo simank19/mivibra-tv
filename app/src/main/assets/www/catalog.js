@@ -384,7 +384,7 @@
       Se agrupan por portal: una lista por portal y las demás MAC quedan de respaldo. */
   MV.parseMacList = function (text, backup) {
     var groups = {}, order = [], portal = '', pending = [];
-    String(text || '').split(/\r?\n/).forEach(function (line) {
+    String(text || '').replace(/\u0000/g, '').split(/\r?\n/).forEach(function (line) {
       var u = line.match(/https?:\/\/[^\s"'<>|,]+/i);
       // Una URL de lista M3U o Xtream no es un portal
       if (u && !/get\.php|\.m3u8?(\?|$)|player_api/i.test(u[0])) {

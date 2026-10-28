@@ -1756,6 +1756,18 @@
       { onOpen: function (root) { var ta = root.querySelector('#lMulti'); if (ta) ta.addEventListener('input', multiCount); var cb = root.querySelector('#lMacBk'); if (cb) cb.addEventListener('change', multiCount); } });
   }
 
+  /** Muestra la pestaña "Varias" con el texto del archivo elegido (si al volver del selector la ventana se cerró, se vuelve a abrir). */
+  function multiWith(txt) {
+    var ta = document.getElementById('lMulti');
+    if (!ta) { while (MV.modalOpen()) MV.closeModal(true); addListDialog('multi'); ta = document.getElementById('lMulti'); }
+    if (!ta) return;
+    ta.value = String(txt || '').replace(/\u0000/g, '').replace(/^\uFEFF/, '');
+    multiCount();
+    var n = document.getElementById('lMultiCount');
+    if (n && !n.textContent) n.textContent = 'No encontré direcciones de listas ni cuentas de Portal y MAC en el archivo.';
+    var go = document.querySelector('#modal [data-act="listSave"]'); if (go) go.focus();
+  }
+  MV.multiWith = multiWith;
   function multiCount() {
     var ta = document.getElementById('lMulti'), el = document.getElementById('lMultiCount'); if (!ta || !el) return;
     var bk = !!(document.getElementById('lMacBk') || {}).checked, mc = MV.parseMacList(ta.value, bk);
@@ -1787,7 +1799,7 @@
   var ACT = {
     multiPick: function () {
       MV.call('pickFile', []).then(function (d) { return fetch(d.path).then(function (r) { return r.text(); }); }).then(function (txt) {
-        var ta = document.getElementById('lMulti'); if (ta) { ta.value = txt; multiCount(); }
+        multiWith(txt);
       }).catch(function (e) { if (e.message !== 'cancel') MV.toast(e.message === 'nopicker' ? 'Este equipo no tiene selector de archivos. Pega el texto.' : e.message); });
     },
     nav: function (a) { stack = []; MV.go(a, null, { replace: true }); },
@@ -2086,6 +2098,8 @@
       } else if (tab === 'file') {
         MV.call('pickFile', []).then(function (d) {
           return fetch(d.path).then(function (r) { return r.text(); }).then(function (txt) {
+            // Un .txt con cuentas de Portal y MAC: se muestra en "Varias" para revisar antes de importar
+            if (!/#EXTINF/i.test(txt.slice(0, 20000)) && MV.parseMacList(txt).length) { multiWith(txt); return; }
             // Un .txt con direcciones (no una lista M3U): se importa como varias listas
             var many = MV.parseUrlList(txt);
             if (many && many.length) { importMany(many); return; }
@@ -2975,9 +2989,10 @@
   MV.onOpenFile = function (d) {
     if (!MV.acct.canEdit()) { MV.toast('Solo el administrador puede agregar listas'); return; }
     fetch(d.path).then(function (r) { return r.text(); }).then(function (txt) {
+      if (!/#EXTINF/i.test(txt.slice(0, 20000)) && (MV.parseMacList(txt).length || (MV.parseUrlList(txt) || []).length)) { MV.go('settings'); setTimeout(function () { multiWith(txt); }, 300); return 'multi'; }
       var l = { id: 'l' + Date.now().toString(36), type: 'file', name: 'Lista abierta', enabled: true, added: Date.now(), updatedAt: Date.now() };
       return MV.idbSet('raw:' + l.id, txt).then(function () { S.lists.push(l); MV.saveLists(); return MV.reloadCatalog(true); });
-    }).then(function () { MV.toast('Lista agregada'); MV.rerender(); });
+    }).then(function (r) { if (r === 'multi') return; MV.toast('Lista agregada'); MV.rerender(); });
   };
 
   // Tiempo de pantalla de perfiles infantiles (también cuenta en los menús)
