@@ -98,6 +98,7 @@
   var UTILS = [['youtube', 'YouTube', 'yt', 'Videos, tendencias y búsqueda'], ['music', 'Música', 'music', 'Tu música y música libre'], ['radio', 'Radio', 'radio', 'Emisoras de Colombia y el mundo'], ['browser', 'Navegador', 'globe', 'Con bloqueador de anuncios'], ['games', 'Juegos', 'games', 'Consolas clásicas y ports']];
   function navOwner(name) {
     if (name === 'guide') return 'live';
+    if (name === 'adult') return 'utils';
     if (UTILS.some(function (u) { return u[0] === name; })) return 'utils';
     return name;
   }
@@ -461,7 +462,7 @@
     if (liveCat !== 'Todos' && !cats.some(function (c) { return c.name === liveCat; })) liveCat = 'Todos';
     var list = channelsOf(liveCat, all);
     var lim = limits.live || 150;
-    return top('En vivo', tvTabs('live') + '<button class="pill f" data-act="adultToggle">' + IC.lock.replace('<svg', '<svg width="18" height="18"') + (MV.adultOk() ? 'Bloquear +18' : '+18') + '</button>') + loadingBlock() + filt +
+    return top('En vivo', tvTabs('live')) + loadingBlock() + filt +
       '<div class="live"><div class="cats glass">' + cats.map(function (c) {
         return '<button class="cat f' + (c.name === liveCat ? ' on' : '') + '" data-act="liveCat" data-arg="' + esc(c.name) + '" data-fid="cat-' + MV.hash(c.name) + '"><span>' + esc(c.name) + '</span><small>' + c.count + '</small></button>';
       }).join('') + '</div><div class="chlist glass">' +
@@ -761,6 +762,17 @@
       if (i.type === 'live' || i.anime || i.adult || i.doc) return false;
       return !!(i.kids || (i.age != null && i.age <= 7 && i.learnedKids) || (i.animated && i.age != null && i.age <= 13));
     }));
+  };
+  /** Contenido +18 (solo desde Utilidades, con PIN). */
+  function adultItems() { return MV.adultOk() ? S.items.filter(function (i) { return i.adult; }) : []; }
+  VIEWS.adult = function () {
+    if (!MV.adultOk()) return top('+18') + '<div class="empty glass"><h2>Contenido bloqueado</h2><p class="muted">Ábrelo desde Utilidades con el PIN.</p><div class="btns" style="justify-content:center"><button class="btn f" data-act="adultOpen" data-autofocus>Ingresar PIN</button></div></div>';
+    var all = adultItems(), live = all.filter(function (i) { return i.type === 'live'; }), vod = all.filter(function (i) { return i.type !== 'live'; });
+    var head = top('+18', '<button class="pill f" data-act="adultLock">' + IC.lock.replace('<svg', '<svg width="18" height="18"') + 'Bloquear</button>') +
+      '<p class="muted" style="margin:0 0 12px">Se bloquea solo a los 30 minutos o al tocar Bloquear.</p>';
+    if (!all.length) return head + '<div class="empty glass"><h2>No hay contenido +18 en tus listas</h2></div>';
+    return head + (live.length ? '<h3 style="margin:8px 0">Canales <small class="muted">' + live.length + '</small></h3>' + grid(live, 'ch', 'adult-live') : '') +
+      (vod.length ? '<h3 style="margin:18px 0 8px">Películas y series <small class="muted">' + vod.length + '</small></h3>' + grid(vod, 'poster', 'adult-vod') : '');
   };
   VIEWS.docs = function () { return catalogView('docs', 'Documentales', S.items.filter(function (i) { return i.doc && i.type !== 'live'; })); };
 
@@ -1223,7 +1235,7 @@
     var a = P.adult;
     return '<div class="panel glass"><h2>PIN de control parental</h2><p>Se pide para salir de un perfil infantil o darle más tiempo.</p><div class="btns"><button class="btn f" data-act="setParentPin">' + (P.parentPin ? 'Cambiar PIN' : 'Crear PIN') + '</button></div>' +
       '<div class="line"><div class="t"><b>Tiempo diario para perfiles infantiles</b></div><div class="seg">' + [30, 60, 90, 120, 0].map(function (m) { return '<button class="chip f' + (+P.kidsLimit === m ? ' on' : '') + '" data-act="pref" data-arg="kidsLimit:' + m + '">' + (m ? m + ' min' : 'Sin límite') + '</button>'; }).join('') + '</div></div></div>' +
-      '<div class="panel glass"><h2>Contenido +18</h2><p>Las categorías para adultos de tus listas quedan ocultas. Solo se ven después de iniciar sesión con el usuario adulto, nunca en perfiles infantiles, y se bloquean solas a los 30 minutos.</p>' +
+      '<div class="panel glass"><h2>Contenido +18</h2><p>Las categorías para adultos de tus listas nunca aparecen en las secciones normales. Están solo en Utilidades › +18, se abren con el PIN, nunca en perfiles infantiles, y se bloquean solas a los 30 minutos.</p>' +
       (a ? '<div class="line"><div class="t"><b>Usuario: ' + esc(a.user) + '</b><span>' + (MV.adultOk() ? 'Desbloqueado' : 'Bloqueado') + '</span></div><button class="btn f sm" data-act="adultToggle">' + (MV.adultOk() ? 'Bloquear ahora' : 'Desbloquear') + '</button><button class="btn danger sm f" data-act="adultDelete">Eliminar</button></div>'
         : '<label class="field">Usuario<input class="in f" id="adUser" autocomplete="off"></label><label class="field">Contraseña (mínimo 8)<input class="in f" id="adPass" type="password"></label><label class="field">PIN rápido para el control (4 dígitos)<input class="in f" id="adPin" type="password" inputmode="numeric" maxlength="4"></label><button class="btn f" data-act="adultCreate">Crear usuario protegido</button>') + '</div>';
   };
@@ -1306,7 +1318,7 @@
     if (it.type === 'rom') { playRom(it.rom); return; }
     if (it.type === 'live') {
       var list = channelsOf(liveCat, liveBase());
-      if (list.indexOf(it) < 0) list = MV.visible(S.live);
+      if (list.indexOf(it) < 0) list = it.adult ? adultItems().filter(function (i) { return i.type === 'live'; }) : MV.visible(S.live);
       var idx = Math.max(0, list.indexOf(it)), from = Math.max(0, idx - 200), slice = list.slice(from, from + 400);
       // Recientes para la lista de canales del reproductor
       var recent = (MV.pdata().history || []).filter(function (h) { return h.type === 'live'; }).slice(0, 30).map(function (h) { return h.key; });
@@ -1775,6 +1787,17 @@
       MV.modal('<h2>Contenido +18</h2><p>Ingresa con el usuario adulto o usa el PIN rápido.</p><label class="field">Contraseña de ' + esc(P.adult.user) + '<input class="in f" id="adIn" type="password" data-autofocus></label><div class="btns"><button class="btn f" data-act="adultPass">Entrar</button><button class="btn ghost f" data-act="adultPin">Usar PIN</button></div>');
       MV._adultUnlock = unlock;
     },
+    /** Utilidades › +18: solo con el PIN del usuario adulto. */
+    adultOpen: function () {
+      if (MV.isKids()) { MV.toast('No disponible en perfiles infantiles'); return; }
+      if (!P.adult) { MV.toast('Primero crea el usuario +18 y su PIN en Ajustes › Control parental'); MV.go('settings', 'parental'); return; }
+      if (MV.adultOk()) { MV.go('adult'); return; }
+      pinPad('PIN +18', function (h) {
+        if (h !== P.adult.pin) return false;
+        S.adultUntil = Date.now() + 30 * 60e3; MV.closeModal(true); MV.go('adult'); return true;
+      });
+    },
+    adultLock: function () { S.adultUntil = 0; MV.toast('Contenido +18 bloqueado'); MV.go('utils', null, { replace: true }); },
     adultPass: function () { var v = document.getElementById('adIn').value; MV.sha256(v).then(function (h) { if (h === P.adult.pass) MV._adultUnlock(); else MV.toast('Contraseña incorrecta'); }); },
     adultPin: function () { MV.closeModal(true); pinPad('PIN +18', function (h) { if (h === P.adult.pin) { MV._adultUnlock(); return true; } return false; }); },
     syncIn: function () {
@@ -2221,6 +2244,7 @@
       return '<button class="utile glass f" data-act="nav" data-arg="' + u[0] + '" data-fid="u-' + u[0] + '" style="animation-delay:' + i * 0.05 + 's"><span class="uic">' + IC[u[2]] + '</span><b>' + u[1] + '</b><span>' + u[3] + '</span></button>';
     }).join('') +
       '<button class="utile glass f" data-act="openDiag" data-fid="u-diag"><span class="uic">' + IC.settings + '</span><b>Diagnóstico MiVibra</b><span>Revisa y optimiza este equipo</span></button>' +
+      '<button class="utile glass f" data-act="adultOpen" data-fid="u-adult"><span class="uic">' + IC.lock + '</span><b>+18</b><span>' + (MV.adultOk() ? 'Desbloqueado' : 'Protegido con PIN') + '</span></button>' +
       '<button class="utile glass f" data-act="go" data-arg="settings" data-fid="u-remote" onclick="MV.remoteTab&&MV.remoteTab()"><span class="uic">' + IC.phone + '</span><b>Celular como control</b><span>Control remoto y mando de juegos</span></button></div>';
   };
 

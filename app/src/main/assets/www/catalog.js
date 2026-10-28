@@ -435,11 +435,12 @@
     S.series = items.filter(function (i) { return i.type === 'series'; });
   }
 
-  /** Lo que el perfil actual puede ver (+18 oculto salvo desbloqueo; perfiles infantiles solo contenido infantil). */
+  /** Lo que el perfil actual puede ver. El +18 nunca sale en las secciones normales:
+      solo en Utilidades › +18, desbloqueado con el PIN (MV.adultOnly lo pide esa pantalla). */
   MV.visible = function (arr) {
-    var kids = MV.isKids(), adult = MV.adultOk();
+    var kids = MV.isKids();
     return arr.filter(function (i) {
-      if (i.adult && !adult) return false;
+      if (i.adult) return false;
       if (kids && !MV.kidsOk(i)) return false;
       return true;
     });
