@@ -177,7 +177,8 @@
     if (o.platform === 'viki' && !o.anime) o.kdrama = o.kdrama || /drama|corea|korea/i.test(g);
     // Documental solo si la categoría lo dice claramente (no "Ciencia ficción", "Historia" o "Animales fantásticos")
     o.doc = (RX.doc.test(o.group || '') && !RX.notDoc.test(o.group || '')) || /\bdocumental\b|\bdocumentary\b/i.test(o.name || '');
-    o.adult = RX.adult.test(g);
+    // +18: en películas y series solo cuenta la CATEGORÍA (títulos como "xXx", "Vida adulta" o "MaXXXine" no son +18)
+    o.adult = o.type === 'live' ? RX.adult.test(g) : RX.adult.test(o.group || '');
     if (o.type === 'live') o.country = D.countryOf(o);
     if (o.type !== 'live' || o.doc || o.kids) {
       var gtxt = g + ' ' + (o.genre || '');
