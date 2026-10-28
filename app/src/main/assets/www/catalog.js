@@ -418,12 +418,16 @@
     if (!macs.length) return Promise.reject(new Error('La MAC debe tener 12 caracteres, como 00:1A:79:AB:CD:EF'));
     list.macs = macs; list.mac = macs[0];
     // Se prueba cada ruta posible del portal con cada MAC (la primera que conecte queda como principal)
-    var combos = []; stkCandidates(list.portal).forEach(function (a) { macs.forEach(function (m) { combos.push([a, m]); }); });
+    // La ruta que ya funcionó con otra MAC del mismo portal se prueba primero
+    var pk = String(list.portal || '').toLowerCase().replace(/\/+$/, ''), cl = stkCandidates(list.portal);
+    if (STK_API[pk]) cl = [STK_API[pk]].concat(cl.filter(function (x) { return x !== STK_API[pk]; }));
+    var combos = []; cl.forEach(function (a) { macs.forEach(function (m) { combos.push([a, m]); }); });
     var i = 0, lastErr = null;
     function next() {
       if (i >= combos.length || i >= 40) return Promise.reject(lastErr || new Error('No encontré el portal en esa dirección'));
       list.api = combos[i][0]; list.mac = combos[i][1]; i++;
       return stkToken(list, true).then(function () {
+        STK_API[pk] = list.api;
         return stkGet(list, 'type=account_info&action=get_main_info').catch(function () { return {}; });
       }).catch(function (e) { lastErr = e; return next(); });
     }
@@ -436,23 +440,29 @@
     return origin + (u.charAt(0) === '/' ? '' : '/') + u;
   }
   /** Recorre todas las páginas de un listado del portal (14 por página normalmente), varias a la vez. */
+  // Categorías de películas/series ya descargadas en esta sesión por otra MAC del mismo portal: no se repiten
+  // (mismo portal + misma categoría = mismo contenido; así 27 MAC no descargan 27 veces lo mismo)
+  var STK_SEEN = {}, STK_API = {};
   function stkPages(list, type, cats, budget) {
-    var out = [], jobs = [];
+    var out = [], jobs = [], portalKey = list.api.toLowerCase();
+    cats = cats.filter(function (c) { var k = portalKey + '|' + type + '|' + c.id + '|' + c.title; if (STK_SEEN[k]) return false; STK_SEEN[k] = 1; return true; });
     cats.forEach(function (c) { jobs.push({ c: c, p: 1 }); });
-    var used = 0;
+    var used = 0, total = cats.length, label = type === 'series' ? 'Series' : 'Películas', lastEmit = 0;
     function worker() {
       var j = jobs.shift(); if (!j || used >= budget) return Promise.resolve();
       used++;
+      if (Date.now() - lastEmit > 700) { lastEmit = Date.now(); S.loadMsg = (list.name || 'Portal') + ' · ' + label + ': ' + used + ' de ' + Math.max(total, used) + ' páginas'; MV.emit('catalog'); }
       return stkGet(list, 'type=' + type + '&action=get_ordered_list&category=' + encodeURIComponent(j.c.id) + '&genre=' + encodeURIComponent(j.c.id) + '&p=' + j.p + '&sortby=added&fav=0').then(function (js) {
         var data = (js && js.data) || [];
         data.forEach(function (d) { d._cat = j.c.title; out.push(d); });
         if (j.p === 1 && js && +js.total_items > data.length && data.length) {
           var pages = Math.min(Math.ceil(+js.total_items / Math.max(1, +js.max_page_items || data.length)), 80);
           for (var p = 2; p <= pages; p++) jobs.push({ c: j.c, p: p });
+          total += Math.max(0, pages - 1);
         }
       }).catch(function () {}).then(worker);
     }
-    var w = []; for (var k = 0; k < 6; k++) w.push(worker());
+    var w = []; for (var k = 0; k < 8; k++) w.push(worker());
     return Promise.all(w).then(function () { return out; });
   }
   function buildFromStalker(list) {

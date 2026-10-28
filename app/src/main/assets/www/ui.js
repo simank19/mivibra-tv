@@ -1784,15 +1784,20 @@
     if (!arr || !arr.length) { MV.toast('No encontré direcciones http:// o https://'); return; }
     MV.closeModal(true);
     MV.modal('<h2>Importando listas</h2><div style="height:8px;border-radius:8px;background:var(--glass-strong);overflow:hidden;margin:14px 0"><i id="impFill" style="display:block;height:100%;width:0;background:var(--accent);transition:width .3s"></i></div><p class="muted" id="impTxt">Preparando ' + arr.length + ' listas…</p>');
+    // Detalle de lo que se está cargando ahora (páginas de películas del portal, etc.) y opción de seguir en segundo plano
+    var box = document.querySelector('#modal .dialog');
+    if (box) box.insertAdjacentHTML('beforeend', '<p class="muted" id="impSub" style="font-size:13px;margin:-6px 0 12px"></p><div class="btns"><button class="btn ghost f" data-act="closeModal" data-autofocus>Seguir en segundo plano</button></div>');
+    var subT = setInterval(function () { var x = document.getElementById('impSub'); if (!x) return; x.textContent = S.loadMsg || ''; }, 600);
     MV.addLists(arr, function (n, total, name) {
       var f = document.getElementById('impFill'), t = document.getElementById('impTxt');
       if (f) f.style.width = Math.round(n / total * 100) + '%';
-      if (t) t.textContent = n + ' de ' + total + ' · ' + name;
+      if (t) t.textContent = 'Listas listas: ' + n + ' de ' + total + ' · última: ' + name;
     }).then(function (r) {
-      MV.closeModal(true);
+      clearInterval(subT);
+      if (document.getElementById('impFill')) MV.closeModal(true);
       MV.toast(r.added + ' listas agregadas' + (r.skipped ? ' · ' + r.skipped + ' ya estaban' : '') + (r.failed.length ? ' · ' + r.failed.length + ' no cargaron' : ''), 5000);
       MV.rerender();
-    }).catch(function (e) { MV.closeModal(true); MV.toast(e.message, 4000); MV.rerender(); });
+    }).catch(function (e) { clearInterval(subT); if (document.getElementById('impFill')) MV.closeModal(true); MV.toast(e.message, 4000); MV.rerender(); });
   }
 
   // ---------- Acciones ----------
