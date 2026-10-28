@@ -2358,7 +2358,9 @@
     deezer: { name: 'Deezer', pkgs: ['deezer.android.tv', 'deezer.android.app'], web: 'https://www.deezer.com' },
     amazon: { name: 'Amazon Music', pkgs: ['com.amazon.mp3'], web: 'https://music.amazon.com' },
     apple: { name: 'Apple Music', pkgs: ['com.apple.android.music'], web: 'https://music.apple.com' },
-    brave: { name: 'Brave', pkgs: ['com.brave.browser'], web: 'https://brave.com/download/' }
+    brave: { name: 'Brave', pkgs: ['com.brave.browser'], web: 'https://brave.com/download/' },
+    kick: { name: 'Kick', pkgs: ['com.kick.mobile'], web: 'https://kick.com' },
+    twitch: { name: 'Twitch', pkgs: ['tv.twitch.android.viewer', 'tv.twitch.android.app'], web: 'https://www.twitch.tv' }
   };
   var installed = null;
   function appsInstalled() {
@@ -2540,6 +2542,8 @@
     return top('Utilidades') + '<div class="utilgrid">' + UTILS.map(function (u, i) {
       return '<button class="utile glass f" data-act="nav" data-arg="' + u[0] + '" data-fid="u-' + u[0] + '" style="animation-delay:' + i * 0.05 + 's"><span class="uic">' + IC[u[2]] + '</span><b>' + u[1] + '</b><span>' + u[3] + '</span></button>';
     }).join('') +
+      '<button class="utile glass f" data-act="openApp" data-arg="kick" data-fid="u-kick"><span class="uic">' + IC.play + '</span><b>Kick</b><span>' + (!A || hasApp('kick') ? 'Transmisiones en vivo' : 'Instalar desde la tienda') + '</span></button>' +
+      '<button class="utile glass f" data-act="openApp" data-arg="twitch" data-fid="u-twitch"><span class="uic">' + IC.play + '</span><b>Twitch</b><span>' + (!A || hasApp('twitch') ? 'Transmisiones en vivo' : 'Instalar desde la tienda') + '</span></button>' +
       '<button class="utile glass f" data-act="openDiag" data-fid="u-diag"><span class="uic">' + IC.settings + '</span><b>Diagnóstico MiVibra</b><span>Revisa y optimiza este equipo</span></button>' +
       '<button class="utile glass f" data-act="adultOpen" data-fid="u-adult"><span class="uic">' + IC.lock + '</span><b>+18</b><span>' + (MV.adultOk() ? 'Desbloqueado' : 'Protegido con PIN') + '</span></button>' +
       '<button class="utile glass f" data-act="go" data-arg="settings" data-fid="u-remote" onclick="MV.remoteTab&&MV.remoteTab()"><span class="uic">' + IC.phone + '</span><b>Celular como control</b><span>Control remoto y mando de juegos</span></button></div>';
