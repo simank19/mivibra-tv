@@ -329,8 +329,154 @@
     });
   }
 
+
+  // ---------- Portal + MAC (Stalker / Ministra, tipo MAG) ----------
+  var STK_UA = 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3';
+  var stkTok = {};
+  MV.normMac = function (m) {
+    var h = String(m || '').toUpperCase().replace(/[^0-9A-F]/g, '');
+    return h.length === 12 ? h.match(/../g).join(':') : '';
+  };
+  function stkHdr(list, tok) {
+    var h = { 'User-Agent': STK_UA, 'X-User-Agent': 'Model: MAG250; Link: WiFi', Cookie: 'mac=' + encodeURIComponent(list.mac) + '; stb_lang=es; timezone=America%2FBogota', Referer: (list.api || '').replace(/(server\/load|portal)\.php.*$/, '') };
+    if (tok) h.Authorization = 'Bearer ' + tok;
+    return h;
+  }
+  function stkJs(txt) {
+    var j; try { j = JSON.parse(txt); } catch (e) { throw new Error(/authoriz/i.test(txt) ? 'El portal rechazó la MAC' : 'El portal no respondió como se esperaba'); }
+    return j && j.js !== undefined ? j.js : j;
+  }
+  function stkCandidates(portal) {
+    var u = String(portal || '').trim().replace(/\/+$/, '');
+    if (!/^https?:\/\//i.test(u)) u = 'http://' + u;
+    var origin = (u.match(/^(https?:\/\/[^\/]+)/i) || [u])[0], out = [];
+    if (/\.php$/i.test(u)) out.push(u);
+    var base = u.replace(/\/c$/i, '').replace(/\/(server\/load|portal)\.php$/i, '');
+    if (/stalker_portal/i.test(base)) out.push(base.replace(/(\/stalker_portal).*$/i, '$1') + '/server/load.php');
+    out.push(base + '/portal.php', base + '/server/load.php', origin + '/stalker_portal/server/load.php', origin + '/portal.php', origin + '/c/portal.php');
+    return out.filter(function (x, i, a) { return a.indexOf(x) === i; });
+  }
+  function stkSn(mac) { var h = 0, s2 = mac.replace(/:/g, ''); for (var i = 0; i < s2.length; i++) h = (h * 31 + s2.charCodeAt(i)) >>> 0; return ('MV' + h.toString(16).toUpperCase() + s2).slice(0, 13); }
+  function stkToken(list, force) {
+    var k = list.api + '|' + list.mac, t = stkTok[k];
+    if (t && !force && t.exp > Date.now()) return Promise.resolve(t.v);
+    return MV.getText(list.api + '?type=stb&action=handshake&token=&prehash=0&JsHttpRequest=1-xml', stkHdr(list)).then(function (txt) {
+      var js = stkJs(txt), tok = js && js.token;
+      if (!tok) throw new Error('El portal no aceptó la conexión');
+      var sn = stkSn(list.mac);
+      return MV.getText(list.api + '?type=stb&action=get_profile&hd=1&ver=ImageDescription%3A%200.2.18-r23-250%3B%20ImageDate%3A%20Wed%20Aug%2029%2010%3A49%3A53%20EEST%202018%3B%20PORTAL%20version%3A%205.6.2%3B%20API%20Version%3A%20JS%20API%20version%3A%20343&num_banks=2&sn=' + sn + '&stb_type=MAG250&client_type=STB&image_version=218&video_out=hdmi&device_id=&device_id2=&signature=&auth_second_step=1&hw_version=1.7-BD-00&not_valid_token=0&timestamp=' + Math.floor(Date.now() / 1000) + '&api_signature=262&prehash=0&JsHttpRequest=1-xml', stkHdr(list, tok)).then(function (p) {
+        var prof = {}; try { prof = stkJs(p) || {}; } catch (e) {}
+        if (prof.status === 2 || prof.blocked === '1') throw new Error('La MAC está bloqueada o vencida en el portal');
+        stkTok[k] = { v: tok, exp: Date.now() + 20 * 60e3 };
+        return tok;
+      });
+    });
+  }
+  function stkGet(list, q, retry) {
+    return stkToken(list, false).then(function (tok) {
+      return MV.getText(list.api + '?' + q + '&JsHttpRequest=1-xml', stkHdr(list, tok));
+    }).then(function (txt) {
+      if (/authoriz/i.test(txt) && !retry) { delete stkTok[list.api + '|' + list.mac]; return stkGet(list, q, true); }
+      return stkJs(txt);
+    });
+  }
+  /** Prueba la dirección del portal y la MAC: encuentra la ruta correcta (portal.php o server/load.php). */
+  MV.stkLogin = function (list) {
+    list.mac = MV.normMac(list.mac);
+    if (!list.mac) return Promise.reject(new Error('La MAC debe tener 12 caracteres, como 00:1A:79:AB:CD:EF'));
+    var cands = stkCandidates(list.portal), i = 0, lastErr = null;
+    function next() {
+      if (i >= cands.length) return Promise.reject(lastErr || new Error('No encontré el portal en esa dirección'));
+      list.api = cands[i++];
+      return stkToken(list, true).then(function () {
+        return stkGet(list, 'type=account_info&action=get_main_info').catch(function () { return {}; });
+      }).catch(function (e) { lastErr = e; return next(); });
+    }
+    return next();
+  };
+  function stkImg(list, u) {
+    if (!u) return '';
+    if (/^https?:\/\//i.test(u)) return u;
+    var origin = (list.api.match(/^(https?:\/\/[^\/]+)/i) || [''])[0];
+    return origin + (u.charAt(0) === '/' ? '' : '/') + u;
+  }
+  /** Recorre todas las páginas de un listado del portal (14 por página normalmente), varias a la vez. */
+  function stkPages(list, type, cats, budget) {
+    var out = [], jobs = [];
+    cats.forEach(function (c) { jobs.push({ c: c, p: 1 }); });
+    var used = 0;
+    function worker() {
+      var j = jobs.shift(); if (!j || used >= budget) return Promise.resolve();
+      used++;
+      return stkGet(list, 'type=' + type + '&action=get_ordered_list&category=' + encodeURIComponent(j.c.id) + '&genre=' + encodeURIComponent(j.c.id) + '&p=' + j.p + '&sortby=added&fav=0').then(function (js) {
+        var data = (js && js.data) || [];
+        data.forEach(function (d) { d._cat = j.c.title; out.push(d); });
+        if (j.p === 1 && js && +js.total_items > data.length && data.length) {
+          var pages = Math.min(Math.ceil(+js.total_items / Math.max(1, +js.max_page_items || data.length)), 80);
+          for (var p = 2; p <= pages; p++) jobs.push({ c: j.c, p: p });
+        }
+      }).catch(function () {}).then(worker);
+    }
+    var w = []; for (var k = 0; k < 6; k++) w.push(worker());
+    return Promise.all(w).then(function () { return out; });
+  }
+  function buildFromStalker(list) {
+    function safe(pr, d) { return pr.catch(function () { return d; }); }
+    var base = { api: list.api, mac: list.mac };
+    S.loadMsg = 'Cargando el portal…'; MV.emit('catalog');
+    return stkToken(list, true).then(function () {
+      return Promise.all([
+        safe(stkGet(list, 'type=itv&action=get_genres'), []),
+        safe(stkGet(list, 'type=itv&action=get_all_channels'), {}),
+        safe(stkGet(list, 'type=vod&action=get_categories'), []),
+        safe(stkGet(list, 'type=series&action=get_categories'), [])
+      ]);
+    }).then(function (r) {
+      var gm = {}; (Array.isArray(r[0]) ? r[0] : []).forEach(function (g) { gm[g.id] = g.title; });
+      var out = [];
+      ((r[1] && r[1].data) || []).forEach(function (c) {
+        if (!c || !c.cmd) return;
+        out.push(tags({ key: 'live:' + (c.xmltv_id ? String(c.xmltv_id).toLowerCase() : MV.norm(c.name)), type: 'live', name: c.name, logo: stkImg(list, c.logo), group: gm[c.tv_genre_id] || 'En vivo', tvg: c.xmltv_id || '', num: c.number, url: 'stalker:itv:' + c.id, ua: STK_UA, stk: Object.assign({ t: 'itv', cmd: c.cmd }, base), list: list.id }));
+      });
+      var vcats = (Array.isArray(r[2]) ? r[2] : []).filter(function (c) { return c.id !== '*'; });
+      var scats = (Array.isArray(r[3]) ? r[3] : []).filter(function (c) { return c.id !== '*'; });
+      S.loadMsg = 'Cargando películas y series del portal…'; MV.emit('catalog');
+      return Promise.all([stkPages(list, 'vod', vcats, 900), scats.length ? stkPages(list, 'series', scats, 500) : Promise.resolve([])]).then(function (v) {
+        function add(d, mod) {
+          var series = mod === 'series' || d.is_series === '1' || d.is_series === 1;
+          var y = String(d.year || '').match(/(19|20)\d{2}/); y = y ? y[0] : '';
+          var common = { name: d.name || d.o_name, poster: stkImg(list, d.screenshot_uri || d.cover_big || d.pic), group: d._cat || (series ? 'Series' : 'Películas'), plot: d.description || '', genre: d.genres_str || '', rating: d.rating_imdb || d.rating_kinopoisk || '', year: y, list: list.id };
+          if (!common.name) return;
+          if (series) out.push(tags(Object.assign({ key: 'series:' + MV.norm(common.name), type: 'series', stks: Object.assign({ t: mod, id: d.id }, base), episodes: [] }, common)));
+          else if (d.cmd) out.push(tags(Object.assign({ key: 'movie:' + MV.norm(common.name), type: 'movie', url: 'stalker:vod:' + d.id, ua: STK_UA, stk: Object.assign({ t: 'vod', cmd: d.cmd }, base), added: d.added ? Date.parse(String(d.added).replace(' ', 'T')) / 1000 || 0 : 0 }, common)));
+        }
+        v[0].forEach(function (d) { add(d, 'vod'); });
+        v[1].forEach(function (d) { add(d, 'series'); });
+        return out;
+      });
+    });
+  }
+  /** Temporadas y capítulos de una serie del portal: cada temporada trae la lista de capítulos y un "cmd" para pedir el enlace. */
+  function stkEpisodes(item) {
+    var x = item.stks, list = { api: x.api, mac: x.mac };
+    return stkGet(list, 'type=' + x.t + '&action=get_ordered_list&movie_id=' + encodeURIComponent(x.id) + '&season_id=0&episode_id=0&p=1').then(function (js) {
+      var eps = [];
+      ((js && js.data) || []).forEach(function (s, si) {
+        var sn = +((String(s.name || '').match(/(\d+)/) || [])[1]) || si + 1;
+        var list2 = Array.isArray(s.series) ? s.series : [];
+        list2.forEach(function (n) {
+          eps.push({ season: sn, ep: +n, title: 'Episodio ' + n, url: 'stalker:ep:' + s.id + ':' + n, ua: STK_UA, stk: { api: x.api, mac: x.mac, t: 'vod', cmd: s.cmd, series: +n } });
+        });
+      });
+      eps.sort(function (a, b) { return a.season - b.season || a.ep - b.ep; });
+      item.episodes = eps;
+      return eps;
+    });
+  }
+
   /** Episodios de una serie Xtream (se cargan al abrir la ficha). */
   MV.loadEpisodes = function (item) {
+    if (item.stks && !(item.episodes || []).length) return stkEpisodes(item);
     if (!item.xt) return Promise.resolve(item.episodes || []);
     var list = S.lists.find(function (l) { return l.id === item.xt.list; });
     if (!list) return Promise.resolve([]);
@@ -359,6 +505,7 @@
       if (cached && !force && fresh) return cached.items.map(retag);
       var job;
       if (list.type === 'xtream') job = buildFromXtream(list);
+      else if (list.type === 'stalker') job = buildFromStalker(list);
       else if (list.type === 'file') job = MV.idbGet('raw:' + list.id).then(function (txt) { return buildFromM3U(MV.parseM3U(txt || '', list), list); });
       else job = MV.getBig(list.url).then(function (txt) {
         if (!/#EXTINF|#EXTM3U/i.test(txt.slice(0, 5000))) throw new Error('No parece una lista M3U');
@@ -483,8 +630,9 @@
     }
     function swapIn(ex, it) {
       // El nuevo es de mejor calidad: pasa a ser el principal y el anterior queda de respaldo
-      if (ex.url && ex.url !== it.url) { ex.alts = [ex.url].concat((ex.alts || []).filter(function (u) { return u !== it.url; })).slice(0, 6); }
+      if (ex.url && ex.url !== it.url && !/^stalker:/.test(ex.url)) { ex.alts = [ex.url].concat((ex.alts || []).filter(function (u) { return u !== it.url; })).slice(0, 6); }
       ['url', 'ua', 'ref', 'list'].forEach(function (k) { if (it[k] !== undefined) ex[k] = it[k]; });
+      ex.stk = it.stk; if (it.stks || ex.stks) { ex.stks = it.stks; if (it.stks) ex.episodes = []; }
       if (it.xt) ex.xt = it.xt;
       if (it.episodes && it.episodes.length) ex.episodes = it.episodes.slice();
       ex.q = qScore(it);
@@ -502,9 +650,9 @@
         if (ex) {
           pairs.push([it, ex]);
           if (it.type === 'live') {
-            if (it.url && it.url !== ex.url) { ex.alts = ex.alts || []; if (ex.alts.length < 6 && ex.alts.indexOf(it.url) < 0) ex.alts.push(it.url); }
-            ex.qs = ex.qs || {}; ex.qs[ex.url] = ex.qs[ex.url] || ex.q || 15; if (it.url) ex.qs[it.url] = q;
-            ex.cands = [ex.url].concat(ex.alts || []);
+            if (it.stk || ex.stk) { /* señales del portal: el enlace se pide al reproducir, no se mezclan */ }
+            else if (it.url && it.url !== ex.url) { ex.alts = ex.alts || []; if (ex.alts.length < 6 && ex.alts.indexOf(it.url) < 0) ex.alts.push(it.url); }
+            if (!it.stk && !ex.stk) { ex.qs = ex.qs || {}; ex.qs[ex.url] = ex.qs[ex.url] || ex.q || 15; if (it.url) ex.qs[it.url] = q; ex.cands = [ex.url].concat(ex.alts || []); }
           } else if (it.type === 'series') {
             var better = q > (ex.q || 15) || (q === (ex.q || 15) && (it.episodes || []).length > (ex.episodes || []).length + 2);
             var other = better ? (ex.episodes || []) : (it.episodes || []);
@@ -516,7 +664,7 @@
             }
           } else {
             if (q > (ex.q || 15)) swapIn(ex, it);
-            else if (it.url && it.url !== ex.url) { ex.alts = ex.alts || []; if (ex.alts.length < 6 && ex.alts.indexOf(it.url) < 0) ex.alts.push(it.url); }
+            else if (it.url && it.url !== ex.url && !it.stk) { ex.alts = ex.alts || []; if (ex.alts.length < 6 && ex.alts.indexOf(it.url) < 0) ex.alts.push(it.url); }
           }
           if (!ex.logo && it.logo) ex.logo = it.logo;
           if (!ex.poster && it.poster) ex.poster = it.poster;

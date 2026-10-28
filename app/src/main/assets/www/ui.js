@@ -561,7 +561,7 @@
   /** Vista previa en vivo (sin sonido) del canal del recuadro principal. Si el canal no abre en vista previa, queda el logo. */
   function heroPreview() {
     var v = document.getElementById('heroVid'), it = MV._heroIt;
-    if (!v || !it || it.type !== 'live' || !it.url || document.hidden) return;
+    if (!v || !it || it.type !== 'live' || !it.url || it.stk || document.hidden) return;
     if (MV.lite) { v.remove(); return; }   // en equipos modestos sin vista previa en vivo (se nota más fluido)
     var done = false;
     v.muted = true;
@@ -1455,7 +1455,7 @@
   SETTINGS.lists = function () {
     if (!MV.acct.canEdit()) {
       return '<div class="panel glass"><h2>Listas</h2><p>Las listas y claves las administra ' + esc((window.MV_CONFIG || {}).admin ? 'el superadministrador' : 'el administrador') + '. Se cargan solas en este equipo.</p>' +
-        (S.lists.length ? S.lists.map(function (l) { return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.type === 'xtream' ? 'Xtream Codes' : 'Lista M3U') + ' · ' + (l.count || 0) + ' elementos</span></div></div>'; }).join('') : '<p class="muted">Aún no hay listas.</p>') +
+        (S.lists.length ? S.lists.map(function (l) { return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.type === 'xtream' ? 'Xtream Codes' : l.type === 'stalker' ? 'Portal MAC' : 'Lista M3U') + ' · ' + (l.count || 0) + ' elementos</span></div></div>'; }).join('') : '<p class="muted">Aún no hay listas.</p>') +
         '<div class="btns" style="margin-top:14px"><button class="btn ghost f" data-act="reloadAll">' + IC.refresh + 'Actualizar todo</button></div></div>' + dupesPanel();
     }
     var share = '';
@@ -1467,7 +1467,7 @@
     }
     return share + '<div class="panel glass"><h2>Tus listas</h2><p>Todo el contenido de tus listas se combina: los canales repetidos aparecen una sola vez y se queda la señal que funciona.' + (MV.acct.isAdmin() ? ' <b>Eres superadministrador:</b> lo que cambies aquí llega a todos los usuarios (las listas en archivo solo quedan en este equipo; usa enlaces para compartirlas).' : '') + '</p>' +
       (S.lists.length ? S.lists.map(function (l) {
-        return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.type === 'xtream' ? 'Xtream Codes · ' + esc(l.host) : l.type === 'file' ? 'Archivo' : esc(l.url)) + ' · ' + (l.count || 0) + ' elementos' + ((S.hiddenDupes || {})[l.id] ? ' · ' + S.hiddenDupes[l.id] + ' repetidos ocultos' : '') + (l.epg ? ' · con guía' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div>' +
+        return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.type === 'xtream' ? 'Xtream Codes · ' + esc(l.host) : l.type === 'stalker' ? 'Portal MAC · ' + esc(l.mac) : l.type === 'file' ? 'Archivo' : esc(l.url)) + ' · ' + (l.count || 0) + ' elementos' + ((S.hiddenDupes || {})[l.id] ? ' · ' + S.hiddenDupes[l.id] + ' repetidos ocultos' : '') + (l.epg ? ' · con guía' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div>' +
           '<button class="toggle f' + (l.enabled !== false ? ' on' : '') + '" data-act="listToggle" data-arg="' + l.id + '" aria-label="Activar lista"></button>' +
           '<button class="iconbtn f" data-act="listEpg" data-arg="' + l.id + '" aria-label="Guía EPG">' + IC.guide + '</button>' +
           '<button class="iconbtn f" data-act="listDelete" data-arg="' + l.id + '" aria-label="Eliminar">' + IC.trash + '</button></div>';
@@ -1606,7 +1606,7 @@
   }
   function q(it, extra) {
     var nn = it.type === 'live' ? MV.nowNext(it) : {};
-    return Object.assign({ id: it.key, url: it.url, title: it.name, subtitle: nn.now ? nn.now.t : (it.group || ''), num: it.num || '', ua: it.ua || '', ref: it.ref || '', alts: it.alts || [], poster: it.type === 'live' ? '' : MV.poster(it), logo: it.type === 'live' ? (it.logo || '') : '', cn: it.type === 'live' && it.country ? D.countryName(it.country) : '', sp: it.type === 'live' && (D.RX.sports.test(it.group || '') || /\b(espn|fox sports|tyc|dsports|directv sports|win sports|bein|gol ?tv|tudn|claro sports|sky sports|eurosport|dazn|nba|nfl|f1)\b/i.test(it.name || '')), fav: MV.isFav(it.key), private: !!it.adult }, it.type === 'live' ? {} : subInfo(it), extra || {});
+    return Object.assign({ id: it.key, url: it.url, title: it.name, subtitle: nn.now ? nn.now.t : (it.group || ''), num: it.num || '', ua: it.ua || '', ref: it.ref || '', alts: it.alts || [], poster: it.type === 'live' ? '' : MV.poster(it), logo: it.type === 'live' ? (it.logo || '') : '', cn: it.type === 'live' && it.country ? D.countryName(it.country) : '', sp: it.type === 'live' && (D.RX.sports.test(it.group || '') || /\b(espn|fox sports|tyc|dsports|directv sports|win sports|bein|gol ?tv|tudn|claro sports|sky sports|eurosport|dazn|nba|nfl|f1)\b/i.test(it.name || '')), fav: MV.isFav(it.key), private: !!it.adult, stk: it.stk || null }, it.type === 'live' ? {} : subInfo(it), extra || {});
   }
   function launch(req, ctx) {
     if (!ctx.hinted && A && !(ctx.item && ctx.item.type === 'rom')) { ctx.hinted = true; return playerHint(!!req.live, function () { launch(req, ctx); }); }
@@ -1642,7 +1642,7 @@
   MV.playEpisode = function (series, i, resume) {
     var eps = series.episodes || []; var e = eps[i]; if (!e) return;
     var poster = MV.poster(series);
-    var queue = eps.slice(i).map(function (x) { return Object.assign({ id: series.key + '#' + x.season + 'x' + x.ep, url: x.url, title: series.name, subtitle: 'T' + x.season + ' E' + x.ep + ' · ' + x.title, ua: x.ua || '', ref: x.ref || '', poster: poster }, subInfo(series, x.season, x.ep)); });
+    var queue = eps.slice(i).map(function (x) { return Object.assign({ id: series.key + '#' + x.season + 'x' + x.ep, url: x.url, title: series.name, subtitle: 'T' + x.season + ' E' + x.ep + ' · ' + x.title, ua: x.ua || '', ref: x.ref || '', poster: poster, stk: x.stk || null }, subInfo(series, x.season, x.ep)); });
     var k = series.key + '#' + e.season + 'x' + e.ep, prog = resume !== false ? MV.progressOf(k) : null;
     launch({ queue: queue, index: 0, live: false, startMs: prog ? prog.pos : 0 }, { item: series, episodes: eps, start: i });
   };
@@ -1739,17 +1739,19 @@
   }
   function addListDialog(tab) {
     tab = tab || 'url';
-    var tabs = [['url', 'Enlace M3U'], ['multi', 'Varias (.txt)'], ['file', 'Archivo'], ['xtream', 'Xtream Codes']];
+    var tabs = [['url', 'Enlace M3U'], ['multi', 'Varias (.txt)'], ['file', 'Archivo'], ['xtream', 'Xtream Codes'], ['stalker', 'Portal y MAC']];
     var body = tab === 'multi'
       ? '<p>Pega tus direcciones (una por línea) o elige tu archivo .txt. Puedes poner un nombre antes de cada una: <code>Mi lista, https://…</code>. Los enlaces de Xtream (get.php?username=…) se agregan como cuenta Xtream con películas y series.</p>' +
         '<label class="field">Direcciones<textarea class="in f" id="lMulti" rows="6" placeholder="https://…/lista1.m3u&#10;Deportes, https://…/lista2.m3u" data-autofocus></textarea></label><p class="muted" id="lMultiCount" style="font-size:13px;margin:-4px 0 8px"></p>'
+      : tab === 'stalker'
+      ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi proveedor" data-autofocus></label><label class="field">URL del portal<input class="in f" id="lPortal" placeholder="http://servidor:puerto/c/" autocomplete="off" inputmode="url"></label><label class="field">Dirección MAC<input class="in f" id="lMac" placeholder="00:1A:79:XX:XX:XX" autocomplete="off" style="text-transform:uppercase"></label><p class="muted" style="font-size:13px;margin:-4px 0 8px">Copia la URL y la MAC tal como te las envió tu proveedor (tipo MAG / Stalker). Cargar películas y series del portal puede tardar uno o dos minutos la primera vez.</p><p id="lErr" style="color:#FF8A80;font-size:14px;margin:0 0 8px"></p>'
       : tab === 'xtream'
       ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi proveedor" data-autofocus></label><label class="field">Servidor<input class="in f" id="lHost" placeholder="http://servidor:puerto" autocomplete="off"></label><label class="field">Usuario<input class="in f" id="lUser" autocomplete="off"></label><label class="field">Contraseña<input class="in f" id="lPass" type="password"></label><p class="muted" style="font-size:13px;margin:-4px 0 8px">Servidor: solo la dirección y el puerto, por ejemplo http://servidor.com:8080</p><p id="lErr" style="color:#FF8A80;font-size:14px;margin:0 0 8px"></p>'
       : tab === 'file'
         ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Lista descargada" data-autofocus></label><p>Elige un archivo .m3u del dispositivo, una USB o el administrador de archivos.</p>'
         : '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi lista" data-autofocus></label><label class="field">Enlace de la lista M3U / M3U8<input class="in f" id="lUrl" placeholder="https://…/lista.m3u" autocomplete="off" inputmode="url"></label><label class="field">Guía EPG XMLTV (opcional)<input class="in f" id="lEpg" placeholder="https://…/guia.xml" autocomplete="off" inputmode="url"></label>';
     MV.modal('<h2>Agregar lista</h2><div class="chips">' + tabs.map(function (t) { return '<button class="chip f' + (t[0] === tab ? ' on' : '') + '" data-act="listTab" data-arg="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' + body +
-      '<div class="btns"><button class="btn f" data-act="listSave" data-arg="' + tab + '">' + (tab === 'xtream' ? 'Iniciar sesión' : tab === 'file' ? 'Elegir archivo' : tab === 'multi' ? 'Importar' : 'Cargar lista') + '</button>' + (tab === 'multi' ? '<button class="btn ghost f" data-act="multiPick">Elegir archivo .txt</button>' : '') + '<button class="btn ghost f" data-act="confirmNo">Cancelar</button></div>',
+      '<div class="btns"><button class="btn f" data-act="listSave" data-arg="' + tab + '">' + (tab === 'xtream' || tab === 'stalker' ? 'Iniciar sesión' : tab === 'file' ? 'Elegir archivo' : tab === 'multi' ? 'Importar' : 'Cargar lista') + '</button>' + (tab === 'multi' ? '<button class="btn ghost f" data-act="multiPick">Elegir archivo .txt</button>' : '') + '<button class="btn ghost f" data-act="confirmNo">Cancelar</button></div>',
       { onOpen: function (root) { var ta = root.querySelector('#lMulti'); if (ta) ta.addEventListener('input', multiCount); } });
   }
 
@@ -2044,6 +2046,18 @@
     listTab: function (t) { MV.closeModal(true); addListDialog(t); },
     listSave: function (tab) {
       var name = (document.getElementById('lName') || {}).value;
+      if (tab === 'stalker') {
+        var sl = { type: 'stalker', name: name || 'Portal', portal: document.getElementById('lPortal').value.trim(), mac: document.getElementById('lMac').value.trim() };
+        if (!sl.portal || !sl.mac) { MV.toast('Completa la URL del portal y la MAC'); return; }
+        var se = document.getElementById('lErr'); if (se) se.textContent = '';
+        MV.toast('Conectando con el portal…');
+        MV.stkLogin(sl).then(function (info) {
+          MV.closeModal(true);
+          MV.toast('Conectado' + (info && (info.phone || info.end_date) ? ' · vence ' + (info.phone || info.end_date) : '') + '. Cargando canales, películas y series…', 5000);
+          return MV.addList(sl);
+        }).then(function () { MV.rerender(); }).catch(function (e) { var el = document.getElementById('lErr'); if (el) el.textContent = '' + e.message; MV.toast(e.message, 6000); });
+        return;
+      }
       if (tab === 'xtream') {
         var l = { type: 'xtream', name: name || 'Xtream', host: document.getElementById('lHost').value.trim(), user: document.getElementById('lUser').value.trim(), pass: document.getElementById('lPass').value };
         if (!l.host || !l.user) { MV.toast('Completa servidor y usuario'); return; }

@@ -630,6 +630,28 @@ class PlayerActivity : ComponentActivity() {
         index = (i + queue.length()) % maxOf(1, queue.length())
         val item = current()
         if (item.optString("url").isBlank()) return
+        // Portal MAC: primero se pide el enlace (vence en minutos, por eso se pide cada vez que se abre)
+        val stk = item.optJSONObject("stk")
+        if (stk != null && !item.optBoolean("stkReady")) {
+            val want = index
+            info.text = "Conectando con el portal…"; info.visibility = View.VISIBLE; info.alpha = 1f
+            Thread {
+                val res = try { Result.success(Stalker.link(stk)) } catch (e: Exception) { Result.failure(e) }
+                runOnUiThread {
+                    if (isFinishing || index != want) return@runOnUiThread
+                    info.visibility = View.GONE
+                    res.onSuccess { u ->
+                        item.put("url", u); item.put("ua", Stalker.UA); item.put("stkReady", true)
+                        playIndex(want, startMs, announce)
+                    }.onFailure { e ->
+                        errorView.text = "No se pudo abrir desde el portal.\n\n" + (e.message ?: "") + (if (live) "\n\nPrueba otro canal con ▲ ▼." else "\n\nVuelve atrás e intenta de nuevo.")
+                        errorView.visibility = View.VISIBLE
+                    }
+                }
+            }.start()
+            return
+        }
+        if (stk != null) item.put("stkReady", false)   // la próxima vez se vuelve a pedir un enlace fresco
         val ref = item.optString("ref")
         http.setDefaultRequestProperties(if (ref.isNotBlank()) mapOf("Referer" to ref) else emptyMap())
         extSub = null; extSubName = ""; extOffset = 0L
