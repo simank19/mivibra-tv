@@ -79,7 +79,7 @@
     // Nombres que sí son infantiles aunque la categoría no lo diga (canales y series conocidas)
     kidsName: /(disney ?(junior|jr)|cartoon ?network|cartoonito|nick ?jr|nickelodeon|discovery ?kids|baby ?tv|babyfirst|boomerang|tooncast|pbs ?kids|zoomoo|duck ?tv|baby ?shark|peppa|paw patrol|patrulla canina|bluey|cocomelon|plim ?plim|mundo bita|pocoyo|barney|pinkfong|super ?wings|masha)/i,
     // Nunca infantil aunque la categoría lo parezca ("Animación para adultos", "Terror familiar"…)
-    notKids: /(terror|horror|miedo|thriller|suspenso|crimen|crime|asesin|narco|mafia|guerra|\bwar\b|er[oó]tic|adult|\+18|18\+|xxx|gore|zombi|violen|polic[ií]ac|noticias|news)/i,
+    notKids: /(terror|horror|miedo|thriller|suspenso|crimen|crime|asesin|narco|mafia|guerra|\bwar\b|er[oó]tic|adult|\+18|18\+|xxx|gore|zombi|violen|polic[ií]ac|noticias|news|\barmas?\b|guns?\b|handguns?|pistol|rifle|disparo|shoot|docu|documental)/i,
     anime: /\b(anime|animes|animé|manga|otaku|japanimation|crunchy)\b/i,
     doc: /\b(docu|docus|documental(es)?|documentar(y|ies)|docuseries?|docu-?series|nat ?geo|national geographic|discovery|animal planet|vida salvaje|wildlife|naturaleza|nature doc)\b/i,
     notDoc: /ficci[oó]n|fiction|sci-?fi|ciencia ?ficci|fantas|acci[oó]n|action|terror|horror|comedia|comedy|drama|thriller|suspenso|infantil|kids|anime/i,

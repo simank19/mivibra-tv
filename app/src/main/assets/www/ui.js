@@ -659,6 +659,7 @@
   VIEWS.detail = function (key) {
     var it = S.byKey[key] || MV.reg[key];
     if (!it) return top('Ficha') + '<p class="muted">Este contenido ya no está en tus listas.</p>';
+    if (MV.isKids() && !MV.kidsOk(it)) return top('No disponible') + '<div class="empty glass"><h2>Esto no es para niños</h2><p class="muted">Pide a un adulto que cambie de perfil.</p><div class="btns" style="justify-content:center"><button class="btn f" data-act="nav" data-arg="kids" data-autofocus>Volver al inicio</button></div></div>';
     reg(it);
     var prog = MV.progressOf(it.key), fav = MV.isFav(it.key), img = MV.poster(it);
     var facts = [it.year, it.type === 'series' ? 'Serie' : 'Película', it.group, it.rating ? '★ ' + it.rating : ''].concat((it.genres || []).map(D.genreName)).filter(Boolean);
@@ -1147,7 +1148,7 @@
   }
   function q(it, extra) {
     var nn = it.type === 'live' ? MV.nowNext(it) : {};
-    return Object.assign({ id: it.key, url: it.url, title: it.name, subtitle: nn.now ? nn.now.t : (it.group || ''), num: it.num || '', ua: it.ua || '', ref: it.ref || '', alts: it.alts || [] }, it.type === 'live' ? {} : subInfo(it), extra || {});
+    return Object.assign({ id: it.key, url: it.url, title: it.name, subtitle: nn.now ? nn.now.t : (it.group || ''), num: it.num || '', ua: it.ua || '', ref: it.ref || '', alts: it.alts || [], poster: it.type === 'live' ? '' : MV.poster(it) }, it.type === 'live' ? {} : subInfo(it), extra || {});
   }
   function launch(req, ctx) {
     if (MV.isKids() && +P.kidsLimit > 0 && MV.kidsLeft() <= 0) { kidsTimeUp(); return; }
@@ -1176,9 +1177,28 @@
   };
   MV.playEpisode = function (series, i, resume) {
     var eps = series.episodes || []; var e = eps[i]; if (!e) return;
-    var queue = eps.slice(i).map(function (x) { return Object.assign({ id: series.key + '#' + x.season + 'x' + x.ep, url: x.url, title: series.name, subtitle: 'T' + x.season + ' E' + x.ep + ' · ' + x.title, ua: x.ua || '', ref: x.ref || '' }, subInfo(series, x.season, x.ep)); });
+    var poster = MV.poster(series);
+    var queue = eps.slice(i).map(function (x) { return Object.assign({ id: series.key + '#' + x.season + 'x' + x.ep, url: x.url, title: series.name, subtitle: 'T' + x.season + ' E' + x.ep + ' · ' + x.title, ua: x.ua || '', ref: x.ref || '', poster: poster }, subInfo(series, x.season, x.ep)); });
     var k = series.key + '#' + e.season + 'x' + e.ep, prog = resume !== false ? MV.progressOf(k) : null;
     launch({ queue: queue, index: 0, live: false, startMs: prog ? prog.pos : 0 }, { item: series, episodes: eps, start: i });
+  };
+  /** Desde "Continuar viendo" del inicio de Android TV: sigue donde iba (espera a que cargue el catálogo). */
+  MV.openFromHome = function (id, tries) {
+    tries = tries || 0;
+    var base = String(id).split('#')[0], it = S.byKey[base] || (MV.reg && MV.reg[base]);
+    if (!it || !MV.profile()) { if (tries < 60) setTimeout(function () { MV.openFromHome(id, tries + 1); }, 500); return; }
+    if (MV.isKids() && !MV.kidsOk(it)) return;
+    var m = String(id).match(/#(\d+)x(\d+)$/);
+    if (it.type === 'series' && m) {
+      MV.loadEpisodes(it).then(function (eps) {
+        eps.sort(function (a, b) { return a.season - b.season || a.ep - b.ep; });
+        it.episodes = eps;
+        var i = eps.findIndex(function (e) { return +e.season === +m[1] && +e.ep === +m[2]; });
+        if (i >= 0) MV.playEpisode(it, i, true); else MV.go('detail', it.key);
+      }).catch(function () { MV.go('detail', it.key); });
+      return;
+    }
+    MV.playItem(it, true);
   };
   MV.onPlayerClosed = function (r) {
     if (!playing) return;

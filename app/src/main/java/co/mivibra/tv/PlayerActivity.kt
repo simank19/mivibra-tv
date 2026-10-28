@@ -153,69 +153,58 @@ class PlayerActivity : ComponentActivity() {
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
     /**
-     * Controles abajo (en la barra, entre el tiempo y los botones de la derecha), más pequeños,
-     * se ocultan rápido y con un botón para saltar 1:30 (los openings de anime).
+     * Controles estilo YouTube (diseño en res/layout/exo_player_control_view.xml): barra de progreso naranja,
+     * botones abajo, botón grande al centro en pausa, se ocultan rápido y botón +1:30 para saltar openings.
      */
     @OptIn(UnstableApi::class)
     private fun arrangeControls() {
         view.controllerShowTimeoutMs = 2500
-        val center = view.findViewById<android.widget.LinearLayout>(androidx.media3.ui.R.id.exo_center_controls) ?: return
-        (center.layoutParams as? FrameLayout.LayoutParams)?.let {
-            it.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-            it.bottomMargin = 0
-            center.layoutParams = it
+        (view.findViewById<View>(androidx.media3.ui.R.id.exo_progress) as? androidx.media3.ui.DefaultTimeBar)?.apply {
+            setPlayedColor(0xFFFF6900.toInt())
+            setScrubberColor(0xFFFF6900.toInt())
+            setBufferedColor(0x66FFFFFF)
+            setUnplayedColor(0x33FFFFFF)
         }
-        center.setPadding(0, 0, 0, 0)
-        // Más pequeños: se escala desde abajo para que queden dentro de la barra inferior
-        center.viewTreeObserver.addOnGlobalLayoutListener {
-            val target = dp(60).toFloat()
-            val h = center.height.toFloat()
-            if (h > 0) {
-                val sc = minOf(1f, target / h)
-                center.pivotX = center.width / 2f
-                center.pivotY = h
-                center.scaleX = sc
-                center.scaleY = sc
-            }
-        }
-        // Fondo oscuro solo abajo, no sobre toda la imagen
-        view.findViewById<View>(androidx.media3.ui.R.id.exo_controls_background)?.setBackgroundColor(0x33000000)
+        view.findViewById<View>(R.id.mv_center_play)?.setOnClickListener { player?.play() }
 
-        if (!live) {
-            val skip = TextView(this).apply {
-                text = "+1:30"
-                setTextColor(Color.WHITE)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
-                typeface = Typeface.DEFAULT_BOLD
-                gravity = Gravity.CENTER
-                setPadding(dp(22), dp(10), dp(22), dp(10))
-                isFocusable = true
-                isClickable = true
-                contentDescription = "Adelantar 1 minuto 30 segundos"
-                background = android.graphics.drawable.StateListDrawable().apply {
-                    addState(intArrayOf(android.R.attr.state_focused), android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(30).toFloat(); setColor(0xFFFF6900.toInt()) })
-                    addState(intArrayOf(), android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(30).toFloat(); setColor(0x66000000); setStroke(dp(2), 0x88FFFFFF.toInt()) })
-                }
-                setOnClickListener {
-                    player?.let { p ->
-                        val d = p.duration
-                        val to = p.currentPosition + 90_000
-                        p.seekTo(if (d > 0) minOf(to, d - 1000) else to)
-                    }
-                    info.text = "⏩ +1:30"
-                    info.visibility = View.VISIBLE
-                    ui.removeCallbacksAndMessages("skip")
-                    ui.postAtTime({ info.visibility = View.GONE }, "skip", android.os.SystemClock.uptimeMillis() + 1200)
-                    view.showController()
-                }
+        val left = view.findViewById<android.widget.LinearLayout>(R.id.mv_left) ?: return
+        if (live) return
+        val skip = TextView(this).apply {
+            text = "+1:30"
+            setTextColor(Color.WHITE)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            setPadding(dp(14), dp(6), dp(14), dp(6))
+            isFocusable = true
+            isClickable = true
+            contentDescription = "Adelantar 1 minuto 30 segundos"
+            background = android.graphics.drawable.StateListDrawable().apply {
+                addState(intArrayOf(android.R.attr.state_focused), android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(20).toFloat(); setColor(0xFFFF6900.toInt()) })
+                addState(intArrayOf(), android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(20).toFloat(); setColor(0x33FFFFFF); setStroke(dp(1), 0x88FFFFFF.toInt()) })
             }
-            val next = center.findViewById<View>(androidx.media3.ui.R.id.exo_next)
-            val at = if (next != null) center.indexOfChild(next) else center.childCount
-            center.addView(skip, at, android.widget.LinearLayout.LayoutParams(-2, -2).apply {
-                gravity = Gravity.CENTER_VERTICAL
-                leftMargin = dp(12); rightMargin = dp(12)
-            })
+            setOnClickListener {
+                player?.let { p ->
+                    val d = p.duration
+                    val to = p.currentPosition + 90_000
+                    p.seekTo(if (d > 0) minOf(to, d - 1000) else to)
+                }
+                view.showController()
+            }
         }
+        val next = left.findViewById<View>(androidx.media3.ui.R.id.exo_next)
+        val at = if (next != null) left.indexOfChild(next) else left.childCount
+        left.addView(skip, at, android.widget.LinearLayout.LayoutParams(-2, -2).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            leftMargin = dp(6); rightMargin = dp(6)
+        })
+    }
+
+    /** Botón grande al centro solo en pausa (como YouTube). */
+    private fun updateCenterPlay() {
+        val c = view.findViewById<View>(R.id.mv_center_play) ?: return
+        val p = player
+        c.visibility = if (p != null && !p.isPlaying && p.playbackState == Player.STATE_READY) View.VISIBLE else View.GONE
     }
 
     private fun current(): JSONObject = queue.optJSONObject(index) ?: JSONObject()
@@ -260,6 +249,7 @@ class PlayerActivity : ComponentActivity() {
             .build()
         p.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) { onFail(error) }
+            override fun onIsPlayingChanged(isPlaying: Boolean) { updateCenterPlay(); WatchNext.update(this@PlayerActivity, current(), p, live) }
 
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_READY) {
@@ -646,6 +636,7 @@ class PlayerActivity : ComponentActivity() {
 
     private fun finishWithResult() {
         val p = player
+        WatchNext.update(this, current(), p, live)
         val item = current()
         val result = JSONObject()
             .put("id", item.optString("id"))
@@ -679,9 +670,17 @@ class PlayerActivity : ComponentActivity() {
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        if (Build.VERSION.SDK_INT >= 26 && player?.isPlaying == true && !packageManager.hasSystemFeature("android.software.leanback")) {
+        // Ventana pequeña al salir con Inicio (celular, tablet y Android TV que lo soporten)
+        if (Build.VERSION.SDK_INT >= 26 && player?.isPlaying == true && packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
             try { enterPictureInPictureMode(android.app.PictureInPictureParams.Builder().build()) } catch (_: Exception) {}
         }
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: android.content.res.Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        // En la ventana pequeña no se muestran controles ni avisos
+        view.useController = !isInPictureInPictureMode
+        if (isInPictureInPictureMode) { view.hideController(); info.visibility = View.GONE; tracksBtn.visibility = View.GONE }
     }
 
     override fun onDestroy() {

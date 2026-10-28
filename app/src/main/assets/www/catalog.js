@@ -49,11 +49,12 @@
   MV.kidsOk = function (i) {
     if (i.adult) return false;
     if (i.type === 'live') return !!i.kids;
-    if (i.anime) return false;
+    if (i.anime || i.doc) return false;
     if (i.age == null) return false;
     // Animación (no anime) se permite hasta 13 años; lo demás, solo de 0 a 7 años y que sea infantil o familiar
     if (i.animated && i.age <= 13) return true;
-    return i.age <= 7 && !!(i.kids || i.platform === 'disney' || (i.genres || []).indexOf('infantil') >= 0);
+    // "Infantil/Familia" tiene que venir de la ficha de TMDB (no del título: "… American Kids" no es infantil)
+    return i.age <= 7 && !!(i.kids || i.platform === 'disney' || i.learnedKids);
   };
   var ANIM = MV.load('animated', {});
   MV.learnGenres = function (item, names, age) {
@@ -68,6 +69,8 @@
     }
     var ids = D.classifyGenres((names || []).join(' '));
     if (ids.some(function (x) { return NOT_FOR_KIDS.indexOf(x) >= 0; })) item.kids = false;
+    if (ids.indexOf('infantil') >= 0) item.learnedKids = true;
+    if (ids.indexOf('documental') >= 0) item.kids = false;
     if (!ids.length) return;
     item.genres = item.genres || [];
     ids.forEach(function (x) { if (item.genres.indexOf(x) < 0) item.genres.push(x); });
@@ -181,6 +184,7 @@
         // Lo que dice TMDB manda: documental si su género es Documental
         if (o.type !== 'live' && learned.indexOf('documental') >= 0) o.doc = true;
         if (learned.some(function (x) { return NOT_FOR_KIDS.indexOf(x) >= 0; })) o.kids = false;
+        if (learned.indexOf('infantil') >= 0) o.learnedKids = true;
       }
     }
     return o;

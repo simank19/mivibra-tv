@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Controles del reproductor estilo YouTube: barra de progreso y botones abajo, sombra suave solo abajo.
+     Reemplaza el diseño de Media3 (mismos ids para que funcione igual). -->
+<merge xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <View android:id="@id/exo_controls_background"
+      android:layout_width="0dp"
+      android:layout_height="0dp"
+      android:background="@drawable/mv_ctl_gradient" />
+
+  <!-- Botón grande al centro: solo se ve en pausa -->
+  <LinearLayout android:id="@id/exo_center_controls"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:layout_gravity="center"
+      android:gravity="center"
+      android:layoutDirection="ltr">
+    <ImageButton android:id="@+id/mv_center_play"
+        android:layout_width="76dp"
+        android:layout_height="76dp"
+        android:background="@drawable/mv_center_bg"
+        android:src="@drawable/exo_icon_play"
+        android:padding="20dp"
+        android:scaleType="fitCenter"
+        android:focusable="false"
+        android:visibility="gone"
+        android:contentDescription="@string/exo_controls_play_description" />
+  </LinearLayout>
+
+  <FrameLayout android:id="@id/exo_bottom_bar"
+      android:layout_width="match_parent"
+      android:layout_height="@dimen/exo_styled_bottom_bar_height"
+      android:layout_gravity="bottom"
+      android:paddingLeft="12dp"
+      android:paddingRight="12dp"
+      android:background="@android:color/transparent"
+      android:layoutDirection="ltr">
+
+    <LinearLayout android:id="@+id/mv_left"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:layout_gravity="start|center_vertical"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+      <ImageButton android:id="@id/exo_play_pause" style="@style/MvCtl"
+          android:src="@drawable/exo_icon_play"
+          android:contentDescription="@string/exo_controls_play_description" />
+      <ImageButton android:id="@id/exo_prev" style="@style/MvCtl"
+          android:src="@drawable/exo_styled_controls_previous"
+          android:contentDescription="@string/exo_controls_previous_description" />
+      <ImageButton android:id="@id/exo_rew" style="@style/MvCtl"
+          android:src="@drawable/exo_styled_controls_rewind"
+          android:contentDescription="@string/exo_controls_rewind_description" />
+      <ImageButton android:id="@id/exo_ffwd" style="@style/MvCtl"
+          android:src="@drawable/exo_styled_controls_fastforward"
+          android:contentDescription="@string/exo_controls_fastforward_description" />
+      <ImageButton android:id="@id/exo_next" style="@style/MvCtl"
+          android:src="@drawable/exo_styled_controls_next"
+          android:contentDescription="@string/exo_controls_next_description" />
+      <LinearLayout android:id="@id/exo_time"
+          android:layout_width="wrap_content"
+          android:layout_height="wrap_content"
+          android:layout_marginLeft="10dp"
+          android:orientation="horizontal"
+          android:layoutDirection="ltr">
+        <TextView android:id="@id/exo_position" style="@style/MvTime" />
+        <TextView style="@style/MvTime" android:text="  /  " android:textColor="#B3FFFFFF" />
+        <TextView android:id="@id/exo_duration" style="@style/MvTime" android:textColor="#B3FFFFFF" />
+      </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout android:id="@id/exo_basic_controls"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:layout_gravity="end|center_vertical"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:layoutDirection="ltr">
+      <ImageButton android:id="@id/exo_subtitle" style="@style/MvCtl"
+          android:src="@drawable/exo_styled_controls_subtitle_off"
+          android:contentDescription="@string/exo_controls_cc_disabled_description" />
+      <ImageButton android:id="@id/exo_settings" style="@style/MvCtl"
+          android:src="@drawable/exo_styled_controls_settings"
+          android:contentDescription="@string/exo_controls_settings_description" />
+    </LinearLayout>
+  </FrameLayout>
+
+  <View android:id="@id/exo_progress_placeholder"
+      android:layout_width="match_parent"
+      android:layout_height="@dimen/exo_styled_progress_layout_height"
+      android:layout_gravity="bottom"
+      android:layout_marginLeft="10dp"
+      android:layout_marginRight="10dp"
+      android:layout_marginBottom="@dimen/exo_styled_progress_margin_bottom" />
+</merge>

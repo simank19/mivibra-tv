@@ -65,6 +65,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
+            <!-- "Continuar viendo" en el inicio de Android TV -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="mivibra" android:host="play" />
+            </intent-filter>
             <!-- Abrir listas .m3u desde el administrador de archivos -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

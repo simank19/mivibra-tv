@@ -108,6 +108,12 @@ class MainActivity : ComponentActivity() {
     private fun handleViewIntent(i: Intent?) {
         val uri = i?.data ?: return
         if (i.action != Intent.ACTION_VIEW) return
+        // Desde "Continuar viendo" del inicio de Android TV
+        if (uri.scheme == "mivibra") {
+            val key = uri.getQueryParameter("key") ?: return
+            js("window.MV&&MV.openFromHome&&MV.openFromHome(" + org.json.JSONObject.quote(key) + ")")
+            return
+        }
         bridge.readLocalFile("open-intent", uri.toString())
     }
 

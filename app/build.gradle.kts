@@ -80,6 +80,8 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-hls:1.6.1")
     implementation("androidx.media3:media3-exoplayer-dash:1.6.1")
     implementation("androidx.media3:media3-ui:1.6.1")
+    // Fila "Continuar viendo" en la pantalla de inicio de Android TV
+    implementation("androidx.tvprovider:tvprovider:1.0.0")
     // Decodificador FFmpeg (Jellyfin): audio AC3/E-AC3/MP2/DTS que muchos equipos no traen
     implementation("org.jellyfin.media3:media3-ffmpeg-decoder:1.6.1+2")
 
