@@ -871,14 +871,14 @@
   var kidCat = 'all';
   VIEWS.kids = function () {
     var items = MV.visible(S.items);
-    var cats = [['all', 'Todo', '#FF6900', '★'], ['live', 'Canales de TV', '#2F6FEB', 'TV'], ['movie', 'Películas', '#E0447C', '▶'], ['series', 'Series', '#14A38B', '◆'], ['anime', 'Anime', '#D9A20B', '✦']];
-    var list = items.filter(function (i) { if (kidCat === 'live') return i.type === 'live'; if (i.type === 'live') return false; return kidCat === 'all' || (kidCat === 'anime' ? i.anime : i.type === kidCat); });
+    var cats = [['all', 'Todo', '#FF6900', '★'], ['live', 'Canales de TV', '#2F6FEB', 'TV'], ['movie', 'Películas', '#E0447C', '▶'], ['series', 'Series', '#14A38B', '◆']];
+    var list = items.filter(function (i) { if (kidCat === 'live') return i.type === 'live'; if (i.type === 'live') return false; return kidCat === 'all' || i.type === kidCat; });
     var p = MV.profile() || {};
     return '<div class="top"><img src="' + esc(p.avatar || '') + '" alt="" style="width:58px;height:58px;border-radius:50%;background:#F3EFEA;box-shadow:0 0 0 4px var(--accent)"><div><h1>¡Hola, ' + esc(p.name || '') + '!</h1><span class="muted">¿Qué quieres ver hoy?</span></div><div class="sp"></div>' +
       '<span class="pill">Te quedan ' + MV.kidsLeft() + ' min</span><button class="pill f" data-act="kidsExit">' + IC.lock.replace('<svg', '<svg width="18" height="18"') + 'Salir</button></div>' +
       '<div class="kidcats">' + cats.map(function (c) { return '<button class="kidcat f' + (kidCat === c[0] ? ' on' : '') + '" data-act="kidCat" data-arg="' + c[0] + '"><span class="bub" style="background:' + c[2] + '">' + c[3] + '</span>' + c[1] + '</button>'; }).join('') + '</div>' +
       '<button class="kidsearch f" data-act="nav" data-arg="search">' + IC.search + '<span>Buscar dibujos, películas o canales</span></button>' +
-      (!list.length ? '<div class="empty glass"><h2>Aún no hay contenido infantil</h2><p class="muted">Pide a un adulto que agregue canales infantiles en Ajustes › Listas (hay una lista gratuita de canales para niños).</p></div>'
+      (!list.length ? '<div class="empty glass"><h2>' + (kidsChecking ? 'Buscando contenido para tu edad…' : 'Aún no hay contenido infantil') + '</h2><p class="muted">' + (kidsChecking ? 'Estamos revisando en TMDB qué películas y series son para niños de 0 a 7 años.' : 'Pide a un adulto que agregue canales infantiles en Ajustes › Listas (hay una lista gratuita de canales para niños).') + '</p></div>'
         : kidCat === 'all' ? kidsRows(items) : grid(list, kidCat === 'live' ? 'ch' : 'poster', 'kids'));
   };
   /** "Todo" en filas: lo que estaba viendo, canales, películas, series y anime. */
@@ -887,25 +887,28 @@
     var live = items.filter(function (i) { return i.type === 'live'; });
     var mov = items.filter(function (i) { return i.type === 'movie' && !i.anime; });
     var ser = items.filter(function (i) { return i.type === 'series' && !i.anime; });
-    var ani = items.filter(function (i) { return i.anime && i.type !== 'live'; });
+
     var r = function (t, arr, kind) { return arr.length ? row(t, arr.slice(0, 24), kind, arr.length + '') : ''; };
-    return r('Seguir viendo', cont, 'poster') + r('Canales infantiles', live, 'ch') + r('Películas', mov, 'poster') + r('Series', ser, 'poster') + r('Anime', ani, 'poster');
+    return r('Seguir viendo', cont, 'poster') + r('Canales infantiles', live, 'ch') + r('Películas', mov, 'poster') + r('Series', ser, 'poster') +
+      (kidsChecking ? '<p class="muted" style="margin-top:8px">Buscando más películas y series para tu edad…</p>' : '') +
+      (!P.tmdbKey ? '<p class="muted" style="margin-top:8px">Para mostrar películas y series hace falta la clave de TMDB (la configura un adulto).</p>' : '');
   }
   /** Revisa en segundo plano la edad recomendada (TMDB / MyAnimeList) para dejar solo lo apto para niños. */
   var kidsChecked = {}, kidsChecking = false;
   function kidsVerify() {
     if (kidsChecking || !MV.isKids()) return;
     var todo = S.items.filter(function (i) {
-      return i.type !== 'live' && i.age == null && !kidsChecked[i.key] && !i.adult &&
-        (i.kids || i.anime || i.platform === 'disney' || (i.genres || []).indexOf('infantil') >= 0) && (P.tmdbKey || i.anime);
-    }).slice(0, 60);
+      return i.type !== 'live' && !i.anime && i.age == null && !kidsChecked[i.key] && !i.adult &&
+        (i.kids || i.platform === 'disney' || (i.genres || []).indexOf('infantil') >= 0) && P.tmdbKey;
+    }).slice(0, 400);
     if (!todo.length) return;
     kidsChecking = true;
+    if (view.name === 'kids') MV.rerender();
     var n = 0, changed = 0;
     (function next() {
       if (!MV.isKids() || n >= todo.length) {
         kidsChecking = false;
-        if (changed && view.name === 'kids') MV.rerender();
+        if (view.name === 'kids') MV.rerender();
         return;
       }
       var it = todo[n++]; kidsChecked[it.key] = 1;
@@ -913,7 +916,7 @@
       MV.meta(it).then(function () {
         if (MV.kidsOk(it) !== before) changed++;
         if (changed >= 8 && view.name === 'kids') { changed = 0; MV.rerender(); }
-        setTimeout(next, it.anime ? 450 : 120);
+        setTimeout(next, 120);
       });
     })();
   }

@@ -44,12 +44,14 @@
   // Edad recomendada aprendida de TMDB (certificación) o MyAnimeList (rating): 0 = todo público, 7 = niños
   var AGES = MV.load('ages', {});
   var NOT_FOR_KIDS = ['terror', 'suspenso', 'crimen', 'belico'];
-  /** ¿Lo puede ver un perfil infantil? Canales: categoría infantil. Películas, series y anime: edad ≤ 7 si se conoce; si no, categoría infantil. */
+  /** ¿Lo puede ver un perfil infantil? Canales: categoría infantil. Películas y series: solo con edad de TMDB de 0 a 7 años
+      (y que sean infantiles o familiares). Sin anime. */
   MV.kidsOk = function (i) {
     if (i.adult) return false;
     if (i.type === 'live') return !!i.kids;
-    if (i.age != null) return i.age <= 7 && !!(i.kids || i.anime || (i.genres || []).indexOf('infantil') >= 0);
-    return !!i.kids;
+    if (i.anime) return false;
+    if (i.age == null) return false;
+    return i.age <= 7 && !!(i.kids || i.platform === 'disney' || (i.genres || []).indexOf('infantil') >= 0);
   };
   MV.learnGenres = function (item, names, age) {
     if (age != null && item.key) {
