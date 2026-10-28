@@ -68,6 +68,7 @@
     if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) ae.blur();
     if (Date.now() - (MV._typedAt || 0) < 900) return true;
     if (MV.ytPlayer && MV.ytPlayer.isOpen()) { MV.ytPlayer.close(); return true; }
+    if (MV.streamOpen && MV.streamOpen()) { MV.streamClose(); return true; }
     if (MV.modalOpen()) { MV.closeModal(); return true; }
     if (yearSel[view.name]) { yearSel[view.name] = ''; MV.rerender(); return true; }   // salir de "Ver todo" de un año
     if (stack.length) {
@@ -99,7 +100,7 @@
   var UTILS = [['youtube', 'YouTube', 'yt', 'Videos, tendencias y búsqueda'], ['music', 'Música', 'music', 'Tu música y música libre'], ['radio', 'Radio', 'radio', 'Emisoras de Colombia y el mundo'], ['browser', 'Navegador', 'globe', 'Con bloqueador de anuncios'], ['games', 'Juegos', 'games', 'Consolas clásicas y ports']];
   function navOwner(name) {
     if (name === 'guide') return 'live';
-    if (name === 'adult') return 'utils';
+    if (name === 'adult' || name === 'streams') return 'utils';
     if (UTILS.some(function (u) { return u[0] === name; })) return 'utils';
     return name;
   }
@@ -1941,6 +1942,13 @@
       MV.save('radioFavs', f.slice(0, 100)); if (RADIO.scope === 'fav') RADIO.key = ''; MV.rerender();
     },
     musicTab: function (t) { MUSIC.tab = t; MV.rerender(); },
+    streamTab: function (t) { STREAM.tab = t; MV.rerender(); },
+    streamGo: function (a) { var i = a.indexOf(':'); streamPlay(a.slice(0, i), a.slice(i + 1)); },
+    streamOpenIn: function () { var v = ((document.getElementById('streamIn') || {}).value || '').trim(); if (!v) { MV.toast('Escribe el nombre del canal'); return; } streamPlay(STREAM.tab, v); },
+    streamClose: function () { MV.streamClose(); },
+    streamFav: function (a) { var i = a.indexOf(':'), t = a.slice(0, i), c = a.slice(i + 1).toLowerCase(), f = streamFavs(); f[t] = (f[t] || []).filter(function (x) { return x !== c; }); f[t].unshift(c); MV.save('streamFavs', f); MV.toast('Canal guardado'); },
+    streamUnfav: function (a) { var i = a.indexOf(':'), t = a.slice(0, i), c = a.slice(i + 1), f = streamFavs(); f[t] = (f[t] || []).filter(function (x) { return x !== c; }); MV.save('streamFavs', f); MV.rerender(); },
+    streamBrowse: function () { openBrowser(STREAM.tab === 'kick' ? 'https://kick.com/browse' : 'https://www.twitch.tv/directory'); },
     ytmCat: function (c) { YTM.cat = c; YTM.q = ''; YTM.list = null; MV.rerender(); },
     ytmSearch: function () { MV._typedAt = Date.now(); YTM.q = ((document.getElementById('ytmIn') || {}).value || '').trim(); YTM.list = null; MV.rerender(); },
     ytmPlay: function (i) { if (AU.current()) AU.stop(); YTP.play(MV._ytmList || [], +i); },
@@ -2545,12 +2553,49 @@
     return top('Utilidades') + '<div class="utilgrid">' + UTILS.map(function (u, i) {
       return '<button class="utile glass f" data-act="nav" data-arg="' + u[0] + '" data-fid="u-' + u[0] + '" style="animation-delay:' + i * 0.05 + 's"><span class="uic">' + IC[u[2]] + '</span><b>' + u[1] + '</b><span>' + u[3] + '</span></button>';
     }).join('') +
-      '<button class="utile glass f" data-act="openApp" data-arg="kick" data-fid="u-kick"><span class="uic">' + IC.play + '</span><b>Kick</b><span>' + (!A || hasApp('kick') ? 'Transmisiones en vivo' : 'Instalar desde la tienda') + '</span></button>' +
-      '<button class="utile glass f" data-act="openApp" data-arg="twitch" data-fid="u-twitch"><span class="uic">' + IC.play + '</span><b>Twitch</b><span>' + (!A || hasApp('twitch') ? 'Transmisiones en vivo' : 'Instalar desde la tienda') + '</span></button>' +
+      '<button class="utile glass f" data-act="nav" data-arg="streams" data-fid="u-streams"><span class="uic">' + IC.play + '</span><b>Twitch y Kick</b><span>Transmisiones en vivo aquí mismo</span></button>' +
       '<button class="utile glass f" data-act="openDiag" data-fid="u-diag"><span class="uic">' + IC.settings + '</span><b>Diagnóstico MiVibra</b><span>Revisa y optimiza este equipo</span></button>' +
       '<button class="utile glass f" data-act="adultOpen" data-fid="u-adult"><span class="uic">' + IC.lock + '</span><b>+18</b><span>' + (MV.adultOk() ? 'Desbloqueado' : 'Protegido con PIN') + '</span></button>' +
       '<button class="utile glass f" data-act="go" data-arg="settings" data-fid="u-remote" onclick="MV.remoteTab&&MV.remoteTab()"><span class="uic">' + IC.phone + '</span><b>Celular como control</b><span>Control remoto y mando de juegos</span></button></div>';
   };
+
+  // ---------- Twitch y Kick dentro de MiVibra (reproductores oficiales incrustados) ----------
+  var STREAM = { tab: 'twitch' };
+  var STREAM_SUGGEST = {
+    twitch: [['ibai', 'Ibai'], ['auronplay', 'AuronPlay'], ['elmariana', 'El Mariana'], ['rubius', 'Rubius'], ['juansguarnizo', 'JuanSGuarnizo'], ['illojuan', 'IlloJuan'], ['thegrefg', 'TheGrefg'], ['spreen', 'Spreen'], ['elxokas', 'ElXokas'], ['quackity', 'Quackity'], ['rivers_gg', 'Rivers'], ['moistcr1tikal', 'MoistCr1TiKaL']],
+    kick: [['westcol', 'Westcol'], ['elzeein', 'ElZeein'], ['coscu', 'Coscu'], ['roshtein', 'Roshtein'], ['adinross', 'Adin Ross'], ['xqc', 'xQc'], ['amouranth', 'Amouranth'], ['trainwreckstv', 'Trainwreck']]
+  };
+  function streamFavs() { return MV.load('streamFavs', { twitch: [], kick: [] }); }
+  function streamUrl(tab, ch) {
+    ch = encodeURIComponent(String(ch).trim().toLowerCase().replace(/^@/, '').replace(/^https?:\/\/(www\.)?(twitch\.tv|kick\.com)\//, '').split(/[/?#]/)[0]);
+    return tab === 'kick' ? 'https://player.kick.com/' + ch + '?autoplay=true&muted=false'
+      : 'https://player.twitch.tv/?channel=' + ch + '&parent=' + location.hostname + '&autoplay=true&muted=false';
+  }
+  var streamBox = null;
+  MV.streamOpen = function () { return !!(streamBox && streamBox.isConnected); };
+  MV.streamClose = function () { if (streamBox) { streamBox.remove(); streamBox = null; } MV.focusFirst(); };
+  function streamPlay(tab, ch) {
+    if (!ch) return;
+    if (AU.current()) AU.stop();
+    if (streamBox) streamBox.remove();
+    streamBox = document.createElement('div');
+    streamBox.className = 'streambox';
+    streamBox.innerHTML = '<iframe src="' + esc(streamUrl(tab, ch)) + '" allow="autoplay; fullscreen; encrypted-media" allowfullscreen></iframe>' +
+      '<div class="streambar"><b>' + esc(ch) + ' · ' + (tab === 'kick' ? 'Kick' : 'Twitch') + '</b><button class="btn ghost sm f" data-act="streamFav" data-arg="' + esc(tab + ':' + ch) + '">' + IC.star + 'Guardar canal</button><button class="btn sm f" data-act="streamClose" data-autofocus>' + IC.close + 'Cerrar</button></div>';
+    document.body.appendChild(streamBox);
+    var b = streamBox.querySelector('[data-autofocus]'); if (b) b.focus();
+  }
+  VIEWS.streams = function () {
+    var tab = STREAM.tab, favs = streamFavs()[tab] || [];
+    var chip = function (ch, label) { return '<button class="chip f" data-act="streamGo" data-arg="' + esc(tab + ':' + ch) + '">' + esc(label || ch) + '</button>'; };
+    return top('Twitch y Kick') + '<div class="chips">' + [['twitch', 'Twitch'], ['kick', 'Kick']].map(function (t) { return '<button class="chip f' + (tab === t[0] ? ' on' : '') + '" data-act="streamTab" data-arg="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' +
+      '<div style="display:flex;gap:10px;margin:6px 0 16px;flex-wrap:wrap"><input class="in f" id="streamIn" placeholder="Nombre del canal (ej: ' + (tab === 'kick' ? 'westcol' : 'ibai') + ')" style="flex:1;min-width:220px" autocomplete="off" enterkeyhint="go"' + (MV.device.tv ? ' inputmode="none"' : '') + '><button class="btn f" data-act="streamOpenIn">' + IC.play + 'Ver en vivo</button></div>' +
+      (favs.length ? '<h3 style="margin:8px 0">Tus canales</h3><div class="chips">' + favs.map(function (c) { return chip(c) + '<button class="chip f" data-act="streamUnfav" data-arg="' + esc(tab + ':' + c) + '" aria-label="Quitar">' + IC.close + '</button>'; }).join('') + '</div>' : '') +
+      '<h3 style="margin:14px 0 8px">Canales populares</h3><div class="chips">' + STREAM_SUGGEST[tab].map(function (c) { return chip(c[0], c[1]); }).join('') + '</div>' +
+      '<p class="muted" style="font-size:13px;margin-top:16px">Se ve con el reproductor oficial de ' + (tab === 'kick' ? 'Kick' : 'Twitch') + ' dentro de MiVibra. Si el canal no está en vivo, aparece su pantalla de "desconectado". Atrás o Cerrar vuelve aquí.</p>' +
+      '<div class="btns"><button class="btn ghost f" data-act="streamBrowse">Explorar ' + (tab === 'kick' ? 'Kick' : 'Twitch') + ' en el navegador de la app</button></div>';
+  };
+  VIEWS.streams.after = function () { var i = document.getElementById('streamIn'); if (i) i.addEventListener('keydown', function (e) { if (e.key === 'Enter') { MV._typedAt = Date.now(); ACT.streamOpenIn(); } }); };
 
   // ---------- Navegador ----------
   var BROWSER_SITES = [['Google', 'https://www.google.com'], ['YouTube', 'https://m.youtube.com'], ['Wikipedia', 'https://es.wikipedia.org'], ['Noticias', 'https://news.google.com/?hl=es-419&gl=CO&ceid=CO:es-419'], ['El Tiempo', 'https://www.eltiempo.com'], ['Clima', 'https://www.google.com/search?q=clima'], ['Mapas', 'https://www.google.com/maps'], ['Fútbol', 'https://www.google.com/search?q=resultados+futbol']];
