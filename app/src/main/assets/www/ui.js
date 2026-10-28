@@ -1467,11 +1467,12 @@
     }
     return share + '<div class="panel glass"><h2>Tus listas</h2><p>Todo el contenido de tus listas se combina: los canales repetidos aparecen una sola vez y se queda la señal que funciona.' + (MV.acct.isAdmin() ? ' <b>Eres superadministrador:</b> lo que cambies aquí llega a todos los usuarios (las listas en archivo solo quedan en este equipo; usa enlaces para compartirlas).' : '') + '</p>' +
       (S.lists.length ? S.lists.map(function (l) {
-        return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.type === 'xtream' ? 'Xtream Codes · ' + esc(l.host) : l.type === 'file' ? 'Archivo' : esc(l.url)) + ' · ' + (l.count || 0) + ' elementos' + (l.epg ? ' · con guía' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div>' +
+        return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.type === 'xtream' ? 'Xtream Codes · ' + esc(l.host) : l.type === 'file' ? 'Archivo' : esc(l.url)) + ' · ' + (l.count || 0) + ' elementos' + ((S.hiddenDupes || {})[l.id] ? ' · ' + S.hiddenDupes[l.id] + ' repetidos ocultos' : '') + (l.epg ? ' · con guía' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div>' +
           '<button class="toggle f' + (l.enabled !== false ? ' on' : '') + '" data-act="listToggle" data-arg="' + l.id + '" aria-label="Activar lista"></button>' +
           '<button class="iconbtn f" data-act="listEpg" data-arg="' + l.id + '" aria-label="Guía EPG">' + IC.guide + '</button>' +
           '<button class="iconbtn f" data-act="listDelete" data-arg="' + l.id + '" aria-label="Eliminar">' + IC.trash + '</button></div>';
       }).join('') : '<p class="muted">No has agregado listas.</p>') +
+      '<div class="line"><div class="t"><b>Ocultar contenido repetido</b><span>Si una película, serie o canal está en varias listas (aunque se llame distinto, como "Animales" y "Animals"), se muestra una sola vez con la versión de mejor calidad: 4K, luego Full HD, HD y SD; latino primero. Las otras quedan de respaldo por si la principal falla.</span></div><button class="toggle f' + (P.dedupe !== false ? ' on' : '') + '" data-act="dedupeToggle" aria-label="Ocultar repetidos"></button></div>' +
       '<div class="btns" style="margin-top:14px"><button class="btn f" data-act="addList">' + IC.plus + 'Agregar lista</button><button class="btn ghost f" data-act="presets">Canales gratis</button><button class="btn ghost f" data-act="reloadAll">' + IC.refresh + 'Actualizar todo</button></div></div>' + dupesPanel();
   };
   SETTINGS.menu = function () {
@@ -1791,6 +1792,7 @@
         '</div><div class="btns"><button class="btn ghost f" data-act="closeModal">Cerrar</button></div>');
     },
     hintGo: function () { MV.closeModal(); },
+    dedupeToggle: function () { P.dedupe = P.dedupe === false; MV.savePrefs(); MV.toast(P.dedupe ? 'Mostrando solo la mejor versión de cada título' : 'Mostrando todas las versiones'); MV.reloadCatalog(false).then(MV.rerender); },
     tourAgain: function () { MV.tourReset(); MV.toast('Listo: el tutorial aparecerá otra vez en cada sección'); MV.go('home'); },
     go: function (a) { MV.closeModal(true); if (a === 'profileEdit') { editSel = null; pendingName = null; } MV.go(a); },
     more: function (k) { limits[k] = (limits[k] || (k === 'live' ? 150 : k === 'games' ? 120 : k === 'music' ? 200 : 60)) + (k === 'live' ? 150 : k === 'music' ? 200 : 60); keepPlace(); },

@@ -547,6 +547,7 @@ html.tv .row { content-visibility: auto; contain-intrinsic-size: auto 280px; }
   /* Fondo oscuro casi opaco: sobre carátulas claras (blancas) los íconos y nombres se perdían */
   .side.glass { background: rgba(14,12,11,.9); -webkit-backdrop-filter: blur(18px) saturate(1.3); backdrop-filter: blur(18px) saturate(1.3); border: 1px solid rgba(255,255,255,.12); box-shadow: 0 10px 30px rgba(0,0,0,.55); }
   .side .nav:not(.on) { color: rgba(255,255,255,.82); }
+  html.typing .side { display: none; }
   .side .logo, .side .sp { display: none; }
   .nav { flex: 0 0 68px; width: 68px; min-height: 58px; font-size: 10px; }
   .main { padding: 16px 14px 100px; }

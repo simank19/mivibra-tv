@@ -16,7 +16,7 @@
   var P = S.prefs;
   var defaults = {
     theme: 'mv', glass: 'mid', anim: true, bgAnim: true, autoTheme: true, audioLang: 'es', subLang: '', xtFormat: 'm3u8',
-    tmdbKey: '', ytKey: '', subKey: '', streamKeys: {}, navOrder: [], navHidden: [], covers: {}, kidsLimit: 60, parentPin: '', adult: null, romRoots: [], romSystem: {}, shader: 'default',
+    tmdbKey: '', ytKey: '', subKey: '', streamKeys: {}, dedupe: true, navOrder: [], navHidden: [], covers: {}, kidsLimit: 60, parentPin: '', adult: null, romRoots: [], romSystem: {}, shader: 'default',
     firebase: '', syncLists: true, updatedAt: 0, deviceName: ''
   };
   Object.keys(defaults).forEach(function (k) { if (P[k] === undefined) P[k] = defaults[k]; });
@@ -60,6 +60,16 @@
   MV.hasLearned = function (key) { return !!GCACHE[key]; };
   // Año según TMDB (manda sobre el de la lista)
   var YEARS = MV.load('tmdbYears', {}), DATES = MV.load('tmdbDates', {});
+  // Ficha de TMDB de cada título: dos títulos con la misma ficha son la misma película aunque se llamen distinto ("Animales" = "Animals")
+  var TIDS = MV.load('tmdbIds', {});
+  MV.learnTid = function (item, tid) {
+    if (!tid || !item || !item.key || item.type === 'live' || TIDS[item.key] === tid) return;
+    TIDS[item.key] = tid; item.tid = tid;
+    var tk = Object.keys(TIDS); if (tk.length > 30000) delete TIDS[tk[0]];
+    MV.save('tmdbIds', TIDS);
+    // Si ya hay otro título con esa ficha, se vuelven a combinar las listas (con calma, sin trabar la navegación)
+    if (S.byTid && S.byTid[tid] && S.byTid[tid] !== item && S.byTid[tid].key !== item.key) MV.redupeLater();
+  };
   MV.learnGenres = function (item, names, age, year, date) {
     // Fecha de estreno (para ordenar Estrenos del más reciente al más antiguo)
     if (date && item.key && item.type !== 'live' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -185,6 +195,7 @@
     o.kids = !RX.notKids.test(g) && !RX.adult.test(g) && (RX.kids.test(o.group || '') || RX.kidsName.test(o.name || ''));
     if (AGES[o.key] != null) o.age = AGES[o.key];
     if (ANIM[o.key]) o.animated = true;
+    if (TIDS[o.key]) o.tid = TIDS[o.key];
     o.anime = RX.anime.test(g);
     o.kdrama = RX.kdrama.test(g);
     o.platform = D.platformOf(o.group || '') || (o.type !== 'live' ? D.platformOf(o.name || '') : '');
@@ -372,6 +383,7 @@
       return loadList(l, force).catch(function (e) { MV.toast('“' + l.name + '”: ' + e.message, 4000); return []; });
     })).then(function (all) {
       MV.saveLists();
+      lastAll = all;
       combine(all);
       S.loading = false; MV.emit('catalog');
       MV.loadEpg(false);
@@ -388,7 +400,12 @@
     var r = c.map(function (u) { var p = PROBE[u]; return p && now - p.ts < PROBE_TTL ? p : null; });
     if (r.some(function (x) { return !x; })) return false;
     var good = c.map(function (u, i) { return { u: u, p: r[i] }; }).filter(function (x) { return x.p.ok; })
-      .sort(function (a, b) { return a.p.ms - b.p.ms; });
+      .sort(function (a, b) {
+        // Primero la mejor calidad (4K, FHD, HD…); entre iguales, la que responde más rápido. Una señal muy lenta (>4 s) pierde.
+        var qa = (it.qs && it.qs[a.u]) || 15, qb = (it.qs && it.qs[b.u]) || 15;
+        if (a.p.ms > 4000 !== b.p.ms > 4000) return a.p.ms > 4000 ? 1 : -1;
+        return qb - qa || a.p.ms - b.p.ms;
+      });
     if (good.length) { it.url = good[0].u; it.alts = good.slice(1).map(function (x) { return x.u; }); it.dead = false; }
     else { it.dead = true; }
     return true;
@@ -426,28 +443,104 @@
   function liveName(n) {
     return MV.norm(String(n || '').replace(/^\s*[\[|(]?\s*[a-z]{2,5}\s*[\]|):]\s*/i, '').replace(/\([^)]*\)|\[[^\]]*\]/g, ''));
   }
+  /** Calidad según el nombre, la categoría y el enlace: 4K > FHD/1080 > HD/720 > SD. Latino/español suma; CAM/TS resta. */
+  function qScore(it) {
+    var t = (it.name || '') + ' ' + (it.group || '') + ' ' + (it.url || '').split('?')[0];
+    var q = /\b(4k|uhd|2160p?)\b/i.test(t) ? 40 : /\b(fhd|full ?hd|1080p?)\b/i.test(t) ? 30 : /\b(hd|720p?)\b/i.test(t) ? 20 : /\b(sd|480p?|360p?)\b/i.test(t) ? 10 : 15;
+    if (/\b(cam|camrip|hdcam|telesync)\b/i.test(t) || /\bTS\b/.test(it.name || '')) q -= 20;
+    if (/\b(latino|lat|español|espanol|castellano|dual)\b/i.test(t)) q += 4;
+    if (/\b(sub|subs|subtitulad[ao]|vose|vos)\b/i.test(t)) q -= 3;
+    if (/\b(hevc|x265|h265)\b/i.test(t)) q += 1;
+    return q;
+  }
+  var lastAll = null, redupeT = null;
+  /** Vuelve a combinar cuando TMDB descubre que dos títulos son la misma película (espera a que no se esté usando el control). */
+  MV.redupeLater = function () {
+    clearTimeout(redupeT);
+    redupeT = setTimeout(function again() {
+      if (!lastAll || S.loading) return;
+      if (Date.now() - (MV._lastKey || 0) < 4000 || (MV.modalOpen && MV.modalOpen())) { redupeT = setTimeout(again, 3000); return; }
+      // Lo aprendido de TMDB en esta sesión (géneros, año, ficha) se aplica también a las copias originales
+      lastAll.forEach(function (arr) { arr.forEach(function (o) { if (o.type !== 'live') retag(o); }); });
+      combine(lastAll); MV.emit('catalog');
+    }, 8000);
+  };
   function combine(all) {
-    var byKey = {}, byName = {}, items = [];
+    var byKey = {}, byName = {}, byId = {}, byTid = {}, items = [], dedupe = P.dedupe !== false, hidden = {}, pairs = [];
+    // Carátulas que se repiten mucho (genéricas del proveedor) no sirven para reconocer duplicados
+    var posterUse = {};
+    if (dedupe) all.forEach(function (arr) { arr.forEach(function (it) { if (it.type !== 'live' && it.poster) posterUse[it.poster] = (posterUse[it.poster] || 0) + 1; }); });
+    function yearOf(it) { return String(it.year || (String(it.name || '').match(/\((19|20)\d{2}\)/) || [''])[0].replace(/[()]/g, '') || ''); }
+    function idents(it) {
+      if (!dedupe || it.type === 'live') return [];
+      var y = yearOf(it), t = MV.norm(MV.cleanTitle(it.name || '').replace(/\((19|20)\d{2}\)/, '')), out = [];
+      if (it.tid) out.push('t:' + it.tid);
+      if (t) out.push('n:' + it.type + ':' + t + ':' + y);
+      if (it.poster && posterUse[it.poster] <= 4) out.push('p:' + it.type + ':' + it.poster.replace(/^https?:\/\//, '') + ':' + y);
+      return out;
+    }
+    function swapIn(ex, it) {
+      // El nuevo es de mejor calidad: pasa a ser el principal y el anterior queda de respaldo
+      if (ex.url && ex.url !== it.url) { ex.alts = [ex.url].concat((ex.alts || []).filter(function (u) { return u !== it.url; })).slice(0, 6); }
+      ['url', 'ua', 'ref', 'list'].forEach(function (k) { if (it[k] !== undefined) ex[k] = it[k]; });
+      if (it.xt) ex.xt = it.xt;
+      if (it.episodes && it.episodes.length) ex.episodes = it.episodes.slice();
+      ex.q = qScore(it);
+    }
     all.forEach(function (arr) {
       arr.forEach(function (it) {
         var ln = it.type === 'live' ? liveName(it.name) : '', nk = ln ? 'n:' + (it.country || '') + ':' + ln : '';
+        var ids = idents(it), q = qScore(it);
         var ex = byKey[it.key] || (nk ? byName[nk] : null);
+        for (var k = 0; !ex && k < ids.length; k++) {
+          var c = byId[ids[k]];
+          // Mismo título y año, misma ficha o misma carátula; si los dos tienen año distinto no se juntan (remakes)
+          if (c && c.type === it.type && (!yearOf(c) || !yearOf(it) || Math.abs(+yearOf(c) - +yearOf(it)) <= 1)) ex = c;
+        }
         if (ex) {
-          // Mismo contenido en otra lista: guardar como señal alternativa
-          if (it.url && it.url !== ex.url) { ex.alts = ex.alts || []; if (ex.alts.length < 6 && ex.alts.indexOf(it.url) < 0) ex.alts.push(it.url); }
-          if (it.type === 'live') ex.cands = [ex.url].concat(ex.alts || []);
+          pairs.push([it, ex]);
+          if (it.type === 'live') {
+            if (it.url && it.url !== ex.url) { ex.alts = ex.alts || []; if (ex.alts.length < 6 && ex.alts.indexOf(it.url) < 0) ex.alts.push(it.url); }
+            ex.qs = ex.qs || {}; ex.qs[ex.url] = ex.qs[ex.url] || ex.q || 15; if (it.url) ex.qs[it.url] = q;
+            ex.cands = [ex.url].concat(ex.alts || []);
+          } else if (it.type === 'series') {
+            var better = q > (ex.q || 15) || (q === (ex.q || 15) && (it.episodes || []).length > (ex.episodes || []).length + 2);
+            var other = better ? (ex.episodes || []) : (it.episodes || []);
+            if (better) swapIn(ex, it);
+            // Capítulos que solo trae la otra lista se agregan (sin repetir temporada y capítulo)
+            if (ex.episodes && other.length) {
+              var have = {}; ex.episodes.forEach(function (e) { have[e.season + 'x' + e.ep] = 1; });
+              other.forEach(function (e) { if (!have[e.season + 'x' + e.ep]) { ex.episodes.push(e); have[e.season + 'x' + e.ep] = 1; } });
+            }
+          } else {
+            if (q > (ex.q || 15)) swapIn(ex, it);
+            else if (it.url && it.url !== ex.url) { ex.alts = ex.alts || []; if (ex.alts.length < 6 && ex.alts.indexOf(it.url) < 0) ex.alts.push(it.url); }
+          }
           if (!ex.logo && it.logo) ex.logo = it.logo;
           if (!ex.poster && it.poster) ex.poster = it.poster;
           if (!ex.tvg && it.tvg) ex.tvg = it.tvg;
-          if (it.episodes && ex.episodes) ex.episodes = ex.episodes.concat(it.episodes.filter(function (e) { return !ex.episodes.some(function (x) { return x.url === e.url; }); }));
+          if (!ex.plot && it.plot) ex.plot = it.plot;
+          if (!ex.year && it.year) ex.year = it.year;
+          if (!ex.tid && it.tid) ex.tid = it.tid;
+          if ((it.added || 0) > (ex.added || 0)) ex.added = it.added;
+          byKey[it.key] = ex;   // favoritos e historial guardados con la otra versión siguen funcionando
+          ids.forEach(function (x) { if (!byId[x]) byId[x] = ex; });
+          if (it.tid && !byTid[it.tid]) byTid[it.tid] = ex;
           return;
         }
         var copy = Object.assign({}, it);
+        copy.q = q; pairs.push([it, copy]);
+        if (copy.type === 'live') { copy.qs = {}; copy.qs[copy.url] = q; }
+        if (copy.episodes) copy.episodes = copy.episodes.slice();
         byKey[it.key] = copy; items.push(copy);
         if (nk && !byName[nk]) byName[nk] = copy;
+        ids.forEach(function (x) { if (!byId[x]) byId[x] = copy; });
+        if (it.tid) byTid[it.tid] = copy;
       });
     });
-    S.items = items; S.byKey = byKey;
+    // Cuántos títulos de cada lista quedaron ocultos porque otra lista tiene una versión mejor
+    pairs.forEach(function (pr) { if (pr[0].type !== 'live' && (pr[1].url !== pr[0].url || pr[1].list !== pr[0].list) && !(pr[0].type === 'series' && pr[1].list === pr[0].list)) hidden[pr[0].list] = (hidden[pr[0].list] || 0) + 1; });
+    S.items = items; S.byKey = byKey; S.byTid = byTid; S.hiddenDupes = hidden;
     S.live = items.filter(function (i) { return i.type === 'live'; });
     S.live.forEach(function (i) { if (i.cands) applyProbe(i); });
     S.movies = items.filter(function (i) { return i.type === 'movie'; }).sort(function (a, b) { return (b.added || 0) - (a.added || 0); });
@@ -580,7 +673,7 @@
       // Fichas guardadas antes de saber la edad se vuelven a pedir en perfiles infantiles
       // Fichas guardadas sin fecha de estreno (versiones anteriores) se vuelven a pedir una vez
       var fresh = c && c.ts > Date.now() - 14 * 86400e3 && !(MV.isKids() && c.data && c.data.age === undefined) && !(c.data && c.data.source === 'TMDB' && c.data.date === undefined);
-      if (fresh) { if (c.data) MV.learnGenres(item, c.data.genres, c.data.age, c.data.year, c.data.date); return c.data; }
+      if (fresh) { if (c.data) { MV.learnGenres(item, c.data.genres, c.data.age, c.data.year, c.data.date); if (c.data.tmdbId) MV.learnTid(item, c.data.kind + ':' + c.data.tmdbId); } return c.data; }
       var title = MV.cleanTitle(item.name);
       var year = (item.year || (item.name.match(/\((19|20)\d{2}\)/) || [''])[0].replace(/[()]/g, ''));
       var job;
@@ -591,7 +684,7 @@
         if (!data && item.anime && P.tmdbKey) return tmdbMeta(title, year, item.type === 'series' ? 'tv' : 'movie');
         return data;
       }).then(function (data) {
-        if (data) { MV.idbSet(ck, { ts: Date.now(), data: data }); MV.learnGenres(item, data.genres, data.age, data.year, data.date); }
+        if (data) { MV.idbSet(ck, { ts: Date.now(), data: data }); MV.learnGenres(item, data.genres, data.age, data.year, data.date); if (data.tmdbId) MV.learnTid(item, data.kind + ':' + data.tmdbId); }
         return data;
       }).catch(function () { return null; });
     });

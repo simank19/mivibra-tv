@@ -117,6 +117,9 @@
   MV.lite = !!(MV.device.tv && (MV.device.lowRam || (MV.device.ramMb && MV.device.ramMb < 3000)));
   try { if (MV.lite) document.documentElement.classList.add('lite'); } catch (e) {}
 
+  // Celular: mientras se escribe se esconde la barra inferior (quedaba encima del teclado y tapaba los resultados)
+  document.addEventListener('focusin', function (e) { var t = e.target; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') && t.getAttribute('inputmode') !== 'none') document.documentElement.classList.add('typing'); });
+  document.addEventListener('focusout', function () { setTimeout(function () { var a = document.activeElement; if (!a || (a.tagName !== 'INPUT' && a.tagName !== 'TEXTAREA')) document.documentElement.classList.remove('typing'); }, 80); });
   // ---------- Avisos ----------
   MV.toast = function (msg, ms) {
     var box = document.getElementById('toast'), el = document.createElement('div');
