@@ -151,6 +151,7 @@ class PlayerActivity : ComponentActivity() {
         view.setShowSubtitleButton(true)
         arrangeControls()
         setupPanel(req)
+        if (!live && queue.length() > 1) ui.postDelayed(nextTick, 1000)
         applySubtitleStyle()
         setContentView(root)
 
@@ -234,6 +235,48 @@ class PlayerActivity : ComponentActivity() {
         val c = view.findViewById<View>(R.id.mv_center_play) ?: return
         val p = player
         c.visibility = if (p != null && !p.isPlaying && p.playbackState == Player.STATE_READY) View.VISIBLE else View.GONE
+    }
+
+    // ---------- Siguiente episodio automático ----------
+    private var nextCard: TextView? = null
+    private fun hasNext() = !live && index < queue.length() - 1
+    private fun goNext() {
+        ui.removeCallbacks(nextTick)
+        nextCard?.visibility = View.GONE
+        if (hasNext()) { playIndex(index + 1, 0); panel?.setCurrent(index) }
+    }
+    /** En los últimos 20 s aparece "Siguiente capítulo en N s" (OK para verlo ya); al terminar pasa solo. */
+    private val nextTick = object : Runnable {
+        override fun run() {
+            val p = player
+            if (p != null && hasNext() && p.duration > 0) {
+                val left = (p.duration - p.currentPosition) / 1000
+                val card = nextCard ?: makeNextCard().also { nextCard = it }
+                if (left in 0..20) {
+                    val n = queue.optJSONObject(index + 1)
+                    card.text = "▶  Siguiente: " + (n?.optString("subtitle")?.ifBlank { null } ?: n?.optString("title") ?: "") + "  ·  en " + left + " s"
+                    if (card.visibility != View.VISIBLE) { card.visibility = View.VISIBLE; card.requestFocus() }
+                } else card.visibility = View.GONE
+            }
+            ui.postDelayed(this, 1000)
+        }
+    }
+    private fun makeNextCard(): TextView {
+        val t = TextView(this).apply {
+            setTextColor(Color.WHITE)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(dp(22), dp(14), dp(22), dp(14))
+            isFocusable = true; isClickable = true
+            background = android.graphics.drawable.StateListDrawable().apply {
+                addState(intArrayOf(android.R.attr.state_focused), android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(26).toFloat(); setColor(0xFFFF6900.toInt()) })
+                addState(intArrayOf(), android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(26).toFloat(); setColor(0xE60D0C0B.toInt()); setStroke(dp(2), 0xFFFF6900.toInt()) })
+            }
+            visibility = View.GONE
+            setOnClickListener { goNext() }
+        }
+        root.addView(t, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.END).apply { setMargins(0, 0, dp(28), dp(96)) })
+        return t
     }
 
     private fun isFav(o: JSONObject) = o.optBoolean("fav")
@@ -384,6 +427,7 @@ class PlayerActivity : ComponentActivity() {
                     // Ya abrió: quita el aviso de "Probando otra forma…"
                     if (info.visibility == View.VISIBLE && info.text.startsWith("Probando")) hideInfo(600)
                 }
+                if (state == Player.STATE_ENDED && !live && hasNext()) { goNext(); return }
                 if (state == Player.STATE_ENDED && !live) {
                     if (index < queue.length() - 1) playIndex(index + 1, 0) else finishWithResult()
                 }
@@ -427,6 +471,8 @@ class PlayerActivity : ComponentActivity() {
     private fun onFail(error: PlaybackException) {
         cancelWatchdog()
         val p = player ?: return
+        // Si falla en los últimos 90 s de un episodio (créditos cortados), pasa al siguiente
+        if (!live && hasNext() && p.duration > 0 && p.duration - p.currentPosition < 90_000) { goNext(); return }
 
         if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
             p.seekToDefaultPosition(); p.prepare(); return
