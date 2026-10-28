@@ -57,6 +57,7 @@ class PlayerActivity : ComponentActivity() {
     private var replacedBy = false
     private var session: androidx.media3.session.MediaSession? = null
     private var panel: ChannelPanel? = null
+    private val favToggles = linkedSetOf<String>()   // ids cuyo favorito cambió aquí (la app lo guarda al cerrar)
     private var panelOpen = false
     private lateinit var root: FrameLayout
     private val hidePanel = Runnable { closePanel() }
@@ -181,6 +182,8 @@ class PlayerActivity : ComponentActivity() {
             setUnplayedColor(0x33FFFFFF)
         }
         view.findViewById<View>(R.id.mv_center_play)?.setOnClickListener { player?.play() }
+        // Favorito del canal o video actual
+        view.findViewById<android.widget.ImageButton>(R.id.mv_fav)?.setOnClickListener { toggleFav() }
         // Silenciar / quitar silencio
         view.findViewById<android.widget.ImageButton>(R.id.mv_mute)?.let { b ->
             b.setOnClickListener {
@@ -231,6 +234,25 @@ class PlayerActivity : ComponentActivity() {
         val c = view.findViewById<View>(R.id.mv_center_play) ?: return
         val p = player
         c.visibility = if (p != null && !p.isPlaying && p.playbackState == Player.STATE_READY) View.VISIBLE else View.GONE
+    }
+
+    private fun isFav(o: JSONObject) = o.optBoolean("fav")
+    private fun toggleFav() {
+        val o = current()
+        val id = o.optString("id"); if (id.isBlank()) return
+        val on = !isFav(o)
+        o.put("fav", on)
+        if (!favToggles.remove(id)) favToggles.add(id)
+        updateFavBtn()
+        panel?.setCurrent(index)
+        android.widget.Toast.makeText(this, if (on) "Agregado a favoritos" else "Quitado de favoritos", android.widget.Toast.LENGTH_SHORT).show()
+        view.showController()
+    }
+    private fun updateFavBtn() {
+        val b = view.findViewById<android.widget.ImageButton>(R.id.mv_fav) ?: return
+        val on = isFav(current())
+        b.setImageResource(if (on) R.drawable.mv_ic_star_on else R.drawable.mv_ic_star)
+        b.contentDescription = if (on) "Quitar de favoritos" else "Agregar a favoritos"
     }
 
     // ---------- Lista de canales (TV en vivo) ----------
@@ -525,7 +547,8 @@ class PlayerActivity : ComponentActivity() {
         retries = 0
         startPosition = startMs
         startAttempt()
-        if (announce) showInfo(item)
+        // Sin recuadro con el nombre del canal (pedido); solo se actualiza el botón de favorito
+        updateFavBtn()
     }
 
     private fun showInfo(item: JSONObject) {
@@ -759,6 +782,7 @@ class PlayerActivity : ComponentActivity() {
             .put("duration", p?.duration?.takeIf { it > 0 } ?: 0)
             .put("live", live)
             .put("replaced", replacedBy)
+            .put("favToggles", JSONArray(favToggles.toList()))
         setResult(RESULT_OK, Intent().putExtra("result", result.toString()))
         finish()
     }

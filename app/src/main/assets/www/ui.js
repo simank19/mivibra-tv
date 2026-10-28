@@ -1282,7 +1282,7 @@
   }
   function q(it, extra) {
     var nn = it.type === 'live' ? MV.nowNext(it) : {};
-    return Object.assign({ id: it.key, url: it.url, title: it.name, subtitle: nn.now ? nn.now.t : (it.group || ''), num: it.num || '', ua: it.ua || '', ref: it.ref || '', alts: it.alts || [], poster: it.type === 'live' ? '' : MV.poster(it), logo: it.type === 'live' ? (it.logo || '') : '', fav: it.type === 'live' ? MV.isFav(it.key) : false }, it.type === 'live' ? {} : subInfo(it), extra || {});
+    return Object.assign({ id: it.key, url: it.url, title: it.name, subtitle: nn.now ? nn.now.t : (it.group || ''), num: it.num || '', ua: it.ua || '', ref: it.ref || '', alts: it.alts || [], poster: it.type === 'live' ? '' : MV.poster(it), logo: it.type === 'live' ? (it.logo || '') : '', fav: MV.isFav(it.key) }, it.type === 'live' ? {} : subInfo(it), extra || {});
   }
   function launch(req, ctx) {
     stopHeroPreview();
@@ -1342,6 +1342,11 @@
   };
   MV.onPlayerClosed = function (r) {
     var ctx;
+    // Favoritos marcados desde el reproductor
+    if (r && r.favToggles && r.favToggles.length) r.favToggles.forEach(function (id) {
+      var it = S.byKey[id] || (MV.reg && MV.reg[id]) || (id.indexOf('#') > 0 ? S.byKey[id.split('#')[0]] : null);
+      if (it) MV.toggleFav(it);
+    });
     if (r && r.replaced) { ctx = replaced; replaced = null; if (!ctx) return; }
     else { if (!playing) return; ctx = playing; playing = null; }
     var mins = Math.round((Date.now() - ctx.started) / 60000);

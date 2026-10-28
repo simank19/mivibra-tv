@@ -80,6 +80,9 @@
           android:src="@drawable/mv_ic_list"
           android:visibility="gone"
           android:contentDescription="Lista de canales" />
+      <ImageButton android:id="@+id/mv_fav" style="@style/MvCtl"
+          android:src="@drawable/mv_ic_star"
+          android:contentDescription="Agregar a favoritos" />
       <ImageButton android:id="@+id/mv_mute" style="@style/MvCtl"
           android:src="@drawable/mv_vol_on"
           android:contentDescription="Silenciar" />
