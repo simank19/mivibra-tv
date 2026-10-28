@@ -59,8 +59,13 @@
   var ANIM = MV.load('animated', {});
   MV.hasLearned = function (key) { return !!GCACHE[key]; };
   // Año según TMDB (manda sobre el de la lista)
-  var YEARS = MV.load('tmdbYears', {});
-  MV.learnGenres = function (item, names, age, year) {
+  var YEARS = MV.load('tmdbYears', {}), DATES = MV.load('tmdbDates', {});
+  MV.learnGenres = function (item, names, age, year, date) {
+    // Fecha de estreno (para ordenar Estrenos del más reciente al más antiguo)
+    if (date && item.key && item.type !== 'live' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      item.rdate = date;
+      if (DATES[item.key] !== date) { DATES[item.key] = date; var dk = Object.keys(DATES); if (dk.length > 20000) delete DATES[dk[0]]; MV.save('tmdbDates', DATES); }
+    }
     if (year && item.key && item.type !== 'live' && +year >= 1900) {
       item.year = String(year);
       if (YEARS[item.key] !== item.year) { YEARS[item.key] = item.year; var yk = Object.keys(YEARS); if (yk.length > 20000) delete YEARS[yk[0]]; MV.save('tmdbYears', YEARS); }
@@ -197,6 +202,7 @@
       var learned = GCACHE[o.key];
       if (learned && o.type !== 'live') { o.genres = learned.slice(); o.tmdbG = true; }   // TMDB manda
       if (o.type !== 'live' && YEARS[o.key]) o.year = YEARS[o.key];
+      if (o.type !== 'live' && DATES[o.key]) o.rdate = DATES[o.key];
       if (learned) {
         // Lo que dice TMDB manda: documental si su género es Documental
         if (o.type !== 'live' && learned.indexOf('documental') >= 0) o.doc = true;
@@ -573,7 +579,7 @@
     return MV.idbGet(ck).then(function (c) {
       // Fichas guardadas antes de saber la edad se vuelven a pedir en perfiles infantiles
       var fresh = c && c.ts > Date.now() - 14 * 86400e3 && !(MV.isKids() && c.data && c.data.age === undefined);
-      if (fresh) { if (c.data) MV.learnGenres(item, c.data.genres, c.data.age, c.data.year); return c.data; }
+      if (fresh) { if (c.data) MV.learnGenres(item, c.data.genres, c.data.age, c.data.year, c.data.date); return c.data; }
       var title = MV.cleanTitle(item.name);
       var year = (item.year || (item.name.match(/\((19|20)\d{2}\)/) || [''])[0].replace(/[()]/g, ''));
       var job;
@@ -584,7 +590,7 @@
         if (!data && item.anime && P.tmdbKey) return tmdbMeta(title, year, item.type === 'series' ? 'tv' : 'movie');
         return data;
       }).then(function (data) {
-        if (data) { MV.idbSet(ck, { ts: Date.now(), data: data }); MV.learnGenres(item, data.genres, data.age, data.year); }
+        if (data) { MV.idbSet(ck, { ts: Date.now(), data: data }); MV.learnGenres(item, data.genres, data.age, data.year, data.date); }
         return data;
       }).catch(function () { return null; });
     });
@@ -635,6 +641,7 @@
           age: certAge(certs),
           source: 'TMDB', tmdbId: d.id, kind: kind, imdb: (d.external_ids && d.external_ids.imdb_id) || d.imdb_id || '', title: d.title || d.name, overview: d.overview || r.overview || '',
           year: (d.release_date || d.first_air_date || '').slice(0, 4),
+          date: d.release_date || d.first_air_date || '',
           runtime: d.runtime ? d.runtime + ' min' : (d.number_of_seasons ? d.number_of_seasons + ' temporadas' : ''),
           rating: d.vote_average ? d.vote_average.toFixed(1) : '',
           genres: (d.genres || []).map(function (g) { return g.name; }).slice(0, 3)

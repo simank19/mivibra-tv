@@ -738,7 +738,7 @@
     var html = '', K = kind || 'poster';
     // Estrenos siempre primero (se actualiza solo: lo del año actual y el anterior, lo más nuevo arriba)
     if (vkey !== 'anime') {
-      var est = list.filter(isEstreno).sort(function (a, b) { return (+itemYear(b) || 0) - (+itemYear(a) || 0) || (b.added || 0) - (a.added || 0); });
+      var est = list.filter(isEstreno).sort(byRelease);
       if (est.length >= 3) html += '<section class="row"><h3>Estrenos <small>' + est.length + '</small></h3><div class="strip">' +
         est.slice(0, 24).map(function (it, i) { return card(it, K, i); }).join('') +
         (est.length > 24 ? '<button class="card poster f seeall" data-act="cat" data-arg="Estrenos" data-v="' + vkey + '"><div class="th"><b>Ver todo ›</b><span>' + est.length + ' títulos</span></div></button>' : '') + '</div></section>';
@@ -799,6 +799,12 @@
   }
   var yearSel = {};
   // Estreno: del año actual o del anterior (con año confirmado); "Estrenos" en la categoría solo cuenta si no se sabe el año
+  /** Del estreno más reciente al más antiguo: fecha de TMDB; si no hay, el año; después lo agregado a la lista. */
+  function byRelease(a, b) {
+    var da = a.rdate || (itemYear(a) ? itemYear(a) + '-00-00' : ''), db = b.rdate || (itemYear(b) ? itemYear(b) + '-00-00' : '');
+    if (da !== db) return da < db ? 1 : -1;
+    return (b.added || 0) - (a.added || 0);
+  }
   function isEstreno(i) {
     var y = +itemYear(i), now = new Date().getFullYear();
     if (y) return y >= now - 1;
@@ -815,7 +821,7 @@
     if (nEst) cats = [{ name: 'Estrenos', count: nEst }].concat(cats.filter(function (c) { return c.name !== 'Estrenos'; }));
     var cur = catSel[vkey] || '', gen = genreSel[vkey] || '', plat = platSel[vkey] || '', sort = sortSel[vkey] || 'rec';
     if (cur && !cats.some(function (c) { return c.name === cur; })) cur = catSel[vkey] = '';
-    var list = cur === 'Estrenos' ? all.filter(isEstreno).sort(function (a, b) { return (+itemYear(b) || 0) - (+itemYear(a) || 0); }) : cur ? all.filter(function (i) { return catOf(i) === cur; }) : all;
+    var list = cur === 'Estrenos' ? all.filter(isEstreno).sort(byRelease) : cur ? all.filter(function (i) { return catOf(i) === cur; }) : all;
     var pm = {}; list.forEach(function (i) { if (i.platform) pm[i.platform] = (pm[i.platform] || 0) + 1; });
     var plats = vkey.indexOf('pl-') === 0 ? [] : D.PLATFORMS.filter(function (p) { return pm[p.id]; }).map(function (p) { return { id: p.id, name: p.name, count: pm[p.id] }; });
     if (plat) list = list.filter(function (i) { return i.platform === plat; });
