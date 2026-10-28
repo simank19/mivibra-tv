@@ -2506,6 +2506,17 @@
   function ytOpen(q) { openApp('youtube', 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q)); }
 
   // Reproductor a pantalla completa con controles para control remoto
+  // Ventana flotante: mientras haya un video de YouTube, Twitch o Kick abierto, al salir con Inicio sigue visible en una ventanita
+  function pipSet() {
+    var on = !!((MV.ytPlayer && MV.ytPlayer.isOpen()) || (MV.streamOpen && MV.streamOpen()));
+    try { if (A && A.setPip) A.setPip(on); } catch (e) {}
+  }
+  MV.onPip = function (on) {
+    document.documentElement.classList.toggle('pip', !!on);
+    if (!on && MV.ytPlayer && MV.ytPlayer.isOpen()) MV.ytPlayer.touch();
+  };
+  // La app dejó de verse (pantalla apagada, ventana flotante cerrada): YouTube se pausa
+  MV.onHidden = function () { if (MV.ytPlayer && MV.ytPlayer.isOpen()) MV.ytPlayer.pause(); };
   var YTP = MV.ytPlayer = (function () {
     var player = null, list = [], idx = 0, apiReady = null, hideT = null, open = false;
     function api() {
@@ -2566,6 +2577,7 @@
     }
     function close() {
       open = false;
+      pipSet();
       if (player && player.destroy) { try { player.destroy(); } catch (e) {} }
       player = null;
       var b = box(); b.hidden = true; b.innerHTML = ''; b.classList.remove('ui');
@@ -2585,8 +2597,9 @@
         if (AU.current()) AU.stop();
         list = l; idx = i || 0; open = true;
         var b = box(); b.hidden = false; b.classList.toggle('tv', !!MV.device.tv); document.body.classList.add('yt-open');
-        load();
+        load(); pipSet();
       },
+      pause: function () { try { if (player && player.pauseVideo) player.pauseVideo(); } catch (e) {} },
       close: close,
       act: act,
       touch: showBar
@@ -2630,7 +2643,7 @@
     barT = setTimeout(function () { if (streamBox) streamBox.classList.add('hidebar'); }, 3500);
   }
   MV.streamKey = function () { if (!MV.streamOpen()) return false; var hidden = streamBox.classList.contains('hidebar'); streamBarShow(); return hidden; };
-  MV.streamClose = function () { clearTimeout(barT); if (streamBox) { streamBox.remove(); streamBox = null; } MV.focusFirst(); };
+  MV.streamClose = function () { clearTimeout(barT); if (streamBox) { streamBox.remove(); streamBox = null; } pipSet(); MV.focusFirst(); };
   function streamPlay(tab, ch) {
     if (!ch) return;
     if (AU.current()) AU.stop();
@@ -2642,7 +2655,7 @@
     document.body.appendChild(streamBox);
     var b = streamBox.querySelector('[data-autofocus]'); if (b) b.focus();
     ['mousemove', 'touchstart', 'pointerdown'].forEach(function (ev) { streamBox.addEventListener(ev, streamBarShow, { passive: true }); });
-    streamBarShow();
+    streamBarShow(); pipSet();
   }
   // Canales en vivo ahora (APIs oficiales con las claves del administrador)
   var LIVE = { tok: {}, data: {}, at: {}, loading: {}, err: {}, lang: 'es' };

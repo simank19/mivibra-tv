@@ -180,6 +180,10 @@ class Bridge(private val a: MainActivity) {
         a.runOnUiThread { a.startActivity(Intent(a, co.mivibra.tv.diag.DiagActivity::class.java)) }
     }
 
+    /** Ventana flotante para el reproductor de YouTube / Twitch / Kick (sigue visible sobre otras apps). */
+    @JavascriptInterface
+    fun setPip(on: Boolean) { a.runOnUiThread { a.setPip(on) } }
+
     /** Fila de recomendados en el inicio de Android TV. */
     @JavascriptInterface
     fun publishHome(json: String) { HomeChannel.publish(a, json) }

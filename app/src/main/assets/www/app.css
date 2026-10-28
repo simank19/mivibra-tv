@@ -578,3 +578,7 @@ html.tv .row { content-visibility: auto; contain-intrinsic-size: auto 280px; }
 #tour .tour-off:focus { color: var(--text); outline: 2px solid var(--accent); }
 html.tv #tour .tour-tip h3 { font-size: 16px; } html.tv #tour .tour-tip p { font-size: 13px; }
 .hintlist { margin: 6px 0 14px; padding-left: 20px; line-height: 1.5; } .hintlist li { margin: 4px 0; }
+
+/* Ventana flotante: solo el video, sin barras ni botones */
+html.pip .ytp .bar, html.pip .ytp .x, html.pip .streambar, html.pip #tour, html.pip #modal, html.pip #toast { display: none !important; }
+html.pip .streambox { padding: 0 !important; }

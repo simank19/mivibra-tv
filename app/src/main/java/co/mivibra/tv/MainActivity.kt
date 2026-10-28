@@ -5,7 +5,12 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.content.res.Configuration
+import android.app.PictureInPictureParams
+import android.os.Build
 import android.os.Bundle
+import android.util.Rational
 import android.os.SystemClock
 import android.view.InputDevice
 import android.view.KeyEvent
@@ -117,6 +122,37 @@ class MainActivity : ComponentActivity() {
             return
         }
         bridge.readLocalFile("open-intent", uri.toString())
+    }
+
+    // ---------- Ventana flotante (PiP) del reproductor web ----------
+    private var pipWanted = false
+    private fun pipSupported() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+    private fun pipParams(): PictureInPictureParams? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null
+        val b = PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) b.setAutoEnterEnabled(pipWanted).setSeamlessResizeEnabled(true)
+        return b.build()
+    }
+    fun setPip(on: Boolean) {
+        pipWanted = on
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && pipSupported()) try { setPictureInPictureParams(pipParams()!!) } catch (_: Exception) {}
+    }
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        // En Android 12+ entra sola (setAutoEnterEnabled); antes hay que pedirlo al salir con Inicio
+        if (pipWanted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && Build.VERSION.SDK_INT < Build.VERSION_CODES.S && pipSupported()) {
+            try { enterPictureInPictureMode(pipParams()!!) } catch (_: Exception) {}
+        }
+    }
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        js("window.MV&&MV.onPip&&MV.onPip(" + isInPictureInPictureMode + ")")
+    }
+    override fun onStop() {
+        super.onStop()
+        // Pantalla apagada, ventana flotante cerrada o app en segundo plano: el video de YouTube se pausa
+        // (las reglas de YouTube no permiten reproducir sin que el reproductor se vea)
+        js("window.MV&&MV.onHidden&&MV.onHidden()")
     }
 
     override fun onResume() {
