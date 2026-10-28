@@ -414,7 +414,8 @@ class PlayerActivity : ComponentActivity() {
     private fun armWatchdog() { ui.removeCallbacks(watchdog); ui.postDelayed(watchdog, 25000) }
     private fun cancelWatchdog() { ui.removeCallbacks(watchdog) }
 
-    private fun playIndex(i: Int, startMs: Long) {
+    /** announce: muestra el nombre arriba (solo al cambiar de canal con ▲▼, no al abrir). */
+    private fun playIndex(i: Int, startMs: Long, announce: Boolean = false) {
         index = (i + queue.length()) % maxOf(1, queue.length())
         val item = current()
         if (item.optString("url").isBlank()) return
@@ -426,7 +427,7 @@ class PlayerActivity : ComponentActivity() {
         retries = 0
         startPosition = startMs
         startAttempt()
-        showInfo(item)
+        if (announce) showInfo(item)
     }
 
     private fun showInfo(item: JSONObject) {
@@ -447,7 +448,7 @@ class PlayerActivity : ComponentActivity() {
 
     private fun zap(delta: Int) {
         if (queue.length() < 2) return
-        playIndex(index + delta, 0)
+        playIndex(index + delta, 0, announce = true)
     }
 
     // ---------- Audio, subtítulos y pantalla ----------
