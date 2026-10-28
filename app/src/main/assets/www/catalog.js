@@ -443,10 +443,12 @@
   function liveName(n) {
     return MV.norm(String(n || '').replace(/^\s*[\[|(]?\s*[a-z]{2,5}\s*[\]|):]\s*/i, '').replace(/\([^)]*\)|\[[^\]]*\]/g, ''));
   }
+  // 4K solo gana en pantallas 4K: en TV 1080p y celulares se ve igual que Full HD pero tarda mucho más en arrancar
+  var UHD_OK = (function () { try { return !MV.lite && Math.max(screen.width, screen.height) * (window.devicePixelRatio || 1) >= 3000; } catch (e) { return false; } })();
   /** Calidad según el nombre, la categoría y el enlace: 4K > FHD/1080 > HD/720 > SD. Latino/español suma; CAM/TS resta. */
   function qScore(it) {
     var t = (it.name || '') + ' ' + (it.group || '') + ' ' + (it.url || '').split('?')[0];
-    var q = /\b(4k|uhd|2160p?)\b/i.test(t) ? 40 : /\b(fhd|full ?hd|1080p?)\b/i.test(t) ? 30 : /\b(hd|720p?)\b/i.test(t) ? 20 : /\b(sd|480p?|360p?)\b/i.test(t) ? 10 : 15;
+    var q = /\b(4k|uhd|2160p?)\b/i.test(t) ? (UHD_OK ? 40 : 25) : /\b(fhd|full ?hd|1080p?)\b/i.test(t) ? 30 : /\b(hd|720p?)\b/i.test(t) ? 20 : /\b(sd|480p?|360p?)\b/i.test(t) ? 10 : 15;
     if (/\b(cam|camrip|hdcam|telesync)\b/i.test(t) || /\bTS\b/.test(it.name || '')) q -= 20;
     if (/\b(latino|lat|español|espanol|castellano|dual)\b/i.test(t)) q += 4;
     if (/\b(sub|subs|subtitulad[ao]|vose|vos)\b/i.test(t)) q -= 3;

@@ -423,8 +423,8 @@ class PlayerActivity : ComponentActivity() {
         val first = current()
         http = DefaultHttpDataSource.Factory()
             .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(10000)
-            .setReadTimeoutMs(20000)
+            .setConnectTimeoutMs(7000)
+            .setReadTimeoutMs(15000)
             .setUserAgent(first.optString("ua").ifBlank { Net.UA })
         val referer = first.optString("ref")
         if (referer.isNotBlank()) http.setDefaultRequestProperties(mapOf("Referer" to referer))
@@ -434,8 +434,14 @@ class PlayerActivity : ComponentActivity() {
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
             .setEnableDecoderFallback(true)
 
+        // Arranca con 1 s en memoria (antes 2,5 s) y sigue llenando el búfer mientras se ve
+        val load = androidx.media3.exoplayer.DefaultLoadControl.Builder()
+            .setBufferDurationsMs(15_000, 50_000, 1_000, 2_500)
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
         val p = ExoPlayer.Builder(this, renderers)
             .setMediaSourceFactory(DefaultMediaSourceFactory(this).setDataSourceFactory(http))
+            .setLoadControl(load)
             .build()
         p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
             .setPreferredAudioLanguage(audioLang)
@@ -551,18 +557,23 @@ class PlayerActivity : ComponentActivity() {
         // Mismo enlace con el otro protocolo (algunos servidores solo responden en http o en https)
         if (url.startsWith("https://", true)) urls.add("http://" + url.substring(8)) else if (url.startsWith("http://", true)) urls.add("https://" + url.substring(7))
         val alts = item.optJSONArray("alts")
-        if (alts != null) for (i in 0 until alts.length()) alts.optString(i).takeIf { it.isNotBlank() }?.let { urls.add(it) }
+        val altList = mutableListOf<String>()
+        if (alts != null) for (i in 0 until alts.length()) alts.optString(i).takeIf { it.isNotBlank() && it != url }?.let { altList.add(it) }
+        fun hlsOf(u: String) = u.lowercase().substringBefore('?').let { it.endsWith(".m3u8") || it.contains("/hls/") }
         val out = mutableListOf<Attempt>()
-        for (u in urls.distinct()) {
-            val isHls = u.lowercase().substringBefore('?').let { it.endsWith(".m3u8") || it.contains("/hls/") }
+        // Orden pensado para arrancar rápido: 1) el enlace tal cual, 2) las otras listas (versiones de respaldo) tal cual,
+        // 3) recién después las variantes de formato, protocolo e identificación de cada una
+        out.add(Attempt(url, hlsOf(url), ua))
+        for (a in altList) out.add(Attempt(a, hlsOf(a), ua))
+        for (u in (urls + altList).distinct()) {
+            val isHls = hlsOf(u)
             out.add(Attempt(u, isHls, ua))
             if (!isHls && live) out.add(Attempt(u, true, ua))     // HLS sin extensión .m3u8
             out.add(Attempt(u, isHls, vlcUa))                      // servidores que solo aceptan reproductores conocidos
             if (!live) out.add(Attempt(u, isHls, "IPTVSmartersPro"))
             if (!live && u == url) out.add(Attempt(u, isHls, "okhttp/4.12.0"))
         }
-        // Primero todas las variantes con la identificación que ya funcionó; luego el resto
-        return out.distinctBy { it.url + "|" + it.forceHls + "|" + it.ua }.take(18)
+        return out.distinctBy { it.url + "|" + it.forceHls + "|" + it.ua }.take(24)
     }
 
     private fun startAttempt() {
@@ -610,7 +621,8 @@ class PlayerActivity : ComponentActivity() {
             onFail(PlaybackException("El servidor no respondió a tiempo", null, PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT))
         }
     }
-    private fun armWatchdog() { ui.removeCallbacks(watchdog); ui.postDelayed(watchdog, 25000) }
+    // Los primeros intentos esperan menos (si no arranca rápido, mejor probar la versión de respaldo); los últimos, más
+    private fun armWatchdog() { ui.removeCallbacks(watchdog); ui.postDelayed(watchdog, if (attemptIndex < 3) 12000L else 20000L) }
     private fun cancelWatchdog() { ui.removeCallbacks(watchdog) }
 
     /** announce: muestra el nombre arriba (solo al cambiar de canal con ▲▼, no al abrir). */
