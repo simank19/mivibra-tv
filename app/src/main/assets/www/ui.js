@@ -195,7 +195,9 @@
     var isLogo = it.type === 'live' && !big;
     var mono = '<span class="mono">' + esc(MV.mono(MV.cleanTitle(it.name) || it.name)) + '</span>';
     if (!img) return mono;
-    return '<img class="' + (isLogo ? 'logo' : '') + '" loading="lazy" src="' + esc(img) + '" alt="" onerror="this.outerHTML=\'' + mono.replace(/'/g, "\\'").replace(/"/g, '&quot;') + '\'">';
+    // En tarjetas basta una carátula pequeña de TMDB (carga y decodifica mucho más rápido en TV box)
+    if (!big) img = img.replace(/(image\.tmdb\.org\/t\/p\/)(w\d+|original)\//, '$1' + (MV.lite ? 'w154' : 'w185') + '/');
+    return '<img class="' + (isLogo ? 'logo' : '') + '" loading="lazy" decoding="async" src="' + esc(img) + '" alt=""" onerror="this.outerHTML=\'' + mono.replace(/'/g, "\\'").replace(/"/g, '&quot;') + '\'">';
   }
   function card(it, kind, i) {
     reg(it);
@@ -556,6 +558,7 @@
   function heroPreview() {
     var v = document.getElementById('heroVid'), it = MV._heroIt;
     if (!v || !it || it.type !== 'live' || !it.url || document.hidden) return;
+    if (MV.lite) { v.remove(); return; }   // en equipos modestos sin vista previa en vivo (se nota más fluido)
     var done = false;
     v.muted = true;
     v.addEventListener('playing', function () { done = true; v.classList.add('on'); var l = document.getElementById('heroLive'); if (l) l.classList.add('on'); });
@@ -939,8 +942,10 @@
       var it = todo[n++]; tmdbTried[it.key] = 1;
       MV.meta(it).then(function (m) {
         if (m) changed++;
-        if (changed >= 40 && view.name === here && !MV.modalOpen() && !(document.activeElement && document.activeElement.tagName === 'INPUT')) { changed = 0; MV.rerender(); }
-        setTimeout(next, 250);
+        // Solo se reorganiza cuando no estás moviéndote con el control (así no se traba)
+        var idle = Date.now() - (MV._lastKey || 0) > 4000;
+        if (changed >= 40 && idle && view.name === here && !MV.modalOpen() && !(document.activeElement && document.activeElement.tagName === 'INPUT')) { changed = 0; MV.rerender(); }
+        setTimeout(next, MV.lite ? 900 : MV.device.tv ? 500 : 250);
       });
     })();
   }

@@ -442,6 +442,8 @@ class Bridge(private val a: MainActivity) {
         val touch = a.packageManager.hasSystemFeature("android.hardware.touchscreen")
         return JSONObject()
             .put("tv", tv)
+            .put("ramMb", try { val mi = android.app.ActivityManager.MemoryInfo(); (a.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager).getMemoryInfo(mi); mi.totalMem / 1048576 } catch (_: Exception) { 0L })
+            .put("lowRam", try { (a.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager).isLowRamDevice } catch (_: Exception) { false })
             .put("touch", touch)
             .put("model", Build.MANUFACTURER + " " + Build.MODEL)
             .put("sdk", Build.VERSION.SDK_INT)

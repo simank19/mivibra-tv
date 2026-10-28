@@ -477,6 +477,14 @@ html.tv #deco span, html.no-anim #deco span { animation: none; }
 .chip .sw { display: inline-block; width: 14px; height: 14px; border-radius: 50%; margin-right: 6px; vertical-align: -2px; border: 1px solid rgba(255,255,255,.4); }
 .avh { margin: 16px 0 8px; font-size: 15px; }
 .avnote { font-size: 12px; margin: 6px 0; }
+/* Modo liviano (TV box de 2 GB): sin fondo animado ni sombras grandes, foco con borde */
+html.lite #bg { display: none; }
+html.lite body { background: radial-gradient(ellipse at 70% -10%, var(--glow2), transparent 60%), var(--base); }
+html.lite .card, html.lite .btn, html.lite .chip, html.lite .qbtn, html.lite .hero .prev { box-shadow: none !important; }
+html.lite .f:focus-visible, html.lite .f.kf { transform: none !important; box-shadow: 0 0 0 3px var(--accent) !important; }
+html.lite .card.f:focus-visible, html.lite .card.f.kf { transform: none !important; }
+html.lite * { transition-duration: 0s !important; }
+html.lite #deco { display: none; }
 /* TV: modo rendimiento — sin desenfoques ni animaciones costosas para que el control vaya fluido */
 html.tv #bg i { animation: none; }
 html.tv .glass, html.tv .btn.ghost, html.tv .qbtn { backdrop-filter: none; -webkit-backdrop-filter: none; }

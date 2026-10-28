@@ -113,6 +113,9 @@
   MV.A = A;
   // En TV la interfaz se compacta (html.tv)
   try { if (MV.device.tv) document.documentElement.classList.add('tv'); } catch (e) {}
+  // Equipos modestos (TV box de 2 GB como onn, Chromecast, Fire TV Lite): modo liviano
+  MV.lite = !!(MV.device.tv && (MV.device.lowRam || (MV.device.ramMb && MV.device.ramMb < 3000)));
+  try { if (MV.lite) document.documentElement.classList.add('lite'); } catch (e) {}
 
   // ---------- Avisos ----------
   MV.toast = function (msg, ms) {
@@ -263,6 +266,7 @@
     var k = e.key, t = e.target;
     var typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT');
     var dirs = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
+    MV._lastKey = Date.now();
     if (dirs[k]) {
       if (typing && (k === 'ArrowLeft' || k === 'ArrowRight') && t.value && t.selectionStart != null) {
         var atStart = t.selectionStart === 0, atEnd = t.selectionEnd === t.value.length;

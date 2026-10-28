@@ -177,6 +177,10 @@ class PlayerActivity : ComponentActivity() {
     @OptIn(UnstableApi::class)
     private fun arrangeControls() {
         view.controllerShowTimeoutMs = 2500
+        // TV: margen de seguridad (muchos televisores recortan los bordes de la imagen)
+        if (packageManager.hasSystemFeature("android.software.leanback")) {
+            view.findViewById<View>(androidx.media3.ui.R.id.exo_controller)?.setPadding(dp(40), dp(18), dp(40), dp(22))
+        }
         (view.findViewById<View>(androidx.media3.ui.R.id.exo_progress) as? androidx.media3.ui.DefaultTimeBar)?.apply {
             setPlayedColor(0xFFFF6900.toInt())
             setScrubberColor(0xFFFF6900.toInt())
