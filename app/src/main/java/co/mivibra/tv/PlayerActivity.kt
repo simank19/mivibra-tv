@@ -137,15 +137,85 @@ class PlayerActivity : ComponentActivity() {
             view.findViewById<View>(id)?.setOnClickListener { showTracks() }
         }
         view.setShowSubtitleButton(true)
+        arrangeControls()
         applySubtitleStyle()
         setContentView(root)
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() = finishWithResult()
+            // Atrás: primero esconde los controles; con los controles ocultos, sale del reproductor
+            override fun handleOnBackPressed() { if (view.isControllerFullyVisible) view.hideController() else finishWithResult() }
         })
 
         createPlayer()
         playIndex(index, req.optLong("startMs", 0))
+    }
+
+    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+
+    /**
+     * Controles abajo (en la barra, entre el tiempo y los botones de la derecha), más pequeños,
+     * se ocultan rápido y con un botón para saltar 1:30 (los openings de anime).
+     */
+    @OptIn(UnstableApi::class)
+    private fun arrangeControls() {
+        view.controllerShowTimeoutMs = 2500
+        val center = view.findViewById<android.widget.LinearLayout>(androidx.media3.ui.R.id.exo_center_controls) ?: return
+        (center.layoutParams as? FrameLayout.LayoutParams)?.let {
+            it.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+            it.bottomMargin = 0
+            center.layoutParams = it
+        }
+        center.setPadding(0, 0, 0, 0)
+        // Más pequeños: se escala desde abajo para que queden dentro de la barra inferior
+        center.viewTreeObserver.addOnGlobalLayoutListener {
+            val target = dp(60).toFloat()
+            val h = center.height.toFloat()
+            if (h > 0) {
+                val sc = minOf(1f, target / h)
+                center.pivotX = center.width / 2f
+                center.pivotY = h
+                center.scaleX = sc
+                center.scaleY = sc
+            }
+        }
+        // Fondo oscuro solo abajo, no sobre toda la imagen
+        view.findViewById<View>(androidx.media3.ui.R.id.exo_controls_background)?.setBackgroundColor(0x33000000)
+
+        if (!live) {
+            val skip = TextView(this).apply {
+                text = "+1:30"
+                setTextColor(Color.WHITE)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+                typeface = Typeface.DEFAULT_BOLD
+                gravity = Gravity.CENTER
+                setPadding(dp(22), dp(10), dp(22), dp(10))
+                isFocusable = true
+                isClickable = true
+                contentDescription = "Adelantar 1 minuto 30 segundos"
+                background = android.graphics.drawable.StateListDrawable().apply {
+                    addState(intArrayOf(android.R.attr.state_focused), android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(30).toFloat(); setColor(0xFFFF6900.toInt()) })
+                    addState(intArrayOf(), android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(30).toFloat(); setColor(0x66000000); setStroke(dp(2), 0x88FFFFFF.toInt()) })
+                }
+                setOnClickListener {
+                    player?.let { p ->
+                        val d = p.duration
+                        val to = p.currentPosition + 90_000
+                        p.seekTo(if (d > 0) minOf(to, d - 1000) else to)
+                    }
+                    info.text = "⏩ +1:30"
+                    info.visibility = View.VISIBLE
+                    ui.removeCallbacksAndMessages("skip")
+                    ui.postAtTime({ info.visibility = View.GONE }, "skip", android.os.SystemClock.uptimeMillis() + 1200)
+                    view.showController()
+                }
+            }
+            val next = center.findViewById<View>(androidx.media3.ui.R.id.exo_next)
+            val at = if (next != null) center.indexOfChild(next) else center.childCount
+            center.addView(skip, at, android.widget.LinearLayout.LayoutParams(-2, -2).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                leftMargin = dp(12); rightMargin = dp(12)
+            })
+        }
     }
 
     private fun current(): JSONObject = queue.optJSONObject(index) ?: JSONObject()
@@ -562,7 +632,7 @@ class PlayerActivity : ComponentActivity() {
                 KeyEvent.KEYCODE_DPAD_DOWN -> if (live && !controllerVisible) { zap(1); return true }
                 KeyEvent.KEYCODE_BUTTON_Y -> { cycleResize(); return true }
                 KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_CAPTIONS, KeyEvent.KEYCODE_BUTTON_X, KeyEvent.KEYCODE_MEDIA_AUDIO_TRACK -> { showTracks(); return true }
-                KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_ESCAPE -> { finishWithResult(); return true }
+                KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_ESCAPE -> { if (controllerVisible) view.hideController() else finishWithResult(); return true }
                 KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_BUTTON_A -> if (!controllerVisible) {
                     player?.let { if (it.isPlaying) it.pause() else it.play() }
                     view.showController()
