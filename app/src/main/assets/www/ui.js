@@ -1180,7 +1180,7 @@
     var hidden = P.navHidden || [];
     var visible = navOrderIds(), off = all.filter(function (n) { return visible.indexOf(n[0]) < 0; }).map(function (n) { return n[0]; });
     var ids = visible.concat(off), byId = {}; all.forEach(function (n) { byId[n[0]] = n; });
-    return '<div class="panel glass"><h2>Orden del menú</h2><p>Elige qué botón va después de Inicio y en qué orden' + (MV.acct.managed() ? '. Se aplica para todos los usuarios.' : '.') + ' Inicio va siempre primero y Ajustes siempre al final.</p>' +
+    return '<div class="panel glass"><h2>Orden del menú</h2><p>Elige qué botón va después de Inicio y en qué orden' + (MV.acct.managed() ? '. Se aplica para todos los usuarios.' : '.') + ' Inicio va siempre primero. Ajustes está arriba, en el botón del perfil.</p>' +
       '<div class="line"><div class="t"><b>1. Inicio</b><span>Fijo</span></div></div>' +
       ids.map(function (id, i) {
         var n = byId[id], hid = hidden.indexOf(id) >= 0;
@@ -1480,6 +1480,7 @@
         '<div class="menulist">' +
         '<button class="line f" data-act="go" data-arg="settings" data-autofocus>' + IC.settings + '<div class="t"><b>Ajustes</b><span>Tema, reproducción, listas, cuenta…</span></div></button>' +
         '<button class="line f" data-act="go" data-arg="profiles">' + IC.user + '<div class="t"><b>Cambiar de perfil</b><span>Elige otro perfil de esta cuenta</span></div></button>' +
+        (u ? '<button class="line f" data-act="loginOut">' + IC.lock + '<div class="t"><b>Cerrar sesión</b><span>Salir de ' + esc(u.email || 'tu cuenta') + ' en este equipo</span></div></button>' : '') +
         '</div><div class="btns"><button class="btn ghost f" data-act="closeModal">Cerrar</button></div>');
     },
     go: function (a) { MV.closeModal(true); if (a === 'profileEdit') { editSel = null; } MV.go(a); },
