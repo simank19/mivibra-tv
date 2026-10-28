@@ -38,8 +38,8 @@
     });
   }
   function payload() {
-    var cur = acct.config || {};
-    return { lists: sharedLists(), tmdbKey: P.tmdbKey || '', ytKey: P.ytKey || '', subKey: P.subKey || '', navOrder: P.navOrder || [], navHidden: P.navHidden || [], allowed: cur.allowed || [], open: !!cur.open };
+    // "allowed" y "open" no van aquí: solo se escriben al cambiarlos (así un envío automático nunca los revierte)
+    return { lists: sharedLists(), tmdbKey: P.tmdbKey || '', ytKey: P.ytKey || '', subKey: P.subKey || '', navOrder: P.navOrder || [], navHidden: P.navHidden || [] };
   }
 
   /** Guarda en la nube los cambios del superadministrador. */
@@ -50,7 +50,7 @@
     if (text === lastPushed && !extra) return Promise.resolve();
     data.updatedAt = Date.now(); data.by = MV.sync.user.email;
     acct.pushing = true; MV.emit('acct');
-    return doc().set(JSON.parse(JSON.stringify(data))).then(function () {
+    return doc().set(JSON.parse(JSON.stringify(data)), { merge: true }).then(function () {
       // Solo se da por enviado cuando la nube lo confirma (si falla, se reintenta en el próximo cambio o al abrir)
       lastPushed = text; acct.pushError = ''; acct.pushedAt = Date.now(); acct.pushing = false; MV.emit('acct');
     }).catch(function (e) {
@@ -100,7 +100,7 @@
       if (!snap.exists) {
         acct.status = 'ok';
         // Primera vez del superadministrador: sube lo que ya tiene en este equipo
-        if (acct.isAdmin()) acct.push({});
+        if (acct.isAdmin()) acct.push({ allowed: [], open: false });
         else acct.config = { lists: [] };
         MV.emit('acct');
         return;
@@ -225,8 +225,23 @@
     if (acct.config) acct.config.allowed = list;
     return acct.push({ allowed: list });
   };
+  /** Acceso abierto: se guarda solo ese campo (sin reescribir todo) y se confirma con la nube. */
   acct.setOpen = function (open) {
-    if (acct.config) acct.config.open = !!open;
-    return acct.push({ open: !!open });
+    open = !!open;
+    if (!acct.isAdmin()) { MV.toast('Solo el superadministrador puede cambiar esto'); return Promise.resolve(); }
+    if (acct.config) acct.config.open = open;
+    MV.emit('acct');
+    return doc().set({ open: open, updatedAt: Date.now(), by: MV.sync.user.email }, { merge: true }).then(function () {
+      return doc().get({ source: 'server' }).catch(function () { return null; });
+    }).then(function (snap) {
+      var real = snap && snap.exists ? !!snap.data().open : open;
+      if (acct.config) acct.config.open = real;
+      MV.toast(real === open ? (open ? 'Listo: cualquier cuenta de Google puede entrar' : 'Listo: solo entran los correos de la lista') : 'La nube no guardó el cambio, inténtalo otra vez', 4000);
+      MV.emit('acct');
+    }).catch(function (e) {
+      if (acct.config) acct.config.open = !open;
+      MV.toast('No se pudo guardar: ' + (/permission/i.test(e.code || e.message) ? 'revisa en Firebase que las reglas tengan tu correo de superadministrador' : (e.message || e.code)), 6000);
+      MV.emit('acct');
+    });
   };
 })();
