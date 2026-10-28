@@ -115,7 +115,7 @@ class BrowserActivity : ComponentActivity() {
                 val scheme = u.scheme ?: ""
                 if (scheme == "http" || scheme == "https" || scheme == "about" || scheme == "data") {
                     if (adblock && request.isForMainFrame && (AdBlock.blocks(u.host) || AdBlock.isAdRedirect(u, web.url))) {
-                        blockedCount++; updateShield(); toast("🛡 Anuncio bloqueado"); return true
+                        blockedCount++; updateShield(); toast("Anuncio bloqueado"); return true
                     }
                     return false
                 }
@@ -141,7 +141,7 @@ class BrowserActivity : ComponentActivity() {
                     else -> "El sitio no se pudo abrir (" + error.description + ")."
                 }
                 val html = "<!doctype html><html><head><meta name=viewport content='width=device-width,initial-scale=1'><style>body{margin:0;background:#0D0C0B;color:#F3EFEA;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px;box-sizing:border-box;text-align:center}h1{font-size:28px;margin:0 0 10px}p{color:#A39C94;max-width:620px;line-height:1.5}code{color:#FFB98A;word-break:break-all;font-size:13px}a{margin-top:18px;background:#FF6900;color:#0D0C0B;font-weight:800;padding:14px 28px;border-radius:40px;text-decoration:none}</style></head><body>" +
-                    "<h1>" + (if (ad) "🛡 Anuncio evitado" else "No se pudo abrir") + "</h1><p>" + why + "</p><code>" + esc(url.take(120)) + "</code>" +
+                    "<h1>" + (if (ad) "Anuncio evitado" else "No se pudo abrir") + "</h1><p>" + why + "</p><code>" + esc(url.take(120)) + "</code>" +
                     "<a href='javascript:history.back()'>Volver</a></body></html>"
                 view.loadDataWithBaseURL(url, html, "text/html", "utf-8", url)
             }
@@ -179,7 +179,7 @@ class BrowserActivity : ComponentActivity() {
                     private fun take(u: Uri) {
                         if (done) return; done = true
                         val ad = AdBlock.blocks(u.host) || AdBlock.isAdRedirect(u, web.url)
-                        if (adblock && ad) { blockedCount++; updateShield(); toast("🛡 Ventana de anuncio bloqueada") }
+                        if (adblock && ad) { blockedCount++; updateShield(); toast("Ventana de anuncio bloqueada") }
                         else if (u.scheme == "http" || u.scheme == "https") web.loadUrl(u.toString())
                         probe.stopLoading(); probe.post { probe.destroy() }
                     }
@@ -262,10 +262,10 @@ class BrowserActivity : ComponentActivity() {
         }
         b.addView(urlBox)
         b.addView(btn("★") { addBookmark() })
-        shield = btn("🛡") { toggleAdblock() }
+        shield = btn("Bloqueo") { toggleAdblock() }
         b.addView(shield)
-        b.addView(btn("🖥") { desktop = !desktop; prefs.edit().putBoolean("desktop", desktop).apply(); applyUserAgent(); web.reload(); toast(if (desktop) "Modo escritorio" else "Modo celular") })
-        b.addView(btn("🖱") { setCursor(!cursorOn); toast(if (cursorOn) "Cursor activado: muévelo con las flechas, OK hace clic" else "Cursor desactivado: las flechas desplazan la página") })
+        b.addView(btn("PC") { desktop = !desktop; prefs.edit().putBoolean("desktop", desktop).apply(); applyUserAgent(); web.reload(); toast(if (desktop) "Modo escritorio" else "Modo celular") })
+        b.addView(btn("Cursor") { setCursor(!cursorOn); toast(if (cursorOn) "Cursor activado: muévelo con las flechas, OK hace clic" else "Cursor desactivado: las flechas desplazan la página") })
         updateShield()
         return b
     }
@@ -277,7 +277,7 @@ class BrowserActivity : ComponentActivity() {
 
     private fun updateShield() {
         if (!::shield.isInitialized) return
-        shield.text = if (adblock) "🛡 $blockedCount" else "🛡 off"
+        shield.text = if (adblock) "Bloqueo $blockedCount" else "Bloqueo no"
     }
 
     private fun toggleAdblock() {

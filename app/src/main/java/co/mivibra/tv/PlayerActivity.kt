@@ -129,7 +129,7 @@ class PlayerActivity : ComponentActivity() {
 
         // Botón "Audio y subtítulos": aparece con los controles; en el control remoto también con MENÚ
         tracksBtn = TextView(this).apply {
-            text = "🗨  Audio y subtítulos"
+            text = "Audio y subtítulos"
             setTextColor(Color.WHITE)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             typeface = Typeface.DEFAULT_BOLD
@@ -694,10 +694,10 @@ class PlayerActivity : ComponentActivity() {
             labels.add("    ⏩  Que aparezcan después (+0,5 s)"); actions.add({ extOffset += 500; reloadExternal("Subtítulos " + offText()) })
             labels.add("    ⏪⏪  Mucho antes (−5 s)"); actions.add({ extOffset -= 5000; reloadExternal("Subtítulos " + offText()) })
             labels.add("    ⏩⏩  Mucho después (+5 s)"); actions.add({ extOffset += 5000; reloadExternal("Subtítulos " + offText()) })
-            labels.add("    ✕  Quitar el subtítulo externo"); actions.add({ extSub = null; extOffset = 0; reloadExternal("Subtítulo externo quitado") })
+            labels.add("    Quitar el subtítulo externo"); actions.add({ extSub = null; extOffset = 0; reloadExternal("Subtítulo externo quitado") })
         }
         if (!live) {
-            labels.add(if (subKey.isNotBlank()) "🔎  Buscar subtítulos en internet" else "🔎  Buscar en internet (falta la clave de SubDL en Ajustes)")
+            labels.add(if (subKey.isNotBlank()) "Buscar subtítulos en internet" else "Buscar en internet (falta la clave de SubDL en Ajustes)")
             actions.add(if (subKey.isNotBlank()) ({ searchSubs() }) else null)
         }
 
@@ -758,7 +758,7 @@ class PlayerActivity : ComponentActivity() {
         Thread {
             try {
                 val f = Subtitles.download(java.io.File(cacheDir, "subs"), r)
-                ui.post { extSub = f; extSubName = r.name.take(40); extOffset = 0; reloadExternal("Subtítulo listo. Si no coincide, ajústalo en ⚙") }
+                ui.post { extSub = f; extSubName = r.name.take(40); extOffset = 0; reloadExternal("Subtítulo listo. Si no coincide, ajústalo en Ajustes del reproductor") }
             } catch (e: Exception) {
                 ui.post { toastInfo(e.message ?: "No se pudo descargar") }
             }

@@ -289,9 +289,7 @@
   };
   D.countryName = function (code) { return CBY[code] ? CBY[code][1] : 'Otro país'; };
   D.countryFlag = function (code) {
-    if (code === 'latam') return '🌎';
-    if (!code || code.length !== 2) return '';
-    return String.fromCodePoint(0x1F1E6 + code.charCodeAt(0) - 97, 0x1F1E6 + code.charCodeAt(1) - 97);
+    return '';   // sin banderas (interfaz sin emojis)
   };
 
   // Secciones dentro de En vivo (los canales de TV solo se subdividen aquí)

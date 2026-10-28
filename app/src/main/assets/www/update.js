@@ -58,7 +58,7 @@
     var el = document.getElementById('updPill');
     if (!u) { if (el) el.remove(); return; }
     if (!el) { el = document.createElement('button'); el.id = 'updPill'; el.className = 'updpill f'; document.body.appendChild(el); el.onclick = function () { if (MV.pendingUpdate) showPopup(MV.pendingUpdate); }; }
-    el.innerHTML = '⬆ Actualizar a la versión ' + u.version;
+    el.innerHTML = 'Actualizar a la versión ' + u.version;
   }
   MV.showUpdate = function () { if (MV.pendingUpdate) showPopup(MV.pendingUpdate); else MV.checkUpdate(true); };
 

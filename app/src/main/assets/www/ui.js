@@ -443,7 +443,7 @@
     if (!cs.length) return '';
     if (liveCountry !== 'all' && liveCountry !== 'auto' && !cs.some(function (c) { return c.id === liveCountry; })) liveCountry = 'all';
     var cur = liveCountry === 'auto' ? (cs.some(function (c) { return c.id === 'co'; }) ? 'co' : 'all') : liveCountry;
-    return '<div class="chips" aria-label="Países">' + [{ id: 'all', name: '🌐 Todos los países', count: secList.length }].concat(cs).map(function (x) {
+    return '<div class="chips" aria-label="Países">' + [{ id: 'all', name: 'Todos los países', count: secList.length }].concat(cs).map(function (x) {
       return '<button class="chip f' + (x.id === cur ? ' on' : '') + '" data-act="liveCountry" data-arg="' + esc(x.id) + '">' + esc(x.name) + ' <small>' + x.count + '</small></button>';
     }).join('') + '</div>';
   }
@@ -561,7 +561,7 @@
     if (vkey === 'anime') {
       loadAiring();
       var air = airingMatches(list);
-      if (air.length) html += row('🔴 En emisión', air.slice(0, 24), K, air.length + '');
+      if (air.length) html += row('En emisión', air.slice(0, 24), K, air.length + '');
     }
     // Lo más nuevo arriba: agregados recientemente y luego una fila por año (2026, 2025, 2024…)
     var recent = list.filter(function (i) { return i.added; }).sort(function (a, b) { return (b.added || 0) - (a.added || 0); }).slice(0, 20);
@@ -580,7 +580,7 @@
     if (years.length > ylim) html += '<button class="btn ghost more f" data-act="moreRows" data-arg="' + vkey + ':y">Ver más años (' + (years.length - ylim) + ')</button>';
     // Ganadoras del Óscar (solo películas)
     var osc = list.filter(function (i) { return i.type === 'movie' && isOscar(i); });
-    if (osc.length >= 2) html += row('🏆 Ganadoras del Óscar', osc.sort(function (a, b) { return (+itemYear(b) || 0) - (+itemYear(a) || 0); }).slice(0, 30), K, osc.length + '');
+    if (osc.length >= 2) html += row('Ganadoras del Óscar', osc.sort(function (a, b) { return (+itemYear(b) || 0) - (+itemYear(a) || 0); }).slice(0, 30), K, osc.length + '');
     var top = list.filter(function (i) { return +i.rating >= 7; }).sort(function (a, b) { return (+b.rating || 0) - (+a.rating || 0); }).slice(0, 20);
     if (top.length >= 6) html += row('Mejor calificadas', top, K);
     var lim = rowLimit[vkey] || 14;
@@ -648,7 +648,7 @@
       (genres.length ? fb('genres', 'Género', gen ? D.genreName(gen) : 'Todos', !!gen) : '') +
       fb('sort', 'Orden', (SORTS.find(function (x) { return x[0] === sort; }) || SORTS[0])[1], false) +
       // Filtro rápido: Western (del oeste, vaqueros) en Películas y Series
-      ((vkey === 'movies' || vkey === 'series') && (gen === 'western' || all.some(isWestern)) ? '<button class="fbtn f' + (gen === 'western' ? ' on' : '') + '" data-act="westernToggle" data-v="' + vkey + '">🤠 Western</button>' : '') +
+      ((vkey === 'movies' || vkey === 'series') && (gen === 'western' || all.some(isWestern)) ? '<button class="fbtn f' + (gen === 'western' ? ' on' : '') + '" data-act="westernToggle" data-v="' + vkey + '">Western</button>' : '') +
       (!cur ? '<button class="fbtn f" data-act="viewMode" data-arg="' + (mode === 'rows' ? 'grid' : 'rows') + '" data-v="' + vkey + '">' + (mode === 'rows' ? '▦ Cuadrícula' : '☰ Filas') + '</button>' : '') +
       (active.length ? '<button class="fbtn f" data-act="clearFilters" data-arg="' + vkey + '">✕ Limpiar</button>' : '') + '</div>';
     MV._fbarPre = '';
@@ -722,10 +722,10 @@
   }
   VIEWS.anime = function () {
     var items = S.items.filter(function (i) { return i.anime && i.type !== 'live'; });
-    var modes = '<div class="chips filt" style="margin-bottom:10px"><span class="flabel">VER</span>' + [['all', 'Todo'], ['airing', '🔴 En emisión'], ['year', 'Por año']].map(function (m) {
+    var modes = '<div class="chips filt" style="margin-bottom:10px"><span class="flabel">VER</span>' + [['all', 'Todo'], ['airing', 'En emisión'], ['year', 'Por año']].map(function (m) {
       return '<button class="chip f' + (animeMode === m[0] ? ' on' : '') + '" data-act="animeMode" data-arg="' + m[0] + '">' + m[1] + '</button>'; }).join('') + '</div>';
     if (animeMode === 'all' || !S.lists.length) {
-      MV._fbarPre = [['all', 'Todo'], ['airing', '🔴 En emisión'], ['year', 'Por año']].map(function (m) { return '<button class="fbtn f' + (animeMode === m[0] ? ' on' : '') + '" data-act="animeMode" data-arg="' + m[0] + '">' + m[1] + '</button>'; }).join('');
+      MV._fbarPre = [['all', 'Todo'], ['airing', 'En emisión'], ['year', 'Por año']].map(function (m) { return '<button class="fbtn f' + (animeMode === m[0] ? ' on' : '') + '" data-act="animeMode" data-arg="' + m[0] + '">' + m[1] + '</button>'; }).join('');
       return catalogView('anime', 'Anime', items);
     }
     var vis = MV.visible(items);
@@ -782,7 +782,7 @@
         (prog ? '<button class="btn f" data-act="resume" data-key="' + esc(it.key) + '" data-autofocus>' + IC.play + 'Continuar · ' + MV.fmtDur(prog.pos) + '</button><button class="btn ghost f" data-act="play" data-key="' + esc(it.key) + '">Desde el inicio</button>'
           : '<button class="btn f" data-act="play" data-key="' + esc(it.key) + '" data-autofocus>' + IC.play + 'Reproducir</button>')) +
       '<button class="btn ghost f" data-act="fav" data-key="' + esc(it.key) + '">' + (fav ? IC.starFill : IC.star) + (fav ? 'En favoritos' : 'Favorito') + '</button>' +
-      '<button class="btn ghost f" data-act="langMenu">🗨 Audio y subtítulos</button>' +
+      '<button class="btn ghost f" data-act="langMenu">Audio y subtítulos</button>' +
       '</div>' +
       (it.type === 'series' ? '<div id="eps" class="eps"><div class="spinner"></div></div>' : '') + '</div></div>' +
       '<div id="related">' + relatedHtml(it) + '</div>';
@@ -1151,12 +1151,12 @@
     if (MV.acct.isAdmin()) {
       var cl = ((MV.acct.config || {}).lists || []).length, mineN = S.lists.filter(function (l) { return l.type !== 'file'; }).length;
       share = '<div class="panel glass"><h2>Compartidas con tus usuarios</h2>' +
-        '<div class="line"><div class="t"><b>' + (MV.acct.pushing ? 'Enviando…' : MV.acct.pushError ? '⚠ No se pudo enviar' : cl === mineN ? '✓ ' + cl + (cl === 1 ? ' lista en la nube' : ' listas en la nube') : '⚠ En la nube hay ' + cl + ' de ' + mineN + ' listas') + '</b><span>' + esc(MV.acct.pushError || (MV.acct.pushedAt ? 'Último envío: ' + MV.fmtTime(MV.acct.pushedAt) : 'Tus usuarios reciben estas listas, las claves y el orden del menú')) + '</span></div>' +
+        '<div class="line"><div class="t"><b>' + (MV.acct.pushing ? 'Enviando…' : MV.acct.pushError ? 'No se pudo enviar' : cl === mineN ? '✓ ' + cl + (cl === 1 ? ' lista en la nube' : ' listas en la nube') : 'En la nube hay ' + cl + ' de ' + mineN + ' listas') + '</b><span>' + esc(MV.acct.pushError || (MV.acct.pushedAt ? 'Último envío: ' + MV.fmtTime(MV.acct.pushedAt) : 'Tus usuarios reciben estas listas, las claves y el orden del menú')) + '</span></div>' +
         '<button class="btn sm f" data-act="pushNow">' + IC.refresh + 'Enviar a todos ahora</button></div></div>';
     }
     return share + '<div class="panel glass"><h2>Tus listas</h2><p>Todo el contenido de tus listas se combina: los canales repetidos aparecen una sola vez y se queda la señal que funciona.' + (MV.acct.isAdmin() ? ' <b>Eres superadministrador:</b> lo que cambies aquí llega a todos los usuarios (las listas en archivo solo quedan en este equipo; usa enlaces para compartirlas).' : '') + '</p>' +
       (S.lists.length ? S.lists.map(function (l) {
-        return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.type === 'xtream' ? 'Xtream Codes · ' + esc(l.host) : l.type === 'file' ? 'Archivo' : esc(l.url)) + ' · ' + (l.count || 0) + ' elementos' + (l.epg ? ' · con guía' : '') + (l.error ? ' · ⚠ ' + esc(l.error) : '') + '</span></div>' +
+        return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.type === 'xtream' ? 'Xtream Codes · ' + esc(l.host) : l.type === 'file' ? 'Archivo' : esc(l.url)) + ' · ' + (l.count || 0) + ' elementos' + (l.epg ? ' · con guía' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div>' +
           '<button class="toggle f' + (l.enabled !== false ? ' on' : '') + '" data-act="listToggle" data-arg="' + l.id + '" aria-label="Activar lista"></button>' +
           '<button class="iconbtn f" data-act="listEpg" data-arg="' + l.id + '" aria-label="Guía EPG">' + IC.guide + '</button>' +
           '<button class="iconbtn f" data-act="listDelete" data-arg="' + l.id + '" aria-label="Eliminar">' + IC.trash + '</button></div>';
@@ -1245,7 +1245,7 @@
       (MV.acct.canEdit() ? '<label class="field">Clave de TMDB (API Key o token de lectura)' + (MV.acct.isAdmin() ? ' · se comparte con todos los usuarios' : '') + '<input class="in f" id="tmdbKey" value="' + esc(P.tmdbKey || '') + '" autocomplete="off"></label><div class="btns"><button class="btn f" data-act="saveTmdb">Guardar</button><button class="btn ghost f" data-act="clearMeta">Volver a buscar todas las fichas</button></div>'
         : '<div class="line"><div class="t"><b>' + (P.tmdbKey ? 'Clave configurada por el administrador' : 'El administrador aún no ha puesto la clave') + '</b></div><button class="btn ghost sm f" data-act="clearMeta">Volver a buscar las fichas</button></div>') +
       '<p style="margin-top:14px;font-size:12px">Este producto usa la API de TMDB pero no está respaldado ni certificado por TMDB.</p></div>' +
-      '<div class="panel glass"><h2>Subtítulos externos</h2><p>Con una clave gratuita de subdl.com (crea tu cuenta y copia tu API Key en tu panel) el reproductor busca subtítulos en español para cada película o episodio, desde el menú ⚙ Audio y subtítulos.</p>' +
+      '<div class="panel glass"><h2>Subtítulos externos</h2><p>Con una clave gratuita de subdl.com (crea tu cuenta y copia tu API Key en tu panel) el reproductor busca subtítulos en español para cada película o episodio, desde el menú Audio y subtítulos.</p>' +
       (MV.acct.canEdit() ? '<label class="field">Clave de SubDL' + (MV.acct.isAdmin() ? ' · se comparte con todos los usuarios' : '') + '<input class="in f" id="subKey" value="' + esc(P.subKey || '') + '" autocomplete="off"></label><div class="btns"><button class="btn f" data-act="saveSubKey">Guardar</button></div>'
         : '<div class="line"><div class="t"><b>' + (P.subKey ? 'Clave configurada por el administrador' : 'El administrador aún no ha puesto la clave') + '</b></div></div>') + '</div>' +
       '<div class="panel glass"><h2>YouTube dentro de la app</h2><p>Con una clave gratuita de la API de YouTube (Google Cloud › APIs y servicios › YouTube Data API v3) puedes buscar y ver videos sin salir de MiVibra TV. El cupo gratis alcanza para unas 100 búsquedas al día entre todos los usuarios; las tendencias casi no gastan cupo.</p>' +
@@ -1608,7 +1608,7 @@
     langMenu: function () {
       var aud = [['es', 'Español'], ['en', 'Inglés'], ['pt', 'Portugués'], ['ja', 'Japonés'], ['ko', 'Coreano'], ['fr', 'Francés']];
       var sub = [['', 'Desactivados'], ['es', 'Español'], ['en', 'Inglés'], ['pt', 'Portugués']];
-      MV.modal('<h2>Audio y subtítulos</h2><p class="muted">Se aplica al reproducir, si el video trae ese idioma. Durante la película puedes cambiarlo con el botón 🗨 o ⚙ del reproductor (en el control remoto, tecla Menú).</p>' +
+      MV.modal('<h2>Audio y subtítulos</h2><p class="muted">Se aplica al reproducir, si el video trae ese idioma. Durante la película puedes cambiarlo con el botón de subtítulos o el de ajustes del reproductor (en el control remoto, tecla Menú).</p>' +
         '<h3 style="margin:14px 0 8px">Idioma del audio</h3><div class="chips">' + aud.map(function (a) { return '<button class="chip f' + (P.audioLang === a[0] ? ' on' : '') + '" data-act="langSet" data-arg="audioLang:' + a[0] + '">' + a[1] + '</button>'; }).join('') + '</div>' +
         '<h3 style="margin:14px 0 8px">Subtítulos</h3><div class="chips">' + sub.map(function (a) { return '<button class="chip f' + ((P.subLang || '') === a[0] ? ' on' : '') + '" data-act="langSet" data-arg="subLang:' + a[0] + '">' + a[1] + '</button>'; }).join('') + '</div>' +
         '<div class="btns"><button class="btn f" data-act="closeModal" data-autofocus>Listo</button></div>');
@@ -1702,7 +1702,7 @@
           var exp = j.user_info.exp_date ? new Date(+j.user_info.exp_date * 1000).toLocaleDateString('es-CO') : '';
           MV.toast('Conectado' + (exp ? ' · vence ' + exp : ''), 3500);
           return MV.addList(l);
-        }).then(function () { MV.rerender(); }).catch(function (e) { var el = document.getElementById('lErr'); if (el) el.textContent = '⚠ ' + e.message; MV.toast(e.message, 6000); });
+        }).then(function () { MV.rerender(); }).catch(function (e) { var el = document.getElementById('lErr'); if (el) el.textContent = '' + e.message; MV.toast(e.message, 6000); });
       } else if (tab === 'multi') {
         var parsed = MV.parseUrlList(document.getElementById('lMulti').value);
         if (parsed === null) { MV.toast('Eso es una lista M3U completa: usa la pestaña Archivo'); return; }
@@ -2212,7 +2212,7 @@
   })();
 
   function tvTabs(cur) {
-    return '<div class="seg sortseg">' + [['live', '📺 Canales'], ['guide', '🗓 Guía']].map(function (t) { return '<button class="chip f' + (cur === t[0] ? ' on' : '') + '" data-act="nav" data-arg="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>';
+    return '<div class="seg sortseg">' + [['live', 'Canales'], ['guide', 'Guía']].map(function (t) { return '<button class="chip f' + (cur === t[0] ? ' on' : '') + '" data-act="nav" data-arg="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>';
   }
   // ---------- Utilidades ----------
   MV.remoteTab = function () { setTab = 'remote'; };
@@ -2234,10 +2234,10 @@
     var brave = !A || hasApp('brave');
     return top('Navegador') +
       '<div class="searchbar glass">' + IC.search + '<input class="in f" id="webIn" placeholder="Buscar en Google o escribir una dirección" autocomplete="off" enterkeyhint="go" inputmode="url" data-autofocus><button class="btn f" data-act="webGo">Ir</button></div>' +
-      '<div class="apps" style="margin-bottom:18px"><button class="apptile glass f" data-act="webOpen" data-arg=""><b>🌐 Navegador MiVibra</b><span>Pantalla completa · bloqueador de anuncios · cursor con el control</span></button>' +
-      '<button class="apptile glass f" data-act="openApp" data-arg="brave"><b>🦁 Brave</b><span>' + (brave ? 'Abrir Brave' : 'Instalar Brave desde la tienda') + '</span></button></div>' +
+      '<div class="apps" style="margin-bottom:18px"><button class="apptile glass f" data-act="webOpen" data-arg=""><b>Navegador MiVibra</b><span>Pantalla completa · bloqueador de anuncios · cursor con el control</span></button>' +
+      '<button class="apptile glass f" data-act="openApp" data-arg="brave"><b>Brave</b><span>' + (brave ? 'Abrir Brave' : 'Instalar Brave desde la tienda') + '</span></button></div>' +
       '<h3 style="margin:6px 0 10px">Accesos rápidos</h3><div class="apps">' + BROWSER_SITES.map(function (x) { return '<button class="apptile glass f" data-act="webOpen" data-arg="' + esc(x[1]) + '"><b>' + esc(x[0]) + '</b><span>' + esc(x[1].replace(/^https?:\/\/(www\.|m\.)?/, '').split('/')[0]) + '</span></button>'; }).join('') + '</div>' +
-      '<p class="muted" style="margin-top:16px;font-size:13px">' + (MV.device.tv ? 'En la TV: las flechas mueven el cursor y OK hace clic. MENÚ muestra la barra (dirección, favoritos, bloqueador 🛡, modo escritorio 🖥 y cursor 🖱). Atrás vuelve a la página anterior.' : 'Toca 🛡 para ver cuántos anuncios se bloquearon o desactivar el bloqueador en una página que no cargue bien.') + '</p>';
+      '<p class="muted" style="margin-top:16px;font-size:13px">' + (MV.device.tv ? 'En la TV: las flechas mueven el cursor y OK hace clic. MENÚ muestra la barra (dirección, favoritos, bloqueador , modo escritorio y cursor ). Atrás vuelve a la página anterior.' : 'Toca para ver cuántos anuncios se bloquearon o desactivar el bloqueador en una página que no cargue bien.') + '</p>';
   };
   VIEWS.browser.after = function () { var i = document.getElementById('webIn'); if (i) i.addEventListener('keydown', function (e) { if (e.key === 'Enter') ACT.webGo(); }); };
 

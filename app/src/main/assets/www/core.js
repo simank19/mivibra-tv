@@ -5,8 +5,11 @@
   var D = window.MVD;
 
   // ---------- Utilidades ----------
+  // Sin emojis en la interfaz (los de las listas como "⭐Acción" también); solo el tema de celebración los usa
+  var EMOJI = /[\uD83C-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u2604\u2606-\u2612\u2614-\u262F\u2631-\u2712\u2714\u2716-\u27BF\u2B50\u2B55\uFE0F\u200D\u20E3]/g;
+  MV.noEmoji = function (s) { return String(s == null ? '' : s).replace(EMOJI, '').replace(/\s{2,}/g, ' ').trim(); };
   MV.esc = function (s) {
-    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return MV.noEmoji(s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   };
