@@ -127,6 +127,7 @@
   // ---------- Render ----------
   var VIEWS = {};
   function render(keepFocus) {
+    if (MV.stopHeroPreview) MV.stopHeroPreview();
     MV.applyLook();
     var app = document.getElementById('app');
     var full = view.name === 'profiles' || view.name === 'profileEdit' || view.name === 'boot' || view.name === 'login';
@@ -301,7 +302,16 @@
     if (!S.lists.length) return top('Hola' + (MV.profile() ? ', ' + MV.profile().name : '')) + emptyLists();
     var live = MV.visible(S.live), movies = MV.visible(S.movies), series = MV.visible(S.series);
     var favs = MV.favs().map(MV.resolve), cont = MV.continueList();
-    var heroIt = favs.find(function (f) { return f.type === 'live'; }) || live[0] || movies[0];
+    // Recuadro principal: el último canal que abriste; si no, un favorito; si no, uno de Colombia
+    var hist = MV.pdata().history || [], lastLive = null;
+    for (var hi = 0; hi < hist.length && !lastLive; hi++) {
+      if (hist[hi].type !== 'live') continue;
+      var cand = S.byKey[hist[hi].key];
+      if (cand && live.indexOf(cand) >= 0) lastLive = cand;
+    }
+    var heroIt = lastLive || favs.find(function (f) { return f.type === 'live' && live.indexOf(f) >= 0; }) ||
+      live.find(function (c) { return c.country === 'CO'; }) || live[0] || movies[0];
+    MV._heroIt = heroIt;
     var html = seasonBanner() + loadingBlock();
     // Continuar desde otro dispositivo
     var other = cont.find(function (c) { return c.device && c.device !== P.deviceName && Date.now() - c.ts < 3 * 86400e3; });
@@ -320,7 +330,8 @@
         (nn.now ? '<div style="display:flex;gap:12px;align-items:center" class="muted"><span>' + MV.fmtTime(nn.now.s) + ' – ' + MV.fmtTime(nn.now.e) + '</span><div class="prog" style="width:200px"><i style="width:' + Math.round((Date.now() - nn.now.s) / (nn.now.e - nn.now.s) * 100) + '%"></i></div>' + (nn.next ? '<span>Después: ' + esc(nn.next.t) + '</span>' : '') + '</div>' : '') +
         '<div class="btns" style="margin-top:6px"><button class="btn f" data-act="play" data-key="' + esc(heroIt.key) + '" data-autofocus>' + IC.play + 'Ver en pantalla completa</button>' +
         (heroIt.type === 'live' ? '<button class="btn ghost f" data-act="nav" data-arg="guide">Guía</button>' : '<button class="btn ghost f" data-act="open" data-key="' + esc(heroIt.key) + '">Ficha</button>') + '</div></div>' +
-        '<div class="prev glass"><div class="in" style="background:linear-gradient(140deg,' + MV.hue(heroIt.name) + ',#17140F 80%)">' + (img ? '<img src="' + esc(img) + '" alt="" style="' + (heroIt.type === 'live' ? 'object-fit:contain;padding:30px' : '') + '">' : '<span class="mono" style="font:800 80px var(--brand)">' + esc(MV.mono(heroIt.name)) + '</span>') + '</div></div></section>';
+        '<div class="prev glass"><div class="in" style="background:linear-gradient(140deg,' + MV.hue(heroIt.name) + ',#17140F 80%)">' + (img ? '<img src="' + esc(img) + '" alt="" style="' + (heroIt.type === 'live' ? 'object-fit:contain;padding:30px' : '') + '">' : '<span class="mono" style="font:800 80px var(--brand)">' + esc(MV.mono(heroIt.name)) + '</span>') +
+        (heroIt.type === 'live' ? '<video id="heroVid" muted playsinline preload="none"></video><span class="herolive" id="heroLive"><span class="live-dot"></span>EN VIVO · sin sonido</span>' : '') + '</div></div></section>';
     }
     html += row('Continuar viendo', cont.map(function (c) { return MV.resolve(c); }), 'wide');
     html += row('Favoritos', favs.slice(0, 30));
@@ -343,11 +354,28 @@
   };
   VIEWS.home.after = function () {
     if (MV.isKids()) return;
+    setTimeout(heroPreview, 600);
     MV.archive().then(function (items) {
       var box = document.getElementById('archiveRow'); if (!box || !items.length) return;
       box.innerHTML = row('Cine clásico de dominio público', items.slice(0, 30), 'poster', 'Internet Archive');
     });
   };
+  /** Vista previa en vivo (sin sonido) del canal del recuadro principal. Si el canal no abre en vista previa, queda el logo. */
+  function heroPreview() {
+    var v = document.getElementById('heroVid'), it = MV._heroIt;
+    if (!v || !it || it.type !== 'live' || !it.url || document.hidden) return;
+    var done = false;
+    v.muted = true;
+    v.addEventListener('playing', function () { done = true; v.classList.add('on'); var l = document.getElementById('heroLive'); if (l) l.classList.add('on'); });
+    v.addEventListener('error', function () { v.remove(); });
+    setTimeout(function () { if (!done && v.isConnected) { try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {} v.remove(); } }, 12000);
+    v.src = it.url;
+    var pr = v.play(); if (pr && pr.catch) pr.catch(function () {});
+  }
+  // Al salir de Inicio o abrir el reproductor se corta la vista previa
+  function stopHeroPreview() { var v = document.getElementById('heroVid'); if (v) { try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {} } }
+  MV.stopHeroPreview = stopHeroPreview;
+  document.addEventListener('visibilitychange', function () { if (document.hidden) stopHeroPreview(); });
   function suggested() {
     var hist = MV.pdata().history, seen = {}, groups = {};
     hist.forEach(function (h) { seen[h.key] = 1; if (h.group) groups[h.group] = (groups[h.group] || 0) + 1; });
@@ -1250,6 +1278,7 @@
     return Object.assign({ id: it.key, url: it.url, title: it.name, subtitle: nn.now ? nn.now.t : (it.group || ''), num: it.num || '', ua: it.ua || '', ref: it.ref || '', alts: it.alts || [], poster: it.type === 'live' ? '' : MV.poster(it) }, it.type === 'live' ? {} : subInfo(it), extra || {});
   }
   function launch(req, ctx) {
+    stopHeroPreview();
     if (MV.isKids() && +P.kidsLimit > 0 && MV.kidsLeft() <= 0) { kidsTimeUp(); return; }
     if (MV.audio && MV.audio.current() && !ctx.noRecord) MV.audio.stop();
     // Si había otro video abierto (por ejemplo en la ventana flotante), se cierra y su avance se guarda aparte

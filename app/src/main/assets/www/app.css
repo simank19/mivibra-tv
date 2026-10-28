@@ -456,6 +456,11 @@ html.tv #deco span, html.no-anim #deco span { animation: none; }
 .menulist .line svg { width: 22px; height: 22px; flex: none; color: var(--accent-text); }
 .menulist .line .t { display: flex; flex-direction: column; gap: 2px; }
 .menulist .line .t span { font-size: 12px; color: var(--muted); }
+/* Vista previa en vivo del recuadro principal de Inicio */
+#heroVid { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .5s; background: #000; }
+#heroVid.on { opacity: 1; }
+.herolive { position: absolute; left: 10px; bottom: 10px; display: none; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: rgba(0,0,0,.6); font: 700 11px var(--ui); color: #fff; }
+.herolive.on { display: inline-flex; }
 /* TV: modo rendimiento — sin desenfoques ni animaciones costosas para que el control vaya fluido */
 html.tv #bg i { animation: none; }
 html.tv .glass, html.tv .btn.ghost, html.tv .qbtn { backdrop-filter: none; -webkit-backdrop-filter: none; }
