@@ -68,6 +68,7 @@
     if (Date.now() - (MV._typedAt || 0) < 900) return true;
     if (MV.ytPlayer && MV.ytPlayer.isOpen()) { MV.ytPlayer.close(); return true; }
     if (MV.modalOpen()) { MV.closeModal(); return true; }
+    if (yearSel[view.name]) { yearSel[view.name] = ''; MV.rerender(); return true; }   // salir de "Ver todo" de un año
     if (stack.length) {
       var prev = stack.pop();
       view = { name: prev.name, arg: prev.arg };
@@ -527,12 +528,33 @@
     var by = {}, order = [];
     list.forEach(function (i) { var c = cleanGroup(i.group); if (!by[c]) { by[c] = []; order.push(c); } by[c].push(i); });
     order.sort(function (a, b) { return by[b].length - by[a].length; });
-    var html = '';
-    // Primeras filas: lo más nuevo y lo mejor calificado de toda la sección
+    var html = '', K = kind || 'poster';
+    // Anime: primero lo que está en emisión esta temporada
+    if (vkey === 'anime') {
+      loadAiring();
+      var air = airingMatches(list);
+      if (air.length) html += row('🔴 En emisión', air.slice(0, 24), K, air.length + '');
+    }
+    // Lo más nuevo arriba: agregados recientemente y luego una fila por año (2026, 2025, 2024…)
     var recent = list.filter(function (i) { return i.added; }).sort(function (a, b) { return (b.added || 0) - (a.added || 0); }).slice(0, 20);
-    if (recent.length >= 6) html += row('Agregados recientemente', recent, kind || 'poster');
+    if (recent.length >= 6) html += row('Agregados recientemente', recent, K);
+    var yr = {}, thisYear = new Date().getFullYear();
+    list.forEach(function (i) { var y = +itemYear(i); if (y >= 1900 && y <= thisYear + 1) (yr[y] = yr[y] || []).push(i); });
+    var years = Object.keys(yr).map(Number).filter(function (y) { return yr[y].length >= 3; }).sort(function (a, b) { return b - a; });
+    var ylim = rowLimit[vkey + ':y'] || 6;
+    var ylabel = vkey === 'movies' ? 'Películas ' : vkey === 'series' ? 'Series ' : vkey === 'anime' ? 'Anime ' : '';
+    years.slice(0, ylim).forEach(function (y) {
+      var items = yr[y];
+      html += '<section class="row"><h3>' + (ylabel ? ylabel : 'Del ') + y + ' <small>' + items.length + '</small></h3><div class="strip">' +
+        items.slice(0, 20).map(function (it, i) { return card(it, K, i); }).join('') +
+        (items.length > 20 ? '<button class="card poster f seeall" data-act="yearAll" data-arg="' + y + '" data-v="' + vkey + '"><div class="th"><b>Ver todo ›</b><span>' + items.length + ' títulos</span></div></button>' : '') + '</div></section>';
+    });
+    if (years.length > ylim) html += '<button class="btn ghost more f" data-act="moreRows" data-arg="' + vkey + ':y">Ver más años (' + (years.length - ylim) + ')</button>';
+    // Ganadoras del Óscar (solo películas)
+    var osc = list.filter(function (i) { return i.type === 'movie' && isOscar(i); });
+    if (osc.length >= 2) html += row('🏆 Ganadoras del Óscar', osc.sort(function (a, b) { return (+itemYear(b) || 0) - (+itemYear(a) || 0); }).slice(0, 30), K, osc.length + '');
     var top = list.filter(function (i) { return +i.rating >= 7; }).sort(function (a, b) { return (+b.rating || 0) - (+a.rating || 0); }).slice(0, 20);
-    if (top.length >= 6) html += row('Mejor calificadas', top, kind || 'poster');
+    if (top.length >= 6) html += row('Mejor calificadas', top, K);
     var lim = rowLimit[vkey] || 14;
     order.slice(0, lim).forEach(function (c) {
       var items = by[c];
@@ -543,6 +565,20 @@
     if (order.length > lim) html += '<button class="btn ghost more f" data-act="moreRows" data-arg="' + vkey + '">Ver más categorías (' + (order.length - lim) + ')</button>';
     return html;
   }
+  /** ¿Ganó el Óscar? Compara el título (sin año ni calidad) con la lista; si la película trae año, debe coincidir (±1). */
+  var OSC_IDX = null;
+  function isOscar(i) {
+    if (!OSC_IDX) {
+      OSC_IDX = {};
+      D.OSCARS.forEach(function (o) { o[1].split('|').forEach(function (t) { var k = MV.norm(t); if (k) (OSC_IDX[k] = OSC_IDX[k] || []).push(o[0]); }); });
+    }
+    var k = MV.norm(MV.cleanTitle(i.name)), ys = OSC_IDX[k];
+    if (!ys) return false;
+    var y = +itemYear(i);
+    if (!y) return k.length >= 6;                       // sin año: solo títulos largos (evita "Up", "Soul"…)
+    return ys.some(function (oy) { return Math.abs(oy - y) <= 1; });
+  }
+  var yearSel = {};
   function catalogView(vkey, title, items, kind) {
     if (!S.lists.length) return top(title) + emptyLists();
     var all = MV.visible(items);
@@ -555,6 +591,8 @@
     if (plat) list = list.filter(function (i) { return i.platform === plat; });
     var genres = MV.genresOf(list);
     if (gen) list = list.filter(function (i) { return (i.genres || []).indexOf(gen) >= 0; });
+    var ysel = yearSel[vkey] || '';
+    if (ysel) list = list.filter(function (i) { return itemYear(i) === ysel; });
     list = sortList(list, sort);
     MV._catAll = MV._catAll || {}; MV._catAll[vkey] = cats;
 
@@ -566,7 +604,7 @@
       (cats.length > CAT_TOP ? '<button class="chip more f" data-act="catMore" data-arg="' + vkey + '">Más categorías (' + (cats.length - CAT_TOP) + ') ▾</button>' : '') + '</div>';
     var mode = viewMode[vkey] || 'rows';
     var sortSeg = '<div class="seg sortseg">' + (!cur ? '<button class="chip f" data-act="viewMode" data-arg="' + (mode === 'rows' ? 'grid' : 'rows') + '" data-v="' + vkey + '">' + (mode === 'rows' ? '▦ Cuadrícula' : '☰ Filas') + '</button>' : '') + SORTS.map(function (s) { return '<button class="chip f' + (sort === s[0] ? ' on' : '') + '" data-act="sortBy" data-arg="' + s[0] + '" data-v="' + vkey + '">' + s[1] + '</button>'; }).join('') + '</div>';
-    var active = [cur, plat ? D.platformName(plat) : '', gen ? D.genreName(gen) : ''].filter(Boolean);
+    var active = [cur, plat ? D.platformName(plat) : '', gen ? D.genreName(gen) : '', ysel ? 'Año ' + ysel : ''].filter(Boolean);
     var summary = '<div class="fsum"><b>' + list.length + '</b> <span>' + (list.length === 1 ? 'título' : 'títulos') + (active.length ? ' · ' + esc(active.join(' · ')) : '') + '</span>' +
       (active.length ? '<button class="btn ghost sm f" data-act="clearFilters" data-arg="' + vkey + '">' + IC.close.replace('<svg', '<svg width="16" height="16"') + 'Limpiar filtros</button>' : '') + '</div>';
     // Filtros compactos en una sola línea; cada botón abre su selector
@@ -582,7 +620,7 @@
       (active.length ? '<button class="fbtn f" data-act="clearFilters" data-arg="' + vkey + '">✕ Limpiar</button>' : '') + '</div>';
     MV._fbarPre = '';
     return top(title) + loadingBlock() + bar + (active.length || cur || mode !== 'rows' ? summary : '') +
-      (list.length ? (mode === 'rows' && !cur ? catRows(vkey, list, kind) : grid(list, kind, vkey)) : '<div class="empty glass"><h2>' + (active.length ? 'Nada con esos filtros' : 'No hay contenido aquí todavía') + '</h2><p class="muted">' + (active.length ? 'Prueba quitando algún filtro.' : 'Se llena con lo que traen tus listas M3U o tu cuenta Xtream.') + '</p>' + (active.length ? '<div class="btns" style="justify-content:center"><button class="btn f" data-act="clearFilters" data-arg="' + vkey + '">Limpiar filtros</button></div>' : '') + '</div>');
+      (list.length ? (mode === 'rows' && !cur && !ysel ? catRows(vkey, list, kind) : grid(list, kind, vkey)) : '<div class="empty glass"><h2>' + (active.length ? 'Nada con esos filtros' : 'No hay contenido aquí todavía') + '</h2><p class="muted">' + (active.length ? 'Prueba quitando algún filtro.' : 'Se llena con lo que traen tus listas M3U o tu cuenta Xtream.') + '</p>' + (active.length ? '<div class="btns" style="justify-content:center"><button class="btn f" data-act="clearFilters" data-arg="' + vkey + '">Limpiar filtros</button></div>' : '') + '</div>');
   }
   function catMoreModal(vkey, filter) {
     var cats = (MV._catAll || {})[vkey] || [], q = MV.norm(filter || '');
@@ -1395,7 +1433,8 @@
     animeYear: function (y) { animeYear = y; MV.rerender(); },
     viewMode: function (m, el) { viewMode[el.dataset.v] = m; MV.save('viewMode', viewMode); MV.rerender(); },
     moreRows: function (v) { rowLimit[v] = (rowLimit[v] || 14) + 14; keepPlace(); },
-    clearFilters: function (v) { catSel[v] = ''; genreSel[v] = ''; platSel[v] = ''; limits[v] = 60; MV.rerender(); },
+    clearFilters: function (v) { catSel[v] = ''; genreSel[v] = ''; platSel[v] = ''; yearSel[v] = ''; limits[v] = 60; MV.rerender(); },
+    yearAll: function (y, el) { var v = el.dataset.v; yearSel[v] = String(y); limits[v] = 60; MV.go(view.name, view.arg, { replace: true }); },
     plat: function (p, el) { MV.closeModal(true); platSel[el.dataset.v] = p; genreSel[el.dataset.v] = ''; limits[el.dataset.v] = 60; MV.rerender(); },
     platform: function (id) { MV.go('platforms', id); },
     back: function () { MV.onBack(); },
