@@ -57,6 +57,7 @@
     return i.age <= 7 && !!(i.kids || i.platform === 'disney' || i.learnedKids);
   };
   var ANIM = MV.load('animated', {});
+  MV.hasLearned = function (key) { return !!GCACHE[key]; };
   MV.learnGenres = function (item, names, age) {
     if (age != null && item.key) {
       item.age = age;
@@ -617,7 +618,7 @@
     return chain.then(function (r) {
       if (!r) return null;
       kind = r._kind || kind;
-      return tmdb('/' + kind + '/' + r.id, '&append_to_response=credits,images,external_ids,' + (kind === 'tv' ? 'content_ratings' : 'release_dates') + '&include_image_language=es,en,null').then(function (d) {
+      return tmdb('/' + kind + '/' + r.id, '&append_to_response=credits,images,external_ids,keywords,' + (kind === 'tv' ? 'content_ratings' : 'release_dates') + '&include_image_language=es,en,null').then(function (d) {
         var certs = kind === 'tv'
           ? ((d.content_ratings && d.content_ratings.results) || []).map(function (x) { return { c: x.iso_3166_1, cert: x.rating }; })
           : ((d.release_dates && d.release_dates.results) || []).map(function (x) { var rd = (x.release_dates || []).filter(function (y) { return y.certification; })[0]; return { c: x.iso_3166_1, cert: rd ? rd.certification : '' }; });
@@ -627,7 +628,10 @@
           year: (d.release_date || d.first_air_date || '').slice(0, 4),
           runtime: d.runtime ? d.runtime + ' min' : (d.number_of_seasons ? d.number_of_seasons + ' temporadas' : ''),
           rating: d.vote_average ? d.vote_average.toFixed(1) : '',
-          genres: (d.genres || []).map(function (g) { return g.name; }).slice(0, 3),
+          genres: (d.genres || []).map(function (g) { return g.name; }).slice(0, 3)
+            // Palabras clave de TMDB que definen una categoría propia (TMDB no tiene género "religioso")
+            .concat((((d.keywords && (d.keywords.keywords || d.keywords.results)) || []).map(function (k) { return k.name; })
+              .filter(function (n) { return /\b(religion|christian|christianity|bible|biblical|jesus christ|faith|gospel|church|catholic|god|saint|apostle|resurrection|moses)\b/i.test(n); }).slice(0, 1).map(function () { return 'religion'; }))),
           cast: ((d.credits && d.credits.cast) || []).slice(0, 5).map(function (c) { return c.name; }),
           poster: d.poster_path ? IMG + 'w500' + d.poster_path : (d.images && d.images.posters && d.images.posters[0] ? IMG + 'w500' + d.images.posters[0].file_path : (r.poster_path ? IMG + 'w500' + r.poster_path : '')),
           backdrop: d.backdrop_path ? IMG + 'w1280' + d.backdrop_path : '',

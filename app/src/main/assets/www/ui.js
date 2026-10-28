@@ -683,6 +683,7 @@
       .map(function (w) { return w.length > 4 ? w.replace(/(es|s)$/, '') : w; }).join(' ');
   }
   function catOf(i) {
+    if ((i.genres || []).indexOf('religiosa') >= 0) return 'Religiosas';   // clasificadas por TMDB o por su categoría
     var g = i.group || '', c = cleanGroup(g), k = CAT_KEY[g];
     if (k === undefined) { k = CAT_KEY[g] = catKey(c); if (k && !CAT_NAME[k]) CAT_NAME[k] = c; }
     if (k) return CAT_NAME[k];
@@ -718,6 +719,13 @@
     order.sort(function (a, b) { return by[b].length - by[a].length; });
     if (by['Otras']) { order.splice(order.indexOf('Otras'), 1); order.push('Otras'); }   // "Otras" al final
     var html = '', K = kind || 'poster';
+    // Estrenos siempre primero (se actualiza solo: lo del año actual y el anterior, lo más nuevo arriba)
+    if (vkey !== 'anime') {
+      var est = list.filter(isEstreno).sort(function (a, b) { return (+itemYear(b) || 0) - (+itemYear(a) || 0) || (b.added || 0) - (a.added || 0); });
+      if (est.length >= 3) html += '<section class="row"><h3>Estrenos <small>' + est.length + '</small></h3><div class="strip">' +
+        est.slice(0, 24).map(function (it, i) { return card(it, K, i); }).join('') +
+        (est.length > 24 ? '<button class="card poster f seeall" data-act="cat" data-arg="Estrenos" data-v="' + vkey + '"><div class="th"><b>Ver todo ›</b><span>' + est.length + ' títulos</span></div></button>' : '') + '</div></section>';
+    }
     // Anime: primero lo que está en emisión esta temporada
     if (vkey === 'anime') {
       loadAiring();
@@ -773,6 +781,7 @@
     return hit ? hit[2] : '';
   }
   var yearSel = {};
+  function isEstreno(i) { var y = +itemYear(i), now = new Date().getFullYear(); return (y && y >= now - 1) || /\bestrenos?\b/i.test(i.group || ''); }
   /** Del oeste / vaqueros / western: por género (categoría o ficha de TMDB) o por el nombre. */
   var WEST_RX = /\b(western|westerns|wéstern|vaqueros?|cowboys?|del oeste|lejano oeste|far west|pistoleros?)\b/i;
   function isWestern(i) { return (i.genres || []).indexOf('western') >= 0 || WEST_RX.test(i.group || '') || WEST_RX.test(i.name || ''); }
@@ -780,9 +789,11 @@
     if (!S.lists.length) return top(title) + emptyLists();
     var all = MV.visible(items);
     var cats = groupsClean(all);
+    var nEst = vkey === 'anime' ? 0 : all.filter(isEstreno).length;
+    if (nEst) cats = [{ name: 'Estrenos', count: nEst }].concat(cats.filter(function (c) { return c.name !== 'Estrenos'; }));
     var cur = catSel[vkey] || '', gen = genreSel[vkey] || '', plat = platSel[vkey] || '', sort = sortSel[vkey] || 'rec';
     if (cur && !cats.some(function (c) { return c.name === cur; })) cur = catSel[vkey] = '';
-    var list = cur ? all.filter(function (i) { return catOf(i) === cur; }) : all;
+    var list = cur === 'Estrenos' ? all.filter(isEstreno).sort(function (a, b) { return (+itemYear(b) || 0) - (+itemYear(a) || 0); }) : cur ? all.filter(function (i) { return catOf(i) === cur; }) : all;
     var pm = {}; list.forEach(function (i) { if (i.platform) pm[i.platform] = (pm[i.platform] || 0) + 1; });
     var plats = vkey.indexOf('pl-') === 0 ? [] : D.PLATFORMS.filter(function (p) { return pm[p.id]; }).map(function (p) { return { id: p.id, name: p.name, count: pm[p.id] }; });
     if (plat) list = list.filter(function (i) { return i.platform === plat; });
@@ -853,6 +864,26 @@
 
   VIEWS.movies = function () { return catalogView('movies', 'Películas', S.movies); };
   VIEWS.series = function () { return catalogView('series', 'Series', S.series); };
+  /** TMDB va clasificando en segundo plano (géneros, religiosas…) lo que todavía no tiene ficha. */
+  var tmdbTried = {}, tmdbRunning = false;
+  function tmdbClassify(list) {
+    if (tmdbRunning || !P.tmdbKey || MV.isKids()) return;
+    var todo = MV.visible(list).filter(function (i) { return !tmdbTried[i.key] && !MV.hasLearned(i.key) && !i.anime; }).slice(0, 150);
+    if (!todo.length) return;
+    tmdbRunning = true;
+    var here = view.name, n = 0, changed = 0;
+    (function next() {
+      if (view.name !== here || n >= todo.length) { tmdbRunning = false; if (changed && view.name === here && !MV.modalOpen()) MV.rerender(); return; }
+      var it = todo[n++]; tmdbTried[it.key] = 1;
+      MV.meta(it).then(function (m) {
+        if (m) changed++;
+        if (changed >= 40 && view.name === here && !MV.modalOpen() && !(document.activeElement && document.activeElement.tagName === 'INPUT')) { changed = 0; MV.rerender(); }
+        setTimeout(next, 250);
+      });
+    })();
+  }
+  VIEWS.movies.after = function () { setTimeout(function () { tmdbClassify(S.movies); }, 1500); };
+  VIEWS.series.after = function () { setTimeout(function () { tmdbClassify(S.series); }, 1500); };
   // ---------- Anime: Todo · En emisión · Por año ----------
   var animeMode = 'all', animeYear = '', AIRING = { list: null, loading: false, ts: 0, error: '' };
   function itemYear(i) { return String(i.year || ((i.name || '').match(/\b(19|20)\d{2}\b/) || [''])[0] || ''); }

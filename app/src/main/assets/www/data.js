@@ -186,6 +186,7 @@
     { id: 'fantasia', name: 'Fantasía', rx: /\b(fantas[ií]a|fantasy|isekai|magia|magic)\b/i },
     { id: 'crimen', name: 'Crimen', rx: /\b(crimen|crime|polic[ií]ac[ao]s?|detective|mafia|narco)\b/i },
     { id: 'infantil', name: 'Infantil', rx: /\b(infantil|kids?|niñ[oa]s|children|familia(r)?|family|animaci[oó]n|animation|dibujos|cartoon)\b/i },
+    { id: 'religiosa', name: 'Religiosas', rx: /\b(religios[ao]s?|religi[oó]n|religion|cristian[ao]s?|christian(ity)?|b[ií]blic[ao]s?|biblical|biblia|bible|jes[uú]s de nazaret|jesus christ|jesucristo|pasi[oó]n de cristo|faith[- ]based|gospel|evangeli\w*|cat[oó]lic[ao]s?|catholic)\b/i },
     { id: 'documental', name: 'Documental', rx: /\b(documental(es)?|documentar(y|ies)|docu|naturaleza|nature|historia real|biograf[ií]a|biography)\b/i },
     { id: 'belico', name: 'Bélico', rx: /\b(b[eé]lic[ao]s?|guerra|war|militar|military)\b/i },
     { id: 'historica', name: 'Histórica', rx: /\b(hist[oó]ric[ao]s?|historical|[eé]poca|period)\b/i },
