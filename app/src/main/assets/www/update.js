@@ -60,6 +60,8 @@
     var bell = document.querySelector('.qbar [data-fid="q-upd"]');
     if (!u) { if (bell) bell.remove(); return; }
     if (!bell && MV.updBell) { var bar = document.querySelector('.qbar'); if (bar) bar.insertAdjacentHTML('afterbegin', MV.updBell()); }
+    // La primera vez que aparece la campana se explica para qué es
+    try { if (!localStorage.getItem('mv:bellTip')) { localStorage.setItem('mv:bellTip', '1'); setTimeout(function () { MV.toast('Hay una versión nueva: la campana de arriba la instala cuando quieras', 5000); }, 800); } } catch (e) {}
   }
   MV.showUpdate = function () { if (MV.pendingUpdate) showPopup(MV.pendingUpdate); else MV.checkUpdate(true); };
 

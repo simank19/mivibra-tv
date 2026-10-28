@@ -3106,7 +3106,8 @@
       ['[data-fid="q-search"]', 'Buscar', 'Busca en canales, películas, series y anime a la vez. No importan las tildes y entiende pequeños errores.'],
       ['[data-fid="q-favs"]', 'Favoritos', 'Todo lo que marques con la estrella queda guardado aquí.'],
       ['[data-fid="q-history"]', 'Historial', 'Lo último que viste, para retomarlo donde lo dejaste.'],
-      ['[data-fid="q-prof"]', 'Tu perfil', 'Ajustes, cambiar de perfil y cerrar sesión. Desde Ajustes puedes volver a ver este tutorial.']
+      ['[data-fid="q-prof"]', 'Tu perfil', 'Ajustes, cambiar de perfil y cerrar sesión. Desde Ajustes puedes volver a ver este tutorial.'],
+      ['[data-fid="q-upd"]', 'Actualización disponible', 'Cuando hay una versión nueva aparece esta campana. ' + PRESS + 'la para instalarla cuando quieras.', 2]
     ],
     home: [
       ['.hero', 'Recuadro principal', 'Muestra el último canal que viste (o uno recomendado) con vista previa. ' + PRESS + ' para abrirlo de una.'],
@@ -3121,7 +3122,8 @@
     catalog: [
       ['.fbar', 'Filtros', 'Filtra por categoría, plataforma o género, y cambia el orden. "Western" muestra solo películas del oeste.'],
       ['[data-act="viewMode"]', 'Filas o cuadrícula', 'Cambia entre ver el contenido por filas (Estrenos, por año, Oscar, géneros…) o todo en cuadrícula.'],
-      ['.view-in .row', 'Estrenos primero', 'Lo más nuevo aparece arriba y se actualiza solo. Más abajo: por año, ganadoras del Oscar y por género.']
+      ['.view-in .row', 'Estrenos primero', 'Lo más nuevo aparece arriba y se actualiza solo. Más abajo: por año, ganadoras del Oscar y por género.'],
+      ['.view-in .row, .view-in .grid', 'Sin repetidos', 'Si un título está en varias de tus listas (aunque se llame distinto), aparece una sola vez con la versión de mejor calidad. Las otras quedan de respaldo por si la principal falla.', 2]
     ],
     detail: [
       ['.detail [data-act="resume"], .detail [data-act="play"]', 'Reproducir', 'Empieza a ver o continúa donde quedaste. En series, al terminar un capítulo el siguiente arranca solo.'],
@@ -3141,15 +3143,18 @@
       ['[data-act="streamTab"]', 'Twitch o Kick', 'Elige la plataforma.'],
       ['#streamIn', 'Buscar un canal', 'Escribe el nombre del canal y presiona "Ver en vivo" o "Listo".'],
       ['.view-in .vgrid', 'En vivo ahora', 'Canales transmitiendo en este momento, ordenados por espectadores. ' + PRESS + ' uno para verlo.'],
-      ['[data-act="streamFav"], .view-in h3', 'Tus canales', 'Al ver un canal puedes guardarlo para tenerlo siempre a mano.']
+      ['[data-act="streamFav"], .view-in h3', 'Tus canales', 'Al ver un canal puedes guardarlo para tenerlo siempre a mano.'],
+      ['[data-act="streamTab"]', 'Mientras ves un directo', 'Los botones se esconden solos; cualquier tecla los vuelve a mostrar. En celular, al salir con Inicio sigue en una ventana flotante.', 2]
     ],
     youtube: [
       ['#ytIn', 'Buscar en YouTube', 'Busca videos y míralos sin salir de MiVibra.'],
-      ['.view-in .chips', 'Categorías', 'Tendencias, música, noticias, deportes y más.']
+      ['.view-in .chips', 'Categorías', 'Tendencias, música, noticias, deportes y más.'],
+      ['.view-in .vgrid, .view-in .chips', 'Ventana flotante', 'Con un video abierto, al salir con Inicio sigue en una ventanita sobre otras apps. Al apagar la pantalla se pausa.', 2]
     ],
     music: [
       ['.view-in .chips', 'Fuentes de música', 'YouTube Music, tu música guardada en el equipo y música libre.'],
-      ['#musicIn', 'Buscar', 'Busca canciones o artistas.']
+      ['#musicIn', 'Buscar', 'Busca canciones o artistas.'],
+      ['.view-in .chips', 'Ventana flotante', 'En YouTube Music, al salir con Inicio la canción sigue en una ventanita sobre otras apps. Al apagar la pantalla se pausa (regla de YouTube).', 2]
     ],
     radio: [
       ['#radioIn', 'Buscar emisoras', 'Busca por nombre o ciudad.'],
@@ -3168,6 +3173,16 @@
     settings: [
       ['.view-in .chips', 'Secciones de ajustes', 'Listas, apariencia, reproducción, control parental, perfiles, cuenta y más.']
     ],
+    settings_lists: [
+      ['[data-act="addList"]', 'Agregar lista', 'Enlace M3U, cuenta Xtream Codes, Portal y MAC, un archivo, o varias a la vez desde un .txt (incluye varias MAC de un portal).', 2],
+      ['[data-act="lselStart"]', 'Seleccionar varias', 'Marca varias listas (todas, las que fallan, las de Portal MAC…) y bórralas juntas.', 2],
+      ['[data-act="listToggle"]', 'Activar o desactivar', 'Apaga una lista sin borrarla: su contenido deja de aparecer hasta que la vuelvas a encender.', 2],
+      ['[data-act="dedupeToggle"]', 'Ocultar repetidos', 'Muestra cada título una sola vez con la mejor calidad (4K solo en pantallas 4K). Apágalo si quieres ver todas las versiones.', 2],
+      ['[data-act="checkDupes"]', 'Canales repetidos', 'Prueba las señales de los canales que están en varias listas y deja la que funciona mejor.', 2]
+    ],
+    settings_look: [
+      ['[data-act="tourAgain"]', 'Tutorial', 'Desde aquí puedes volver a ver estas explicaciones en cada sección.', 2]
+    ],
     profiles: [
       ['.profiles', '¿Quién está viendo?', 'Cada perfil tiene sus favoritos, historial y avatar. Los perfiles infantiles solo muestran contenido para niños.'],
       ['[data-act="manageProfiles"]', 'Administrar perfiles', 'Crea perfiles, cambia nombres y diseña tu avatar 3D.']
@@ -3183,21 +3198,28 @@
   MV.tourReset = function () { MV.save('tour:' + (S.pid || 'default'), {}); };
   var tour = null, tourT = null;
   MV.tourOpen = function () { return !!tour; };
+  /** Versión de cada sección del tutorial: los pasos nuevos (versión mayor) se muestran como "Novedad" a quien ya vio la sección. */
+  function tourVer(list) { return (list || []).reduce(function (m, st) { return Math.max(m, st[3] || 1); }, 0); }
   function tourCheck() {
     clearTimeout(tourT);
     if (tour) { if (tour.view !== view.name) tourEnd(false); else { setTimeout(tourShow, 60); return; } }
     var name = view.name, seen = tourSeen();
     if (seen._off || !TOUR[name] || !S.pid && name !== 'profiles') return;
     var keys = [];
-    if (name !== 'profiles' && !MV.isKids() && !seen.shell) keys.push('shell');
-    var k = TOUR_KEY[name] || name;
-    if (!seen[k]) keys.push(k);
+    if (name !== 'profiles' && !MV.isKids()) keys.push('shell');
+    keys.push(TOUR_KEY[name] || name);
+    if (name === 'settings' && TOUR['settings_' + setTab]) keys.push('settings_' + setTab);
+    keys = keys.filter(function (k) { return (+seen[k] || 0) < tourVer(TOUR[k]); });
     if (!keys.length) return;
     tourT = setTimeout(function () {
       if (view.name !== name || MV.modalOpen() || (MV.streamOpen && MV.streamOpen()) || (MV.ytPlayer && MV.ytPlayer.isOpen())) return;
-      var steps = [];
-      keys.forEach(function (kk) { (kk === 'shell' ? TOUR.shell : TOUR[name]).forEach(function (st) { if (document.querySelector(st[0])) steps.push(st); }); });
-      keys.forEach(tourMark);
+      var steps = [], s2 = tourSeen(), veteran = Object.keys(s2).some(function (x) { return x !== '_off' && x !== 'player'; }) || !!s2.player;
+      keys.forEach(function (kk) {
+        var prev = +s2[kk] || 0;
+        TOUR[kk].forEach(function (st) { if ((st[3] || 1) > prev && document.querySelector(st[0])) steps.push({ s: st, nw: veteran && (st[3] || 1) > 1 }); });
+        s2[kk] = tourVer(TOUR[kk]);
+      });
+      MV.save('tour:' + (S.pid || 'default'), s2);
       if (!steps.length) return;
       tour = { view: name, steps: steps, i: 0, back: document.activeElement };
       tourShow();
@@ -3205,13 +3227,13 @@
   }
   function tourShow() {
     if (!tour) return;
-    var st = tour.steps[tour.i], el = document.querySelector(st[0]);
+    var cur = tour.steps[tour.i], st = cur.s, el = document.querySelector(st[0]);
     if (!el) { if (tour.i < tour.steps.length - 1) { tour.i++; return tourShow(); } return tourEnd(true); }
     try { el.scrollIntoView({ block: 'nearest', behavior: 'instant' }); } catch (e) {}
     var box = document.getElementById('tour');
     if (!box) { box = document.createElement('div'); box.id = 'tour'; document.body.appendChild(box); }
     var last = tour.i === tour.steps.length - 1;
-    box.innerHTML = '<div class="tour-hole"></div><div class="tour-tip glass" role="dialog" aria-live="polite"><small>' + (tour.i + 1) + ' de ' + tour.steps.length + '</small><h3>' + esc(st[1]) + '</h3><p>' + esc(st[2]) + '</p>' +
+    box.innerHTML = '<div class="tour-hole"></div><div class="tour-tip glass" role="dialog" aria-live="polite"><small>' + (cur.nw ? 'Novedad · ' : '') + (tour.i + 1) + ' de ' + tour.steps.length + '</small><h3>' + esc(st[1]) + '</h3><p>' + esc(st[2]) + '</p>' +
       '<div class="btns"><button class="btn f tour-b" data-t="next">' + (last ? 'Entendido' : 'Siguiente') + '</button>' + (tour.i ? '<button class="btn ghost f tour-b" data-t="prev">Atrás</button>' : '') +
       (!last ? '<button class="btn ghost f tour-b" data-t="skip">Saltar</button>' : '') + '</div>' +
       (tour.i === 0 ? '<button class="tour-off tour-b f" data-t="off">No volver a mostrar tutoriales</button>' : '') + '</div>';
