@@ -323,11 +323,13 @@
   };
 
   // ---------- Carga y combinación de todas las listas ----------
+  function retag(o) { try { return tags(o); } catch (e) { return o; } }
   function loadList(list, force) {
     var ck = 'list:' + list.id;
     return MV.idbGet(ck).then(function (cached) {
       var fresh = cached && cached.ts > Date.now() - 12 * 3600e3 && cached.v === 6;
-      if (cached && !force && fresh) return cached.items;
+      // Lo guardado se vuelve a clasificar con las reglas actuales (+18, infantil, géneros, sin emojis)
+      if (cached && !force && fresh) return cached.items.map(retag);
       var job;
       if (list.type === 'xtream') job = buildFromXtream(list);
       else if (list.type === 'file') job = MV.idbGet('raw:' + list.id).then(function (txt) { return buildFromM3U(MV.parseM3U(txt || '', list), list); });
@@ -341,7 +343,7 @@
         return items;
       }).catch(function (e) {
         list.error = e.message || 'Error';
-        if (cached) return cached.items; // sin internet: usa lo último que funcionó
+        if (cached) return cached.items.map(retag); // sin internet: usa lo último que funcionó
         throw e;
       });
     });
