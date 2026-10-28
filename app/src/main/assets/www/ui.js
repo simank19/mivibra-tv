@@ -17,7 +17,38 @@
     h.classList.toggle('no-anim', P.anim === false);
     h.classList.toggle('no-bg', P.bgAnim === false);
     h.classList.toggle('kids', MV.isKids());
+    applySeason();
   };
+  /** Tema de la celebración del día (Halloween, Amor y Amistad, Navidad…): colores y adornos. Se puede apagar en Ajustes › Temas. */
+  MV.season = function () { return P.autoTheme === false ? null : D.seasonFor(new Date()); };
+  var VARS = ['--accent', '--accent-soft', '--accent-text', '--base', '--glow', '--glow2'];
+  function hexA(hex, a) { var n = parseInt(hex.slice(1), 16); return 'rgba(' + (n >> 16 & 255) + ',' + (n >> 8 & 255) + ',' + (n & 255) + ',' + a + ')'; }
+  function applySeason() {
+    var h = document.documentElement, s = MV.season();
+    var deco = document.getElementById('deco');
+    if (!s) {
+      VARS.forEach(function (v) { h.style.removeProperty(v); });
+      delete h.dataset.season; if (deco) deco.remove();
+      return;
+    }
+    if (h.dataset.season === s.id && deco) return;
+    h.dataset.season = s.id;
+    h.style.setProperty('--accent', s.a); h.style.setProperty('--accent-soft', hexA(s.a, .2)); h.style.setProperty('--accent-text', s.text);
+    h.style.setProperty('--base', s.base); h.style.setProperty('--glow', s.glow); h.style.setProperty('--glow2', s.glow2);
+    if (!deco) { deco = document.createElement('div'); deco.id = 'deco'; deco.setAttribute('aria-hidden', 'true'); document.body.insertBefore(deco, document.body.firstChild.nextSibling); }
+    // Pocos adornos y lentos (en TV quietos) para no gastar rendimiento
+    var n = MV.device.tv ? 7 : 10, html = '';
+    for (var i = 0; i < n; i++) {
+      var x = (i * 97 + 13) % 100, y = (i * 53 + 7) % 92, sz = 18 + (i * 7) % 22, dl = (i * 1.7) % 9;
+      html += '<span style="left:' + x + '%;top:' + y + '%;font-size:' + sz + 'px;animation-delay:-' + dl + 's">' + s.deco[i % s.deco.length] + '</span>';
+    }
+    deco.innerHTML = html;
+  }
+  /** Saludo de la celebración arriba en Inicio. */
+  function seasonBanner() {
+    var s = MV.season(); if (!s) return '';
+    return '<div class="seasonbar"><span class="em">' + s.deco[0] + '</span><b>' + esc(s.greet) + '</b><span class="muted">Tema de ' + esc(s.name) + '</span></div>';
+  }
 
   // ---------- Navegación entre pantallas ----------
   MV.go = function (name, arg, opts) {
@@ -270,7 +301,7 @@
     var live = MV.visible(S.live), movies = MV.visible(S.movies), series = MV.visible(S.series);
     var favs = MV.favs().map(MV.resolve), cont = MV.continueList();
     var heroIt = favs.find(function (f) { return f.type === 'live'; }) || live[0] || movies[0];
-    var html = loadingBlock();
+    var html = seasonBanner() + loadingBlock();
     // Continuar desde otro dispositivo
     var other = cont.find(function (c) { return c.device && c.device !== P.deviceName && Date.now() - c.ts < 3 * 86400e3; });
     if (other) {
@@ -878,7 +909,7 @@
     return '<div class="top"><img src="' + esc(p.avatar || '') + '" alt="" style="width:58px;height:58px;border-radius:50%;background:#F3EFEA;box-shadow:0 0 0 4px var(--accent)"><div><h1>¡Hola, ' + esc(p.name || '') + '!</h1><span class="muted">¿Qué quieres ver hoy?</span></div><div class="sp"></div>' +
       '<span class="pill">Te quedan ' + MV.kidsLeft() + ' min</span><button class="pill f" data-act="kidsExit">' + IC.lock.replace('<svg', '<svg width="18" height="18"') + 'Salir</button></div>' +
       '<div class="kidcats">' + cats.map(function (c) { return '<button class="kidcat f' + (kidCat === c[0] ? ' on' : '') + '" data-act="kidCat" data-arg="' + c[0] + '"><span class="bub" style="background:' + c[2] + '">' + c[3] + '</span>' + c[1] + '</button>'; }).join('') + '</div>' +
-      '<button class="kidsearch f" data-act="nav" data-arg="search">' + IC.search + '<span>Buscar dibujos, películas o canales</span></button>' +
+      seasonBanner() + '<button class="kidsearch f" data-act="nav" data-arg="search">' + IC.search + '<span>Buscar dibujos, películas o canales</span></button>' +
       (!list.length ? '<div class="empty glass"><h2>' + (kidsChecking ? 'Buscando contenido para tu edad…' : 'Aún no hay contenido infantil') + '</h2><p class="muted">' + (kidsChecking ? 'Estamos revisando en TMDB qué películas y series son para niños (0 a 7 años, y animación hasta 13).' : 'Pide a un adulto que agregue canales infantiles en Ajustes › Listas (hay una lista gratuita de canales para niños).') + '</p></div>'
         : kidCat === 'all' ? kidsRows(items) : grid(list, kidCat === 'live' ? 'ch' : 'poster', 'kids'));
   };
@@ -1065,7 +1096,10 @@
     }).join('') + '<div class="btns" style="margin-top:12px"><button class="btn f" data-act="go" data-arg="profileEdit">' + IC.plus + 'Nuevo perfil</button></div></div>';
   };
   SETTINGS.look = function () {
-    return '<div class="panel glass"><h2>Tema</h2><div class="themes">' + D.THEMES.map(function (t) {
+    var ss = D.seasonFor(new Date());
+    return '<div class="panel glass"><h2>Temas por celebración</h2>' +
+      '<div class="line"><div class="t"><b>Cambiar el tema solo en fechas especiales</b><span>Halloween, Navidad, Amor y Amistad, Día de la Madre, del Padre, del Niño, 20 de julio, Año Nuevo…' + (ss ? ' Hoy: ' + esc(ss.name) + ' ' + ss.deco[0] : '') + '</span></div><button class="toggle f' + (P.autoTheme !== false ? ' on' : '') + '" data-act="prefToggle" data-arg="autoTheme"></button></div></div>' +
+      '<div class="panel glass"><h2>Tema</h2>' + (ss && P.autoTheme !== false ? '<p class="muted">Ahora se ve el tema de ' + esc(ss.name) + '; el que elijas aquí vuelve cuando termine la celebración.</p>' : '') + '<div class="themes">' + D.THEMES.map(function (t) {
       return '<button class="theme f' + (P.theme === t.id ? ' on' : '') + '" data-act="theme" data-arg="' + t.id + '"><i style="background:linear-gradient(135deg,' + t.a + ',' + t.b + ')"></i>' + t.name + '</button>';
     }).join('') + '</div></div><div class="panel glass"><h2>Efecto vidrio y animaciones</h2>' +
       '<div class="line"><div class="t"><b>Intensidad del vidrio</b></div><div class="seg">' + [['low', 'Suave'], ['mid', 'Media'], ['high', 'Intensa']].map(function (g) { return '<button class="chip f' + (P.glass === g[0] ? ' on' : '') + '" data-act="glass" data-arg="' + g[0] + '">' + g[1] + '</button>'; }).join('') + '</div></div>' +

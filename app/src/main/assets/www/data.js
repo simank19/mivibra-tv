@@ -63,6 +63,37 @@
     { name: 'Música (iptv-org)', url: 'https://iptv-org.github.io/iptv/categories/music.m3u', note: 'Videos y conciertos' }
   ];
 
+  // Temas automáticos por celebración (fechas de Colombia). Se activan solos si "Temas por celebración" está encendido.
+  function nthWeekday(y, m, wd, n) { // n-ésimo día de la semana (0 = domingo) del mes m (0-11); n = -1 → el último
+    if (n > 0) { var d = new Date(y, m, 1); var add = (wd - d.getDay() + 7) % 7 + (n - 1) * 7; return new Date(y, m, 1 + add); }
+    var e = new Date(y, m + 1, 0); return new Date(y, m, e.getDate() - ((e.getDay() - wd + 7) % 7));
+  }
+  function within(d, from, to) { var t = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); return t >= from.getTime() && t <= to.getTime(); }
+  function days(base, before, after) { return [new Date(base.getFullYear(), base.getMonth(), base.getDate() - before), new Date(base.getFullYear(), base.getMonth(), base.getDate() + (after || 0))]; }
+  D.SEASONS = [
+    { id: 'newyear', name: 'Año Nuevo', greet: '¡Feliz Año Nuevo!', deco: ['🎆', '🥂', '✨', '🎉'], a: '#FFC83D', text: '#FFE39A', base: '#0B0A12', glow: 'rgba(255,200,61,.42)', glow2: 'rgba(120,80,200,.35)',
+      when: function (d) { var y = d.getFullYear(); return within(d, new Date(y, 0, 1), new Date(y, 0, 6)) || within(d, new Date(y, 11, 31), new Date(y, 11, 31)); } },
+    { id: 'valentine', name: 'San Valentín', greet: 'Feliz San Valentín', deco: ['💘', '💖', '🌹', '💕'], a: '#FF3D7F', text: '#FFA8C6', base: '#1A0710', glow: 'rgba(255,61,127,.42)', glow2: 'rgba(150,20,60,.4)',
+      when: function (d) { var y = d.getFullYear(); return within(d, new Date(y, 1, 10), new Date(y, 1, 14)); } },
+    { id: 'women', name: 'Día de la Mujer', greet: 'Feliz Día de la Mujer', deco: ['💜', '🌷', '✨'], a: '#B26BFF', text: '#DCC0FF', base: '#130B1E', glow: 'rgba(178,107,255,.42)', glow2: 'rgba(90,40,150,.4)',
+      when: function (d) { var y = d.getFullYear(); return within(d, new Date(y, 2, 7), new Date(y, 2, 8)); } },
+    { id: 'kidsday', name: 'Día del Niño', greet: '¡Feliz Día del Niño!', deco: ['🎈', '🧸', '🪁', '🍭'], a: '#2EC4FF', text: '#A6E7FF', base: '#0A1422', glow: 'rgba(46,196,255,.42)', glow2: 'rgba(255,200,40,.3)',
+      when: function (d) { var y = d.getFullYear(), k = nthWeekday(y, 3, 6, -1), r = days(k, 3, 1); return within(d, r[0], r[1]); } },
+    { id: 'mothers', name: 'Día de la Madre', greet: 'Feliz Día de la Madre', deco: ['💐', '🌸', '💗', '🌷'], a: '#FF6FA8', text: '#FFC1D9', base: '#1A0B13', glow: 'rgba(255,111,168,.42)', glow2: 'rgba(170,60,120,.38)',
+      when: function (d) { var y = d.getFullYear(), k = nthWeekday(y, 4, 0, 2), r = days(k, 6, 0); return within(d, r[0], r[1]); } },
+    { id: 'fathers', name: 'Día del Padre', greet: 'Feliz Día del Padre', deco: ['👔', '🏆', '⚽', '💙'], a: '#3D8BFF', text: '#A9C9FF', base: '#08111F', glow: 'rgba(61,139,255,.42)', glow2: 'rgba(20,60,130,.42)',
+      when: function (d) { var y = d.getFullYear(), k = nthWeekday(y, 5, 0, 3), r = days(k, 6, 0); return within(d, r[0], r[1]); } },
+    { id: 'colombia', name: 'Independencia de Colombia', greet: '¡Viva Colombia! 20 de julio', deco: ['🇨🇴', '💛', '💙', '❤️'], a: '#FCD116', text: '#FFE98A', base: '#0B0F1F', glow: 'rgba(252,209,22,.38)', glow2: 'rgba(0,56,147,.45)',
+      when: function (d) { var y = d.getFullYear(); return within(d, new Date(y, 6, 18), new Date(y, 6, 20)); } },
+    { id: 'love', name: 'Amor y Amistad', greet: 'Feliz Amor y Amistad', deco: ['💝', '🤝', '💌', '💞'], a: '#FF4D6D', text: '#FFB3C1', base: '#1A080D', glow: 'rgba(255,77,109,.42)', glow2: 'rgba(255,150,60,.3)',
+      when: function (d) { var y = d.getFullYear(), k = nthWeekday(y, 8, 6, 3), r = days(k, 6, 1); return within(d, r[0], r[1]); } },
+    { id: 'halloween', name: 'Halloween', greet: '¡Feliz Halloween!', deco: ['🎃', '👻', '🦇', '🕸️', '🍬'], a: '#FF7A00', text: '#FFC07A', base: '#0E0812', glow: 'rgba(255,122,0,.45)', glow2: 'rgba(120,40,170,.45)',
+      when: function (d) { var y = d.getFullYear(); return within(d, new Date(y, 9, 20), new Date(y, 9, 31)); } },
+    { id: 'christmas', name: 'Navidad', greet: '¡Feliz Navidad!', deco: ['🎄', '⭐', '🎁', '❄️', '🕯️'], a: '#E8333F', text: '#FFB0B5', base: '#07120C', glow: 'rgba(232,51,63,.4)', glow2: 'rgba(20,140,70,.42)',
+      when: function (d) { var y = d.getFullYear(); return within(d, new Date(y, 10, 28), new Date(y, 11, 30)); } }
+  ];
+  D.seasonFor = function (d) { d = d || new Date(); for (var i = 0; i < D.SEASONS.length; i++) if (D.SEASONS[i].when(d)) return D.SEASONS[i]; return null; };
+
   D.THEMES = [
     { id: 'mv', name: 'Naranja MiVibra', a: '#FF6900', b: '#0D0C0B' },
     { id: 'ocean', name: 'Océano', a: '#4C8DFF', b: '#0A1220' },
