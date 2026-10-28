@@ -315,12 +315,12 @@
     return new Promise(function (res, rej) { var i = new Image(); if (cors) i.crossOrigin = 'anonymous'; i.onload = function () { res(i); }; i.onerror = rej; i.src = src; });
   }
   /** Dibuja el avatar con cabello recoloreado, lentes y accesorio; devuelve una imagen (data URL). */
-  function avCompose(c) {
+  function avCompose(c, size) {
     var face = D.FACE[c.t];
-    if (!c.hair && !((c.gl || c.acc) && face)) return Promise.resolve(avFile(c));
+    if (!(c.hair && D.HAIR_MASKS.indexOf(c.t) >= 0) && !((c.gl || c.acc) && face)) return Promise.resolve(avFile(c));
     // Con sombrero, gorra, corona o birrete la cara se achica un poco para que quepa lo de arriba
     var hat = ['cap', 'tophat', 'crown', 'grad'].indexOf(c.acc) >= 0 && face;
-    var S2 = 240, sc = hat ? 0.8 : 1, bw = S2 * sc, ox = (S2 - bw) / 2, oy = S2 - bw, k = bw / 160;
+    var S2 = size || 240, sc = hat ? 0.8 : 1, bw = S2 * sc, ox = (S2 - bw) / 2, oy = S2 - bw, k = bw / 160;
     var jobs = [loadImg(avFile(c))];
     jobs.push(c.hair && D.HAIR_MASKS.indexOf(c.t) >= 0 ? loadImg('avatars/fluent/mask/' + c.t + '.png') : null);
     jobs.push(c.gl && face ? loadImg('avatars/fluent/acc/' + c.gl + '.webp') : null);
@@ -362,6 +362,21 @@
       try { return cv.toDataURL('image/webp', 0.9); } catch (e) { return avFile(c); }
     }).catch(function () { return avFile(c); });
   }
+  // Miniaturas con el color de cabello y los lentes que estás eligiendo (así ves cada profesión con tu avatar)
+  var thumbCache = {};
+  function thumbKey(t) { return [t, AV.tone, AV.hair, AV.gl].join('|'); }
+  function avThumbs() {
+    if (!AV || (!AV.hair && !AV.gl)) return;
+    var imgs = Array.prototype.slice.call(document.querySelectorAll('img[data-avt]')), i = 0;
+    (function next() {
+      if (i >= imgs.length || view.name !== 'profileEdit') return;
+      var el = imgs[i++], t = el.getAttribute('data-avt'), key = thumbKey(t);
+      if (thumbCache[key]) { el.src = thumbCache[key]; return next(); }
+      avCompose({ t: t, tone: AV.tone, hair: AV.hair, gl: AV.gl, acc: '' }, 160).then(function (src) {
+        thumbCache[key] = src; if (el.isConnected) el.src = src; setTimeout(next, 0);
+      });
+    })();
+  }
   function avUpdate() {
     if (avBusy) return; avBusy = true; AV.custom = null;
     avCompose(AV).then(function (src) { avBusy = false; editSel = src; keepName(); MV.rerender(); });
@@ -380,13 +395,13 @@
       var list = people.filter(filter);
       return '<h3 class="avh">' + title + '</h3><div class="avgrid">' + list.map(function (x) {
         var f = 'avatars/fluent/' + x[0] + '_' + c.tone + '.webp';
-        return '<button class="avopt av3d f' + (x[0] === c.t ? ' on' : '') + '" data-act="avType" data-arg="' + x[0] + '" title="' + esc(x[1]) + '"><img loading="lazy" src="' + f + '" alt=""><span class="avname">' + esc(x[1]) + '</span></button>';
+        return '<button class="avopt av3d f' + (x[0] === c.t ? ' on' : '') + '" data-act="avType" data-arg="' + x[0] + '" title="' + esc(x[1]) + '"><img loading="lazy" src="' + (thumbCache[thumbKey(x[0])] || f) + '" data-avt="' + x[0] + '" alt=""><span class="avname">' + esc(x[1]) + '</span></button>';
       }).join('') + '</div>';
     };
     var isW = function (x) { return /^(woman|girl|old-woman|princess|mrs-claus)/.test(x[0]); };
     var isM = function (x) { return /^(man|boy|old-man|prince|santa-claus)/.test(x[0]); };
     return tones +
-      (canHair ? chipsRow('Color de cabello', D.HAIR_COLORS, 'avHair', c.hair, true) : '<p class="muted avnote">El color de cabello se puede cambiar en Mujer, Hombre, Persona, Niño, Niña e Infante (también rizados y con barba).</p>') +
+      (canHair ? chipsRow('Color de cabello', D.HAIR_COLORS, 'avHair', c.hair, true) : '<p class="muted avnote">Este personaje no permite cambiar el color de cabello (tiene un color o un casco propio).</p>') +
       (face ? chipsRow('Lentes', D.GLASSES, 'avGl', c.gl) + chipsRow('Accesorio', D.ACCS, 'avAcc', c.acc) : '<p class="muted avnote">Lentes y accesorios: disponibles en las personas y peinados.</p>') +
       sec(function (x) { return x[2] === 'p' && isW(x); }, 'Mujeres') + sec(function (x) { return x[2] === 'p' && isM(x); }, 'Hombres') +
       sec(function (x) { return x[2] === 'p' && !isW(x) && !isM(x); }, 'Personas') +
@@ -2090,7 +2105,10 @@
   };
   var pendingName = null;
   function keepName() { var i = document.getElementById('profName'); if (i) pendingName = i.value; }
-  VIEWS.profileEdit.after = function () { var i = document.getElementById('profName'); if (i && pendingName != null) i.value = pendingName; };
+  VIEWS.profileEdit.after = function () {
+    var i = document.getElementById('profName'); if (i && pendingName != null) i.value = pendingName;
+    if (editTab === 'crear') setTimeout(avThumbs, 50);   // profesiones con tu color de cabello y lentes
+  };
 
   function downloadGame(url, name, unzip) {
     MV.closeModal(true);
