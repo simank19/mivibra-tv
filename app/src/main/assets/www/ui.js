@@ -1941,6 +1941,9 @@
       MV.save('radioFavs', f.slice(0, 100)); if (RADIO.scope === 'fav') RADIO.key = ''; MV.rerender();
     },
     musicTab: function (t) { MUSIC.tab = t; MV.rerender(); },
+    ytmCat: function (c) { YTM.cat = c; YTM.q = ''; YTM.list = null; MV.rerender(); },
+    ytmSearch: function () { MV._typedAt = Date.now(); YTM.q = ((document.getElementById('ytmIn') || {}).value || '').trim(); YTM.list = null; MV.rerender(); },
+    ytmPlay: function (i) { if (AU.current()) AU.stop(); YTP.play(MV._ytmList || [], +i); },
     musicScan: function () { scanMusic(); },
     musicShuffle: function () { var l = (MUSIC.local || []).slice(); for (var i = l.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = l[i]; l[i] = l[j]; l[j] = t; } AU.play(l, 0); setTimeout(MV.rerender, 50); },
     localPlay: function (i) { AU.play(MUSIC.local || [], +i); setTimeout(MV.rerender, 50); },
@@ -2618,7 +2621,7 @@
   VIEWS.radio.after = function () { var i = document.getElementById('radioIn'); if (i) i.addEventListener('keydown', function (e) { if (e.key === 'Enter') ACT.radioSearch(); }); };
 
   // ---------- Música ----------
-  var MUSIC = { tab: 'mine', local: null, scanning: false, genre: '', q: '', aud: null, audKey: '', audLoading: false, host: '' };
+  var MUSIC = { tab: 'ytm', local: null, scanning: false, genre: '', q: '', aud: null, audKey: '', audLoading: false, host: '' };
   var AUD_GENRES = [['', 'Tendencias'], ['Latin', 'Latina'], ['Electronic', 'Electrónica'], ['Hip-Hop/Rap', 'Hip-Hop'], ['Pop', 'Pop'], ['Rock', 'Rock'], ['Lo-Fi', 'Lo-Fi'], ['R&B/Soul', 'R&B'], ['Reggae', 'Reggae'], ['Acoustic', 'Acústica'], ['Jazz', 'Jazz'], ['Classical', 'Clásica'], ['Ambient', 'Relajante']];
   var MUSIC_EXT = ['mp3', 'm4a', 'aac', 'flac', 'ogg', 'opus', 'wav'];
   function mediaUrl(path, ext) {
@@ -2664,9 +2667,10 @@
     }).join('') + '</div>';
   }
   VIEWS.music = function () {
-    var tabs = [['mine', 'Mi música'], ['free', 'Música libre']];
+    var tabs = [['ytm', 'YouTube Music'], ['mine', 'Mi música'], ['free', 'Música libre']];
     var html = top('Música') + '<div class="chips">' + tabs.map(function (t) { return '<button class="chip f' + (MUSIC.tab === t[0] ? ' on' : '') + '" data-act="musicTab" data-arg="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>';
     if (MUSIC.tab === 'apps') MUSIC.tab = 'mine';
+    if (MUSIC.tab === 'ytm') return html + ytMusic();
     if (MUSIC.tab === 'free') {
       loadAudius();
       html += '<div class="chips">' + AUD_GENRES.map(function (g) { return '<button class="chip f' + (!MUSIC.q && MUSIC.genre === g[0] ? ' on' : '') + '" data-act="musicGenre" data-arg="' + esc(g[0]) + '">' + esc(g[1]) + '</button>'; }).join('') + '</div>' +
@@ -2683,7 +2687,40 @@
     return html + '<p class="muted" style="margin:0 0 10px">' + MUSIC.local.length + ' canciones</p>' + trackRows(MUSIC.local.slice(0, limits.music || 200), 'localPlay') +
       (MUSIC.local.length > (limits.music || 200) ? '<button class="btn ghost more f" data-act="more" data-arg="music">Ver más</button>' : '');
   };
-  VIEWS.music.after = function () { var i = document.getElementById('musicIn'); if (i) i.addEventListener('keydown', function (e) { if (e.key === 'Enter') ACT.musicSearch(); }); };
+  VIEWS.music.after = function () {
+    var i = document.getElementById('musicIn'); if (i) i.addEventListener('keydown', function (e) { if (e.key === 'Enter') ACT.musicSearch(); });
+    var y = document.getElementById('ytmIn'); if (y) y.addEventListener('keydown', function (e) { if (e.key === 'Enter') { MV._typedAt = Date.now(); ACT.ytmSearch(); } });
+  };
+  /** YouTube Music dentro de MiVibra: canciones y videos musicales de YouTube con el reproductor de la app (en cola, una tras otra). */
+  var YTM = { cat: 'top', q: '', list: null, loading: false, key: '', error: '' };
+  var YTM_CATS = [['top', 'Lo más escuchado'], ['reggaeton', 'Reggaetón'], ['vallenato', 'Vallenato'], ['salsa', 'Salsa'], ['bachata', 'Bachata'], ['pop latino', 'Pop latino'], ['rock en español', 'Rock en español'], ['regional mexicano', 'Regional mexicano'], ['electronica', 'Electrónica'], ['baladas', 'Baladas'], ['cristiana', 'Cristiana'], ['lofi para estudiar', 'Lo-fi'], ['infantil canciones', 'Infantil']];
+  function loadYTM() {
+    var key = YTM.cat + '|' + YTM.q;
+    if (YTM.key === key || YTM.loading || !P.ytKey) return;
+    YTM.loading = true; YTM.error = '';
+    var job = (!YTM.q && YTM.cat === 'top')
+      ? ytApi('videos?part=snippet&chart=mostPopular&maxResults=50&regionCode=CO&hl=es&videoCategoryId=10')
+      : ytApi('search?part=snippet&type=video&videoCategoryId=10&maxResults=40&regionCode=CO&relevanceLanguage=es&safeSearch=' + (MV.isKids() ? 'strict' : 'moderate') + '&q=' + encodeURIComponent((YTM.q || YTM.cat) + (YTM.q ? '' : ' 2026')));
+    job.then(function (j) { YTM.list = (j.items || []).map(ytItem).filter(Boolean); })
+      .catch(function (e) { YTM.list = []; YTM.error = e.message; })
+      .then(function () { YTM.loading = false; YTM.key = key; if (view.name === 'music') MV.rerender(); });
+  }
+  function ytMusic() {
+    if (!P.ytKey) return '<div class="empty glass"><h2>YouTube Music aquí mismo</h2><p class="muted">Hace falta la clave gratuita de la API de YouTube (la misma de YouTube). ' + (MV.acct.canEdit() ? 'Ponla en Ajustes › Sinopsis y carátulas.' : 'El administrador aún no la ha configurado.') + '</p></div>';
+    loadYTM();
+    var html = '<div class="chips">' + YTM_CATS.map(function (c) { return '<button class="chip f' + (!YTM.q && YTM.cat === c[0] ? ' on' : '') + '" data-act="ytmCat" data-arg="' + esc(c[0]) + '">' + esc(c[1]) + '</button>'; }).join('') + '</div>' +
+      '<div style="display:flex;gap:10px;margin:4px 0 16px;flex-wrap:wrap"><input class="in f" id="ytmIn" value="' + esc(YTM.q) + '" placeholder="Buscar canción, artista o álbum" style="flex:1;min-width:220px" autocomplete="off" enterkeyhint="search"' + (MV.device.tv ? ' inputmode="none"' : '') + '><button class="btn f" data-act="ytmSearch">' + IC.search + 'Buscar</button></div>';
+    if (YTM.loading && !YTM.list) return html + '<div class="panel glass" style="display:flex;gap:14px;align-items:center"><div class="spinner"></div><b>Cargando música…</b></div>';
+    if (YTM.error) return html + '<div class="panel glass"><p>YouTube respondió: ' + esc(YTM.error) + '</p></div>';
+    var list = YTM.list || [];
+    if (!list.length) return html + '<div class="empty glass"><p class="muted">No encontré canciones.</p></div>';
+    MV._ytmList = list;
+    return html + '<div class="btns" style="margin:0 0 12px"><button class="btn f" data-act="ytmPlay" data-arg="0">' + IC.play + 'Reproducir todo</button></div>' +
+      '<div class="vgrid">' + list.map(function (v, i) {
+        return '<button class="vcard f" data-act="ytmPlay" data-arg="' + i + '" data-fid="ym-' + v.id + '"><div class="th"><img loading="lazy" src="' + esc(v.thumb) + '" alt="" onerror="this.remove()"></div><b>' + esc(v.title) + '</b><span>' + esc(v.channel) + '</span></button>';
+      }).join('') + '</div>' +
+      '<p class="muted" style="font-size:12px;margin-top:14px">Se reproduce en el reproductor de YouTube dentro de MiVibra, una canción tras otra.</p>';
+  }
 
   // ---------- Eventos de la app ----------
   /** Fila "MiVibra · Recomendado" en el inicio de Android TV: seguir viendo + sugeridos del perfil (con carátula). */
