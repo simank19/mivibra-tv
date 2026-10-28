@@ -68,6 +68,8 @@ class ChannelPanel(
         root.orientation = LinearLayout.HORIZONTAL
         root.setBackgroundColor(0xF20B0E18.toInt())
         root.isClickable = true
+        // TV: margen de seguridad para que la lista no quede recortada en el borde
+        if (!touch) root.setPadding(dp(28), dp(14), 0, dp(14))
 
         // Íconos de secciones
         rail.orientation = LinearLayout.VERTICAL
