@@ -169,6 +169,9 @@
   /** Vuelve a dibujar la pantalla actual sin animación de entrada y en el mismo lugar (sin saltar arriba ni parpadear). */
   MV.rerender = function () {
     var f = document.activeElement, fid = f && f.dataset && f.dataset.fid, act = f && f.dataset && f.dataset.act, arg = f && f.dataset && f.dataset.arg;
+    // Posición del foco entre los botones de la pantalla: si ese botón desaparece (lista eliminada), se queda en el vecino y no salta arriba
+    var allF = Array.prototype.slice.call(document.querySelectorAll('.view-in .f')), fIdx = allF.indexOf(f);
+    if (fIdx < 0 && MV._lastFocusIdx != null) fIdx = MV._lastFocusIdx;
     var main = document.querySelector('.main'), top = main ? main.scrollTop : 0;
     var strips = Array.prototype.map.call(document.querySelectorAll('.strip'), function (x) { return x.scrollLeft; });
     still = true; render(true); still = false;
@@ -176,6 +179,8 @@
     Array.prototype.forEach.call(document.querySelectorAll('.strip'), function (x, i) { if (strips[i]) x.scrollLeft = strips[i]; });
     var el = (fid && document.querySelector('[data-fid="' + fid + '"]')) ||
       (act && document.querySelector('[data-act="' + act + '"]' + (arg != null ? '[data-arg="' + String(arg).replace(/"/g, '\\"') + '"]' : '')));
+    if (!el && fIdx >= 0) { var nf = document.querySelectorAll('.view-in .f'); el = nf[Math.min(fIdx, nf.length - 1)] || null; }
+    MV._lastFocusIdx = null;
     if (el && !MV.modalOpen()) el.focus({ preventScroll: true }); else if (!MV.modalOpen()) MV.focusFirst();
   };
   var still = false;
@@ -2135,8 +2140,20 @@
     },
     listToggle: function (id) {
       if (!MV.acct.canEdit()) return; var l = S.lists.find(function (x) { return x.id === id; }); l.enabled = l.enabled === false; l.updatedAt = Date.now(); MV.saveLists(); MV.reloadCatalog(false).then(MV.rerender); MV.rerender(); },
-    listDelete: function (id) {
-      if (!MV.acct.canEdit()) return; MV.confirm('¿Eliminar esta lista?', '', 'Eliminar').then(function (y) { if (y) MV.removeList(id).then(MV.rerender); }); },
+    listDelete: function (id, btn) {
+      if (!MV.acct.canEdit()) return;
+      var row = btn && btn.closest ? btn.closest('.line') : null;
+      MV.confirm('¿Eliminar esta lista?', '', 'Eliminar').then(function (y) {
+        if (!y) return;
+        // Se quita la fila de inmediato (sin redibujar todo ni volver arriba) y el foco pasa a la lista de abajo
+        var fs = Array.prototype.slice.call(document.querySelectorAll('.view-in .f'));
+        var idx = row ? fs.indexOf(row.querySelector('.f')) : -1;
+        if (row && row.isConnected) { row.style.transition = 'opacity .25s'; row.style.opacity = '0'; setTimeout(function () { if (row.isConnected) row.remove(); var nf = document.querySelectorAll('.view-in .f'); var n = idx >= 0 ? nf[Math.min(idx, nf.length - 1)] : null; if (n && !MV.modalOpen()) n.focus({ preventScroll: true }); }, 250); }
+        MV._lastFocusIdx = idx;
+        MV.toast('Lista eliminada');
+        MV.removeList(id).then(function () { if (view.name === 'settings') MV.rerender(); });
+      });
+    },
     listEpg: function (id) {
       var l = S.lists.find(function (x) { return x.id === id; });
       MV.prompt('Guía EPG de “' + l.name + '”', 'Enlace XMLTV (.xml o .xml.gz)', l.epg || '', 'url').then(function (v) {
