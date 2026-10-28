@@ -64,7 +64,8 @@
   MV.onBack = function () {
     // Atrás mientras se escribe solo cierra el teclado; y justo después de buscar se ignora (el teclado de la TV manda un Atrás extra al cerrarse)
     var ae = document.activeElement;
-    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) { ae.blur(); MV.focusFirst(); return true; }
+    // Con el cursor en una caja de texto: se suelta la caja y Atrás sigue normal (antes volvía a enfocarla y el teclado se abría y cerraba sin salir)
+    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) ae.blur();
     if (Date.now() - (MV._typedAt || 0) < 900) return true;
     if (MV.ytPlayer && MV.ytPlayer.isOpen()) { MV.ytPlayer.close(); return true; }
     if (MV.modalOpen()) { MV.closeModal(); return true; }
