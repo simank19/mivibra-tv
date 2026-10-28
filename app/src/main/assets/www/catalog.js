@@ -160,7 +160,13 @@
     if (RX.series.test(e.group) && !RX.movie.test(e.group)) return 'episode';
     return 'movie';
   }
+  // Sin emojis en nombres, categorías y tipos que traen las listas ("⭐Acción ⭐", "🔴 EN VIVO"…)
+  var EMOJI = /[\uD83C-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27BF\u2B50\u2B55\uFE0F\u200D\u20E3]/g;
+  MV.noEmoji = function (s) { return String(s == null ? '' : s).replace(EMOJI, ' ').replace(/\s{2,}/g, ' ').replace(/^[\s|·\-–:]+|[\s|·\-–:]+$/g, '').trim(); };
   function tags(o) {
+    if (o.name) o.name = MV.noEmoji(o.name) || o.name;
+    if (o.group) o.group = MV.noEmoji(o.group);
+    if (o.genre) o.genre = MV.noEmoji(o.genre);
     var g = (o.group || '') + ' ' + (o.name || '');
     o.kids = !RX.notKids.test(g) && !RX.adult.test(g) && (RX.kids.test(o.group || '') || RX.kidsName.test(o.name || ''));
     if (AGES[o.key] != null) o.age = AGES[o.key];
@@ -205,7 +211,7 @@
         var s = seriesMap[sk];
         if (!s) { s = seriesMap[sk] = tags({ key: sk, type: 'series', name: sn, poster: e.logo, group: e.group, list: list.id, episodes: [] }); res.push(s); }
         var m = e.name.match(RX.episode) || [];
-        s.episodes.push({ season: +(m[1] || m[3] || 1), ep: +(m[2] || m[4] || s.episodes.length + 1), title: e.name, url: e.url, ua: e.ua, ref: e.ref });
+        s.episodes.push({ season: +(m[1] || m[3] || 1), ep: +(m[2] || m[4] || s.episodes.length + 1), title: MV.noEmoji(e.name), url: e.url, ua: e.ua, ref: e.ref });
       } else if (t === 'movie') {
         var y = (e.name.match(/\((19|20)\d{2}\)/) || [''])[0].replace(/[()]/g, '');
         res.push(tags({ key: 'movie:' + MV.norm(e.name), type: 'movie', name: e.name, poster: e.logo, group: e.group, url: e.url, ua: e.ua, ref: e.ref, year: y, list: list.id }));
@@ -306,7 +312,7 @@
       var src = j.episodes || {};
       Object.keys(src).forEach(function (season) {
         (src[season] || []).forEach(function (e) {
-          eps.push({ season: +season, ep: +e.episode_num, title: e.title || ('Episodio ' + e.episode_num), url: base + '/series/' + u + '/' + p + '/' + e.id + '.' + (e.container_extension || 'mp4'), ua: list.ua || '', plot: e.info && e.info.plot, img: e.info && e.info.movie_image });
+          eps.push({ season: +season, ep: +e.episode_num, title: MV.noEmoji(e.title) || ('Episodio ' + e.episode_num), url: base + '/series/' + u + '/' + p + '/' + e.id + '.' + (e.container_extension || 'mp4'), ua: list.ua || '', plot: e.info && e.info.plot, img: e.info && e.info.movie_image });
         });
       });
       if (j.info) { item.plot = item.plot || j.info.plot; item.backdrop = item.backdrop || (j.info.backdrop_path && j.info.backdrop_path[0]); }
