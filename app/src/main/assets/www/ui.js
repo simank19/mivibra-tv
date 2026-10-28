@@ -1140,7 +1140,7 @@
   };
 
   // ---------- Reproducción ----------
-  var playing = null;
+  var playing = null, replaced = null;
   /** Datos para buscar subtítulos externos de una película o episodio. */
   function subInfo(it, season, ep) {
     var m = it._meta || {};
@@ -1153,6 +1153,8 @@
   function launch(req, ctx) {
     if (MV.isKids() && +P.kidsLimit > 0 && MV.kidsLeft() <= 0) { kidsTimeUp(); return; }
     if (MV.audio && MV.audio.current() && !ctx.noRecord) MV.audio.stop();
+    // Si había otro video abierto (por ejemplo en la ventana flotante), se cierra y su avance se guarda aparte
+    if (playing) replaced = playing;
     playing = Object.assign({ started: Date.now() }, ctx);
     req.audioLang = P.audioLang; req.subLang = P.subLang; req.subKey = P.subKey || '';
     if (A) A.play(JSON.stringify(req));
@@ -1201,8 +1203,9 @@
     MV.playItem(it, true);
   };
   MV.onPlayerClosed = function (r) {
-    if (!playing) return;
-    var ctx = playing; playing = null;
+    var ctx;
+    if (r && r.replaced) { ctx = replaced; replaced = null; if (!ctx) return; }
+    else { if (!playing) return; ctx = playing; playing = null; }
     var mins = Math.round((Date.now() - ctx.started) / 60000);
     if (mins > 0) MV.addKidsMinutes(mins);
     if (ctx.noRecord) { MV.rerender(); return; }

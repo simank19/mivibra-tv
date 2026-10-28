@@ -51,7 +51,10 @@ class PlayerActivity : ComponentActivity() {
     companion object {
         /** El pedido llega por aquí para no pasar listas enormes por el Intent. */
         @Volatile var pendingRequest: String? = null
+        /** Solo un reproductor a la vez: si hay uno en la ventana flotante, se cierra al abrir otro. */
+        private var active: java.lang.ref.WeakReference<PlayerActivity>? = null
     }
+    private var replacedBy = false
 
     private lateinit var view: PlayerView
     private lateinit var tracksBtn: TextView
@@ -72,6 +75,9 @@ class PlayerActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideSystemBars()
+
+        active?.get()?.let { old -> if (old !== this && !old.isFinishing) { old.replacedBy = true; old.player?.pause(); old.finishWithResult() } }
+        active = java.lang.ref.WeakReference(this)
 
         val req = try { JSONObject(pendingRequest ?: "{}") } catch (_: Exception) { JSONObject() }
         pendingRequest = null
@@ -645,6 +651,7 @@ class PlayerActivity : ComponentActivity() {
             .put("position", p?.currentPosition ?: 0)
             .put("duration", p?.duration?.takeIf { it > 0 } ?: 0)
             .put("live", live)
+            .put("replaced", replacedBy)
         setResult(RESULT_OK, Intent().putExtra("result", result.toString()))
         finish()
     }
