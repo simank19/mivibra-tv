@@ -120,7 +120,7 @@
       return ia - ib;
     });
     mid = mid.filter(function (n) { return hidden.indexOf(n[0]) < 0; });
-    return [all[0]].concat(mid, [all[all.length - 1]]);
+    return [all[0]].concat(mid);   // Ajustes ya no va en el menú: está arriba, en el botón del perfil
   }
   function navOrderIds() { return navItems().map(function (n) { return n[0]; }).filter(function (id) { return id !== 'home' && id !== 'settings'; }); }
 
@@ -144,7 +144,7 @@
       // Botones flotantes arriba en todas las pestañas: Buscar, Favoritos, Historial y Perfil
       var q = function (id, icon, label) { return '<button class="qbtn f' + (navOwner(view.name) === id ? ' on' : '') + '" data-act="nav" data-arg="' + id + '" data-fid="q-' + id + '" aria-label="' + label + '" title="' + label + '">' + icon + '</button>'; };
       var quick = '<div class="qbar">' + (MV.isKids() ? '' : q('utils', IC.grid, 'Utilidades') + q('discover', IC.compass, 'Descubrir')) + q('search', IC.search, 'Buscar') + (MV.isKids() ? '' : q('favs', IC.star, 'Favoritos') + q('history', IC.history, 'Historial')) +
-        (p ? '<button class="qprof f" data-act="go" data-arg="profiles" data-fid="q-prof" aria-label="Cambiar de perfil"><img class="avatar" src="' + esc(p.avatar) + '" alt=""><span>' + esc(p.name) + '</span></button>' : '') + '</div>';
+        (p ? '<button class="qprof f' + (view.name === 'settings' ? ' on' : '') + '" data-act="' + (MV.isKids() ? 'go' : 'profMenu') + '" data-arg="profiles" data-fid="q-prof" aria-label="Perfil y ajustes"><img class="avatar" src="' + esc(p.avatar) + '" alt=""><span>' + esc(p.name) + '</span></button>' : '') + '</div>';
       app.innerHTML = '<div class="shell">' + side + '<main class="main">' + quick + '<div class="view-in">' + body + '</div></main></div>';
     }
     if (VIEWS[view.name] && VIEWS[view.name].after) VIEWS[view.name].after(view.arg);
@@ -744,8 +744,34 @@
       '<button class="btn ghost f" data-act="fav" data-key="' + esc(it.key) + '">' + (fav ? IC.starFill : IC.star) + (fav ? 'En favoritos' : 'Favorito') + '</button>' +
       '<button class="btn ghost f" data-act="langMenu">🗨 Audio y subtítulos</button>' +
       '<button class="btn ghost f hidden" id="coverBtn" data-act="covers" data-key="' + esc(it.key) + '">Cambiar carátula</button></div>' +
-      (it.type === 'series' ? '<div id="eps" class="eps"><div class="spinner"></div></div>' : '') + '</div></div>';
+      (it.type === 'series' ? '<div id="eps" class="eps"><div class="spinner"></div></div>' : '') + '</div></div>' +
+      '<div id="related">' + relatedHtml(it) + '</div>';
   };
+  /** Relacionadas: misma saga, mismos géneros (de la ficha), misma categoría o plataforma y años cercanos. */
+  function relatedOf(it) {
+    var pool = MV.visible(it.type === 'series' ? S.series : S.movies);
+    var g = it.genres || [], grp = cleanGroup(it.group), y = +itemYear(it) || 0;
+    var me = MV.norm(MV.cleanTitle(it.name)), w = me.split(' ').filter(function (x) { return x.length > 2; }).slice(0, 2).join(' ');
+    var scored = [];
+    pool.forEach(function (o) {
+      if (o.key === it.key) return;
+      var on = MV.norm(MV.cleanTitle(o.name)); if (on === me) return;
+      var sc = 0;
+      if (w.length > 4 && on.indexOf(w) === 0) sc += 8;                        // misma saga: "Toy Story", "Rápidos y furiosos"…
+      var shared = (o.genres || []).filter(function (x) { return g.indexOf(x) >= 0; }).length; sc += shared * 3;
+      if (grp && cleanGroup(o.group) === grp) sc += 2;
+      if (it.platform && o.platform === it.platform) sc += 2;
+      if (it.anime && o.anime) sc += 4; if (it.kdrama && o.kdrama) sc += 4; if (it.doc && o.doc) sc += 4;
+      var oy = +itemYear(o) || 0; if (y && oy && Math.abs(oy - y) <= 3) sc += 1;
+      if (+o.rating >= 7) sc += 0.5;
+      if (sc >= 3) scored.push({ o: o, sc: sc + ((o.key.length * 7) % 10) / 100 });
+    });
+    return scored.sort(function (a, b) { return b.sc - a.sc; }).slice(0, 20).map(function (x) { return x.o; });
+  }
+  function relatedHtml(it) {
+    var rel = relatedOf(it);
+    return rel.length ? row(it.type === 'series' ? 'Series relacionadas' : 'Películas relacionadas', rel, 'poster') : '';
+  }
   VIEWS.detail.after = function (key) {
     var it = S.byKey[key] || MV.reg[key]; if (!it) return;
     MV.meta(it).then(function (m) {
@@ -756,6 +782,8 @@
       }
       it._meta = m;
       src.textContent = 'FICHA: ' + m.source;
+      // Con los géneros de la ficha, las relacionadas salen más precisas
+      var rb = document.getElementById('related'); if (rb) rb.innerHTML = relatedHtml(it);
       document.getElementById('mtitle').textContent = m.title || it.name;
       if (m.overview) document.getElementById('plot').textContent = m.overview;
       var facts = [m.year, m.runtime, m.rating ? '★ ' + m.rating : ''].concat(m.genres || []).filter(Boolean);
@@ -1110,7 +1138,7 @@
           '<button class="iconbtn f" data-act="navMove" data-arg="' + id + ':1" aria-label="Bajar"' + (i >= visible.length - 1 || hid ? ' disabled' : '') + '>▼</button>' +
           '<button class="toggle f' + (hid ? '' : ' on') + '" data-act="navToggle" data-arg="' + id + '" aria-label="Mostrar"></button></div>';
       }).join('') +
-      '<div class="line"><div class="t"><b>Ajustes</b><span>Fijo al final</span></div></div>' +
+      '<div class="line"><div class="t"><b>Ajustes</b><span>Arriba, en el botón del perfil</span></div></div>' +
       '<div class="btns" style="margin-top:12px"><button class="btn ghost f" data-act="navReset">Restablecer el orden original</button></div></div>';
   };
   SETTINGS.users = function () {
@@ -1386,6 +1414,15 @@
       }).catch(function (e) { if (e.message !== 'cancel') MV.toast(e.message === 'nopicker' ? 'Este equipo no tiene selector de archivos. Pega el texto.' : e.message); });
     },
     nav: function (a) { stack = []; MV.go(a, null, { replace: true }); },
+    /** Botón del perfil arriba: Ajustes, cambiar de perfil y cuenta. */
+    profMenu: function () {
+      var p = MV.profile() || {}, u = MV.acct && MV.acct.user ? MV.acct.user() : null;
+      MV.modal('<div style="display:flex;gap:14px;align-items:center;margin-bottom:14px"><img class="avatar" src="' + esc(p.avatar || '') + '" alt="" style="width:54px;height:54px;border-radius:50%"><div><h2 style="margin:0">' + esc(p.name || 'Perfil') + '</h2>' + (u && u.email ? '<span class="muted" style="font-size:13px">' + esc(u.email) + '</span>' : '') + '</div></div>' +
+        '<div class="menulist">' +
+        '<button class="line f" data-act="go" data-arg="settings" data-autofocus>' + IC.settings + '<div class="t"><b>Ajustes</b><span>Tema, reproducción, listas, cuenta…</span></div></button>' +
+        '<button class="line f" data-act="go" data-arg="profiles">' + IC.user + '<div class="t"><b>Cambiar de perfil</b><span>Elige otro perfil de esta cuenta</span></div></button>' +
+        '</div><div class="btns"><button class="btn ghost f" data-act="closeModal">Cerrar</button></div>');
+    },
     go: function (a) { MV.closeModal(true); if (a === 'profileEdit') { editSel = null; } MV.go(a); },
     more: function (k) { limits[k] = (limits[k] || (k === 'live' ? 150 : k === 'games' ? 120 : k === 'music' ? 200 : 60)) + (k === 'live' ? 150 : k === 'music' ? 200 : 60); keepPlace(); },
     open: function (_, el) { var it = S.byKey[el.dataset.key] || MV.reg[el.dataset.key]; if (!it) return;
@@ -1952,7 +1989,9 @@
     deezer: { name: 'Deezer', pkgs: ['deezer.android.tv', 'deezer.android.app'], web: 'https://www.deezer.com' },
     amazon: { name: 'Amazon Music', pkgs: ['com.amazon.mp3'], web: 'https://music.amazon.com' },
     apple: { name: 'Apple Music', pkgs: ['com.apple.android.music'], web: 'https://music.apple.com' },
-    brave: { name: 'Brave', pkgs: ['com.brave.browser'], web: 'https://brave.com/download/' }
+    brave: { name: 'Brave', pkgs: ['com.brave.browser'], web: 'https://brave.com/download/' },
+    // App de diagnóstico y optimización de MiVibra (APK propia, no está en la tienda)
+    diag: { name: 'MiVibra Diagnóstico', pkgs: ['co.mivibra.diagnostico'], web: '', noStore: true }
   };
   var installed = null;
   function appsInstalled() {
@@ -1966,7 +2005,11 @@
     if (AU.current()) AU.stop();
     var a = APPS[k];
     // Apps que no están en la tienda: si no está instalada, abre su página de descargas
-    if (a.noStore && A && !hasApp(k)) { A.openExternal(a.web); return; }
+    if (a.noStore && A && !hasApp(k)) {
+      if (a.web) A.openExternal(a.web);
+      else MV.toast('La app ' + a.name + ' no está instalada en este equipo. Instala su APK y vuelve a intentar.', 5000);
+      return;
+    }
     if (A && A.openApp) A.openApp(JSON.stringify({ pkgs: a.pkgs, url: url || '' }));
     else window.open(url || a.web, '_blank');
   }
@@ -2129,7 +2172,9 @@
   VIEWS.utils = function () {
     return top('Utilidades') + '<div class="utilgrid">' + UTILS.map(function (u, i) {
       return '<button class="utile glass f" data-act="nav" data-arg="' + u[0] + '" data-fid="u-' + u[0] + '" style="animation-delay:' + i * 0.05 + 's"><span class="uic">' + IC[u[2]] + '</span><b>' + u[1] + '</b><span>' + u[3] + '</span></button>';
-    }).join('') + '<button class="utile glass f" data-act="go" data-arg="settings" data-fid="u-remote" onclick="MV.remoteTab&&MV.remoteTab()"><span class="uic">' + IC.phone + '</span><b>Celular como control</b><span>Control remoto y mando de juegos</span></button></div>';
+    }).join('') +
+      '<button class="utile glass f" data-act="openApp" data-arg="diag" data-fid="u-diag"><span class="uic">' + IC.settings + '</span><b>Diagnóstico MiVibra</b><span>' + (!A || hasApp('diag') ? 'Revisa y optimiza este equipo' : 'No instalada en este equipo') + '</span></button>' +
+      '<button class="utile glass f" data-act="go" data-arg="settings" data-fid="u-remote" onclick="MV.remoteTab&&MV.remoteTab()"><span class="uic">' + IC.phone + '</span><b>Celular como control</b><span>Control remoto y mando de juegos</span></button></div>';
   };
 
   // ---------- Navegador ----------
