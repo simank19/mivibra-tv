@@ -1467,7 +1467,7 @@
     }
     return share + '<div class="panel glass"><h2>Tus listas</h2><p>Todo el contenido de tus listas se combina: los canales repetidos aparecen una sola vez y se queda la señal que funciona.' + (MV.acct.isAdmin() ? ' <b>Eres superadministrador:</b> lo que cambies aquí llega a todos los usuarios (las listas en archivo solo quedan en este equipo; usa enlaces para compartirlas).' : '') + '</p>' +
       (S.lists.length ? S.lists.map(function (l) {
-        return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.type === 'xtream' ? 'Xtream Codes · ' + esc(l.host) : l.type === 'stalker' ? 'Portal MAC · ' + esc(l.mac) : l.type === 'file' ? 'Archivo' : esc(l.url)) + ' · ' + (l.count || 0) + ' elementos' + ((S.hiddenDupes || {})[l.id] ? ' · ' + S.hiddenDupes[l.id] + ' repetidos ocultos' : '') + (l.epg ? ' · con guía' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div>' +
+        return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.type === 'xtream' ? 'Xtream Codes · ' + esc(l.host) : l.type === 'stalker' ? 'Portal MAC · ' + esc(l.mac) + ((l.macs || []).length > 1 ? ' (+' + (l.macs.length - 1) + ' de respaldo)' : '') : l.type === 'file' ? 'Archivo' : esc(l.url)) + ' · ' + (l.count || 0) + ' elementos' + ((S.hiddenDupes || {})[l.id] ? ' · ' + S.hiddenDupes[l.id] + ' repetidos ocultos' : '') + (l.epg ? ' · con guía' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div>' +
           '<button class="toggle f' + (l.enabled !== false ? ' on' : '') + '" data-act="listToggle" data-arg="' + l.id + '" aria-label="Activar lista"></button>' +
           '<button class="iconbtn f" data-act="listEpg" data-arg="' + l.id + '" aria-label="Guía EPG">' + IC.guide + '</button>' +
           '<button class="iconbtn f" data-act="listDelete" data-arg="' + l.id + '" aria-label="Eliminar">' + IC.trash + '</button></div>';
@@ -1741,10 +1741,10 @@
     tab = tab || 'url';
     var tabs = [['url', 'Enlace M3U'], ['multi', 'Varias (.txt)'], ['file', 'Archivo'], ['xtream', 'Xtream Codes'], ['stalker', 'Portal y MAC']];
     var body = tab === 'multi'
-      ? '<p>Pega tus direcciones (una por línea) o elige tu archivo .txt. Puedes poner un nombre antes de cada una: <code>Mi lista, https://…</code>. Los enlaces de Xtream (get.php?username=…) se agregan como cuenta Xtream con películas y series.</p>' +
+      ? '<p>Pega tus direcciones (una por línea) o elige tu archivo .txt. Puedes poner un nombre antes de cada una: <code>Mi lista, https://…</code>. Los enlaces de Xtream (get.php?username=…) se agregan como cuenta Xtream con películas y series. También acepta cuentas de <b>Portal y MAC</b> (la URL del portal y debajo sus MAC).</p>' +
         '<label class="field">Direcciones<textarea class="in f" id="lMulti" rows="6" placeholder="https://…/lista1.m3u&#10;Deportes, https://…/lista2.m3u" data-autofocus></textarea></label><p class="muted" id="lMultiCount" style="font-size:13px;margin:-4px 0 8px"></p>'
       : tab === 'stalker'
-      ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi proveedor" data-autofocus></label><label class="field">URL del portal<input class="in f" id="lPortal" placeholder="http://servidor:puerto/c/" autocomplete="off" inputmode="url"></label><label class="field">Dirección MAC<input class="in f" id="lMac" placeholder="00:1A:79:XX:XX:XX" autocomplete="off" style="text-transform:uppercase"></label><p class="muted" style="font-size:13px;margin:-4px 0 8px">Copia la URL y la MAC tal como te las envió tu proveedor (tipo MAG / Stalker). Cargar películas y series del portal puede tardar uno o dos minutos la primera vez.</p><p id="lErr" style="color:#FF8A80;font-size:14px;margin:0 0 8px"></p>'
+      ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi proveedor" data-autofocus></label><label class="field">URL del portal<input class="in f" id="lPortal" placeholder="http://servidor:puerto/c/" autocomplete="off" inputmode="url"></label><label class="field">Dirección MAC<input class="in f" id="lMac" placeholder="00:1A:79:XX:XX:XX" autocomplete="off" style="text-transform:uppercase"></label><p class="muted" style="font-size:13px;margin:-4px 0 8px">Copia la URL y la MAC tal como te las envió tu proveedor (tipo MAG / Stalker). Cargar películas y series del portal puede tardar uno o dos minutos la primera vez.</p><div class="btns" style="margin:0 0 8px"><button class="btn ghost sm f" data-act="listTab" data-arg="multi">¿Tienes varias en un .txt? Impórtalas aquí</button></div><p id="lErr" style="color:#FF8A80;font-size:14px;margin:0 0 8px"></p>'
       : tab === 'xtream'
       ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi proveedor" data-autofocus></label><label class="field">Servidor<input class="in f" id="lHost" placeholder="http://servidor:puerto" autocomplete="off"></label><label class="field">Usuario<input class="in f" id="lUser" autocomplete="off"></label><label class="field">Contraseña<input class="in f" id="lPass" type="password"></label><p class="muted" style="font-size:13px;margin:-4px 0 8px">Servidor: solo la dirección y el puerto, por ejemplo http://servidor.com:8080</p><p id="lErr" style="color:#FF8A80;font-size:14px;margin:0 0 8px"></p>'
       : tab === 'file'
@@ -1757,6 +1757,8 @@
 
   function multiCount() {
     var ta = document.getElementById('lMulti'), el = document.getElementById('lMultiCount'); if (!ta || !el) return;
+    var mc = MV.parseMacList(ta.value);
+    if (mc.length) { var nm = mc.reduce(function (a, g) { return a + g.macs.length; }, 0); el.textContent = mc.length + (mc.length === 1 ? ' portal' : ' portales') + ' con ' + nm + ' MAC' + (nm === 1 ? '' : 's') + ' (las de un mismo portal quedan de respaldo)'; return; }
     var r = MV.parseUrlList(ta.value);
     el.textContent = r === null ? 'Esto es una lista M3U: usa la pestaña Archivo o Enlace M3U.' : r.length ? r.length + (r.length === 1 ? ' dirección encontrada' : ' direcciones encontradas') + ' (' + r.filter(function (x) { return x.type === 'xtream'; }).length + ' Xtream)' : '';
   }
@@ -2070,7 +2072,9 @@
           return MV.addList(l);
         }).then(function () { MV.rerender(); }).catch(function (e) { var el = document.getElementById('lErr'); if (el) el.textContent = '' + e.message; MV.toast(e.message, 6000); });
       } else if (tab === 'multi') {
-        var parsed = MV.parseUrlList(document.getElementById('lMulti').value);
+        var txtAll = document.getElementById('lMulti').value, macs = MV.parseMacList(txtAll);
+        if (macs.length) { importMany(macs); return; }
+        var parsed = MV.parseUrlList(txtAll);
         if (parsed === null) { MV.toast('Eso es una lista M3U completa: usa la pestaña Archivo'); return; }
         importMany(parsed);
       } else if (tab === 'file') {

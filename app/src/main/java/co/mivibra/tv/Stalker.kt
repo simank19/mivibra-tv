@@ -40,8 +40,23 @@ object Stalker {
     }
 
     /** Pide el enlace real (create_link). stk: {api, mac, t: itv|vod, cmd, series?} */
+    /** Prueba la MAC principal y, si el portal la rechaza o no da enlace, las de respaldo (la que funcione queda primero). */
     fun link(stk: JSONObject): String {
-        val api = stk.optString("api"); val mac = stk.optString("mac")
+        val macs = mutableListOf(stk.optString("mac"))
+        stk.optJSONArray("macs")?.let { a -> for (i in 0 until a.length()) a.optString(i).takeIf { it.isNotBlank() && it !in macs }?.let { macs.add(it) } }
+        var last: Exception? = null
+        for (m in macs.take(8)) {
+            try {
+                val u = linkWith(stk, m)
+                if (m != stk.optString("mac")) stk.put("mac", m)
+                return u
+            } catch (e: Exception) { last = e }
+        }
+        throw last ?: IllegalStateException("No se pudo obtener el enlace")
+    }
+
+    private fun linkWith(stk: JSONObject, mac: String): String {
+        val api = stk.optString("api")
         val type = if (stk.optString("t") == "itv") "itv" else "vod"
         val cmd = stk.optString("cmd")
         val series = stk.optInt("series", 0)
