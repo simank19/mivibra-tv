@@ -655,6 +655,109 @@
     return job.then(function (eps) { eps.sort(function (a, b) { return a.season - b.season || a.ep - b.ep; }); item.episodes = eps; return eps; });
   }
 
+
+  // ---------- Página web: busca los videos de una página y de las páginas enlazadas del mismo sitio ----------
+  var VID_EXT = /\.(mp4|m3u8|webm|mkv|mov|m4v)(\?|#|$)/i;
+  function absUrl(u, base) { try { return new URL(u, base).href; } catch (e) { return ''; } }
+  function ytId(u) { var m = String(u || '').match(/(?:youtube(?:-nocookie)?\.com\/(?:embed\/|watch\?v=|shorts\/|live\/)|youtu\.be\/)([\w-]{11})/); return m ? m[1] : ''; }
+  function txt(el) { return el ? String(el.textContent || '').replace(/\s+/g, ' ').trim() : ''; }
+  function meta(doc, n) { var m = doc.querySelector('meta[property="' + n + '"], meta[name="' + n + '"]'); return m ? (m.getAttribute('content') || '').trim() : ''; }
+  /** Videos de un documento HTML: datos estructurados (VideoObject), etiquetas <video>, enlaces a archivos de video y videos de YouTube/Vimeo incrustados. */
+  function pageVideos(doc, url) {
+    var out = [], seen = {};
+    var pTitle = meta(doc, 'og:title') || txt(doc.querySelector('h1')) || txt(doc.querySelector('title'));
+    var pImg = absUrl(meta(doc, 'og:image'), url), pDesc = meta(doc, 'og:description') || meta(doc, 'description');
+    function add(v) {
+      if (!v.src) return;
+      var k = v.yt ? 'yt:' + v.yt : v.src; if (seen[k]) return; seen[k] = 1;
+      out.push({ src: v.src, yt: v.yt || '', embed: v.embed || '', title: (v.title || pTitle || 'Video').slice(0, 140), img: v.img || (v.yt ? 'https://i.ytimg.com/vi/' + v.yt + '/hqdefault.jpg' : pImg), desc: v.desc || pDesc || '', page: url });
+    }
+    // 1) Datos estructurados (lo más fiable)
+    Array.prototype.forEach.call(doc.querySelectorAll('script[type="application/ld+json"]'), function (sc) {
+      var j; try { j = JSON.parse(sc.textContent); } catch (e) { return; }
+      var all = [].concat(j['@graph'] || j);
+      all.forEach(function walk(o) {
+        if (!o || typeof o !== 'object') return;
+        if (Array.isArray(o)) return o.forEach(walk);
+        if (/VideoObject/i.test([].concat(o['@type'] || []).join(' '))) {
+          var c = absUrl(o.contentUrl || '', url), e = absUrl(o.embedUrl || '', url), th = [].concat(o.thumbnailUrl || [])[0];
+          var y = ytId(c) || ytId(e);
+          add({ src: c || e, yt: y, embed: !c && e && !y ? e : '', title: o.name, img: th ? absUrl(typeof th === 'string' ? th : th.url, url) : '', desc: o.description });
+        }
+        ['video', 'hasPart', 'itemListElement', 'mainEntity'].forEach(function (k) { if (o[k]) walk(o[k]); });
+      });
+    });
+    // 2) Etiquetas <video>
+    Array.prototype.forEach.call(doc.querySelectorAll('video'), function (v) {
+      var src = v.getAttribute('src') || ((v.querySelector('source') || {}).getAttribute ? v.querySelector('source').getAttribute('src') : '');
+      if (!src) return;
+      var box = v.closest('article, section, figure, li, div');
+      add({ src: absUrl(src, url), title: v.getAttribute('title') || v.getAttribute('aria-label') || txt(box && box.querySelector('h1, h2, h3, h4, figcaption')), img: absUrl(v.getAttribute('poster') || '', url) });
+    });
+    // 3) Videos incrustados (YouTube, Vimeo y otros reproductores)
+    Array.prototype.forEach.call(doc.querySelectorAll('iframe[src], iframe[data-src]'), function (f) {
+      var src = absUrl(f.getAttribute('src') || f.getAttribute('data-src'), url), y = ytId(src);
+      var box = f.closest('article, section, figure, li, div');
+      var t = f.getAttribute('title') || txt(box && box.querySelector('h1, h2, h3, h4, figcaption'));
+      if (y) add({ src: src, yt: y, title: t });
+      else if (/player\.vimeo\.com\/video\/\d+|dailymotion\.com\/embed|drive\.google\.com\/file\/.*\/preview|loom\.com\/embed|wistia|bunny|mediadelivery/i.test(src)) add({ src: src, embed: src, title: t });
+    });
+    // 4) Enlaces directos a archivos de video o a YouTube
+    Array.prototype.forEach.call(doc.querySelectorAll('a[href]'), function (a) {
+      var h = absUrl(a.getAttribute('href'), url), y = ytId(h);
+      if (y) add({ src: h, yt: y, title: txt(a) || a.getAttribute('title') });
+      else if (VID_EXT.test(h)) add({ src: h, title: txt(a) || a.getAttribute('title') || decodeURIComponent(h.split('/').pop().split('?')[0]).replace(/\.\w+$/, '').replace(/[_-]+/g, ' ') });
+    });
+    // 5) og:video
+    var ov = meta(doc, 'og:video:secure_url') || meta(doc, 'og:video:url') || meta(doc, 'og:video');
+    if (ov) { var oy = ytId(ov); add({ src: absUrl(ov, url), yt: oy, title: pTitle }); }
+    return out;
+  }
+  /** Enlaces del mismo sitio que valen la pena revisar (no imágenes, archivos ni cuentas). */
+  function siteLinks(doc, url, origin) {
+    var out = [];
+    Array.prototype.forEach.call(doc.querySelectorAll('a[href]'), function (a) {
+      var h = absUrl(a.getAttribute('href'), url).split('#')[0];
+      if (!h || h.indexOf(origin) !== 0 || h === url || VID_EXT.test(h)) return;
+      if (/\.(jpg|jpeg|png|gif|webp|svg|pdf|zip|rar|css|js|xml|json|txt|docx?|xlsx?|pptx?)(\?|$)/i.test(h)) return;
+      if (/\/(login|logout|signin|signup|registro|register|cart|carrito|checkout|wp-admin|wp-login|account|cuenta|feed|tag\/|author\/)/i.test(h)) return;
+      if (out.indexOf(h) < 0) out.push({ url: h, label: txt(a) });
+    });
+    return out;
+  }
+  function parseHtml(t) { return new DOMParser().parseFromString(t, 'text/html'); }
+  function buildFromWeb(list) {
+    var start = list.url.trim(); if (!/^https?:\/\//i.test(start)) start = 'https://' + start;
+    var origin = (start.match(/^(https?:\/\/[^\/]+)/i) || [start])[0];
+    var maxPages = list.deep === false ? 1 : 80, pages = {}, queue = [{ url: start, depth: 0, cat: '' }], vids = [], done = 0;
+    S.loadMsg = (list.name || 'Página') + ': revisando…'; MV.emit('catalog');
+    function worker() {
+      var job = queue.shift(); if (!job || done >= maxPages) return Promise.resolve();
+      if (pages[job.url]) return worker();
+      pages[job.url] = 1; done++;
+      return MV.getText(job.url, { 'User-Agent': 'Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Mobile Safari/537.36', Accept: 'text/html,application/xhtml+xml' }).then(function (t) {
+        var doc = parseHtml(t);
+        // Categoría: el texto del enlace del menú por el que se llegó (o el título de la página principal)
+        var cat = job.cat || (job.depth === 0 ? '' : '');
+        pageVideos(doc, job.url).forEach(function (v) { v.cat = cat; vids.push(v); });
+        if (job.depth < 2) siteLinks(doc, job.url, origin).forEach(function (l) {
+          if (!pages[l.url] && queue.length < 400) queue.push({ url: l.url, depth: job.depth + 1, cat: job.depth === 0 ? (l.label || '').slice(0, 40) : job.cat });
+        });
+        S.loadMsg = (list.name || 'Página') + ': ' + done + ' páginas revisadas · ' + vids.length + ' videos'; MV.emit('catalog');
+      }).catch(function (e) { if (job.depth === 0) throw e; }).then(worker);
+    }
+    // La primera página va sola (si falla, la lista falla); luego varias a la vez
+    return worker().then(function () { var w = []; for (var i = 0; i < 4; i++) w.push(worker()); return Promise.all(w); }).then(function () {
+      var seen = {}, out = [];
+      vids.forEach(function (v) {
+        var k = v.yt ? 'yt:' + v.yt : v.src; if (seen[k]) return; seen[k] = 1;
+        out.push(tags({ key: 'video:' + MV.hash(k), type: 'video', name: v.title, poster: v.img, plot: v.desc, group: (list.name || 'Mi página') + (v.cat ? ' · ' + v.cat : ''), url: v.yt ? 'yt:' + v.yt : v.src, yt: v.yt || '', embed: v.embed || '', page: v.page, list: list.id }));
+      });
+      if (!out.length) throw new Error('No encontré videos en esa página');
+      return out;
+    });
+  }
+
   /** Episodios de una serie Xtream (se cargan al abrir la ficha). */
   MV.loadEpisodes = function (item) {
     if (item.stks && !(item.episodes || []).length) return stkEpisodes(item);
@@ -690,6 +793,7 @@
       else if (list.type === 'stalker') job = buildFromStalker(list);
       else if (list.type === 'jellyfin') job = buildFromJellyfin(list);
       else if (list.type === 'plex') job = buildFromPlex(list);
+      else if (list.type === 'web') job = buildFromWeb(list);
       else if (list.type === 'file') job = MV.idbGet('raw:' + list.id).then(function (txt) { return buildFromM3U(MV.parseM3U(txt || '', list), list); });
       else job = MV.getBig(list.url).then(function (txt) {
         if (!/#EXTINF|#EXTM3U/i.test(txt.slice(0, 5000))) throw new Error('No parece una lista M3U');
@@ -824,7 +928,7 @@
     if (dedupe) all.forEach(function (arr) { arr.forEach(function (it) { if (it.type !== 'live' && it.poster) posterUse[it.poster] = (posterUse[it.poster] || 0) + 1; }); });
     function yearOf(it) { return String(it.year || (String(it.name || '').match(/\((19|20)\d{2}\)/) || [''])[0].replace(/[()]/g, '') || ''); }
     function idents(it) {
-      if (!dedupe || it.type === 'live') return [];
+      if (!dedupe || it.type === 'live' || it.type === 'video') return [];
       var y = yearOf(it), t = MV.norm(MV.cleanTitle(it.name || '').replace(/\((19|20)\d{2}\)/, '')), out = [];
       if (it.tid) out.push('t:' + it.tid);
       if (t) out.push('n:' + it.type + ':' + t + ':' + y);

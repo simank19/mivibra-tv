@@ -101,7 +101,7 @@
   var UTILS = [['youtube', 'YouTube', 'yt', 'Videos, tendencias y búsqueda'], ['music', 'Música', 'music', 'Tu música y música libre'], ['radio', 'Radio', 'radio', 'Emisoras de Colombia y el mundo'], ['browser', 'Navegador', 'globe', 'Con bloqueador de anuncios'], ['games', 'Juegos', 'games', 'Consolas clásicas y ports']];
   function navOwner(name) {
     if (name === 'guide') return 'live';
-    if (name === 'adult' || name === 'streams') return 'utils';
+    if (name === 'adult' || name === 'streams' || name === 'webvids') return 'utils';
     if (UTILS.some(function (u) { return u[0] === name; })) return 'utils';
     return name;
   }
@@ -1485,7 +1485,7 @@
   }
   // Selección de varias listas para borrarlas juntas (null = modo normal)
   var LSEL = null;
-  function listKind(l) { return l.type === 'jellyfin' ? 'Jellyfin' : l.type === 'plex' ? 'Plex' : l.type === 'xtream' ? 'Xtream Codes' : l.type === 'stalker' ? 'Portal MAC · ' + (l.mac || '') : l.type === 'file' ? 'Archivo' : 'Lista M3U'; }
+  function listKind(l) { return l.type === 'web' ? 'Página web · ' + (l.url || '') : l.type === 'jellyfin' ? 'Jellyfin' : l.type === 'plex' ? 'Plex' : l.type === 'xtream' ? 'Xtream Codes' : l.type === 'stalker' ? 'Portal MAC · ' + (l.mac || '') : l.type === 'file' ? 'Archivo' : 'Lista M3U'; }
   function selBar() {
     if (S.lists.length < 2) return '';
     if (!LSEL) return '<div class="btns" style="margin:4px 0 10px"><button class="btn ghost sm f" data-act="lselStart">' + IC.check + 'Seleccionar varias</button></div>';
@@ -1518,7 +1518,7 @@
           var on = !!LSEL[l.id];
           return '<button class="line selrow f' + (on ? ' on' : '') + '" data-act="lselToggle" data-arg="' + l.id + '" data-fid="ls-' + l.id + '" aria-pressed="' + on + '"><i class="chk"></i><div class="t"><b>' + esc(l.name) + '</b><span>' + esc(listKind(l)) + ' · ' + (l.count || 0) + ' elementos' + (l.enabled === false ? ' · desactivada' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div></button>';
         }
-        return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.type === 'xtream' ? 'Xtream Codes · ' + esc(l.host) : l.type === 'jellyfin' ? 'Jellyfin · ' + esc(l.server) : l.type === 'plex' ? 'Plex · ' + esc(l.server) : l.type === 'stalker' ? 'Portal MAC · ' + esc(l.mac) + ((l.macs || []).length > 1 ? ' (+' + (l.macs.length - 1) + ' de respaldo)' : '') : l.type === 'file' ? 'Archivo' : esc(l.url)) + ' · ' + (l.count || 0) + ' elementos' + ((S.hiddenDupes || {})[l.id] ? ' · ' + S.hiddenDupes[l.id] + ' repetidos ocultos' : '') + (l.epg ? ' · con guía' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div>' +
+        return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.type === 'xtream' ? 'Xtream Codes · ' + esc(l.host) : l.type === 'web' ? 'Página web · ' + esc(l.url) : l.type === 'jellyfin' ? 'Jellyfin · ' + esc(l.server) : l.type === 'plex' ? 'Plex · ' + esc(l.server) : l.type === 'stalker' ? 'Portal MAC · ' + esc(l.mac) + ((l.macs || []).length > 1 ? ' (+' + (l.macs.length - 1) + ' de respaldo)' : '') : l.type === 'file' ? 'Archivo' : esc(l.url)) + ' · ' + (l.count || 0) + ' elementos' + ((S.hiddenDupes || {})[l.id] ? ' · ' + S.hiddenDupes[l.id] + ' repetidos ocultos' : '') + (l.epg ? ' · con guía' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div>' +
           '<button class="toggle f' + (l.enabled !== false ? ' on' : '') + '" data-act="listToggle" data-arg="' + l.id + '" aria-label="Activar lista"></button>' +
           '<button class="iconbtn f" data-act="listEpg" data-arg="' + l.id + '" aria-label="Guía EPG">' + IC.guide + '</button>' +
           '<button class="iconbtn f" data-act="listDelete" data-arg="' + l.id + '" aria-label="Eliminar">' + IC.trash + '</button></div>';
@@ -1792,11 +1792,13 @@
   }
   function addListDialog(tab) {
     tab = tab || 'url';
-    var tabs = [['url', 'Enlace M3U'], ['multi', 'Varias (.txt)'], ['file', 'Archivo'], ['xtream', 'Xtream Codes'], ['stalker', 'Portal y MAC'], ['jellyfin', 'Jellyfin / Emby'], ['plex', 'Plex']];
+    var tabs = [['url', 'Enlace M3U'], ['multi', 'Varias (.txt)'], ['file', 'Archivo'], ['xtream', 'Xtream Codes'], ['stalker', 'Portal y MAC'], ['jellyfin', 'Jellyfin / Emby'], ['plex', 'Plex'], ['web', 'Página web']];
     var body = tab === 'multi'
       ? '<p>Pega tus direcciones (una por línea) o elige tu archivo .txt. Puedes poner un nombre antes de cada una: <code>Mi lista, https://…</code>. Los enlaces de Xtream (get.php?username=…) se agregan como cuenta Xtream con películas y series. También acepta cuentas de <b>Portal y MAC</b> (la URL del portal y debajo sus MAC).</p>' +
         '<label class="field">Direcciones<textarea class="in f" id="lMulti" rows="6" placeholder="https://…/lista1.m3u&#10;Deportes, https://…/lista2.m3u" data-autofocus></textarea></label><p class="muted" id="lMultiCount" style="font-size:13px;margin:-4px 0 8px"></p>' +
         '<label class="line" id="lMacOpt" hidden style="cursor:pointer"><input type="checkbox" class="f" id="lMacBk" style="width:22px;height:22px;accent-color:var(--accent)"><div class="t"><b>Las MAC de un mismo portal tienen el mismo contenido</b><span>Márcalo solo si son copias de la misma suscripción: se agrega una lista por portal y las otras MAC quedan de respaldo. Si cada MAC trae contenido distinto, déjalo sin marcar.</span></div></label>'
+      : tab === 'web'
+      ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mis videos educativos" data-autofocus></label><label class="field">Dirección de la página<input class="in f" id="lWeb" placeholder="https://mipagina.com" autocomplete="off" inputmode="url"></label><label class="line" style="cursor:pointer"><input type="checkbox" class="f" id="lDeep" checked style="width:22px;height:22px;accent-color:var(--accent)"><div class="t"><b>Revisar también las páginas enlazadas</b><span>Recorre las páginas del mismo sitio (hasta 80) buscando videos. Las secciones del menú de tu página quedan como categorías.</span></div></label><p class="muted" style="font-size:13px;margin:4px 0 8px">Encuentra videos MP4/M3U8, videos de YouTube y Vimeo incrustados y los marcados como video en la página. Aparecen en Utilidades › Mis páginas.</p><p id="lErr" style="color:#FF8A80;font-size:14px;margin:0 0 8px"></p>'
       : tab === 'jellyfin'
       ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi servidor" data-autofocus></label><label class="field">Dirección del servidor<input class="in f" id="lSrv" placeholder="http://192.168.1.10:8096" autocomplete="off" inputmode="url"></label><label class="field">Usuario<input class="in f" id="lUser" autocomplete="off"></label><label class="field">Contraseña<input class="in f" id="lPass" type="password"></label><p class="muted" style="font-size:13px;margin:-4px 0 8px">La misma dirección con la que abres Jellyfin o Emby en el navegador (puerto 8096 por defecto). Tus archivos se ven tal cual: con varios audios y subtítulos eliges latino, original o subtitulado en "Audio y subtítulos".</p><p id="lErr" style="color:#FF8A80;font-size:14px;margin:0 0 8px"></p>'
       : tab === 'plex'
@@ -1809,7 +1811,7 @@
         ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Lista descargada" data-autofocus></label><p>Elige un archivo .m3u del dispositivo, una USB o el administrador de archivos.</p>'
         : '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi lista" data-autofocus></label><label class="field">Enlace de la lista M3U / M3U8<input class="in f" id="lUrl" placeholder="https://…/lista.m3u" autocomplete="off" inputmode="url"></label><label class="field">Guía EPG XMLTV (opcional)<input class="in f" id="lEpg" placeholder="https://…/guia.xml" autocomplete="off" inputmode="url"></label>';
     MV.modal('<h2>Agregar lista</h2><div class="chips">' + tabs.map(function (t) { return '<button class="chip f' + (t[0] === tab ? ' on' : '') + '" data-act="listTab" data-arg="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' + body +
-      '<div class="btns"><button class="btn f" data-act="listSave" data-arg="' + tab + '">' + (tab === 'xtream' || tab === 'stalker' || tab === 'jellyfin' || tab === 'plex' ? 'Conectar' : tab === 'file' ? 'Elegir archivo' : tab === 'multi' ? 'Importar' : 'Cargar lista') + '</button>' + (tab === 'multi' ? '<button class="btn ghost f" data-act="pasteText">Pegar texto</button><button class="btn ghost f" data-act="multiPick">Subir .txt</button>' : '') + '<button class="btn ghost f" data-act="confirmNo">Cancelar</button></div>',
+      '<div class="btns"><button class="btn f" data-act="listSave" data-arg="' + tab + '">' + (tab === 'xtream' || tab === 'stalker' || tab === 'jellyfin' || tab === 'plex' ? 'Conectar' : tab === 'web' ? 'Buscar videos' : tab === 'file' ? 'Elegir archivo' : tab === 'multi' ? 'Importar' : 'Cargar lista') + '</button>' + (tab === 'multi' ? '<button class="btn ghost f" data-act="pasteText">Pegar texto</button><button class="btn ghost f" data-act="multiPick">Subir .txt</button>' : '') + '<button class="btn ghost f" data-act="confirmNo">Cancelar</button></div>',
       { onOpen: function (root) { var ta = root.querySelector('#lMulti'); if (ta) ta.addEventListener('input', multiCount); var cb = root.querySelector('#lMacBk'); if (cb) cb.addEventListener('change', multiCount); } });
   }
 
@@ -1889,6 +1891,9 @@
         '</div><div class="btns"><button class="btn ghost f" data-act="closeModal">Cerrar</button></div>');
     },
     hintGo: function () { MV.closeModal(); },
+    webAdd: function () { addListDialog('web'); },
+    webCat: function (g) { webCat = g || ''; MV.rerender(); var m = document.querySelector('.main'); if (m) m.scrollTop = 0; },
+    webPlay: function (_, el) { MV.playWebVideo(S.byKey[el.dataset.key] || MV.reg[el.dataset.key]); },
     latToggle: function (_, el) { P.latOnly = !P.latOnly; MV.savePrefs(); if (el) el.classList.toggle('on', P.latOnly); MV.toast(P.latOnly ? 'Mostrando solo español latino (K-Drama y Anime con subtitulado)' : 'Mostrando todos los idiomas'); MV.reloadCatalog(false).then(function () { if (view.name === 'settings') MV.rerender(); }); },
     pruneToggle: function (_, el) { P.pruneEmpty = P.pruneEmpty === false; MV.savePrefs(); if (el) el.classList.toggle('on', P.pruneEmpty !== false); MV.toast(P.pruneEmpty !== false ? 'Las listas con 0 elementos se eliminarán solas' : 'Las listas vacías ya no se eliminan solas'); if (P.pruneEmpty !== false) MV.reloadCatalog(false).then(function () { if (view.name === 'settings') MV.rerender(); }); },
     dedupeToggle: function () { P.dedupe = P.dedupe === false; MV.savePrefs(); MV.toast(P.dedupe ? 'Mostrando solo la mejor versión de cada título' : 'Mostrando todas las versiones'); MV.reloadCatalog(false).then(MV.rerender); },
@@ -1896,6 +1901,7 @@
     go: function (a) { MV.closeModal(true); if (a === 'profileEdit') { editSel = null; pendingName = null; } MV.go(a); },
     more: function (k) { limits[k] = (limits[k] || (k === 'live' ? 150 : k === 'games' ? 120 : k === 'music' ? 200 : 60)) + (k === 'live' ? 150 : k === 'music' ? 200 : 60); keepPlace(); },
     open: function (_, el) { var it = S.byKey[el.dataset.key] || MV.reg[el.dataset.key]; if (!it) return;
+      if (it.type === 'video') { MV.playWebVideo(it); return; }
       if (it.type === 'tmdb') {
         var mine = it.have && S.byKey[it.have];
         if (!mine) { tmdbInfo(it); return; }
@@ -2144,6 +2150,17 @@
     listTab: function (t) { MV.closeModal(true); addListDialog(t); },
     listSave: function (tab) {
       var name = (document.getElementById('lName') || {}).value;
+      if (tab === 'web') {
+        var wl = { type: 'web', name: name || 'Mi página', url: document.getElementById('lWeb').value.trim(), deep: !!document.getElementById('lDeep').checked };
+        if (!wl.url) { MV.toast('Escribe la dirección de la página'); return; }
+        MV.closeModal(true); MV.toast('Buscando videos en la página… (puede tardar un minuto)', 4000);
+        MV.addList(wl).then(function () {
+          var n = (S.lists.find(function (l) { return l.id === wl.id; }) || {}).count || 0;
+          MV.toast(n ? n + ' videos encontrados · están en Utilidades › Mis páginas' : 'No encontré videos en esa página', 5000);
+          MV.rerender();
+        }).catch(function (e) { MV.toast(e.message, 6000); });
+        return;
+      }
       if (tab === 'jellyfin' || tab === 'plex') {
         var ml = { type: tab, name: name || (tab === 'plex' ? 'Plex' : 'Jellyfin'), server: document.getElementById('lSrv').value.trim() };
         if (tab === 'plex') ml.token = document.getElementById('lTok').value.trim(); else { ml.user = document.getElementById('lUser').value.trim(); ml.pass = document.getElementById('lPass').value; }
@@ -2783,6 +2800,7 @@
     return top('Utilidades') + '<div class="utilgrid">' + UTILS.map(function (u, i) {
       return '<button class="utile glass f" data-act="nav" data-arg="' + u[0] + '" data-fid="u-' + u[0] + '" style="animation-delay:' + i * 0.05 + 's"><span class="uic">' + IC[u[2]] + '</span><b>' + u[1] + '</b><span>' + u[3] + '</span></button>';
     }).join('') +
+      '<button class="utile glass f" data-act="nav" data-arg="webvids" data-fid="u-webvids"><span class="uic">' + IC.globe + '</span><b>Mis páginas</b><span>Videos de tus páginas web</span></button>' +
       '<button class="utile glass f" data-act="nav" data-arg="streams" data-fid="u-streams"><span class="uic">' + IC.play + '</span><b>Twitch y Kick</b><span>Transmisiones en vivo aquí mismo</span></button>' +
       '<button class="utile glass f" data-act="openDiag" data-fid="u-diag"><span class="uic">' + IC.settings + '</span><b>Diagnóstico MiVibra</b><span>Revisa y optimiza este equipo</span></button>' +
       '<button class="utile glass f" data-act="adultOpen" data-fid="u-adult"><span class="uic">' + IC.lock + '</span><b>+18</b><span>' + (MV.adultOk() ? 'Desbloqueado' : 'Protegido con PIN') + '</span></button>' +
@@ -2901,6 +2919,38 @@
       '<div class="btns"><button class="btn ghost f" data-act="streamBrowse">Explorar ' + (tab === 'kick' ? 'Kick' : 'Twitch') + ' en el navegador de la app</button></div>';
   };
   VIEWS.streams.after = function () { var i = document.getElementById('streamIn'); if (i) i.addEventListener('keydown', function (e) { if (e.key === 'Enter') { MV._typedAt = Date.now(); ACT.streamOpenIn(); } }); };
+
+  // ---------- Mis páginas: videos encontrados en páginas web propias ----------
+  var webCat = '';
+  VIEWS.webvids = function () {
+    var vids = MV.visible(S.items.filter(function (i) { return i.type === 'video'; }));
+    var head = top('Mis páginas', MV.acct.canEdit() ? '<button class="pill f" data-act="webAdd">' + IC.plus + 'Agregar página</button>' : '');
+    if (!vids.length) return head + '<div class="empty glass"><h2>Tus videos aquí</h2><p class="muted">Agrega la dirección de tu página web y MiVibra busca sus videos (MP4, YouTube, Vimeo…) y los ordena por las secciones de tu página.</p>' + (MV.acct.canEdit() ? '<div class="btns" style="justify-content:center"><button class="btn f" data-act="webAdd" data-autofocus>' + IC.plus + 'Agregar página</button></div>' : '') + '</div>';
+    var groups = {}, order = [];
+    vids.forEach(function (v) { var g = v.group || 'Videos'; if (!groups[g]) { groups[g] = []; order.push(g); } groups[g].push(v); });
+    if (webCat && !groups[webCat]) webCat = '';
+    var chipsH = order.length > 1 ? '<div class="chips"><button class="chip f' + (!webCat ? ' on' : '') + '" data-act="webCat" data-arg="">Todo <small>' + vids.length + '</small></button>' + order.map(function (g) { return '<button class="chip f' + (webCat === g ? ' on' : '') + '" data-act="webCat" data-arg="' + esc(g) + '">' + esc(g.replace(/^[^·]+·\s*/, '') || g) + ' <small>' + groups[g].length + '</small></button>'; }).join('') + '</div>' : '';
+    var vc = function (v, i) { reg(v); return '<button class="vcard f" data-act="webPlay" data-key="' + esc(v.key) + '" data-fid="w-' + MV.hash(v.key) + '" style="animation-delay:' + Math.min(i, 12) * 0.03 + 's"><div class="th">' + (v.poster ? '<img loading="lazy" src="' + esc(v.poster) + '" alt="" onerror="this.remove()">' : '') + '</div><b>' + esc(v.name) + '</b><span>' + esc((v.group || '').replace(/^[^·]+·\s*/, '')) + '</span></button>'; };
+    if (webCat) return head + chipsH + '<div class="vgrid">' + groups[webCat].map(vc).join('') + '</div>';
+    return head + chipsH + order.map(function (g) { return '<section class="row"><h3>' + esc(g) + ' <small>' + groups[g].length + '</small></h3><div class="vgrid">' + groups[g].slice(0, 24).map(vc).join('') + '</div>' + (groups[g].length > 24 ? '<button class="btn ghost sm f" data-act="webCat" data-arg="' + esc(g) + '">Ver los ' + groups[g].length + '</button>' : '') + '</section>'; }).join('');
+  };
+  /** Reproduce un video de página: YouTube en su reproductor, Vimeo y similares en su reproductor incrustado, y archivos en el reproductor de la app. */
+  MV.playWebVideo = function (v) {
+    if (!v) return;
+    if (v.yt || v.embed) try { MV.recordPlay(v, { position: 0, duration: 0 }); } catch (e) {}
+    if (v.yt) { YTP.play([{ id: v.yt, title: v.name, channel: (v.group || '').replace(/^[^·]+·\s*/, ''), thumb: v.poster }], 0); return; }
+    if (v.embed) { embedPlay(v.embed, v.name); return; }
+    launch({ queue: [q(v)], index: 0, live: false, startMs: 0 }, { item: v });
+  };
+  function embedPlay(url, title) {
+    if (streamBox) streamBox.remove();
+    streamBox = document.createElement('div'); streamBox.className = 'streambox';
+    streamBox.innerHTML = '<iframe src="' + esc(url) + '" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen></iframe><div class="streambar"><b>' + esc(title || '') + '</b><button class="btn sm f" data-act="streamClose" data-autofocus>' + IC.close + 'Cerrar</button></div>';
+    document.body.appendChild(streamBox);
+    var b = streamBox.querySelector('[data-autofocus]'); if (b) b.focus();
+    ['mousemove', 'touchstart', 'pointerdown'].forEach(function (ev) { streamBox.addEventListener(ev, streamBarShow, { passive: true }); });
+    streamBarShow(); pipSet();
+  }
 
   // ---------- Navegador ----------
   var BROWSER_SITES = [['Google', 'https://www.google.com'], ['YouTube', 'https://m.youtube.com'], ['Wikipedia', 'https://es.wikipedia.org'], ['Noticias', 'https://news.google.com/?hl=es-419&gl=CO&ceid=CO:es-419'], ['El Tiempo', 'https://www.eltiempo.com'], ['Clima', 'https://www.google.com/search?q=clima'], ['Mapas', 'https://www.google.com/maps'], ['Fútbol', 'https://www.google.com/search?q=resultados+futbol']];
