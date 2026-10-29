@@ -115,7 +115,7 @@
   }
   /** Menú en el orden que eligió el superadministrador (Inicio siempre primero y Ajustes siempre al final). */
   function navItems() {
-    if (MV.isKids()) return [['kids', 'Inicio', IC.home], ['youtube', 'YouTube Kids', IC.yt]];
+    if (MV.isKids()) return [['kids', 'Inicio', IC.home], ['youtube', 'YouTube', IC.yt]];
     var all = allNavItems(), order = P.navOrder || [], hidden = P.navHidden || [];
     var mid = all.filter(function (n) { return n[0] !== 'home' && n[0] !== 'settings'; });
     mid.sort(function (a, b) {
@@ -1923,6 +1923,12 @@
         '</div><div class="btns"><button class="btn ghost f" data-act="closeModal">Cerrar</button></div>');
     },
     hintGo: function () { MV.closeModal(); },
+    kytCat: function (c) { KYT.cat = c; KYT.q = ''; KYT.key = ''; MV.rerender(); },
+    kytSearch: function () { MV._typedAt = Date.now(); KYT.q = ((document.getElementById('kytIn') || {}).value || '').trim(); KYT.key = ''; MV.rerender(); },
+    kytPlay: function (i) {
+      if (+P.kidsLimit > 0 && MV.kidsLeft() <= 0) { kidsTimeUp(); return; }
+      YTP.play(MV._kytList || [], +i);
+    },
     webAdd: function () { addListDialog('web'); },
     webCat: function (g) { webCat = g || ''; MV.rerender(); var m = document.querySelector('.main'); if (m) m.scrollTop = 0; },
     webPlay: function (_, el) { MV.playWebVideo(S.byKey[el.dataset.key] || MV.reg[el.dataset.key]); },
@@ -2411,6 +2417,7 @@
       if (t === 'searchIn') { saveRecent(query); var f = document.querySelector('#results .card, #results .f'); if (f) f.focus(); }
       else if (t === 'streamIn') ACT.streamOpenIn();
       else if (t === 'ytmIn') ACT.ytmSearch();
+      else if (t === 'kytIn') ACT.kytSearch();
     },
     clearHistory: function () { MV.confirm('¿Borrar el historial?', 'También se borra “Continuar viendo” de este perfil.', 'Borrar').then(function (y) { if (!y) return; var d = MV.pdata(); d.history = []; d.progress = {}; MV.savePdata(d); MV.rerender(); }); },
     // Juegos
@@ -2724,7 +2731,8 @@
   }
   VIEWS.youtube = function () {
     var kids = MV.isKids();
-    if (kids) return top('YouTube Kids') + '<div class="panel glass"><p>Videos para niños en la app oficial de YouTube Kids.</p><div class="apps">' + appTile('ytkids', 'Abrir YouTube Kids') + '</div></div>';
+    if (kids) return kidsYouTube();
+    if (false) return top('YouTube Kids') + '<div class="panel glass"><p>Videos para niños en la app oficial de YouTube Kids.</p><div class="apps">' + appTile('ytkids', 'Abrir YouTube Kids') + '</div></div>';
     var html = top('YouTube', '<button class="pill f" data-act="openApp" data-arg="youtube">' + IC.yt.replace('<svg', '<svg width="18" height="18"') + 'Abrir app de YouTube</button>');
     if (!P.ytKey) {
       return html + '<div class="empty glass"><h2>Ver YouTube aquí mismo</h2><p class="muted">Para buscar y ver videos dentro de MiVibra TV hace falta una clave gratuita de la API de YouTube. ' +
@@ -2744,7 +2752,46 @@
       return '<button class="vcard f" data-act="ytPlay" data-arg="' + i + '" data-fid="y-' + v.id + '" style="animation-delay:' + Math.min(i, 12) * 0.03 + 's"><div class="th"><img loading="lazy" src="' + esc(v.thumb) + '" alt="" onerror="this.remove()">' + (v.live ? '<span class="tag">EN VIVO</span>' : '') + '</div><b>' + esc(v.title) + '</b><span>' + esc(v.channel) + '</span></button>';
     }).join('') + '</div>';
   };
-  VIEWS.youtube.after = function () { var i = document.getElementById('ytIn'); if (i) i.addEventListener('keydown', function (e) { if (e.key === 'Enter') ACT.ytSearch(); }); };
+  VIEWS.youtube.after = function () { var i = document.getElementById('ytIn'); if (i) i.addEventListener('keydown', function (e) { if (e.key === 'Enter') ACT.ytSearch(); }); var k = document.getElementById('kytIn'); if (k) k.addEventListener('keydown', function (e) { if (e.key === 'Enter') ACT.kytSearch(); }); };
+  // ---------- YouTube para niños dentro de MiVibra (la app YouTube Kids ya no está para Android TV) ----------
+  // Doble filtro: búsqueda con SafeSearch estricto y, además, solo videos que YouTube marca como "hechos para niños" (madeForKids)
+  var KYT = { cat: 'canciones', q: '', list: null, loading: false, key: '', error: '' };
+  var KYT_CATS = [['canciones', 'Canciones', 'canciones infantiles en español'], ['dibujos', 'Dibujos animados', 'dibujos animados para niños en español capítulos completos'], ['cuentos', 'Cuentos', 'cuentos infantiles para niños en español'], ['aprender', 'Aprender', 'aprender colores números letras para niños en español'], ['bebes', 'Para bebés', 'videos para bebés canciones de cuna estimulación'], ['animales', 'Animales', 'animales para niños videos educativos español'], ['manualidades', 'Manualidades', 'manualidades fáciles para niños'], ['ciencia', 'Ciencia', 'ciencia para niños experimentos en español'], ['ingles', 'Inglés', 'aprender inglés para niños canciones']];
+  function kidsYtLoad() {
+    var c = KYT_CATS.find(function (x) { return x[0] === KYT.cat; }) || KYT_CATS[0];
+    var q = KYT.q ? KYT.q + ' para niños' : c[2], key = 'kyt:' + q;
+    if (KYT.key === key || KYT.loading || !P.ytKey) return;
+    // Lo ya buscado se guarda 12 horas en el equipo (ahorra el cupo gratis de YouTube)
+    var cached = MV.load(key, null);
+    if (cached && cached.ts > Date.now() - 12 * 3600e3) { KYT.list = cached.list; KYT.key = key; return; }
+    KYT.loading = true; KYT.error = ''; KYT.list = null;
+    ytApi('search?part=snippet&type=video&maxResults=50&regionCode=CO&relevanceLanguage=es&safeSearch=strict&videoEmbeddable=true&q=' + encodeURIComponent(q)).then(function (j) {
+      var found = (j.items || []).map(ytItem).filter(Boolean);
+      if (!found.length) return [];
+      // Segundo filtro: estado "hecho para niños" de cada video
+      return ytApi('videos?part=status,contentDetails&id=' + found.map(function (v) { return v.id; }).join(',')).then(function (d) {
+        var ok = {}; (d.items || []).forEach(function (v) { if (v.status && v.status.madeForKids && v.status.embeddable !== false) ok[v.id] = 1; });
+        return found.filter(function (v) { return ok[v.id] && !v.live; });
+      });
+    }).then(function (list) { KYT.list = list; MV.save(key, { ts: Date.now(), list: list }); })
+      .catch(function (e) { KYT.list = []; KYT.error = e.message; })
+      .then(function () { KYT.loading = false; KYT.key = key; if (view.name === 'youtube') MV.rerender(); });
+  }
+  function kidsYouTube() {
+    var html = top('YouTube para niños');
+    if (!P.ytKey) return html + '<div class="empty glass"><h2>Pídele a un adulto</h2><p class="muted">Para ver videos aquí hace falta que el administrador ponga la clave de YouTube en Ajustes.</p></div>';
+    kidsYtLoad();
+    html += '<div style="display:flex;gap:10px;margin:0 0 12px;flex-wrap:wrap"><input class="in f" id="kytIn" value="' + esc(KYT.q) + '" placeholder="Buscar videos para niños" style="flex:1;min-width:220px" autocomplete="off" enterkeyhint="search"' + (MV.device.tv ? ' inputmode="none"' : '') + '><button class="btn f" data-act="kytSearch">' + IC.search + 'Buscar</button></div>' +
+      (MV.device.tv ? tvKbd('kytIn', false) : '') +
+      '<div class="chips">' + KYT_CATS.map(function (c) { return '<button class="chip f' + (!KYT.q && KYT.cat === c[0] ? ' on' : '') + '" data-act="kytCat" data-arg="' + c[0] + '">' + c[1] + '</button>'; }).join('') + '</div>';
+    if (KYT.loading || !KYT.list) return html + '<div class="panel glass" style="display:flex;gap:14px;align-items:center"><div class="spinner"></div><b>Buscando videos para niños…</b></div>';
+    if (KYT.error) return html + '<div class="panel glass"><p>No se pudieron cargar los videos. Pídele ayuda a un adulto.</p></div>';
+    if (!KYT.list.length) return html + '<div class="empty glass"><p class="muted">No encontré videos para niños con eso. Prueba otra búsqueda.</p></div>';
+    MV._kytList = KYT.list;
+    return html + '<div class="vgrid">' + KYT.list.map(function (v, i) {
+      return '<button class="vcard f" data-act="kytPlay" data-arg="' + i + '" data-fid="k-' + v.id + '" style="animation-delay:' + Math.min(i, 12) * 0.03 + 's"><div class="th"><img loading="lazy" src="' + esc(v.thumb) + '" alt="" onerror="this.remove()"></div><b>' + esc(v.title) + '</b><span>' + esc(v.channel) + '</span></button>';
+    }).join('') + '</div><p class="muted" style="font-size:12px;margin-top:14px">Solo aparecen videos que YouTube marca como hechos para niños, con búsqueda segura estricta.</p>';
+  }
   function ytOpen(q) { openApp('youtube', 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q)); }
 
   // Reproductor a pantalla completa con controles para control remoto
@@ -2760,7 +2807,7 @@
   // La app dejó de verse (pantalla apagada, ventana flotante cerrada): YouTube se pausa
   MV.onHidden = function () { if (MV.ytPlayer && MV.ytPlayer.isOpen()) MV.ytPlayer.pause(); };
   var YTP = MV.ytPlayer = (function () {
-    var player = null, list = [], idx = 0, apiReady = null, hideT = null, open = false;
+    var player = null, list = [], idx = 0, apiReady = null, hideT = null, open = false, kidIv = null, kidT0 = 0;
     function api() {
       if (apiReady) return apiReady;
       apiReady = new Promise(function (res, rej) {
@@ -2820,6 +2867,7 @@
     function close() {
       open = false;
       pipSet();
+      if (kidIv) { clearInterval(kidIv); kidIv = null; var km = Math.round((Date.now() - kidT0) / 60000); if (km > 0 && MV.isKids()) MV.addKidsMinutes(km); }
       if (player && player.destroy) { try { player.destroy(); } catch (e) {} }
       player = null;
       var b = box(); b.hidden = true; b.innerHTML = ''; b.classList.remove('ui');
@@ -2837,6 +2885,8 @@
       isOpen: function () { return open; },
       play: function (l, i) {
         if (AU.current()) AU.stop();
+        // Perfil infantil: el tiempo de YouTube cuenta para el límite diario; si se acaba, se cierra
+        if (MV.isKids()) { kidT0 = Date.now(); clearInterval(kidIv); kidIv = setInterval(function () { if (!open) return; var m = Math.floor((Date.now() - kidT0) / 60000); if (m >= 1) { MV.addKidsMinutes(m); kidT0 += m * 60000; } if (+P.kidsLimit > 0 && MV.kidsLeft() <= 0) { close(); kidsTimeUp(); } }, 30000); }
         list = l; idx = i || 0; open = true;
         var b = box(); b.hidden = false; b.classList.toggle('tv', !!MV.device.tv); document.body.classList.add('yt-open');
         load(); pipSet();
