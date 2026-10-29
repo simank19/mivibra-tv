@@ -16,7 +16,7 @@
   var P = S.prefs;
   var defaults = {
     theme: 'mv', glass: 'mid', anim: true, bgAnim: true, autoTheme: true, audioLang: 'es', subLang: '', xtFormat: 'm3u8',
-    tmdbKey: '', ytKey: '', subKey: '', streamKeys: {}, dedupe: true, pruneEmpty: true, navOrder: [], navHidden: [], covers: {}, kidsLimit: 60, parentPin: '', adult: null, romRoots: [], romSystem: {}, shader: 'default',
+    tmdbKey: '', ytKey: '', subKey: '', streamKeys: {}, dedupe: true, pruneEmpty: true, latOnly: false, navOrder: [], navHidden: [], covers: {}, kidsLimit: 60, parentPin: '', adult: null, romRoots: [], romSystem: {}, shader: 'default',
     firebase: '', syncLists: true, updatedAt: 0, deviceName: ''
   };
   Object.keys(defaults).forEach(function (k) { if (P[k] === undefined) P[k] = defaults[k]; });
@@ -205,6 +205,7 @@
     // +18: en películas y series solo cuenta la CATEGORÍA (títulos como "xXx", "Vida adulta" o "MaXXXine" no son +18)
     o.adult = o.type === 'live' ? RX.adult.test(g) : RX.adult.test(o.group || '');
     if (o.type === 'live') o.country = D.countryOf(o);
+    o.lang = D.langOf(o);
     if (o.type !== 'live' || o.doc || o.kids) {
       var gtxt = g + ' ' + (o.genre || '');
       o.genres = D.classifyGenres(gtxt);
@@ -668,7 +669,8 @@
     var t = (it.name || '') + ' ' + (it.group || '') + ' ' + (it.url || '').split('?')[0];
     var q = /\b(4k|uhd|2160p?)\b/i.test(t) ? (UHD_OK ? 40 : 25) : /\b(fhd|full ?hd|1080p?)\b/i.test(t) ? 30 : /\b(hd|720p?)\b/i.test(t) ? 20 : /\b(sd|480p?|360p?)\b/i.test(t) ? 10 : 15;
     if (/\b(cam|camrip|hdcam|telesync)\b/i.test(t) || /\bTS\b/.test(it.name || '')) q -= 20;
-    if (/\b(latino|lat|español|espanol|castellano|dual)\b/i.test(t)) q += 4;
+    // Idioma: con "Solo español latino" la versión latina gana siempre; si no, suma un poco
+    if (it.lang === 'lat') q += P.latOnly ? 30 : 6; else if (it.lang === 'es' || /\bdual\b/i.test(t)) q += 3; else if (it.lang === 'cast') q += 1;
     if (/\b(sub|subs|subtitulad[ao]|vose|vos)\b/i.test(t)) q -= 3;
     if (/\b(hevc|x265|h265)\b/i.test(t)) q += 1;
     return q;
@@ -702,7 +704,7 @@
     function swapIn(ex, it) {
       // El nuevo es de mejor calidad: pasa a ser el principal y el anterior queda de respaldo
       if (ex.url && ex.url !== it.url && !/^stalker:/.test(ex.url)) { ex.alts = [ex.url].concat((ex.alts || []).filter(function (u) { return u !== it.url; })).slice(0, 6); }
-      ['url', 'ua', 'ref', 'list'].forEach(function (k) { if (it[k] !== undefined) ex[k] = it[k]; });
+      ['url', 'ua', 'ref', 'list', 'lang'].forEach(function (k) { if (it[k] !== undefined) ex[k] = it[k]; });
       ex.stk = it.stk; if (it.stks || ex.stks) { ex.stks = it.stks; if (it.stks) ex.episodes = []; }
       if (it.xt) ex.xt = it.xt;
       if (it.episodes && it.episodes.length) ex.episodes = it.episodes.slice();
@@ -775,6 +777,7 @@
     return arr.filter(function (i) {
       if (i.adult) return false;
       if (kids && !MV.kidsOk(i)) return false;
+      if (P.latOnly && !D.latOk(i)) return false;
       return true;
     });
   };

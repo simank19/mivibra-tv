@@ -283,6 +283,42 @@
     for (var i = 0; i < CWORDS.length; i++) if (CWORDS[i][0].test(g)) return CWORDS[i][1];
     return '';
   };
+  // ---------- Idioma del contenido (según nombre y categoría de la lista) ----------
+  // lat = español latino · es = español sin especificar · sub = subtitulado / idioma original · cast = castellano (España)
+  // en = inglés · otro = otros idiomas · '' = no lo dice
+  var LANG_LAT = /\b(lat|latino|latina|latam|latinoam[eé]rica|audio latino|esp lat|spanish latin|doblaje latino|dub lat)\b/i;
+  var LANG_SUB = /\b(sub|subs|subtitulad[oa]s?|subtitulos|vose|v\.o\.s\.e|vos|vo|version original|versi[oó]n original|idioma original|jap|japon[eé]s|japanese|coreano|korean|kor|raw)\b/i;
+  var LANG_CAST = /\b(castellano|castilian|espa[nñ]a|spain|cast|es-es|esp\.? ?cast)\b/i;
+  // Palabras sin importar mayúsculas; códigos cortos (EN, PT…) solo en mayúscula y como etiqueta ("EN |", "[EN]") para no confundir "en" de "Amor en la ciudad"
+  var LANG_EN_W = /\b(english|ingl[eé]s|eng)\b/i, LANG_EN_C = /(^|[\[(|])\s*(EN|US|UK)\s*([\])|:\-]|$)/;
+  var LANG_OT_W = /\b(portugu[eé]s|portuguese|dublado|legendado|fran[cç]ais|french|deutsch|german|italiano|italian|t[uü]rk[cç]e|turkish|arabic|[aá]rabe|hindi|russian|ruso|polski|nederlands)\b/i, LANG_OT_C = /(^|[\[(|])\s*(PT|BR|FR|DE|IT|TR|AR|RU|PL|NL|IN)\s*([\])|:\-]|$)/;
+  var LANG_EN = { test: function (x) { return LANG_EN_W.test(x) || LANG_EN_C.test(x); } };
+  var LANG_OTHER = { test: function (x) { return LANG_OT_W.test(x) || LANG_OT_C.test(x); } };
+  var LANG_ES = /\b(espa[nñ]ol|spanish|esp|castellano latino)\b/i;
+  D.langOf = function (o) {
+    var t = (o.group || '') + ' | ' + (o.name || '');
+    if (LANG_LAT.test(t)) return 'lat';
+    if (LANG_SUB.test(t)) return 'sub';
+    if (LANG_CAST.test(t)) return 'cast';
+    if (LANG_EN.test(o.group || '') || LANG_EN.test(o.name || '')) return 'en';
+    if (LANG_OTHER.test(o.group || '') || LANG_OTHER.test(o.name || '')) return 'otro';
+    if (LANG_ES.test(t)) return 'es';
+    return '';
+  };
+  var LATAM = ['AR', 'BO', 'CL', 'CO', 'CR', 'CU', 'DO', 'EC', 'SV', 'GT', 'HN', 'MX', 'NI', 'PA', 'PY', 'PE', 'PR', 'UY', 'VE'];
+  var HISPANIC_US = /univision|telemundo|unimas|galavisi[oó]n|estrella|azteca|en espa[nñ]ol|espn deportes|fox deportes|universo|tudn|discovery en espa|cnn en espa|ntn24|telefe|caracol|rcn/i;
+  /** ¿Pasa el filtro "Solo español latino"? En K-Drama y Anime también vale subtitulado con idioma original. */
+  D.latOk = function (i) {
+    var l = i.lang || '';
+    if (i.type === 'live') {
+      if (l === 'lat') return true;
+      if (l === 'en' || l === 'otro' || l === 'cast') return false;
+      if (!i.country) return true;   // internacionales sin país (Discovery, Cartoon…): se dejan
+      return LATAM.indexOf(i.country) >= 0 || HISPANIC_US.test(i.name || '');
+    }
+    if (i.anime || i.kdrama) return l === 'lat' || l === 'sub' || l === 'es' || l === '';
+    return l === 'lat' || l === 'es' || l === '';
+  };
   D.countryName = function (code) { return CBY[code] ? CBY[code][1] : 'Otro país'; };
   D.countryFlag = function (code) {
     return '';   // sin banderas (interfaz sin emojis)

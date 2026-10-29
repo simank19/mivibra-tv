@@ -1504,6 +1504,7 @@
           '<button class="iconbtn f" data-act="listEpg" data-arg="' + l.id + '" aria-label="Guía EPG">' + IC.guide + '</button>' +
           '<button class="iconbtn f" data-act="listDelete" data-arg="' + l.id + '" aria-label="Eliminar">' + IC.trash + '</button></div>';
       }).join('') : '<p class="muted">No has agregado listas.</p>') +
+      '<div class="line"><div class="t"><b>Solo español latino</b><span>Muestra únicamente contenido en español latino (o sin idioma indicado). En K-Drama y Anime también deja el subtitulado con idioma original. Oculta castellano, inglés y otros idiomas; en TV en vivo deja canales de Latinoamérica e hispanos de EE. UU.</span></div><button class="toggle f' + (P.latOnly ? ' on' : '') + '" data-act="latToggle" aria-label="Solo español latino"></button></div>' +
       '<div class="line"><div class="t"><b>Eliminar listas vacías</b><span>Si una lista carga con 0 elementos (vencida, MAC rechazada o enlace caído) se borra sola. Si antes funcionaba, espera a que llegue vacía dos veces seguidas para no borrarla por una falla pasajera.</span></div><button class="toggle f' + (P.pruneEmpty !== false ? ' on' : '') + '" data-act="pruneToggle" aria-label="Eliminar listas vacías"></button></div>' +
       '<div class="line"><div class="t"><b>Ocultar contenido repetido</b><span>Si una película, serie o canal está en varias listas (aunque se llame distinto, como "Animales" y "Animals"), se muestra una sola vez con la versión de mejor calidad: 4K, luego Full HD, HD y SD; latino primero. Las otras quedan de respaldo por si la principal falla.</span></div><button class="toggle f' + (P.dedupe !== false ? ' on' : '') + '" data-act="dedupeToggle" aria-label="Ocultar repetidos"></button></div>' +
       '<div class="btns" style="margin-top:14px"><button class="btn f" data-act="addList">' + IC.plus + 'Agregar lista</button><button class="btn ghost f" data-act="presets">Canales gratis</button><button class="btn ghost f" data-act="reloadAll">' + IC.refresh + 'Actualizar todo</button></div></div>' + dupesPanel();
@@ -1852,6 +1853,7 @@
         '</div><div class="btns"><button class="btn ghost f" data-act="closeModal">Cerrar</button></div>');
     },
     hintGo: function () { MV.closeModal(); },
+    latToggle: function (_, el) { P.latOnly = !P.latOnly; MV.savePrefs(); if (el) el.classList.toggle('on', P.latOnly); MV.toast(P.latOnly ? 'Mostrando solo español latino (K-Drama y Anime con subtitulado)' : 'Mostrando todos los idiomas'); MV.reloadCatalog(false).then(function () { if (view.name === 'settings') MV.rerender(); }); },
     pruneToggle: function (_, el) { P.pruneEmpty = P.pruneEmpty === false; MV.savePrefs(); if (el) el.classList.toggle('on', P.pruneEmpty !== false); MV.toast(P.pruneEmpty !== false ? 'Las listas con 0 elementos se eliminarán solas' : 'Las listas vacías ya no se eliminan solas'); if (P.pruneEmpty !== false) MV.reloadCatalog(false).then(function () { if (view.name === 'settings') MV.rerender(); }); },
     dedupeToggle: function () { P.dedupe = P.dedupe === false; MV.savePrefs(); MV.toast(P.dedupe ? 'Mostrando solo la mejor versión de cada título' : 'Mostrando todas las versiones'); MV.reloadCatalog(false).then(MV.rerender); },
     tourAgain: function () { MV.tourReset(); MV.toast('Listo: el tutorial aparecerá otra vez en cada sección'); MV.go('home'); },
@@ -3182,6 +3184,7 @@
       ['[data-act="addList"]', 'Agregar lista', 'Enlace M3U, cuenta Xtream Codes, Portal y MAC, un archivo, o varias a la vez desde un .txt (incluye varias MAC de un portal).', 2],
       ['[data-act="lselStart"]', 'Seleccionar varias', 'Marca varias listas (todas, las que fallan, las de Portal MAC…) y bórralas juntas.', 2],
       ['[data-act="listToggle"]', 'Activar o desactivar', 'Apaga una lista sin borrarla: su contenido deja de aparecer hasta que la vuelvas a encender.', 2],
+      ['[data-act="latToggle"]', 'Solo español latino', 'Deja únicamente contenido en español latino. En K-Drama y Anime también el subtitulado con idioma original.', 3],
       ['[data-act="dedupeToggle"]', 'Ocultar repetidos', 'Muestra cada título una sola vez con la mejor calidad (4K solo en pantallas 4K). Apágalo si quieres ver todas las versiones.', 2],
       ['[data-act="checkDupes"]', 'Canales repetidos', 'Prueba las señales de los canales que están en varias listas y deja la que funciona mejor.', 2]
     ],
