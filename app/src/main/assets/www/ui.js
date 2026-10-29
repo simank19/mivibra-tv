@@ -2597,6 +2597,7 @@
   // ---------- Otras apps ----------
   var APPS = {
     youtube: { name: 'YouTube', pkgs: ['com.google.android.youtube.tv', 'com.google.android.youtube.googletv', 'com.google.android.youtube'], web: 'https://www.youtube.com' },
+    viki: { name: 'Rakuten Viki', pkgs: ['com.viki.android', 'com.viki.androidtv', 'com.viki.android.tv'], web: 'https://www.viki.com/?locale=es' },
     ytkids: { name: 'YouTube Kids', pkgs: ['com.google.android.youtube.tvkids', 'com.google.android.apps.youtube.kids'], web: 'https://www.youtubekids.com' },
     ytmusic: { name: 'YouTube Music', pkgs: ['com.google.android.apps.youtube.music'], web: 'https://music.youtube.com' },
     spotify: { name: 'Spotify', pkgs: ['com.spotify.tv.android', 'com.spotify.music'], web: 'https://open.spotify.com' },
@@ -2800,6 +2801,7 @@
     return top('Utilidades') + '<div class="utilgrid">' + UTILS.map(function (u, i) {
       return '<button class="utile glass f" data-act="nav" data-arg="' + u[0] + '" data-fid="u-' + u[0] + '" style="animation-delay:' + i * 0.05 + 's"><span class="uic">' + IC[u[2]] + '</span><b>' + u[1] + '</b><span>' + u[3] + '</span></button>';
     }).join('') +
+      '<button class="utile glass f" data-act="openApp" data-arg="viki" data-fid="u-viki"><span class="uic">' + IC.kdrama + '</span><b>Rakuten Viki</b><span>K-Dramas y doramas con subtítulos · ' + (!A || hasApp('viki') ? 'abre su app' : 'instalar app') + '</span></button>' +
       '<button class="utile glass f" data-act="nav" data-arg="webvids" data-fid="u-webvids"><span class="uic">' + IC.globe + '</span><b>Mis páginas</b><span>Videos de tus páginas web</span></button>' +
       '<button class="utile glass f" data-act="nav" data-arg="streams" data-fid="u-streams"><span class="uic">' + IC.play + '</span><b>Twitch y Kick</b><span>Transmisiones en vivo aquí mismo</span></button>' +
       '<button class="utile glass f" data-act="openDiag" data-fid="u-diag"><span class="uic">' + IC.settings + '</span><b>Diagnóstico MiVibra</b><span>Revisa y optimiza este equipo</span></button>' +

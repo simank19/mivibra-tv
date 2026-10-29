@@ -71,6 +71,9 @@
         <package android:name="com.kick.mobile" />
         <package android:name="tv.twitch.android.app" />
         <package android:name="tv.twitch.android.viewer" />
+        <package android:name="com.viki.android" />
+        <package android:name="com.viki.androidtv" />
+        <package android:name="com.viki.android.tv" />
     </queries>
 
     <application
