@@ -798,7 +798,8 @@
     if (vkey === 'anime') {
       loadAiring();
       var air = airingMatches(list);
-      if (air.length) html += row('En emisión', air.slice(0, 24), K, air.length + '');
+      if (air.length) html += '<section class="row"><h3>En emisión <small>' + air.length + '</small></h3><div class="strip">' + air.slice(0, 24).map(function (it, i) { return card(it, K, i); }).join('') +
+        (air.length > 6 ? '<button class="card poster f seeall" data-act="animeMode" data-arg="airing"><div class="th"><b>Ver todo ›</b><span>' + air.length + ' en emisión</span></div></button>' : '') + '</div></section>';
     }
     // Lo más nuevo arriba: agregados recientemente y luego una fila por año (2026, 2025, 2024…)
     var recent = list.filter(function (i) { return i.added; }).sort(function (a, b) { return (b.added || 0) - (a.added || 0); }).slice(0, 20);
@@ -870,9 +871,11 @@
     var cats = groupsClean(all);
     var nEst = vkey === 'anime' ? 0 : all.filter(isEstreno).length;
     if (nEst) cats = [{ name: 'Estrenos', count: nEst }].concat(cats.filter(function (c) { return c.name !== 'Estrenos'; }));
+    var airAll = vkey === 'anime' ? (loadAiring(), airingMatches(all)) : [];
+    if (airAll.length) cats = [{ name: 'En emisión', count: airAll.length }].concat(cats.filter(function (c) { return c.name !== 'En emisión'; }));
     var cur = catSel[vkey] || '', gen = genreSel[vkey] || '', plat = platSel[vkey] || '', sort = sortSel[vkey] || 'rec';
     if (cur && !cats.some(function (c) { return c.name === cur; })) cur = catSel[vkey] = '';
-    var list = cur === 'Estrenos' ? all.filter(isEstreno).sort(byRelease) : cur ? all.filter(function (i) { return catOf(i) === cur; }) : all;
+    var list = cur === 'Estrenos' ? all.filter(isEstreno).sort(byRelease) : cur === 'En emisión' && vkey === 'anime' ? airAll : cur ? all.filter(function (i) { return catOf(i) === cur; }) : all;
     var pm = {}; list.forEach(function (i) { if (i.platform) pm[i.platform] = (pm[i.platform] || 0) + 1; });
     var plats = vkey.indexOf('pl-') === 0 ? [] : D.PLATFORMS.filter(function (p) { return pm[p.id]; }).map(function (p) { return { id: p.id, name: p.name, count: pm[p.id] }; });
     if (plat) list = list.filter(function (i) { return i.platform === plat; });
@@ -980,7 +983,7 @@
   /** Anime que se está emitiendo esta temporada (MyAnimeList vía Jikan), cruzado con tus listas. */
   function loadAiring() {
     if (AIRING.loading || (AIRING.list && AIRING.ts > Date.now() - 12 * 3600e3)) return;
-    var cached = MV.load('airingNow', null);
+    var cached = MV.load('airingNow2', null);
     if (cached && cached.ts > Date.now() - 12 * 3600e3) { AIRING.list = cached.titles; AIRING.ts = cached.ts; return; }
     AIRING.loading = true; AIRING.error = '';
     var titles = [];
@@ -993,15 +996,31 @@
         if (j.pagination && j.pagination.has_next_page && n < 4) return new Promise(function (r) { setTimeout(r, 450); }).then(function () { return page(n + 1); });
       });
     }
-    page(1).then(function () { AIRING.list = titles; AIRING.ts = Date.now(); MV.save('airingNow', { ts: AIRING.ts, titles: titles }); })
+    // Además de la temporada actual, los que siguen en emisión de temporadas anteriores (One Piece, Boruto…)
+    function topAir(n) {
+      return MV.getJSON('https://api.jikan.moe/v4/top/anime?filter=airing&sfw=true&page=' + n).then(function (j) {
+        (j.data || []).forEach(function (a) {
+          var names = [a.title, a.title_english, a.title_japanese].concat((a.titles || []).map(function (t) { return t.title; })).filter(Boolean);
+          titles.push({ keys: names.map(titleKey).filter(Boolean), title: a.title_english || a.title, eps: a.episodes, score: a.score });
+        });
+        if (j.pagination && j.pagination.has_next_page && n < 3) return new Promise(function (r) { setTimeout(r, 450); }).then(function () { return topAir(n + 1); });
+      }).catch(function () {});
+    }
+    page(1).then(function () { return new Promise(function (r) { setTimeout(r, 450); }).then(function () { return topAir(1); }); }).then(function () { AIRING.list = titles; AIRING.ts = Date.now(); MV.save('airingNow2', { ts: AIRING.ts, titles: titles }); })
       .catch(function (e) { AIRING.list = AIRING.list || []; AIRING.error = e.message; })
       .then(function () { AIRING.loading = false; if (view.name === 'anime') MV.rerender(); });
   }
+  var AIR_GROUP = /\b(en emisi[oó]n|emisi[oó]n|simulcast|airing|en curso|ongoing|temporada actual|nuevos cap[ií]tulos)\b/i;
   function airingMatches(items) {
     var idx = {};
     (AIRING.list || []).forEach(function (a) { a.keys.forEach(function (k) { idx[k] = a; }); });
+    var keys = Object.keys(idx).filter(function (k) { return k.length >= 6; });
     return items.filter(function (i) {
-      var k = titleKey(i.name); if (idx[k]) return true;
+      // La lista misma lo dice ("En emisión", "Simulcast", "Airing"…)
+      if (AIR_GROUP.test(i.group || '')) return true;
+      var k = titleKey(String(i.name || '').replace(/\b(s\d{1,2}(e\d{1,3})?|cap(itulo)?\.? ?\d+|ep(isodio)?\.? ?\d+)\b.*$/i, '')); if (idx[k]) return true;
+      // "Solo Leveling Temporada 2 Latino" ↔ "Solo Leveling Season 2": que uno empiece con el otro
+      if (k.length >= 6 && keys.some(function (x) { return k.indexOf(x + ' ') === 0 || x.indexOf(k + ' ') === 0; })) return true;
       // "Nombre Temporada 2" / "Nombre 2nd Season": compara sin la parte de temporada
       var base = k.replace(/\b(temporada|season|part|parte|cour)\b.*$/, '').replace(/\b\d+(st|nd|rd|th)\b.*$/, '').trim();
       return base.length > 3 && !!idx[base];
