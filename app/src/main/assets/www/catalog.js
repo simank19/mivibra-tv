@@ -658,6 +658,10 @@
 
   // ---------- Página web: busca los videos de una página y de las páginas enlazadas del mismo sitio ----------
   var VID_EXT = /\.(mp4|m3u8|webm|mkv|mov|m4v)(\?|#|$)/i;
+  // Reproductores incrustados que NO son videos: anuncios, mapas, comentarios, redes, formularios, chats
+  var EMBED_SKIP = /doubleclick|googlesyndication|googletagmanager|google-analytics|adservice|\/ads?\/|facebook\.com\/plugins|platform\.twitter|instagram\.com\/embed|disqus|recaptcha|hcaptcha|google\.com\/maps|maps\.google|openstreetmap|calendly|typeform|forms\.gle|docs\.google\.com\/forms|tawk\.to|crisp\.chat|intercom|livechat|whatsapp|spotify\.com|soundcloud|paypal|stripe|mercadopago|wompi/i;
+  /** Google Drive: el enlace "ver archivo" se convierte en su reproductor ("preview"). */
+  function driveEmbed(u) { var m = String(u).match(/drive\.google\.com\/file\/d\/([\w-]+)/); return m ? 'https://drive.google.com/file/d/' + m[1] + '/preview' : u; }
   function absUrl(u, base) { try { return new URL(u, base).href; } catch (e) { return ''; } }
   function ytId(u) { var m = String(u || '').match(/(?:youtube(?:-nocookie)?\.com\/(?:embed\/|watch\?v=|shorts\/|live\/)|youtu\.be\/)([\w-]{11})/); return m ? m[1] : ''; }
   function txt(el) { return el ? String(el.textContent || '').replace(/\s+/g, ' ').trim() : ''; }
@@ -694,21 +698,33 @@
       var box = v.closest('article, section, figure, li, div');
       add({ src: absUrl(src, url), title: v.getAttribute('title') || v.getAttribute('aria-label') || txt(box && box.querySelector('h1, h2, h3, h4, figcaption')), img: absUrl(v.getAttribute('poster') || '', url) });
     });
-    // 3) Videos incrustados (YouTube, Vimeo y otros reproductores)
-    Array.prototype.forEach.call(doc.querySelectorAll('iframe[src], iframe[data-src]'), function (f) {
-      var src = absUrl(f.getAttribute('src') || f.getAttribute('data-src'), url), y = ytId(src);
+    // 3) Reproductores incrustados de cualquier sitio (tu video alojado en otro servicio y la página solo lo reproduce).
+    //    Se abre con el mismo reproductor que usa tu página. Se ignoran anuncios, mapas, comentarios y botones sociales.
+    Array.prototype.forEach.call(doc.querySelectorAll('iframe[src], iframe[data-src], iframe[data-lazy-src], embed[src], object[data]'), function (f) {
+      var raw = f.getAttribute('src') || f.getAttribute('data-src') || f.getAttribute('data-lazy-src') || f.getAttribute('data') || '';
+      if (!raw || /^(about:|javascript:|data:)/i.test(raw)) return;
+      var src = absUrl(raw, url), y = ytId(src);
+      if (!y && EMBED_SKIP.test(src)) return;
       var box = f.closest('article, section, figure, li, div');
       var t = f.getAttribute('title') || txt(box && box.querySelector('h1, h2, h3, h4, figcaption'));
       if (y) add({ src: src, yt: y, title: t });
-      else if (/player\.vimeo\.com\/video\/\d+|dailymotion\.com\/embed|drive\.google\.com\/file\/.*\/preview|loom\.com\/embed|wistia|bunny|mediadelivery/i.test(src)) add({ src: src, embed: src, title: t });
+      else if (VID_EXT.test(src)) add({ src: src, title: t });
+      else add({ src: src, embed: driveEmbed(src), title: t });
     });
-    // 4) Enlaces directos a archivos de video o a YouTube
+    // 4) Enlaces directos a archivos de video, a YouTube o a Google Drive
     Array.prototype.forEach.call(doc.querySelectorAll('a[href]'), function (a) {
       var h = absUrl(a.getAttribute('href'), url), y = ytId(h);
       if (y) add({ src: h, yt: y, title: txt(a) || a.getAttribute('title') });
+      else if (/drive\.google\.com\/file\/d\//i.test(h)) add({ src: h, embed: driveEmbed(h), title: txt(a) || a.getAttribute('title') });
       else if (VID_EXT.test(h)) add({ src: h, title: txt(a) || a.getAttribute('title') || decodeURIComponent(h.split('/').pop().split('?')[0]).replace(/\.\w+$/, '').replace(/[_-]+/g, ' ') });
     });
-    // 5) og:video
+    // 5) Direcciones de video escritas dentro de los scripts de la página (reproductores tipo JW Player, Video.js, Plyr…)
+    var html = doc.documentElement ? doc.documentElement.innerHTML : '';
+    (html.match(/https?:(?:\\?\/){2}[^"'\s<>()]+?\.(?:m3u8|mp4|webm)(?:\?[^"'\s<>()]*)?/gi) || []).slice(0, 60).forEach(function (u) {
+      u = u.replace(/\\\//g, '/');
+      if (!/thumb|preview\.mp4|sprite|banner|ads?[\/_.-]/i.test(u)) add({ src: u, title: pTitle });
+    });
+    // 6) og:video
     var ov = meta(doc, 'og:video:secure_url') || meta(doc, 'og:video:url') || meta(doc, 'og:video');
     if (ov) { var oy = ytId(ov); add({ src: absUrl(ov, url), yt: oy, title: pTitle }); }
     return out;
@@ -729,7 +745,7 @@
   function buildFromWeb(list) {
     var start = list.url.trim(); if (!/^https?:\/\//i.test(start)) start = 'https://' + start;
     var origin = (start.match(/^(https?:\/\/[^\/]+)/i) || [start])[0];
-    var maxPages = list.deep === false ? 1 : 80, pages = {}, queue = [{ url: start, depth: 0, cat: '' }], vids = [], done = 0;
+    var rendered = 0, maxPages = list.deep === false ? 1 : 80, pages = {}, queue = [{ url: start, depth: 0, cat: '' }], vids = [], done = 0;
     S.loadMsg = (list.name || 'Página') + ': revisando…'; MV.emit('catalog');
     function worker() {
       var job = queue.shift(); if (!job || done >= maxPages) return Promise.resolve();
@@ -737,6 +753,14 @@
       pages[job.url] = 1; done++;
       return MV.getText(job.url, { 'User-Agent': 'Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Mobile Safari/537.36', Accept: 'text/html,application/xhtml+xml' }).then(function (t) {
         var doc = parseHtml(t);
+        // Página armada con JavaScript (sin videos en el HTML inicial): se abre en un navegador invisible y se lee ya armada
+        if (!pageVideos(doc, job.url).length && MV.native && rendered < 25) {
+          rendered++;
+          S.loadMsg = (list.name || 'Página') + ': abriendo ' + (job.url.replace(/^https?:\/\//, '').slice(0, 50)) + '…'; MV.emit('catalog');
+          return MV.call('renderHtml', [job.url, 5000]).then(function (d) { return d && d.html ? parseHtml(d.html) : doc; }).catch(function () { return doc; });
+        }
+        return doc;
+      }).then(function (doc) {
         // Categoría: el texto del enlace del menú por el que se llegó (o el título de la página principal)
         var cat = job.cat || (job.depth === 0 ? '' : '');
         pageVideos(doc, job.url).forEach(function (v) { v.cat = cat; vids.push(v); });

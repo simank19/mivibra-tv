@@ -93,6 +93,41 @@ class Bridge(private val a: MainActivity) {
         }
     }
 
+    /** Abre una página en un navegador invisible, espera a que su JavaScript termine de armarla y devuelve el HTML final
+        (para páginas hechas con Wix, constructores de WordPress, React…, donde el reproductor no está en el HTML inicial). */
+    @JavascriptInterface
+    fun renderHtml(id: String, url: String, waitMs: Int) {
+        a.runOnUiThread {
+            try {
+                val w = android.webkit.WebView(a)
+                w.settings.javaScriptEnabled = true
+                w.settings.domStorageEnabled = true
+                w.settings.mediaPlaybackRequiresUserGesture = true   // que no suene nada
+                w.settings.userAgentString = "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Mobile Safari/537.36"
+                w.measure(android.view.View.MeasureSpec.makeMeasureSpec(1280, android.view.View.MeasureSpec.EXACTLY), android.view.View.MeasureSpec.makeMeasureSpec(2400, android.view.View.MeasureSpec.EXACTLY))
+                w.layout(0, 0, 1280, 2400)
+                var done = false
+                val ui = android.os.Handler(android.os.Looper.getMainLooper())
+                fun finish() {
+                    if (done) return
+                    done = true
+                    w.evaluateJavascript("(function(){window.scrollTo(0,document.body.scrollHeight);return document.documentElement.outerHTML})()") { html ->
+                        val text = try { org.json.JSONArray("[" + html + "]").optString(0) } catch (_: Exception) { "" }
+                        reply(id, true, JSONObject().put("html", text))
+                        try { w.stopLoading(); w.destroy() } catch (_: Exception) {}
+                    }
+                }
+                w.webViewClient = object : android.webkit.WebViewClient() {
+                    override fun onPageFinished(view: android.webkit.WebView, u: String) { ui.postDelayed({ finish() }, waitMs.coerceIn(1000, 10000).toLong()) }
+                }
+                ui.postDelayed({ finish() }, 25000)   // por si la página nunca termina de cargar
+                w.loadUrl(url)
+            } catch (e: Exception) {
+                reply(id, false, e.message ?: "No se pudo abrir la página")
+            }
+        }
+    }
+
     /** Texto copiado en el portapapeles (para pegar listas o MAC sin teclado). */
     @JavascriptInterface
     fun clipText(): String = try {
