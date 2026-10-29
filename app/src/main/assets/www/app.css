@@ -607,3 +607,7 @@ html.pip .streambox { padding: 0 !important; }
 .qbtn.bell.has svg { animation: bellring 4s ease-in-out infinite; transform-origin: 50% 10%; }
 @keyframes bellring { 0%, 86%, 100% { transform: rotate(0); } 89% { transform: rotate(14deg); } 92% { transform: rotate(-12deg); } 95% { transform: rotate(8deg); } }
 html.lite .qbtn.bell svg, html.lite .qbtn.bell .dot { animation: none; }
+
+.pastebox { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; margin: 4px 0 12px; border-radius: 14px; border: 1px dashed var(--line); background: rgba(255,255,255,.03); }
+.pastebox span { color: var(--muted); font-size: 13px; }
+.pastebox .btns { margin: 6px 0 0; }

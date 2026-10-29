@@ -1783,14 +1783,14 @@
       : tab === 'plex'
       ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi Plex" data-autofocus></label><label class="field">Dirección del servidor<input class="in f" id="lSrv" placeholder="http://192.168.1.10:32400" autocomplete="off" inputmode="url"></label><label class="field">Token de Plex (X-Plex-Token)<input class="in f" id="lTok" autocomplete="off"></label><p class="muted" style="font-size:13px;margin:-4px 0 8px">Puerto 32400 por defecto. El token lo ves en Plex Web: abre cualquier película › ⋯ › Obtener información › Ver XML; en la dirección que se abre aparece <code>X-Plex-Token=…</code>.</p><p id="lErr" style="color:#FF8A80;font-size:14px;margin:0 0 8px"></p>'
       : tab === 'stalker'
-      ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi proveedor" data-autofocus></label><label class="field">URL del portal<input class="in f" id="lPortal" placeholder="http://servidor:puerto/c/" autocomplete="off" inputmode="url"></label><label class="field">Dirección MAC<input class="in f" id="lMac" placeholder="00:1A:79:XX:XX:XX" autocomplete="off" style="text-transform:uppercase"></label><p class="muted" style="font-size:13px;margin:-4px 0 8px">Copia la URL y la MAC tal como te las envió tu proveedor (tipo MAG / Stalker). Cargar películas y series del portal puede tardar uno o dos minutos la primera vez.</p><div class="btns" style="margin:0 0 8px"><button class="btn ghost sm f" data-act="listTab" data-arg="multi">¿Tienes varias en un .txt? Impórtalas aquí</button></div><p id="lErr" style="color:#FF8A80;font-size:14px;margin:0 0 8px"></p>'
+      ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi proveedor" data-autofocus></label><label class="field">URL del portal<input class="in f" id="lPortal" placeholder="http://servidor:puerto/c/" autocomplete="off" inputmode="url"></label><label class="field">Dirección MAC<input class="in f" id="lMac" placeholder="00:1A:79:XX:XX:XX" autocomplete="off" style="text-transform:uppercase"></label><p class="muted" style="font-size:13px;margin:-4px 0 8px">Copia la URL y la MAC tal como te las envió tu proveedor (tipo MAG / Stalker). Cargar películas y series del portal puede tardar uno o dos minutos la primera vez.</p><div class="pastebox"><b>¿Tienes varias MAC o te las mandaron en un texto?</b><span>Pega el texto copiado (WhatsApp, correo…) o sube el archivo .txt: la app encuentra el portal y todas las MAC.</span><div class="btns"><button class="btn sm f" data-act="pasteText">Pegar texto</button><button class="btn ghost sm f" data-act="multiPick">Subir .txt</button></div></div><p id="lErr" style="color:#FF8A80;font-size:14px;margin:0 0 8px"></p>'
       : tab === 'xtream'
       ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi proveedor" data-autofocus></label><label class="field">Servidor<input class="in f" id="lHost" placeholder="http://servidor:puerto" autocomplete="off"></label><label class="field">Usuario<input class="in f" id="lUser" autocomplete="off"></label><label class="field">Contraseña<input class="in f" id="lPass" type="password"></label><p class="muted" style="font-size:13px;margin:-4px 0 8px">Servidor: solo la dirección y el puerto, por ejemplo http://servidor.com:8080</p><p id="lErr" style="color:#FF8A80;font-size:14px;margin:0 0 8px"></p>'
       : tab === 'file'
         ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Lista descargada" data-autofocus></label><p>Elige un archivo .m3u del dispositivo, una USB o el administrador de archivos.</p>'
         : '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi lista" data-autofocus></label><label class="field">Enlace de la lista M3U / M3U8<input class="in f" id="lUrl" placeholder="https://…/lista.m3u" autocomplete="off" inputmode="url"></label><label class="field">Guía EPG XMLTV (opcional)<input class="in f" id="lEpg" placeholder="https://…/guia.xml" autocomplete="off" inputmode="url"></label>';
     MV.modal('<h2>Agregar lista</h2><div class="chips">' + tabs.map(function (t) { return '<button class="chip f' + (t[0] === tab ? ' on' : '') + '" data-act="listTab" data-arg="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' + body +
-      '<div class="btns"><button class="btn f" data-act="listSave" data-arg="' + tab + '">' + (tab === 'xtream' || tab === 'stalker' || tab === 'jellyfin' || tab === 'plex' ? 'Conectar' : tab === 'file' ? 'Elegir archivo' : tab === 'multi' ? 'Importar' : 'Cargar lista') + '</button>' + (tab === 'multi' ? '<button class="btn ghost f" data-act="multiPick">Elegir archivo .txt</button>' : '') + '<button class="btn ghost f" data-act="confirmNo">Cancelar</button></div>',
+      '<div class="btns"><button class="btn f" data-act="listSave" data-arg="' + tab + '">' + (tab === 'xtream' || tab === 'stalker' || tab === 'jellyfin' || tab === 'plex' ? 'Conectar' : tab === 'file' ? 'Elegir archivo' : tab === 'multi' ? 'Importar' : 'Cargar lista') + '</button>' + (tab === 'multi' ? '<button class="btn ghost f" data-act="pasteText">Pegar texto</button><button class="btn ghost f" data-act="multiPick">Subir .txt</button>' : '') + '<button class="btn ghost f" data-act="confirmNo">Cancelar</button></div>',
       { onOpen: function (root) { var ta = root.querySelector('#lMulti'); if (ta) ta.addEventListener('input', multiCount); var cb = root.querySelector('#lMacBk'); if (cb) cb.addEventListener('change', multiCount); } });
   }
 
@@ -1840,6 +1840,19 @@
 
   // ---------- Acciones ----------
   var ACT = {
+    /** Pega lo copiado en el portapapeles; si no hay nada, deja la caja lista para pegar a mano. */
+    pasteText: function () {
+      var t = '';
+      try { if (A && A.clipText) t = A.clipText() || ''; } catch (e) {}
+      var done = function (txt) {
+        if (txt && txt.trim()) { multiWith(txt); return; }
+        multiWith('');
+        var n = document.getElementById('lMultiCount'); if (n) n.textContent = 'No hay nada copiado. Copia el texto (en WhatsApp: mantén presionado el mensaje › Copiar) o pégalo aquí a mano.';
+        var ta = document.getElementById('lMulti'); if (ta && !MV.device.tv) ta.focus();
+      };
+      if (t) return done(t);
+      if (navigator.clipboard && navigator.clipboard.readText) navigator.clipboard.readText().then(done, function () { done(''); }); else done('');
+    },
     multiPick: function () {
       MV.call('pickFile', []).then(function (d) { return fetch(d.path).then(function (r) { return r.text(); }); }).then(function (txt) {
         multiWith(txt);

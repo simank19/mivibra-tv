@@ -93,6 +93,14 @@ class Bridge(private val a: MainActivity) {
         }
     }
 
+    /** Texto copiado en el portapapeles (para pegar listas o MAC sin teclado). */
+    @JavascriptInterface
+    fun clipText(): String = try {
+        val cm = a.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        val clip = cm.primaryClip
+        if (clip != null && clip.itemCount > 0) (0 until clip.itemCount).joinToString("\n") { clip.getItemAt(it).coerceToText(a)?.toString().orEmpty() } else ""
+    } catch (_: Exception) { "" }
+
     /** POST con cabeceras propias (inicio de sesión en Jellyfin/Emby). */
     @JavascriptInterface
     fun httpPost2(id: String, url: String, body: String, contentType: String?, headersJson: String?) {
