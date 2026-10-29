@@ -93,6 +93,30 @@ class Bridge(private val a: MainActivity) {
         }
     }
 
+    /** POST con cabeceras propias (inicio de sesión en Jellyfin/Emby). */
+    @JavascriptInterface
+    fun httpPost2(id: String, url: String, body: String, contentType: String?, headersJson: String?) {
+        io.execute {
+            try {
+                val c = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                c.connectTimeout = 15000
+                c.readTimeout = 30000
+                c.requestMethod = "POST"
+                c.doOutput = true
+                c.setRequestProperty("Content-Type", contentType ?: "application/json")
+                c.setRequestProperty("Accept", "application/json")
+                for ((k, v) in headers(headersJson)) if (v.isNotBlank()) c.setRequestProperty(k, v)
+                c.outputStream.use { it.write(body.toByteArray()) }
+                val code = c.responseCode
+                val txt = Net.body(c).use { it.readBytes().toString(Charsets.UTF_8) }
+                c.disconnect()
+                reply(id, true, JSONObject().put("status", code).put("text", txt))
+            } catch (e: Exception) {
+                reply(id, false, e.message ?: e.javaClass.simpleName)
+            }
+        }
+    }
+
     /** Prueba varias señales a la vez y dice cuáles responden y en cuánto tiempo. */
     @JavascriptInterface
     fun probe(id: String, json: String) {

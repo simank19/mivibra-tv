@@ -205,7 +205,7 @@
     // +18: en películas y series solo cuenta la CATEGORÍA (títulos como "xXx", "Vida adulta" o "MaXXXine" no son +18)
     o.adult = o.type === 'live' ? RX.adult.test(g) : RX.adult.test(o.group || '');
     if (o.type === 'live') o.country = D.countryOf(o);
-    o.lang = D.langOf(o);
+    o.lang = o.langFixed || D.langOf(o);
     if (o.type !== 'live' || o.doc || o.kids) {
       var gtxt = g + ' ' + (o.genre || '');
       o.genres = D.classifyGenres(gtxt);
@@ -528,9 +528,137 @@
     });
   }
 
+
+  // ---------- Servidor propio: Jellyfin / Emby y Plex ----------
+  // Tus archivos (MKV con varios audios y subtítulos) se reproducen tal cual: el reproductor elige audio latino y subtítulos.
+  function srvBase(u) { u = String(u || '').trim().replace(/\/+$/, '').replace(/\/web(\/index\.html)?(#.*)?$/i, ''); if (!/^https?:\/\//i.test(u)) u = 'http://' + u; return u; }
+  function devId() { var d = MV.load('devId', ''); if (!d) { d = 'mv' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); MV.save('devId', d); } return d; }
+  function jfAuth(tok) { return 'MediaBrowser Client="MiVibra TV", Device="' + String(MV.device.model || 'Android').replace(/"/g, '') + '", DeviceId="' + devId() + '", Version="1.0"' + (tok ? ', Token="' + tok + '"' : ''); }
+  function jfGet(list, path) {
+    var sep = path.indexOf('?') >= 0 ? '&' : '?';
+    return MV.getText(list.server + path + sep + 'api_key=' + encodeURIComponent(list.token), { 'X-Emby-Authorization': jfAuth(list.token), Accept: 'application/json' }).then(function (t) { return JSON.parse(t); });
+  }
+  function postJson(url, obj, headers) {
+    if (MV.native) return MV.call('httpPost2', [url, JSON.stringify(obj), 'application/json', JSON.stringify(headers || {})]).then(function (d) {
+      if (d.status === 401 || d.status === 403) throw new Error('Usuario o contraseña incorrectos');
+      if (d.status >= 400) throw new Error('El servidor respondió ' + d.status);
+      return JSON.parse(d.text || '{}');
+    });
+    return fetch(url, { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, headers || {}), body: JSON.stringify(obj) }).then(function (r) { if (!r.ok) throw new Error(r.status === 401 ? 'Usuario o contraseña incorrectos' : 'El servidor respondió ' + r.status); return r.json(); });
+  }
+  /** Inicia sesión: Jellyfin/Emby con usuario y contraseña (también prueba la ruta /emby); Plex con su token. */
+  MV.mediaLogin = function (list) {
+    list.server = srvBase(list.server);
+    if (list.type === 'plex') {
+      return MV.getText(list.server + '/library/sections?X-Plex-Token=' + encodeURIComponent(list.token), { Accept: 'application/json' }).then(function (t) {
+        var j = JSON.parse(t), dirs = (j.MediaContainer && j.MediaContainer.Directory) || [];
+        if (!dirs.length) throw new Error('El servidor Plex no tiene bibliotecas de películas o series');
+        return { name: (j.MediaContainer && j.MediaContainer.title1) || 'Plex' };
+      }).catch(function (e) { throw new Error(/401|unauthor/i.test(e.message) ? 'El token de Plex no es válido' : 'No pude conectar con Plex: ' + e.message); });
+    }
+    var bases = [list.server]; if (!/\/emby$/i.test(list.server)) bases.push(list.server + '/emby');
+    var i = 0, lastErr = null;
+    function next() {
+      if (i >= bases.length) return Promise.reject(lastErr || new Error('No encontré el servidor'));
+      var b = bases[i++];
+      return postJson(b + '/Users/AuthenticateByName', { Username: list.user || '', Pw: list.pass || '' }, { 'X-Emby-Authorization': jfAuth(''), Authorization: jfAuth('') }).then(function (j) {
+        if (!j.AccessToken) throw new Error('El servidor no aceptó el inicio de sesión');
+        list.server = b; list.token = j.AccessToken; list.uid = (j.User && j.User.Id) || '';
+        return { name: (j.User && j.User.Name) || list.user };
+      }).catch(function (e) { lastErr = /incorrectos/.test(e.message) ? e : (lastErr || e); if (/incorrectos/.test(e.message)) return Promise.reject(e); return next(); });
+    }
+    return next();
+  };
+  /** Idioma real según las pistas del archivo: audio en español (latino si la pista lo dice), o solo subtítulos en español. */
+  function streamsLang(ms) {
+    ms = ms || []; if (!ms.length) return '';
+    var spa = function (x) { return /^(spa|es|esl|es-419|es-mx)/i.test(x.Language || '') || /espa[nñ]ol|spanish|latino|castellano/i.test((x.DisplayTitle || '') + ' ' + (x.Title || '')); };
+    var aud = ms.filter(function (x) { return x.Type === 'Audio'; }), subs = ms.filter(function (x) { return x.Type === 'Subtitle'; });
+    var sa = aud.filter(spa);
+    if (sa.length) {
+      if (sa.some(function (x) { return /lat|419|mex|am[eé]rica/i.test((x.DisplayTitle || '') + ' ' + (x.Title || '') + ' ' + (x.Language || '')); })) return 'lat';
+      if (sa.every(function (x) { return /castellano|espa[nñ]a|spain|es-es|castilian/i.test((x.DisplayTitle || '') + ' ' + (x.Title || '')); })) return 'cast';
+      return 'es';
+    }
+    if (subs.some(spa)) return 'sub';
+    return aud.length ? 'otro' : '';
+  }
+  function jfItems(list, types) {
+    var out = [], start = 0, page = 1500;
+    function more() {
+      return jfGet(list, '/Users/' + list.uid + '/Items?IncludeItemTypes=' + types + '&Recursive=true&Fields=ProductionYear,Genres,Overview,ProviderIds,DateCreated,MediaStreams,CommunityRating&StartIndex=' + start + '&Limit=' + page + '&SortBy=DateCreated&SortOrder=Descending').then(function (j) {
+        var it = j.Items || []; out = out.concat(it); start += it.length;
+        S.loadMsg = (list.name || 'Servidor') + ': ' + out.length + ' títulos'; MV.emit('catalog');
+        return it.length === page && start < (j.TotalRecordCount || 0) ? more() : out;
+      });
+    }
+    return more();
+  }
+  function buildFromJellyfin(list) {
+    var s = list.server, k = encodeURIComponent(list.token);
+    var img = function (id) { return s + '/Items/' + id + '/Images/Primary?maxHeight=450&quality=90&api_key=' + k; };
+    var y4 = function (d) { return d.ProductionYear ? String(d.ProductionYear) : ''; };
+    var grp = function (kind, d) { return (list.name || 'Mi servidor') + ' · ' + kind + ((d.Genres || [])[0] ? ' · ' + d.Genres[0] : ''); };
+    return Promise.all([jfItems(list, 'Movie'), jfItems(list, 'Series')]).then(function (r) {
+      var out = [];
+      r[0].forEach(function (d) {
+        var tm = d.ProviderIds && (d.ProviderIds.Tmdb || d.ProviderIds.tmdb);
+        out.push(tags({ key: 'movie:' + MV.norm(d.Name + ' ' + y4(d)), type: 'movie', name: d.Name + (y4(d) ? ' (' + y4(d) + ')' : ''), year: y4(d), poster: img(d.Id), plot: d.Overview || '', genre: (d.Genres || []).join(', '), rating: d.CommunityRating ? String(d.CommunityRating) : '', group: grp('Películas', d), url: s + '/Videos/' + d.Id + '/stream?static=true&api_key=' + k, tid: tm ? 'movie:' + tm : undefined, langFixed: streamsLang(d.MediaStreams), added: d.DateCreated ? Date.parse(d.DateCreated) / 1000 : 0, list: list.id }));
+      });
+      r[1].forEach(function (d) {
+        var tm = d.ProviderIds && (d.ProviderIds.Tmdb || d.ProviderIds.tmdb);
+        out.push(tags({ key: 'series:' + MV.norm(d.Name), type: 'series', name: d.Name, year: y4(d), poster: img(d.Id), plot: d.Overview || '', genre: (d.Genres || []).join(', '), group: grp('Series', d), jf: { list: list.id, id: d.Id }, tid: tm ? 'tv:' + tm : undefined, added: d.DateCreated ? Date.parse(d.DateCreated) / 1000 : 0, episodes: [], list: list.id }));
+      });
+      return out;
+    });
+  }
+  function pxGet(list, path) {
+    var sep = path.indexOf('?') >= 0 ? '&' : '?';
+    return MV.getText(list.server + path + sep + 'X-Plex-Token=' + encodeURIComponent(list.token), { Accept: 'application/json', 'X-Plex-Client-Identifier': devId(), 'X-Plex-Product': 'MiVibra TV' }).then(function (t) { return JSON.parse(t).MediaContainer || {}; });
+  }
+  function pxTid(m, kind) { var g = (m.Guid || []).map(function (x) { return x.id; }).join(' '); var t = g.match(/tmdb:\/\/(\d+)/); return t ? kind + ':' + t[1] : undefined; }
+  function buildFromPlex(list) {
+    var s = list.server, k = encodeURIComponent(list.token);
+    var img = function (p) { return p ? s + '/photo/:/transcode?width=320&height=480&minSize=1&url=' + encodeURIComponent(p) + '&X-Plex-Token=' + k : ''; };
+    return pxGet(list, '/library/sections').then(function (mc) {
+      var dirs = (mc.Directory || []).filter(function (d) { return d.type === 'movie' || d.type === 'show'; });
+      return Promise.all(dirs.map(function (d) { return pxGet(list, '/library/sections/' + d.key + '/all?includeGuids=1').then(function (x) { return { d: d, items: x.Metadata || [] }; }).catch(function () { return { d: d, items: [] }; }); }));
+    }).then(function (secs) {
+      var out = [];
+      secs.forEach(function (sec) {
+        sec.items.forEach(function (m) {
+          var y = m.year ? String(m.year) : '', genre = (m.Genre || []).map(function (g) { return g.tag; }).join(', ');
+          var group = (list.name || 'Plex') + ' · ' + sec.d.title;
+          if (sec.d.type === 'movie') {
+            var part = m.Media && m.Media[0] && m.Media[0].Part && m.Media[0].Part[0];
+            if (!part) return;
+            out.push(tags({ key: 'movie:' + MV.norm(m.title + ' ' + y), type: 'movie', name: m.title + (y ? ' (' + y + ')' : ''), year: y, poster: img(m.thumb), plot: m.summary || '', genre: genre, rating: m.audienceRating ? String(m.audienceRating) : '', group: group, url: s + part.key + '?X-Plex-Token=' + k, tid: pxTid(m, 'movie'), added: m.addedAt || 0, list: list.id }));
+          } else {
+            out.push(tags({ key: 'series:' + MV.norm(m.title), type: 'series', name: m.title, year: y, poster: img(m.thumb), plot: m.summary || '', genre: genre, group: group, px: { list: list.id, id: m.ratingKey }, tid: pxTid(m, 'tv'), added: m.addedAt || 0, episodes: [], list: list.id }));
+          }
+        });
+      });
+      return out;
+    });
+  }
+  function mediaEpisodes(item) {
+    var ref = item.jf || item.px, list = S.lists.find(function (l) { return l.id === ref.list; });
+    if (!list) return Promise.resolve([]);
+    var s = list.server, k = encodeURIComponent(list.token);
+    var job = item.jf
+      ? jfGet(list, '/Shows/' + ref.id + '/Episodes?UserId=' + list.uid + '&Fields=Overview,MediaStreams').then(function (j) {
+          return (j.Items || []).map(function (e) { return { season: e.ParentIndexNumber || 1, ep: e.IndexNumber || 0, title: e.Name || ('Episodio ' + e.IndexNumber), plot: e.Overview || '', url: s + '/Videos/' + e.Id + '/stream?static=true&api_key=' + k, img: s + '/Items/' + e.Id + '/Images/Primary?maxHeight=240&api_key=' + k }; });
+        })
+      : pxGet(list, '/library/metadata/' + ref.id + '/allLeaves').then(function (mc) {
+          return (mc.Metadata || []).map(function (e) { var p = e.Media && e.Media[0] && e.Media[0].Part && e.Media[0].Part[0]; return p ? { season: e.parentIndex || 1, ep: e.index || 0, title: e.title || ('Episodio ' + e.index), plot: e.summary || '', url: s + p.key + '?X-Plex-Token=' + k } : null; }).filter(Boolean);
+        });
+    return job.then(function (eps) { eps.sort(function (a, b) { return a.season - b.season || a.ep - b.ep; }); item.episodes = eps; return eps; });
+  }
+
   /** Episodios de una serie Xtream (se cargan al abrir la ficha). */
   MV.loadEpisodes = function (item) {
     if (item.stks && !(item.episodes || []).length) return stkEpisodes(item);
+    if ((item.jf || item.px) && !(item.episodes || []).length) return mediaEpisodes(item);
     if (!item.xt) return Promise.resolve(item.episodes || []);
     var list = S.lists.find(function (l) { return l.id === item.xt.list; });
     if (!list) return Promise.resolve([]);
@@ -560,6 +688,8 @@
       var job;
       if (list.type === 'xtream') job = buildFromXtream(list);
       else if (list.type === 'stalker') job = buildFromStalker(list);
+      else if (list.type === 'jellyfin') job = buildFromJellyfin(list);
+      else if (list.type === 'plex') job = buildFromPlex(list);
       else if (list.type === 'file') job = MV.idbGet('raw:' + list.id).then(function (txt) { return buildFromM3U(MV.parseM3U(txt || '', list), list); });
       else job = MV.getBig(list.url).then(function (txt) {
         if (!/#EXTINF|#EXTM3U/i.test(txt.slice(0, 5000))) throw new Error('No parece una lista M3U');
@@ -706,6 +836,7 @@
       if (ex.url && ex.url !== it.url && !/^stalker:/.test(ex.url)) { ex.alts = [ex.url].concat((ex.alts || []).filter(function (u) { return u !== it.url; })).slice(0, 6); }
       ['url', 'ua', 'ref', 'list', 'lang'].forEach(function (k) { if (it[k] !== undefined) ex[k] = it[k]; });
       ex.stk = it.stk; if (it.stks || ex.stks) { ex.stks = it.stks; if (it.stks) ex.episodes = []; }
+      if (it.jf || it.px || ex.jf || ex.px) { ex.jf = it.jf; ex.px = it.px; if (it.jf || it.px) ex.episodes = []; }
       if (it.xt) ex.xt = it.xt;
       if (it.episodes && it.episodes.length) ex.episodes = it.episodes.slice();
       ex.q = qScore(it);

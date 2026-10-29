@@ -1466,7 +1466,7 @@
   }
   // Selección de varias listas para borrarlas juntas (null = modo normal)
   var LSEL = null;
-  function listKind(l) { return l.type === 'xtream' ? 'Xtream Codes' : l.type === 'stalker' ? 'Portal MAC · ' + (l.mac || '') : l.type === 'file' ? 'Archivo' : 'Lista M3U'; }
+  function listKind(l) { return l.type === 'jellyfin' ? 'Jellyfin' : l.type === 'plex' ? 'Plex' : l.type === 'xtream' ? 'Xtream Codes' : l.type === 'stalker' ? 'Portal MAC · ' + (l.mac || '') : l.type === 'file' ? 'Archivo' : 'Lista M3U'; }
   function selBar() {
     if (S.lists.length < 2) return '';
     if (!LSEL) return '<div class="btns" style="margin:4px 0 10px"><button class="btn ghost sm f" data-act="lselStart">' + IC.check + 'Seleccionar varias</button></div>';
@@ -1482,7 +1482,7 @@
   SETTINGS.lists = function () {
     if (!MV.acct.canEdit()) {
       return '<div class="panel glass"><h2>Listas</h2><p>Las listas y claves las administra ' + esc((window.MV_CONFIG || {}).admin ? 'el superadministrador' : 'el administrador') + '. Se cargan solas en este equipo.</p>' +
-        (S.lists.length ? S.lists.map(function (l) { return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.type === 'xtream' ? 'Xtream Codes' : l.type === 'stalker' ? 'Portal MAC' : 'Lista M3U') + ' · ' + (l.count || 0) + ' elementos</span></div></div>'; }).join('') : '<p class="muted">Aún no hay listas.</p>') +
+        (S.lists.length ? S.lists.map(function (l) { return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.type === 'xtream' ? 'Xtream Codes' : l.type === 'stalker' ? 'Portal MAC' : l.type === 'jellyfin' ? 'Jellyfin' : l.type === 'plex' ? 'Plex' : 'Lista M3U') + ' · ' + (l.count || 0) + ' elementos</span></div></div>'; }).join('') : '<p class="muted">Aún no hay listas.</p>') +
         '<div class="btns" style="margin-top:14px"><button class="btn ghost f" data-act="reloadAll">' + IC.refresh + 'Actualizar todo</button></div></div>' + dupesPanel();
     }
     var share = '';
@@ -1499,7 +1499,7 @@
           var on = !!LSEL[l.id];
           return '<button class="line selrow f' + (on ? ' on' : '') + '" data-act="lselToggle" data-arg="' + l.id + '" data-fid="ls-' + l.id + '" aria-pressed="' + on + '"><i class="chk"></i><div class="t"><b>' + esc(l.name) + '</b><span>' + esc(listKind(l)) + ' · ' + (l.count || 0) + ' elementos' + (l.enabled === false ? ' · desactivada' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div></button>';
         }
-        return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.type === 'xtream' ? 'Xtream Codes · ' + esc(l.host) : l.type === 'stalker' ? 'Portal MAC · ' + esc(l.mac) + ((l.macs || []).length > 1 ? ' (+' + (l.macs.length - 1) + ' de respaldo)' : '') : l.type === 'file' ? 'Archivo' : esc(l.url)) + ' · ' + (l.count || 0) + ' elementos' + ((S.hiddenDupes || {})[l.id] ? ' · ' + S.hiddenDupes[l.id] + ' repetidos ocultos' : '') + (l.epg ? ' · con guía' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div>' +
+        return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.type === 'xtream' ? 'Xtream Codes · ' + esc(l.host) : l.type === 'jellyfin' ? 'Jellyfin · ' + esc(l.server) : l.type === 'plex' ? 'Plex · ' + esc(l.server) : l.type === 'stalker' ? 'Portal MAC · ' + esc(l.mac) + ((l.macs || []).length > 1 ? ' (+' + (l.macs.length - 1) + ' de respaldo)' : '') : l.type === 'file' ? 'Archivo' : esc(l.url)) + ' · ' + (l.count || 0) + ' elementos' + ((S.hiddenDupes || {})[l.id] ? ' · ' + S.hiddenDupes[l.id] + ' repetidos ocultos' : '') + (l.epg ? ' · con guía' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div>' +
           '<button class="toggle f' + (l.enabled !== false ? ' on' : '') + '" data-act="listToggle" data-arg="' + l.id + '" aria-label="Activar lista"></button>' +
           '<button class="iconbtn f" data-act="listEpg" data-arg="' + l.id + '" aria-label="Guía EPG">' + IC.guide + '</button>' +
           '<button class="iconbtn f" data-act="listDelete" data-arg="' + l.id + '" aria-label="Eliminar">' + IC.trash + '</button></div>';
@@ -1773,11 +1773,15 @@
   }
   function addListDialog(tab) {
     tab = tab || 'url';
-    var tabs = [['url', 'Enlace M3U'], ['multi', 'Varias (.txt)'], ['file', 'Archivo'], ['xtream', 'Xtream Codes'], ['stalker', 'Portal y MAC']];
+    var tabs = [['url', 'Enlace M3U'], ['multi', 'Varias (.txt)'], ['file', 'Archivo'], ['xtream', 'Xtream Codes'], ['stalker', 'Portal y MAC'], ['jellyfin', 'Jellyfin / Emby'], ['plex', 'Plex']];
     var body = tab === 'multi'
       ? '<p>Pega tus direcciones (una por línea) o elige tu archivo .txt. Puedes poner un nombre antes de cada una: <code>Mi lista, https://…</code>. Los enlaces de Xtream (get.php?username=…) se agregan como cuenta Xtream con películas y series. También acepta cuentas de <b>Portal y MAC</b> (la URL del portal y debajo sus MAC).</p>' +
         '<label class="field">Direcciones<textarea class="in f" id="lMulti" rows="6" placeholder="https://…/lista1.m3u&#10;Deportes, https://…/lista2.m3u" data-autofocus></textarea></label><p class="muted" id="lMultiCount" style="font-size:13px;margin:-4px 0 8px"></p>' +
         '<label class="line" id="lMacOpt" hidden style="cursor:pointer"><input type="checkbox" class="f" id="lMacBk" style="width:22px;height:22px;accent-color:var(--accent)"><div class="t"><b>Las MAC de un mismo portal tienen el mismo contenido</b><span>Márcalo solo si son copias de la misma suscripción: se agrega una lista por portal y las otras MAC quedan de respaldo. Si cada MAC trae contenido distinto, déjalo sin marcar.</span></div></label>'
+      : tab === 'jellyfin'
+      ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi servidor" data-autofocus></label><label class="field">Dirección del servidor<input class="in f" id="lSrv" placeholder="http://192.168.1.10:8096" autocomplete="off" inputmode="url"></label><label class="field">Usuario<input class="in f" id="lUser" autocomplete="off"></label><label class="field">Contraseña<input class="in f" id="lPass" type="password"></label><p class="muted" style="font-size:13px;margin:-4px 0 8px">La misma dirección con la que abres Jellyfin o Emby en el navegador (puerto 8096 por defecto). Tus archivos se ven tal cual: con varios audios y subtítulos eliges latino, original o subtitulado en "Audio y subtítulos".</p><p id="lErr" style="color:#FF8A80;font-size:14px;margin:0 0 8px"></p>'
+      : tab === 'plex'
+      ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi Plex" data-autofocus></label><label class="field">Dirección del servidor<input class="in f" id="lSrv" placeholder="http://192.168.1.10:32400" autocomplete="off" inputmode="url"></label><label class="field">Token de Plex (X-Plex-Token)<input class="in f" id="lTok" autocomplete="off"></label><p class="muted" style="font-size:13px;margin:-4px 0 8px">Puerto 32400 por defecto. El token lo ves en Plex Web: abre cualquier película › ⋯ › Obtener información › Ver XML; en la dirección que se abre aparece <code>X-Plex-Token=…</code>.</p><p id="lErr" style="color:#FF8A80;font-size:14px;margin:0 0 8px"></p>'
       : tab === 'stalker'
       ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi proveedor" data-autofocus></label><label class="field">URL del portal<input class="in f" id="lPortal" placeholder="http://servidor:puerto/c/" autocomplete="off" inputmode="url"></label><label class="field">Dirección MAC<input class="in f" id="lMac" placeholder="00:1A:79:XX:XX:XX" autocomplete="off" style="text-transform:uppercase"></label><p class="muted" style="font-size:13px;margin:-4px 0 8px">Copia la URL y la MAC tal como te las envió tu proveedor (tipo MAG / Stalker). Cargar películas y series del portal puede tardar uno o dos minutos la primera vez.</p><div class="btns" style="margin:0 0 8px"><button class="btn ghost sm f" data-act="listTab" data-arg="multi">¿Tienes varias en un .txt? Impórtalas aquí</button></div><p id="lErr" style="color:#FF8A80;font-size:14px;margin:0 0 8px"></p>'
       : tab === 'xtream'
@@ -1786,7 +1790,7 @@
         ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Lista descargada" data-autofocus></label><p>Elige un archivo .m3u del dispositivo, una USB o el administrador de archivos.</p>'
         : '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi lista" data-autofocus></label><label class="field">Enlace de la lista M3U / M3U8<input class="in f" id="lUrl" placeholder="https://…/lista.m3u" autocomplete="off" inputmode="url"></label><label class="field">Guía EPG XMLTV (opcional)<input class="in f" id="lEpg" placeholder="https://…/guia.xml" autocomplete="off" inputmode="url"></label>';
     MV.modal('<h2>Agregar lista</h2><div class="chips">' + tabs.map(function (t) { return '<button class="chip f' + (t[0] === tab ? ' on' : '') + '" data-act="listTab" data-arg="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' + body +
-      '<div class="btns"><button class="btn f" data-act="listSave" data-arg="' + tab + '">' + (tab === 'xtream' || tab === 'stalker' ? 'Iniciar sesión' : tab === 'file' ? 'Elegir archivo' : tab === 'multi' ? 'Importar' : 'Cargar lista') + '</button>' + (tab === 'multi' ? '<button class="btn ghost f" data-act="multiPick">Elegir archivo .txt</button>' : '') + '<button class="btn ghost f" data-act="confirmNo">Cancelar</button></div>',
+      '<div class="btns"><button class="btn f" data-act="listSave" data-arg="' + tab + '">' + (tab === 'xtream' || tab === 'stalker' || tab === 'jellyfin' || tab === 'plex' ? 'Conectar' : tab === 'file' ? 'Elegir archivo' : tab === 'multi' ? 'Importar' : 'Cargar lista') + '</button>' + (tab === 'multi' ? '<button class="btn ghost f" data-act="multiPick">Elegir archivo .txt</button>' : '') + '<button class="btn ghost f" data-act="confirmNo">Cancelar</button></div>',
       { onOpen: function (root) { var ta = root.querySelector('#lMulti'); if (ta) ta.addEventListener('input', multiCount); var cb = root.querySelector('#lMacBk'); if (cb) cb.addEventListener('change', multiCount); } });
   }
 
@@ -2108,6 +2112,19 @@
     listTab: function (t) { MV.closeModal(true); addListDialog(t); },
     listSave: function (tab) {
       var name = (document.getElementById('lName') || {}).value;
+      if (tab === 'jellyfin' || tab === 'plex') {
+        var ml = { type: tab, name: name || (tab === 'plex' ? 'Plex' : 'Jellyfin'), server: document.getElementById('lSrv').value.trim() };
+        if (tab === 'plex') ml.token = document.getElementById('lTok').value.trim(); else { ml.user = document.getElementById('lUser').value.trim(); ml.pass = document.getElementById('lPass').value; }
+        if (!ml.server || (tab === 'plex' ? !ml.token : !ml.user)) { MV.toast(tab === 'plex' ? 'Completa la dirección y el token' : 'Completa la dirección y el usuario'); return; }
+        var me = document.getElementById('lErr'); if (me) me.textContent = '';
+        MV.toast('Conectando con tu servidor…');
+        MV.mediaLogin(ml).then(function () {
+          delete ml.pass;   // se guarda el token de sesión, no la contraseña
+          MV.closeModal(true); MV.toast('Conectado. Cargando tus películas y series…', 4000);
+          return MV.addList(ml);
+        }).then(function () { MV.rerender(); }).catch(function (e) { var el = document.getElementById('lErr'); if (el) el.textContent = '' + e.message; MV.toast(e.message, 6000); });
+        return;
+      }
       if (tab === 'stalker') {
         var sl = { type: 'stalker', name: name || 'Portal', portal: document.getElementById('lPortal').value.trim(), mac: document.getElementById('lMac').value.trim() };
         if (!sl.portal || !sl.mac) { MV.toast('Completa la URL del portal y la MAC'); return; }
@@ -3181,7 +3198,7 @@
       ['.view-in .chips', 'Secciones de ajustes', 'Listas, apariencia, reproducción, control parental, perfiles, cuenta y más.']
     ],
     settings_lists: [
-      ['[data-act="addList"]', 'Agregar lista', 'Enlace M3U, cuenta Xtream Codes, Portal y MAC, un archivo, o varias a la vez desde un .txt (incluye varias MAC de un portal).', 2],
+      ['[data-act="addList"]', 'Agregar lista', 'Enlace M3U, cuenta Xtream Codes, Portal y MAC, tu servidor Jellyfin/Emby o Plex, un archivo, o varias a la vez desde un .txt.', 2],
       ['[data-act="lselStart"]', 'Seleccionar varias', 'Marca varias listas (todas, las que fallan, las de Portal MAC…) y bórralas juntas.', 2],
       ['[data-act="listToggle"]', 'Activar o desactivar', 'Apaga una lista sin borrarla: su contenido deja de aparecer hasta que la vuelvas a encender.', 2],
       ['[data-act="latToggle"]', 'Solo español latino', 'Deja únicamente contenido en español latino. En K-Drama y Anime también el subtitulado con idioma original.', 3],
