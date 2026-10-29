@@ -101,7 +101,7 @@
   var UTILS = [['youtube', 'YouTube', 'yt', 'Videos, tendencias y búsqueda'], ['music', 'Música', 'music', 'Tu música y música libre'], ['radio', 'Radio', 'radio', 'Emisoras de Colombia y el mundo'], ['browser', 'Navegador', 'globe', 'Con bloqueador de anuncios'], ['games', 'Juegos', 'games', 'Consolas clásicas y ports']];
   function navOwner(name) {
     if (name === 'guide') return 'live';
-    if (name === 'adult' || name === 'streams' || name === 'webvids') return 'utils';
+    if (name === 'adult' || name === 'streams' || name === 'webvids' || name === 'webseries') return 'utils';
     if (UTILS.some(function (u) { return u[0] === name; })) return 'utils';
     return name;
   }
@@ -1926,6 +1926,18 @@
     webAdd: function () { addListDialog('web'); },
     webCat: function (g) { webCat = g || ''; MV.rerender(); var m = document.querySelector('.main'); if (m) m.scrollTop = 0; },
     webPlay: function (_, el) { MV.playWebVideo(S.byKey[el.dataset.key] || MV.reg[el.dataset.key]); },
+    webSeries: function (_, el) { MV.go('webseries', el.dataset.key); },
+    webEp: function (i, el) {
+      var s = S.byKey[el.dataset.key] || MV.reg[el.dataset.key]; if (!s || !s.eps) return;
+      var e = s.eps[+i]; if (!e) return;
+      // Archivos (MP4/M3U8) seguidos en el reproductor de la app: al terminar uno empieza el siguiente
+      if (!e.yt && !e.embed) {
+        var rest = s.eps.slice(+i).filter(function (x) { return !x.yt && !x.embed; });
+        launch({ queue: rest.map(function (x, n) { return { id: s.key + '#1x' + (+i + n + 1), url: x.url, title: s.name, subtitle: x.title, poster: x.img || s.poster, alts: [] }; }), index: 0, live: false, startMs: 0 }, { item: s });
+        return;
+      }
+      MV.playWebVideo({ key: s.key + '#' + i, name: s.name + ' · ' + e.title, yt: e.yt, embed: e.embed, url: e.url, poster: e.img || s.poster, group: s.group, type: 'video' });
+    },
     latToggle: function (_, el) { P.latOnly = !P.latOnly; MV.savePrefs(); if (el) el.classList.toggle('on', P.latOnly); MV.toast(P.latOnly ? 'Mostrando solo español latino (K-Drama y Anime con subtitulado)' : 'Mostrando todos los idiomas'); MV.reloadCatalog(false).then(function () { if (view.name === 'settings') MV.rerender(); }); },
     pruneToggle: function (_, el) { P.pruneEmpty = P.pruneEmpty === false; MV.savePrefs(); if (el) el.classList.toggle('on', P.pruneEmpty !== false); MV.toast(P.pruneEmpty !== false ? 'Las listas con 0 elementos se eliminarán solas' : 'Las listas vacías ya no se eliminan solas'); if (P.pruneEmpty !== false) MV.reloadCatalog(false).then(function () { if (view.name === 'settings') MV.rerender(); }); },
     dedupeToggle: function () { P.dedupe = P.dedupe === false; MV.savePrefs(); MV.toast(P.dedupe ? 'Mostrando solo la mejor versión de cada título' : 'Mostrando todas las versiones'); MV.reloadCatalog(false).then(MV.rerender); },
@@ -1933,7 +1945,7 @@
     go: function (a) { MV.closeModal(true); if (a === 'profileEdit') { editSel = null; pendingName = null; } MV.go(a); },
     more: function (k) { limits[k] = (limits[k] || (k === 'live' ? 150 : k === 'games' ? 120 : k === 'music' ? 200 : 60)) + (k === 'live' ? 150 : k === 'music' ? 200 : 60); keepPlace(); },
     open: function (_, el) { var it = S.byKey[el.dataset.key] || MV.reg[el.dataset.key]; if (!it) return;
-      if (it.type === 'video') { MV.playWebVideo(it); return; }
+      if (it.type === 'video') { if (it.eps && it.eps.length) MV.go('webseries', it.key); else MV.playWebVideo(it); return; }
       if (it.type === 'tmdb') {
         var mine = it.have && S.byKey[it.have];
         if (!mine) { tmdbInfo(it); return; }
@@ -2974,11 +2986,22 @@
     if (!vids.length) return head + '<div class="empty glass"><h2>Tus videos aquí</h2><p class="muted">Agrega la dirección de tu página web y MiVibra busca sus videos (MP4, YouTube, Vimeo…) y los ordena por las secciones de tu página.</p>' + (MV.acct.canEdit() ? '<div class="btns" style="justify-content:center"><button class="btn f" data-act="webAdd" data-autofocus>' + IC.plus + 'Agregar página</button></div>' : '') + '</div>';
     var groups = {}, order = [];
     vids.forEach(function (v) { var g = v.group || 'Videos'; if (!groups[g]) { groups[g] = []; order.push(g); } groups[g].push(v); });
+    // "En emisión" (series que actualizas) primero; dentro de cada categoría, las series con más videos y lo más nuevo arriba
+    order.sort(function (a, b) { var ea = /emisi[oó]n|en vivo|nuevo|reciente/i.test(a) ? 0 : 1, eb = /emisi[oó]n|en vivo|nuevo|reciente/i.test(b) ? 0 : 1; return ea - eb; });
     if (webCat && !groups[webCat]) webCat = '';
     var chipsH = order.length > 1 ? '<div class="chips"><button class="chip f' + (!webCat ? ' on' : '') + '" data-act="webCat" data-arg="">Todo <small>' + vids.length + '</small></button>' + order.map(function (g) { return '<button class="chip f' + (webCat === g ? ' on' : '') + '" data-act="webCat" data-arg="' + esc(g) + '">' + esc(g.replace(/^[^·]+·\s*/, '') || g) + ' <small>' + groups[g].length + '</small></button>'; }).join('') + '</div>' : '';
-    var vc = function (v, i) { reg(v); return '<button class="vcard f" data-act="webPlay" data-key="' + esc(v.key) + '" data-fid="w-' + MV.hash(v.key) + '" style="animation-delay:' + Math.min(i, 12) * 0.03 + 's"><div class="th">' + (v.poster ? '<img loading="lazy" src="' + esc(v.poster) + '" alt="" onerror="this.remove()">' : '') + '</div><b>' + esc(v.name) + '</b><span>' + esc((v.group || '').replace(/^[^·]+·\s*/, '')) + '</span></button>'; };
+    var vc = function (v, i) { reg(v); var n = (v.eps || []).length; return '<button class="vcard f" data-act="' + (n ? 'webSeries' : 'webPlay') + '" data-key="' + esc(v.key) + '" data-fid="w-' + MV.hash(v.key) + '" style="animation-delay:' + Math.min(i, 12) * 0.03 + 's"><div class="th">' + (v.poster ? '<img loading="lazy" src="' + esc(v.poster) + '" alt="" onerror="this.remove()">' : '') + (n ? '<span class="tag" style="background:var(--accent)">SERIE · ' + n + ' VIDEOS</span>' : '') + '</div><b>' + esc(v.name) + '</b><span>' + esc((v.group || '').replace(/^[^·]+·\s*/, '')) + '</span></button>'; };
     if (webCat) return head + chipsH + '<div class="vgrid">' + groups[webCat].map(vc).join('') + '</div>';
-    return head + chipsH + order.map(function (g) { return '<section class="row"><h3>' + esc(g) + ' <small>' + groups[g].length + '</small></h3><div class="vgrid">' + groups[g].slice(0, 24).map(vc).join('') + '</div>' + (groups[g].length > 24 ? '<button class="btn ghost sm f" data-act="webCat" data-arg="' + esc(g) + '">Ver los ' + groups[g].length + '</button>' : '') + '</section>'; }).join('');
+    return head + chipsH + order.map(function (g) { return '<section class="row"><h3>' + esc(g.replace(/^[^·]+·\s*/, '') || g) + ' <small>' + groups[g].length + '</small></h3><div class="vgrid">' + groups[g].slice(0, 40).map(vc).join('') + '</div>' + (groups[g].length > 40 ? '<button class="btn ghost sm f" data-act="webCat" data-arg="' + esc(g) + '">Ver los ' + groups[g].length + '</button>' : '') + '</section>'; }).join('');
+  };
+  /** Serie de videos de tu página: sus capítulos en orden (se actualiza cada hora con los nuevos). */
+  VIEWS.webseries = function (key) {
+    var s = S.byKey[key] || MV.reg[key];
+    if (!s) return top('Serie') + '<div class="empty glass"><p class="muted">Esta serie ya no está en tu página.</p></div>';
+    var eps = s.eps || [];
+    return top(s.name) + (s.plot ? '<p class="muted" style="margin:0 0 12px;max-width:760px">' + esc(s.plot) + '</p>' : '') +
+      '<div class="btns" style="margin:0 0 14px"><button class="btn f" data-act="webEp" data-key="' + esc(key) + '" data-arg="0" data-autofocus>' + IC.play + 'Ver desde el primero</button>' + (eps.length > 1 ? '<button class="btn ghost f" data-act="webEp" data-key="' + esc(key) + '" data-arg="' + (eps.length - 1) + '">Ver el último</button>' : '') + '</div>' +
+      '<div class="vgrid">' + eps.map(function (e, i) { return '<button class="vcard f" data-act="webEp" data-key="' + esc(key) + '" data-arg="' + i + '" data-fid="we-' + i + '"><div class="th">' + (e.img || s.poster ? '<img loading="lazy" src="' + esc(e.img || s.poster) + '" alt="" onerror="this.remove()">' : '') + '<span class="tag" style="background:rgba(0,0,0,.7)">' + (i + 1) + '</span></div><b>' + esc(e.title) + '</b>' + (e.desc ? '<span>' + esc(e.desc.slice(0, 80)) + '</span>' : '') + '</button>'; }).join('') + '</div>';
   };
   /** Reproduce un video de página: YouTube en su reproductor, Vimeo y similares en su reproductor incrustado, y archivos en el reproductor de la app. */
   MV.playWebVideo = function (v) {

@@ -746,16 +746,18 @@
       var h = absUrl(a.getAttribute('href'), url).split('#')[0];
       if (!h || h.indexOf(origin) !== 0 || h === url || VID_EXT.test(h)) return;
       if (/\.(jpg|jpeg|png|gif|webp|svg|pdf|zip|rar|css|js|xml|json|txt|docx?|xlsx?|pptx?)(\?|$)/i.test(h)) return;
-      if (/\/(login|logout|signin|signup|registro|register|cart|carrito|checkout|wp-admin|wp-login|account|cuenta|feed|tag\/|author\/)/i.test(h)) return;
+      if (/\/(login|logout|signin|signup|registro|register|cart|carrito|checkout|wp-admin|wp-login|account|cuenta|feed|author\/)/i.test(h)) return;
       if (out.indexOf(h) < 0) out.push({ url: h, label: txt(a) });
     });
     return out;
   }
   function parseHtml(t) { return new DOMParser().parseFromString(t, 'text/html'); }
+  // Enlaces que en la página funcionan como filtro o categoría (/categoria/…, ?tipo=…, etiquetas, listas de reproducción…)
+  var CAT_URL = /[\/?&](categor[iy]a?s?|category|categories|genero|g[eé]nero|genre|tipo|type|tag|etiqueta|seccion|secci[oó]n|section|coleccion|colecci[oó]n|collection|materia|tema|temas|filtro|filter)[\/=_-]/i;   // (las páginas de una serie, curso o playlist no son categorías: son series)
   function buildFromWeb(list) {
     var start = list.url.trim(); if (!/^https?:\/\//i.test(start)) start = 'https://' + start;
     var origin = (start.match(/^(https?:\/\/[^\/]+)/i) || [start])[0];
-    var rendered = 0, maxPages = list.deep === false ? 1 : 80, pages = {}, queue = [{ url: start, depth: 0, cat: '' }], vids = [], done = 0;
+    var rendered = 0, maxPages = list.deep === false ? 1 : 300, pages = {}, queue = [{ url: start, depth: 0, cat: '' }], pageList = [], done = 0, total = 0;
     S.loadMsg = (list.name || 'Página') + ': revisando…'; MV.emit('catalog');
     function worker() {
       var job = queue.shift(); if (!job || done >= maxPages) return Promise.resolve();
@@ -764,28 +766,47 @@
       return MV.getText(job.url, { 'User-Agent': 'Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Mobile Safari/537.36', Accept: 'text/html,application/xhtml+xml' }).then(function (t) {
         var doc = parseHtml(t);
         // Página armada con JavaScript (sin videos en el HTML inicial): se abre en un navegador invisible y se lee ya armada
-        if (!pageVideos(doc, job.url).length && MV.native && rendered < 25) {
+        if (!pageVideos(doc, job.url).length && MV.native && rendered < 40) {
           rendered++;
           S.loadMsg = (list.name || 'Página') + ': abriendo ' + (job.url.replace(/^https?:\/\//, '').slice(0, 50)) + '…'; MV.emit('catalog');
           return MV.call('renderHtml', [job.url, 5000]).then(function (d) { return d && d.html ? parseHtml(d.html) : doc; }).catch(function () { return doc; });
         }
         return doc;
       }).then(function (doc) {
-        // Categoría: el texto del enlace del menú por el que se llegó (o el título de la página principal)
-        var cat = job.cat || (job.depth === 0 ? '' : '');
-        pageVideos(doc, job.url).forEach(function (v) { v.cat = cat; vids.push(v); });
-        if (job.depth < 2) siteLinks(doc, job.url, origin).forEach(function (l) {
-          if (!pages[l.url] && queue.length < 400) queue.push({ url: l.url, depth: job.depth + 1, cat: job.depth === 0 ? (l.label || '').slice(0, 40) : job.cat });
+        // Categoría de la página: la que ella misma declara (WordPress, Blogger…) o la del filtro/menú por el que se llegó
+        var own = meta(doc, 'article:section') || txt(doc.querySelector('a[rel~="category"], .cat-links a, .post-categories a, .breadcrumb li:nth-last-child(2) a, nav[aria-label*="breadcrumb" i] li:nth-last-child(2) a'));
+        var cat = (own || job.cat || '').slice(0, 40);
+        var vs = pageVideos(doc, job.url);
+        total += vs.length;
+        pageList.push({ url: job.url, depth: job.depth, cat: cat, title: meta(doc, 'og:title') || txt(doc.querySelector('h1')) || txt(doc.querySelector('title')), img: absUrl(meta(doc, 'og:image'), job.url), desc: meta(doc, 'og:description') || meta(doc, 'description'), isCat: CAT_URL.test(job.url) || job.depth === 0, vids: vs });
+        if (job.depth < 3) siteLinks(doc, job.url, origin).forEach(function (l) {
+          if (pages[l.url] || queue.length >= 3000) return;
+          // El filtro o categoría de tu página (por su dirección, o por estar en el menú principal) pasa a ser la categoría en MiVibra
+          var c = CAT_URL.test(l.url) && l.label ? l.label : job.depth === 0 ? (l.label || '') : job.cat;
+          queue.push({ url: l.url, depth: job.depth + 1, cat: (c || '').slice(0, 40) });
         });
-        S.loadMsg = (list.name || 'Página') + ': ' + done + ' páginas revisadas · ' + vids.length + ' videos'; MV.emit('catalog');
+        S.loadMsg = (list.name || 'Página') + ': ' + done + ' páginas revisadas · ' + total + ' videos'; MV.emit('catalog');
       }).catch(function (e) { if (job.depth === 0) throw e; }).then(worker);
     }
     // La primera página va sola (si falla, la lista falla); luego varias a la vez
-    return worker().then(function () { var w = []; for (var i = 0; i < 4; i++) w.push(worker()); return Promise.all(w); }).then(function () {
-      var seen = {}, out = [];
-      vids.forEach(function (v) {
-        var k = v.yt ? 'yt:' + v.yt : v.src; if (seen[k]) return; seen[k] = 1;
-        out.push(tags({ key: 'video:' + MV.hash(k), type: 'video', name: v.title, poster: v.img, plot: v.desc, group: (list.name || 'Mi página') + (v.cat ? ' · ' + v.cat : ''), url: v.yt ? 'yt:' + v.yt : v.src, yt: v.yt || '', embed: v.embed || '', page: v.page, list: list.id }));
+    return worker().then(function () { var w = []; for (var i = 0; i < 5; i++) w.push(worker()); return Promise.all(w); }).then(function () {
+      var claimed = {}, out = [], g = function (c) { return (list.name || 'Mi página') + (c ? ' · ' + c : ''); };
+      var vkey = function (v) { return v.yt ? 'yt:' + v.yt : v.src; };
+      // 1) Páginas de una serie (una página con varios videos que no es un listado ni una categoría): una "serie" con sus capítulos en orden
+      pageList.filter(function (p) { return !p.isCat && p.vids.length >= 2; }).forEach(function (p) {
+        var eps = p.vids.filter(function (v) { return !claimed[vkey(v)]; });
+        if (eps.length < 2) return;
+        eps.forEach(function (v) { claimed[vkey(v)] = 1; });
+        out.push(tags({ key: 'video:' + MV.hash('page:' + p.url), type: 'video', name: p.title || eps[0].title, poster: p.img || eps[0].img, plot: p.desc || '', group: g(p.cat), page: p.url, list: list.id,
+          eps: eps.map(function (v, n) { return { title: v.title && v.title !== p.title ? v.title : 'Video ' + (n + 1), url: v.yt ? 'yt:' + v.yt : v.src, yt: v.yt || '', embed: v.embed || '', img: v.img || '', desc: v.desc || '' }; }),
+          added: Date.now() / 1000 }));
+      });
+      // 2) Videos sueltos
+      pageList.forEach(function (p) {
+        p.vids.forEach(function (v) {
+          var k = vkey(v); if (claimed[k]) return; claimed[k] = 1;
+          out.push(tags({ key: 'video:' + MV.hash(k), type: 'video', name: v.title, poster: v.img, plot: v.desc, group: g(p.cat), url: v.yt ? 'yt:' + v.yt : v.src, yt: v.yt || '', embed: v.embed || '', page: v.page, list: list.id }));
+        });
       });
       if (!out.length) throw new Error('No encontré videos en esa página');
       return out;
@@ -819,7 +840,8 @@
   function loadList(list, force) {
     var ck = 'list:' + list.id;
     return MV.idbGet(ck).then(function (cached) {
-      var fresh = cached && cached.ts > Date.now() - 12 * 3600e3 && cached.v === 6;
+      // Las páginas web se actualizan cada hora (tus series nuevas aparecen solas); lo demás cada 12 horas
+      var fresh = cached && cached.ts > Date.now() - (list.type === 'web' ? 3600e3 : 12 * 3600e3) && cached.v === 6;
       // Lo guardado se vuelve a clasificar con las reglas actuales (+18, infantil, géneros, sin emojis)
       if (cached && !force && fresh) return cached.items.map(retag);
       var job;
@@ -1110,6 +1132,11 @@
     ids.forEach(function (id) { MV.idbDel('list:' + id); MV.idbDel('raw:' + id); });
     MV.saveLists(); return MV.reloadCatalog(false);
   };
+  // Revisión cada hora de las páginas web (sin interrumpir lo que estés viendo)
+  setInterval(function () {
+    if (S.loading || !S.lists.some(function (l) { return l.type === 'web' && l.enabled !== false; })) return;
+    MV.reloadCatalog(false);
+  }, 3600e3 + 30e3);
   MV.removeList = function (id) {
     S.lists = S.lists.filter(function (l) { return l.id !== id; });
     MV.idbDel('list:' + id); MV.idbDel('raw:' + id);
