@@ -1687,7 +1687,10 @@
       return;
     }
     var prog = resume ? MV.progressOf(it.key) : null;
-    var go = function (url) { launch({ queue: [q(it, { url: url })], index: 0, live: false, startMs: prog ? prog.pos : 0 }, { item: it }); };
+    var go = function (url) {
+      // Antes de abrir, se elige entre la versión principal y las de respaldo la que responde (así el video arranca de una)
+      pickWorking(it, url).then(function (r) { launch({ queue: [q(it, { url: r.url, alts: r.alts })], index: 0, live: false, startMs: prog ? prog.pos : 0 }, { item: it }); });
+    };
     if (it.ia) { MV.toast('Preparando película…'); MV.archiveUrl(it).then(go).catch(function (e) { MV.toast(e.message); }); }
     else if (it.url) go(it.url);
     else MV.toast('Este contenido ya no está disponible en tus listas');
@@ -1749,8 +1752,38 @@
     var ks = Object.keys(TRK); if (ks.length > 4000) ks.sort(function (a, b) { return (TRK[a].ts || 0) - (TRK[b].ts || 0); }).slice(0, ks.length - 3500).forEach(function (k) { delete TRK[k]; });
     MV.save('tracks', TRK);
   }
+  // Enlaces que de verdad funcionaron y salud de cada servidor (para elegir la versión que arranca de una)
+  var LINKS = MV.load('linkOk', {}), HOSTS = MV.load('hostHealth', {});
+  function hostOf(u) { var m = String(u || '').match(/^https?:\/\/([^\/:?#]+)/i); return m ? m[1].toLowerCase() : ''; }
+  function learnWorked(map) {
+    Object.keys(map || {}).forEach(function (id) {
+      var w = map[id]; if (!w || !w.url) return;
+      var good = hostOf(w.url), orig = hostOf(w.orig);
+      if (good) { HOSTS[good] = HOSTS[good] || { ok: 0, bad: 0 }; HOSTS[good].ok++; }
+      if (w.tries > 0 && orig && orig !== good) { HOSTS[orig] = HOSTS[orig] || { ok: 0, bad: 0 }; HOSTS[orig].bad++; }
+      if (w.url !== w.orig && !/^stalker:/.test(w.orig || '')) LINKS[id] = w.url; else delete LINKS[id];
+    });
+    var lk = Object.keys(LINKS); if (lk.length > 3000) lk.slice(0, lk.length - 2500).forEach(function (k) { delete LINKS[k]; });
+    MV.save('linkOk', LINKS); MV.save('hostHealth', HOSTS);
+  }
+  MV.hostPenalty = function (u) { var h = HOSTS[hostOf(u)]; return h && h.bad >= 3 && h.bad > h.ok * 2 ? -12 : 0; };
+  /** Elige el enlace que responde: primero el que ya funcionó antes, luego la mejor calidad que conteste (máx. 3 s de espera). */
+  function pickWorking(it, url) {
+    var alts = (it.alts || []).filter(function (u) { return u && !/^stalker:|^yt:/.test(u); });
+    var cands = [LINKS[it.key], url].concat(alts).filter(function (u, i, a) { return u && a.indexOf(u) === i && (u === url || u === LINKS[it.key] || alts.indexOf(u) >= 0); });
+    var plain = function (first) { var rest = cands.filter(function (u) { return u !== first; }); return { url: first, alts: rest }; };
+    if (!A || it.stk || cands.length < 2) return Promise.resolve(plain(cands[0] || url));
+    var probe = MV.call('probe', [JSON.stringify(cands.slice(0, 4).map(function (u) { return { url: u, ua: it.ua || '', ref: it.ref || '' }; }))]).catch(function () { return null; });
+    var timer = new Promise(function (r) { setTimeout(function () { r(null); }, 3000); });
+    return Promise.race([probe, timer]).then(function (res) {
+      if (!res || !res.length) return plain(cands[0]);
+      for (var i = 0; i < res.length; i++) if (res[i] && res[i].ok) return plain(cands[i]);
+      return plain(cands[0]);
+    });
+  }
   MV.onPlayerClosed = function (r) {
     var ctx;
+    if (r && r.worked) try { learnWorked(r.worked); } catch (e) {}
     if (r && r.tracks) try { saveTracks(r.tracks); } catch (e) {}
     // Favoritos marcados desde el reproductor
     if (r && r.favToggles && r.favToggles.length) r.favToggles.forEach(function (id) {

@@ -963,6 +963,8 @@
     if (it.lang === 'lat') q += P.latOnly ? 30 : 6; else if (it.lang === 'es' || /\bdual\b/i.test(t)) q += 3; else if (it.lang === 'cast') q += 1;
     if (/\b(sub|subs|subtitulad[ao]|vose|vos)\b/i.test(t)) q -= 3;
     if (/\b(hevc|x265|h265)\b/i.test(t)) q += 1;
+    // Servidores que suelen fallar (aprendido al reproducir) pierden prioridad frente a las otras listas
+    if (MV.hostPenalty) q += MV.hostPenalty(it.url);
     return q;
   }
   var lastAll = null, redupeT = null;

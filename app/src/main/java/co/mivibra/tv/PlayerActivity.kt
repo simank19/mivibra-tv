@@ -464,8 +464,11 @@ class PlayerActivity : ComponentActivity() {
                     cancelWatchdog()
                     retries = 0
                     errorView.visibility = View.GONE
-                    // Ya abrió: quita el aviso de "Probando otra forma…"
-                    if (info.visibility == View.VISIBLE && info.text.startsWith("Probando")) hideInfo(600)
+                    // Ya abrió: se recuerda qué enlace funcionó (la app lo usará primero la próxima vez)
+                    attempts.getOrNull(attemptIndex)?.let { at ->
+                        val id = current().optString("id")
+                        if (id.isNotBlank()) worked.put(id, JSONObject().put("url", at.url).put("orig", current().optString("url")).put("tries", attemptIndex))
+                    }
                 }
                 if (state == Player.STATE_ENDED && !live && hasNext()) { goNext(); return }
                 if (state == Player.STATE_ENDED && !live) {
@@ -527,10 +530,7 @@ class PlayerActivity : ComponentActivity() {
         if (attemptIndex < attempts.size - 1) {
             attemptIndex++
             retries = 0
-            info.text = (if (live) "Probando otra forma de abrir el canal… (" else "Probando otra forma de abrir el video… (") + (attemptIndex + 1) + "/" + attempts.size + ")"
-            info.visibility = View.VISIBLE
-            info.alpha = 1f
-            hideInfo(6000)
+            // Se prueba la siguiente forma en silencio (sin aviso en pantalla)
             startAttempt()
             return
         }
@@ -707,6 +707,7 @@ class PlayerActivity : ComponentActivity() {
 
     // Idiomas de audio y subtítulos que trae cada contenido (se devuelven a la app para mostrar solo esos en "Audio y subtítulos")
     private val trackLog = JSONObject()
+    private val worked = JSONObject()   // id → enlace con el que realmente arrancó
     private fun logTracks(tracks: androidx.media3.common.Tracks) {
         if (live) return
         val id = current().optString("id"); if (id.isBlank()) return
@@ -916,6 +917,7 @@ class PlayerActivity : ComponentActivity() {
             .put("replaced", replacedBy)
             .put("favToggles", JSONArray(favToggles.toList()))
             .put("tracks", trackLog)
+            .put("worked", worked)
         setResult(RESULT_OK, Intent().putExtra("result", result.toString()))
         finish()
     }
