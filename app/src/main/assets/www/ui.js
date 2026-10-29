@@ -1099,7 +1099,7 @@
         (prog ? '<button class="btn f" data-act="resume" data-key="' + esc(it.key) + '" data-autofocus>' + IC.play + 'Continuar · ' + MV.fmtDur(prog.pos) + '</button><button class="btn ghost f" data-act="play" data-key="' + esc(it.key) + '">Desde el inicio</button>'
           : '<button class="btn f" data-act="play" data-key="' + esc(it.key) + '" data-autofocus>' + IC.play + 'Reproducir</button>')) +
       '<button class="btn ghost f" data-act="fav" data-key="' + esc(it.key) + '">' + (fav ? IC.starFill : IC.star) + (fav ? 'En favoritos' : 'Favorito') + '</button>' +
-      '<button class="btn ghost f" data-act="langMenu">Audio y subtítulos</button>' +
+      '<button class="btn ghost f" data-act="langMenu" data-arg="' + esc(it.key) + '">Audio y subtítulos</button>' +
       '</div>' +
       (it.type === 'series' ? '<div id="eps" class="eps"><div class="spinner"></div></div>' : '') + '</div></div>' +
       '<div id="related">' + relatedHtml(it) + '</div>';
@@ -1718,8 +1718,40 @@
     }
     MV.playItem(it, true);
   };
+  // Idiomas que trae cada contenido (aprendidos al reproducirlo o informados por tu servidor Jellyfin)
+  var TRK = MV.load('tracks', {});
+  var LANG_NAMES = { es: 'Español', spa: 'Español', en: 'Inglés', eng: 'Inglés', ja: 'Japonés', jpn: 'Japonés', ko: 'Coreano', kor: 'Coreano', pt: 'Portugués', por: 'Portugués', fr: 'Francés', fra: 'Francés', fre: 'Francés', it: 'Italiano', ita: 'Italiano', de: 'Alemán', deu: 'Alemán', ger: 'Alemán', zh: 'Chino', zho: 'Chino', chi: 'Chino', ru: 'Ruso', rus: 'Ruso', hi: 'Hindi', hin: 'Hindi', tr: 'Turco', tur: 'Turco', ar: 'Árabe', ara: 'Árabe', th: 'Tailandés', tha: 'Tailandés' };
+  var LANG2 = { spa: 'es', eng: 'en', jpn: 'ja', kor: 'ko', por: 'pt', fra: 'fr', fre: 'fr', ita: 'it', deu: 'de', ger: 'de', zho: 'zh', chi: 'zh', rus: 'ru', hin: 'hi', tur: 'tr', ara: 'ar', tha: 'th' };
+  /** "spa|Latino" → { code: 'es', label: 'Español · Latino' }; sin repetir. */
+  function langList(arr) {
+    var out = [], seen = {};
+    (arr || []).forEach(function (v) {
+      var p = String(v).split('|'), raw = (p[0] || '').toLowerCase().split(/[-_]/)[0], extra = (p.slice(1).join('|') || '').trim();
+      var code = LANG2[raw] || raw; if (!code || code === 'und') code = '';
+      var name = LANG_NAMES[code] || (code ? code.toUpperCase() : '');
+      if (/lat|419|m[eé]x/i.test(extra + ' ' + (p[0] || '')) && code === 'es') name = 'Español latino';
+      else if (/castellano|espa[nñ]a|spain|es-es/i.test(extra + ' ' + (p[0] || '')) && code === 'es') name = 'Español (castellano)';
+      var label = name || extra || 'Sin idioma indicado';
+      if (extra && name && label.toLowerCase().indexOf(extra.toLowerCase()) < 0 && !/^(audio|track|pista|stereo|est[eé]reo|aac|ac3|eac3|dts|mp3|5\.1|2\.0|default)/i.test(extra)) label += ' · ' + extra;
+      if (seen[label]) return; seen[label] = 1;
+      out.push({ code: code, label: label });
+    });
+    return out;
+  }
+  function saveTracks(map) {
+    Object.keys(map || {}).forEach(function (id) {
+      var v = map[id]; if (!v) return;
+      TRK[id] = { a: v.a || [], s: v.s || [], ts: Date.now() };
+      // Capítulo de una serie: también cuenta para la serie completa
+      var parent = id.indexOf('#') > 0 ? id.split('#')[0] : '';
+      if (parent) { var pv = TRK[parent] || { a: [], s: [] }; (v.a || []).forEach(function (x) { if (pv.a.indexOf(x) < 0) pv.a.push(x); }); (v.s || []).forEach(function (x) { if (pv.s.indexOf(x) < 0) pv.s.push(x); }); pv.ts = Date.now(); TRK[parent] = pv; }
+    });
+    var ks = Object.keys(TRK); if (ks.length > 4000) ks.sort(function (a, b) { return (TRK[a].ts || 0) - (TRK[b].ts || 0); }).slice(0, ks.length - 3500).forEach(function (k) { delete TRK[k]; });
+    MV.save('tracks', TRK);
+  }
   MV.onPlayerClosed = function (r) {
     var ctx;
+    if (r && r.tracks) try { saveTracks(r.tracks); } catch (e) {}
     // Favoritos marcados desde el reproductor
     if (r && r.favToggles && r.favToggles.length) r.favToggles.forEach(function (id) {
       var it = S.byKey[id] || (MV.reg && MV.reg[id]) || (id.indexOf('#') > 0 ? S.byKey[id.split('#')[0]] : null);
@@ -2051,18 +2083,30 @@
     stype: function (t) { searchType = t; showResults(); var el = document.querySelector('[data-act="stype"][data-arg="' + t + '"]'); if (el) el.focus(); },
     searchFor: function (q) { query = q; var i = document.getElementById('searchIn'); if (i) i.value = q; saveRecent(q); showResults(); },
     clearRecent: function () { MV.save('recentSearch', []); showResults(); },
-    langMenu: function () {
-      var aud = [['es', 'Español'], ['en', 'Inglés'], ['pt', 'Portugués'], ['ja', 'Japonés'], ['ko', 'Coreano'], ['fr', 'Francés']];
-      var sub = [['', 'Desactivados'], ['es', 'Español'], ['en', 'Inglés'], ['pt', 'Portugués']];
-      MV.modal('<h2>Audio y subtítulos</h2><p class="muted">Se aplica al reproducir, si el video trae ese idioma. Durante la película puedes cambiarlo con el botón de subtítulos o el de ajustes del reproductor (en el control remoto, tecla Menú).</p>' +
-        '<h3 style="margin:14px 0 8px">Idioma del audio</h3><div class="chips">' + aud.map(function (a) { return '<button class="chip f' + (P.audioLang === a[0] ? ' on' : '') + '" data-act="langSet" data-arg="audioLang:' + a[0] + '">' + a[1] + '</button>'; }).join('') + '</div>' +
-        '<h3 style="margin:14px 0 8px">Subtítulos</h3><div class="chips">' + sub.map(function (a) { return '<button class="chip f' + ((P.subLang || '') === a[0] ? ' on' : '') + '" data-act="langSet" data-arg="subLang:' + a[0] + '">' + a[1] + '</button>'; }).join('') + '</div>' +
-        '<div class="btns"><button class="btn f" data-act="closeModal" data-autofocus>Listo</button></div>');
+    langMenu: function (key) {
+      var it = key ? (S.byKey[key] || MV.reg[key]) : null;
+      var tr = it ? (it.tracks || TRK[key]) : null;
+      var chip = function (k, code, label) { return '<button class="chip f' + ((P[k] || '') === code ? ' on' : '') + '" data-act="langSet" data-arg="' + k + ':' + code + (key ? ':' + esc(key) : '') + '">' + esc(label) + '</button>'; };
+      var html = '<h2>Audio y subtítulos</h2>';
+      if (tr && ((tr.a || []).length || (tr.s || []).length)) {
+        var aud = langList(tr.a), subs = langList(tr.s);
+        html += '<p class="muted">Estos son los idiomas que trae este contenido. El que elijas queda como preferido y se aplica al reproducir.</p>' +
+          '<h3 style="margin:14px 0 8px">Idioma del audio</h3>' + (aud.length ? '<div class="chips">' + aud.map(function (x) { return chip('audioLang', x.code, x.label); }).join('') + '</div>' + (aud.length === 1 ? '<p class="muted" style="font-size:13px">Solo trae este idioma.</p>' : '') : '<p class="muted">El video no informa el idioma de su audio.</p>') +
+          '<h3 style="margin:14px 0 8px">Subtítulos</h3><div class="chips">' + chip('subLang', '', 'Desactivados') + subs.map(function (x) { return chip('subLang', x.code, x.label); }).join('') + '</div>' +
+          (subs.length ? '' : '<p class="muted" style="font-size:13px">No trae subtítulos propios.' + (P.subKey ? ' En el reproductor puedes buscar subtítulos en internet.' : '') + '</p>');
+      } else {
+        // Aún no se sabe: se informa lo que dice la lista y se aprende al reproducirlo una vez
+        var l = it ? it.lang : '', guess = l === 'lat' ? 'Español latino' : l === 'es' ? 'Español' : l === 'cast' ? 'Español (castellano)' : l === 'sub' ? 'Idioma original con subtítulos en español' : l === 'en' ? 'Inglés' : '';
+        html += '<p>' + (guess ? 'Según tu lista: <b>' + esc(guess) + '</b>.' : 'Tu lista no dice en qué idioma viene.') + '</p>' +
+          '<p class="muted">Los idiomas exactos de audio y subtítulos aparecen aquí después de reproducirlo una vez. Dentro del reproductor, el botón "Audio y subtítulos" ya muestra solo los que trae.</p>';
+      }
+      html += '<div class="btns">' + (it && it.type !== 'series' && !(tr && (tr.a || []).length) ? '<button class="btn f" data-act="play" data-key="' + esc(key) + '">' + IC.play + 'Reproducir</button>' : '') + '<button class="btn ghost f" data-act="closeModal" data-autofocus>Listo</button></div>';
+      MV.modal(html);
     },
     langSet: function (v) {
-      var k = v.split(':')[0], val = v.split(':')[1] || '';
+      var parts = v.split(':'), k = parts[0], val = parts[1] || '', key = parts.slice(2).join(':');
       P[k] = val; MV.savePrefs();
-      MV.closeModal(true); ACT.langMenu();
+      MV.closeModal(true); ACT.langMenu(key);
       MV.toast(k === 'audioLang' ? 'Audio preferido guardado' : (val ? 'Subtítulos activados' : 'Subtítulos desactivados'));
     },
     auToggle: function () { AU.toggle(); },

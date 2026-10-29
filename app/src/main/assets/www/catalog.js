@@ -583,6 +583,16 @@
     if (subs.some(spa)) return 'sub';
     return aud.length ? 'otro' : '';
   }
+  /** Pistas del archivo para el menú "Audio y subtítulos" (idioma|título). */
+  function streamsTracks(ms) {
+    var t = { a: [], s: [] };
+    (ms || []).forEach(function (x) {
+      var v = (x.Language || 'und') + '|' + (x.Title || '');
+      if (x.Type === 'Audio' && t.a.indexOf(v) < 0) t.a.push(v);
+      if (x.Type === 'Subtitle' && t.s.indexOf(v) < 0) t.s.push(v);
+    });
+    return t.a.length || t.s.length ? t : undefined;
+  }
   function jfItems(list, types) {
     var out = [], start = 0, page = 1500;
     function more() {
@@ -603,7 +613,7 @@
       var out = [];
       r[0].forEach(function (d) {
         var tm = d.ProviderIds && (d.ProviderIds.Tmdb || d.ProviderIds.tmdb);
-        out.push(tags({ key: 'movie:' + MV.norm(d.Name + ' ' + y4(d)), type: 'movie', name: d.Name + (y4(d) ? ' (' + y4(d) + ')' : ''), year: y4(d), poster: img(d.Id), plot: d.Overview || '', genre: (d.Genres || []).join(', '), rating: d.CommunityRating ? String(d.CommunityRating) : '', group: grp('Películas', d), url: s + '/Videos/' + d.Id + '/stream?static=true&api_key=' + k, tid: tm ? 'movie:' + tm : undefined, langFixed: streamsLang(d.MediaStreams), added: d.DateCreated ? Date.parse(d.DateCreated) / 1000 : 0, list: list.id }));
+        out.push(tags({ key: 'movie:' + MV.norm(d.Name + ' ' + y4(d)), type: 'movie', name: d.Name + (y4(d) ? ' (' + y4(d) + ')' : ''), year: y4(d), poster: img(d.Id), plot: d.Overview || '', genre: (d.Genres || []).join(', '), rating: d.CommunityRating ? String(d.CommunityRating) : '', group: grp('Películas', d), url: s + '/Videos/' + d.Id + '/stream?static=true&api_key=' + k, tid: tm ? 'movie:' + tm : undefined, langFixed: streamsLang(d.MediaStreams), tracks: streamsTracks(d.MediaStreams), added: d.DateCreated ? Date.parse(d.DateCreated) / 1000 : 0, list: list.id }));
       });
       r[1].forEach(function (d) {
         var tm = d.ProviderIds && (d.ProviderIds.Tmdb || d.ProviderIds.tmdb);
@@ -962,7 +972,7 @@
     function swapIn(ex, it) {
       // El nuevo es de mejor calidad: pasa a ser el principal y el anterior queda de respaldo
       if (ex.url && ex.url !== it.url && !/^stalker:/.test(ex.url)) { ex.alts = [ex.url].concat((ex.alts || []).filter(function (u) { return u !== it.url; })).slice(0, 6); }
-      ['url', 'ua', 'ref', 'list', 'lang'].forEach(function (k) { if (it[k] !== undefined) ex[k] = it[k]; });
+      ['url', 'ua', 'ref', 'list', 'lang', 'tracks'].forEach(function (k) { if (it[k] !== undefined) ex[k] = it[k]; });
       ex.stk = it.stk; if (it.stks || ex.stks) { ex.stks = it.stks; if (it.stks) ex.episodes = []; }
       if (it.jf || it.px || ex.jf || ex.px) { ex.jf = it.jf; ex.px = it.px; if (it.jf || it.px) ex.episodes = []; }
       if (it.xt) ex.xt = it.xt;

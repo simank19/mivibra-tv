@@ -457,6 +457,7 @@ class PlayerActivity : ComponentActivity() {
         p.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) { onFail(error) }
             override fun onIsPlayingChanged(isPlaying: Boolean) { updateCenterPlay(); WatchNext.update(this@PlayerActivity, current(), p, live) }
+            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) { logTracks(tracks) }
 
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_READY) {
@@ -704,6 +705,24 @@ class PlayerActivity : ComponentActivity() {
         return if (n.isBlank() || n == code) code.uppercase() else n.replaceFirstChar { it.uppercase() }
     }
 
+    // Idiomas de audio y subtítulos que trae cada contenido (se devuelven a la app para mostrar solo esos en "Audio y subtítulos")
+    private val trackLog = JSONObject()
+    private fun logTracks(tracks: androidx.media3.common.Tracks) {
+        if (live) return
+        val id = current().optString("id"); if (id.isBlank()) return
+        val a = JSONArray(); val t = JSONArray(); val seen = HashSet<String>()
+        for (g in tracks.groups) for (i in 0 until g.length) {
+            if (!g.isTrackSupported(i)) continue
+            val f = g.getTrackFormat(i)
+            val v = (f.language ?: "und") + "|" + (f.label ?: "")
+            when (g.type) {
+                C.TRACK_TYPE_AUDIO -> if (seen.add("a$v")) a.put(v)
+                C.TRACK_TYPE_TEXT -> if (seen.add("t$v")) t.put(v)
+            }
+        }
+        if (a.length() > 0 || t.length() > 0) trackLog.put(id, JSONObject().put("a", a).put("s", t))
+    }
+
     private class Opt(val label: String, val selected: Boolean, val run: () -> Unit)
 
     private fun showTracks() {
@@ -896,6 +915,7 @@ class PlayerActivity : ComponentActivity() {
             .put("live", live)
             .put("replaced", replacedBy)
             .put("favToggles", JSONArray(favToggles.toList()))
+            .put("tracks", trackLog)
         setResult(RESULT_OK, Intent().putExtra("result", result.toString()))
         finish()
     }
