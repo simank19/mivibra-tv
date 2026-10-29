@@ -1082,7 +1082,19 @@
     list.id = 'l' + Date.now().toString(36);
     list.enabled = true; list.added = Date.now(); list.updatedAt = Date.now();
     S.lists.push(list); MV.saveLists();
-    return loadList(list, true).then(function () { MV.saveLists(); return MV.reloadCatalog(false); });
+    return loadList(list, true).then(function () { MV.saveLists(); return MV.reloadCatalog(false); }).then(function () {
+      // Resumen de lo que aportó la lista (y por qué parte no se ve: repetidos o idioma)
+      var mine = S.items.filter(function (i) { return i.list === list.id; });
+      var vis = MV.visible(mine), c = { live: 0, movie: 0, series: 0, video: 0 };
+      vis.forEach(function (i) { c[i.type] = (c[i.type] || 0) + 1; });
+      var parts = [];
+      if (c.live) parts.push(c.live + ' canales'); if (c.movie) parts.push(c.movie + ' películas'); if (c.series) parts.push(c.series + ' series'); if (c.video) parts.push(c.video + ' videos');
+      var dup = (S.hiddenDupes || {})[list.id] || 0, lang = P.latOnly ? mine.filter(function (i) { return !D.latOk(i); }).length : 0;
+      var extra = [];
+      if (dup) extra.push(dup + ' ya estaban en otras listas');
+      if (lang) extra.push(lang + ' ocultos por "Solo español latino"');
+      if (list.count != null) MV.toast('“' + list.name + '”: ' + (list.count || 0) + ' elementos' + (parts.length ? ' · nuevos visibles: ' + parts.join(', ') : ' · nada nuevo visible') + (extra.length ? ' (' + extra.join('; ') + ')' : ''), 7000);
+    });
   };
   /** Lee un .txt (o texto pegado) con varias direcciones: una por línea.
       Acepta "url", "Nombre,url", "Nombre | url" o "Nombre url". Los enlaces de Xtream (get.php?username=…&password=…) se agregan como cuenta Xtream. */

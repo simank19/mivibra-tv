@@ -2284,7 +2284,7 @@
         if (!/^https?:\/\//i.test(url)) { MV.toast('El enlace debe empezar con http:// o https://'); return; }
         var epg = document.getElementById('lEpg').value.trim();
         MV.closeModal(true); MV.toast('Cargando lista…');
-        MV.addList({ type: 'url', name: name || 'Mi lista', url: url, epg: epg }).then(function () { MV.rerender(); MV.toast('Lista agregada'); }).catch(function (e) { MV.toast(e.message, 4000); MV.rerender(); });
+        MV.addList({ type: 'url', name: name || 'Mi lista', url: url, epg: epg }).then(function () { MV.rerender(); }).catch(function (e) { MV.toast(e.message, 4000); MV.rerender(); });
       }
     },
     presets: function () {
