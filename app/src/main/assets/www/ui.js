@@ -1282,12 +1282,16 @@
   };
   function showResults() {
     var box = document.getElementById('results'), tbox = document.getElementById('stypes'); if (!box) return;
+    if (smart && !query) return showSmart(box, tbox);
+    smart = '';
     var q = MV.norm(query);
+    if (q.length >= 3) setTimeout(function () { actorLookup(query); }, 0);
     if (q.length < 2) {
       tbox.innerHTML = '';
       var rec = recentSearches();
       var gens = MV.genresOf(MV.visible(S.items.filter(function (i) { return i.type !== 'live'; }))).slice(0, 10);
-      box.innerHTML = (rec.length ? '<section class="row"><h3>Búsquedas recientes <button class="btn ghost sm f" data-act="clearRecent" style="margin-left:8px">Borrar</button></h3><div class="chips">' + rec.map(function (r) { return '<button class="chip f" data-act="searchFor" data-arg="' + esc(r) + '">' + IC.history.replace('<svg', '<svg width="15" height="15"') + ' ' + esc(r) + '</button>'; }).join('') + '</div></section>' : '') +
+      box.innerHTML = (P.tmdbKey && !MV.isKids() ? '<section class="row"><h3>Búsqueda inteligente</h3><div class="chips"><button class="chip f" data-act="smartNow">' + IC.movie + ' En cartelera</button><button class="chip f" data-act="smartSoon">Próximos estrenos</button></div><p class="muted" style="font-size:13px;margin:6px 0 0">También puedes escribir el nombre de un actor o director: te muestro sus películas y series que tienes.</p></section>' : '') +
+        (rec.length ? '<section class="row"><h3>Búsquedas recientes <button class="btn ghost sm f" data-act="clearRecent" style="margin-left:8px">Borrar</button></h3><div class="chips">' + rec.map(function (r) { return '<button class="chip f" data-act="searchFor" data-arg="' + esc(r) + '">' + IC.history.replace('<svg', '<svg width="15" height="15"') + ' ' + esc(r) + '</button>'; }).join('') + '</div></section>' : '') +
         (gens.length ? '<section class="row"><h3>Explora por género</h3><div class="chips">' + gens.map(function (g) { return '<button class="chip f" data-act="searchFor" data-arg="' + esc(g.name) + '">' + esc(g.name) + ' <small>' + g.count + '</small></button>'; }).join('') + '</div></section>' : '') +
         '<p class="muted">Escribe al menos 2 letras. No importan las tildes ni las mayúsculas, y entiende pequeños errores de escritura.</p>';
       return;
@@ -1301,7 +1305,7 @@
     var counts = {}; STYPES.forEach(function (t) { counts[t[0]] = t[0] === 'games' ? roms.length : t[0] === 'all' ? scored.length + roms.length : scored.filter(function (x) { return typeOk(x.it, t[0]); }).length; });
     if (searchType !== 'all' && !counts[searchType]) searchType = 'all';
     tbox.innerHTML = STYPES.filter(function (t) { return t[0] === 'all' || counts[t[0]]; }).map(function (t) { return '<button class="chip f' + (searchType === t[0] ? ' on' : '') + '" data-act="stype" data-arg="' + t[0] + '">' + t[1] + ' <small>' + counts[t[0]] + '</small></button>'; }).join('');
-    if (!scored.length && !roms.length) { box.innerHTML = '<div class="empty glass"><h2>Sin resultados para “' + esc(query) + '”</h2><p class="muted">Revisa la escritura o prueba con menos palabras.' + (P.tmdbKey ? ' También puedes buscarlo en Descubrir.' : '') + '</p></div>'; return; }
+    if (!scored.length && !roms.length) { box.innerHTML = '<div id="actorRes"></div><div class="empty glass"><h2>Sin resultados para “' + esc(query) + '”</h2><p class="muted">Revisa la escritura o prueba con menos palabras.' + (P.tmdbKey ? ' También puedes buscarlo en Descubrir.' : '') + '</p></div>'; return; }
     var html = '';
     if (searchType === 'all') {
       var best = scored.filter(function (x) { return x.sc >= 700; }).slice(0, 12).map(function (x) { return x.it; });
@@ -1317,7 +1321,75 @@
       var items = scored.filter(function (x) { return typeOk(x.it, searchType); }).map(function (x) { return x.it; });
       html = grid(items, searchType === 'live' ? 'ch' : 'poster', 'search');
     }
-    box.innerHTML = html;
+    box.innerHTML = '<div id="actorRes"></div>' + html;
+    fillActor();
+  }
+  // ---------- Búsqueda inteligente: actores y directores (TMDB) y cartelera ----------
+  var smart = '', SMART = {}, PERSON = {}, personQ = '';
+  function haveOf(t) { var k = S.byTid && S.byTid[t.mtype + ':' + t.id]; return k ? k.key : t.have; }
+  function tmdbCards(list) { return list.map(function (t, i) { reg(t); return card(t, 'poster', i); }).join(''); }
+  /** Busca si lo escrito es un actor o director y trae sus títulos (con espera corta para no consultar en cada letra). */
+  var actorTimer = null;
+  function actorLookup(q) {
+    if (!P.tmdbKey || MV.isKids()) return;
+    clearTimeout(actorTimer);
+    actorTimer = setTimeout(function () {
+      var k = MV.norm(q); personQ = k;
+      if (PERSON[k]) return fillActor();
+      PERSON[k] = { loading: true };
+      MV.tmdb('/search/person', '&query=' + encodeURIComponent(q)).then(function (j) {
+        var words = k.split(' ').filter(Boolean);
+        var ppl = (j.results || []).filter(function (p) {
+          var n = MV.norm(p.name || '');
+          return (p.popularity || 0) > 1 && /Acting|Directing/.test(p.known_for_department || '') && words.every(function (w) { return n.indexOf(w) >= 0; });
+        }).slice(0, 3);
+        if (!ppl.length) { PERSON[k] = { none: true }; return; }
+        var p = ppl[0];
+        return MV.tmdb('/person/' + p.id + '/combined_credits', '').then(function (c) {
+          var seen = {}, all = [];
+          (c.cast || []).concat((c.crew || []).filter(function (x) { return x.job === 'Director'; })).forEach(function (r) {
+            if (seen[r.media_type + r.id] || (r.media_type === 'tv' && (r.episode_count || 0) < 3 && !r.job)) return;   // sin apariciones de invitado
+            seen[r.media_type + r.id] = 1;
+            var t = toItem(r); if (t && t.name) { t.have = haveOf(t); all.push(t); }
+          });
+          all.sort(function (a, b) { return (b.year || 0) - (a.year || 0); });
+          PERSON[k] = { person: p, others: ppl.slice(1), owned: all.filter(function (t) { return t.have; }).map(function (t) { return S.byKey[t.have]; }).filter(Boolean), missing: all.filter(function (t) { return !t.have && t.poster; }).slice(0, 20) };
+        });
+      }).catch(function () { PERSON[k] = { none: true }; }).then(fillActor);
+    }, 450);
+  }
+  function fillActor() {
+    var el = document.getElementById('actorRes'), r = PERSON[personQ];
+    if (!el || !r || r.loading || r.none || MV.norm(query) !== personQ) return;
+    var vis = MV.visible(r.owned || []), p = r.person, role = /Directing/.test(p.known_for_department) ? 'Dirigidas por ' : 'Con ';
+    var html = '<section class="row"><h3>' + role + esc(p.name) + ' <small>' + vis.length + ' en tus listas</small></h3>' +
+      (vis.length ? '<div class="strip">' + vis.map(function (it, i) { return card(it, 'poster', i); }).join('') + '</div>' : '<p class="muted">No tienes títulos de ' + esc(p.name) + ' en tus listas.</p>') + '</section>' +
+      (r.missing.length ? '<section class="row"><h3>Más de ' + esc(p.name) + ' <small>no están en tus listas</small></h3><div class="strip">' + tmdbCards(r.missing) + '</div></section>' : '') +
+      (r.others.length ? '<div class="chips" style="margin:-4px 0 10px"><span class="flabel">¿BUSCABAS?</span>' + r.others.map(function (o) { return '<button class="chip f" data-act="searchFor" data-arg="' + esc(o.name) + '">' + esc(o.name) + '</button>'; }).join('') + '</div>' : '');
+    el.innerHTML = html;
+    // Si no había resultados por título, se quita el "Sin resultados"
+    var empty = document.querySelector('#results .empty'); if (empty && vis.length) empty.remove();
+  }
+  /** Cartelera (en cines en Colombia) y próximos estrenos, marcando lo que ya tienes. */
+  function showSmart(box, tbox) {
+    tbox.innerHTML = '<button class="chip f' + (smart === 'now' ? ' on' : '') + '" data-act="smartNow">En cartelera</button><button class="chip f' + (smart === 'soon' ? ' on' : '') + '" data-act="smartSoon">Próximos estrenos</button><button class="chip f" data-act="smartOff">' + IC.close + 'Quitar</button>';
+    var d = SMART[smart];
+    if (!d || d.loading) {
+      if (!d) {
+        SMART[smart] = { loading: true }; var which = smart;
+        Promise.all([1, 2].map(function (pg) { return MV.tmdb(which === 'now' ? '/movie/now_playing' : '/movie/upcoming', '&region=CO&page=' + pg).catch(function () { return {}; }); })).then(function (rs) {
+          var list = [], seen = {}; rs.forEach(function (j) { (j.results || []).forEach(function (r) { if (seen[r.id]) return; seen[r.id] = 1; var t = toItem(r, 'movie'); if (t && t.poster) { t.have = haveOf(t); list.push(t); } }); });
+          SMART[which] = { list: list, ts: Date.now() };
+          if (smart === which && view.name === 'search') showResults();
+        });
+      }
+      box.innerHTML = '<div class="panel glass" style="display:flex;gap:14px;align-items:center"><div class="spinner"></div><b>Consultando la cartelera…</b></div>';
+      return;
+    }
+    var mine = MV.visible(d.list.filter(function (t) { return t.have; }).map(function (t) { return S.byKey[t.have]; }).filter(Boolean)), rest = d.list.filter(function (t) { return !t.have; });
+    var name = smart === 'now' ? 'En cartelera' : 'Próximos estrenos';
+    box.innerHTML = (mine.length ? '<section class="row"><h3>' + name + ' que ya tienes <small>' + mine.length + '</small></h3><div class="strip">' + mine.map(function (it, i) { return card(it, 'poster', i); }).join('') + '</div></section>' : '<p class="muted">Ninguna película ' + (smart === 'now' ? 'en cartelera' : 'de los próximos estrenos') + ' está todavía en tus listas.</p>') +
+      (rest.length ? '<section class="row"><h3>' + name + (smart === 'now' ? ' en Colombia' : '') + ' <small>' + rest.length + '</small></h3><div class="grid">' + tmdbCards(rest) + '</div></section>' : '');
   }
   MV.remoteText = function (v) {
     var el = document.activeElement;
@@ -1956,6 +2028,9 @@
         '</div><div class="btns"><button class="btn ghost f" data-act="closeModal">Cerrar</button></div>');
     },
     hintGo: function () { MV.closeModal(); },
+    smartNow: function () { smart = 'now'; query = ''; var i = document.getElementById('searchIn'); if (i) i.value = ''; if (SMART.now && Date.now() - SMART.now.ts > 3 * 3600e3) delete SMART.now; showResults(); var c = document.querySelector('#stypes .chip.on'); if (c) c.focus(); },
+    smartSoon: function () { smart = 'soon'; query = ''; var i = document.getElementById('searchIn'); if (i) i.value = ''; if (SMART.soon && Date.now() - SMART.soon.ts > 3 * 3600e3) delete SMART.soon; showResults(); var c = document.querySelector('#stypes .chip.on'); if (c) c.focus(); },
+    smartOff: function () { smart = ''; showResults(); },
     kytCat: function (c) { KYT.cat = c; KYT.q = ''; KYT.key = ''; MV.rerender(); },
     kytSearch: function () { MV._typedAt = Date.now(); KYT.q = ((document.getElementById('kytIn') || {}).value || '').trim(); KYT.key = ''; MV.rerender(); },
     kytPlay: function (i) {
