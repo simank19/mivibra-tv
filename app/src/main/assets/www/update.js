@@ -58,8 +58,13 @@
   function pill(u) {
     var old = document.getElementById('updPill'); if (old && !old.closest('.qbar')) old.remove();
     var bell = document.querySelector('.qbar [data-fid="q-upd"]');
-    if (!u) { if (bell) bell.remove(); return; }
-    if (!bell && MV.updBell) { var bar = document.querySelector('.qbar'); if (bar) bar.insertAdjacentHTML('afterbegin', MV.updBell()); }
+    // La campana siempre está: se reemplaza para poner o quitar el punto rojo (conservando el foco si lo tenía)
+    if (MV.updBell) {
+      var had = bell && document.activeElement === bell;
+      if (bell) bell.outerHTML = MV.updBell(); else { var bar = document.querySelector('.qbar'); if (bar) bar.insertAdjacentHTML('afterbegin', MV.updBell()); }
+      var nb = document.querySelector('.qbar [data-fid="q-upd"]'); if (had && nb) nb.focus();
+    }
+    if (!u) return;
     // La primera vez que aparece la campana se explica para qué es
     try { if (!localStorage.getItem('mv:bellTip')) { localStorage.setItem('mv:bellTip', '1'); setTimeout(function () { MV.toast('Hay una versión nueva: la campana de arriba la instala cuando quieras', 5000); }, 800); } } catch (e) {}
   }
@@ -108,6 +113,8 @@
   // Revisa al abrir la app y cada 6 horas mientras está abierta (también al volver a ella)
   document.addEventListener('DOMContentLoaded', function () { setTimeout(function () { MV.checkUpdate(false); }, 2500); });
   setInterval(function () { MV.checkUpdate(false); }, 6 * 3600e3);
+  // Al volver a la app (después de un rato fuera) también se revisa, para que la versión nueva llegue rápido
+  document.addEventListener('visibilitychange', function () { if (!document.hidden && Date.now() - lastCheck > 20 * 60e3) MV.checkUpdate(false); });
   document.addEventListener('visibilitychange', function () {
     if (!document.hidden && Date.now() - lastCheck > 10 * 60e3) { shownFor = 0; MV.checkUpdate(false); }
   });

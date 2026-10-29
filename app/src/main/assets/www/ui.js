@@ -238,9 +238,11 @@
     }).join('') + '</div>';
   }
   /** Campana de actualización disponible (solo aparece si hay una versión nueva sin instalar). */
+  // Siempre visible: con versión nueva tiene un punto rojo y abre el aviso; sin ella, busca actualizaciones al momento
   MV.updBell = function () {
-    var u = MV.pendingUpdate; if (!u) return '';
-    return '<button class="qbtn bell f" data-act="showUpdate" data-fid="q-upd" aria-label="Actualización disponible" title="Actualizar a la versión ' + esc(u.version) + '">' + IC.bell + '<i class="dot"></i></button>';
+    if (MV.isKids && MV.isKids()) return '';
+    var u = MV.pendingUpdate;
+    return '<button class="qbtn bell f' + (u ? ' has' : '') + '" data-act="showUpdate" data-fid="q-upd" aria-label="' + (u ? 'Actualización disponible' : 'Buscar actualizaciones') + '" title="' + (u ? 'Actualizar a la versión ' + esc(u.version) : 'Buscar actualizaciones') + '">' + IC.bell + (u ? '<i class="dot"></i>' : '') + '</button>';
   };
   function top(title, right) {
     return '<div class="top"><h1>' + esc(title) + '</h1><div class="sp"></div>' + (right || '') + '</div>';
@@ -2074,7 +2076,7 @@
       }).catch(function () { MV.toast('No se pudo cargar el tráiler'); });
     },
     tmdbSearch: function (key) { var t = MV.reg[key]; if (!t) return; MV.closeModal(true); query = t.name; MV.go('search'); },
-    showUpdate: function () { MV.showUpdate(); },
+    showUpdate: function () { if (!MV.pendingUpdate) MV.toast('Buscando actualizaciones…'); MV.showUpdate(); },
     checkUpdate: function () { if (MV.pendingUpdate) { MV.showUpdate(); return; } MV.toast('Buscando actualizaciones…'); MV.checkUpdate(true).then(function () { if (view.name === 'settings') MV.rerender(); }); },
     checkDupes: function () { MV.checkDupes(true); MV.toast('Probando las señales de los canales repetidos…'); setTimeout(MV.rerender, 300); },
     loginGoogle: function () {
@@ -3110,7 +3112,7 @@
       ['[data-fid="q-favs"]', 'Favoritos', 'Todo lo que marques con la estrella queda guardado aquí.'],
       ['[data-fid="q-history"]', 'Historial', 'Lo último que viste, para retomarlo donde lo dejaste.'],
       ['[data-fid="q-prof"]', 'Tu perfil', 'Ajustes, cambiar de perfil y cerrar sesión. Desde Ajustes puedes volver a ver este tutorial.'],
-      ['[data-fid="q-upd"]', 'Actualización disponible', 'Cuando hay una versión nueva aparece esta campana. ' + PRESS + 'la para instalarla cuando quieras.', 2]
+      ['[data-fid="q-upd"]', 'Actualizaciones', PRESS + ' la campana para buscar una versión nueva. Cuando hay una, la campana se pone naranja con un punto rojo y desde ahí la instalas.', 2]
     ],
     home: [
       ['.hero', 'Recuadro principal', 'Muestra el último canal que viste (o uno recomendado) con vista previa. ' + PRESS + ' para abrirlo de una.'],
