@@ -16,7 +16,7 @@
   var P = S.prefs;
   var defaults = {
     theme: 'mv', glass: 'mid', anim: true, bgAnim: true, autoTheme: true, audioLang: 'es', subLang: '', xtFormat: 'm3u8',
-    tmdbKey: '', ytKey: '', subKey: '', streamKeys: {}, dedupe: true, navOrder: [], navHidden: [], covers: {}, kidsLimit: 60, parentPin: '', adult: null, romRoots: [], romSystem: {}, shader: 'default',
+    tmdbKey: '', ytKey: '', subKey: '', streamKeys: {}, dedupe: true, pruneEmpty: true, navOrder: [], navHidden: [], covers: {}, kidsLimit: 60, parentPin: '', adult: null, romRoots: [], romSystem: {}, shader: 'default',
     firebase: '', syncLists: true, updatedAt: 0, deviceName: ''
   };
   Object.keys(defaults).forEach(function (k) { if (P[k] === undefined) P[k] = defaults[k]; });
@@ -566,6 +566,8 @@
       });
       return job.then(function (items) {
         list.count = items.length; list.updated = Date.now(); list.error = '';
+        // Para borrar listas vacías sin equivocarse: se recuerda si alguna vez trajo contenido y cuántas veces seguidas llegó vacía
+        if (items.length) { list.hadItems = true; list.zeroLoads = 0; } else list.zeroLoads = (list.zeroLoads || 0) + 1;
         MV.idbSet(ck, { ts: Date.now(), v: 6, items: items });
         return items;
       }).catch(function (e) {
@@ -581,8 +583,20 @@
     var lists = S.lists.filter(function (l) { return l.enabled !== false; });
     var failed = [];
     return Promise.all(lists.map(function (l) {
-      return loadList(l, force).catch(function (e) { failed.push(l.name + ': ' + e.message); return []; });
+      return loadList(l, force).catch(function (e) { failed.push(l.name + ': ' + e.message); if (!l.count) l.zeroLoads = (l.zeroLoads || 0) + 1; return []; });
     })).then(function (all) {
+      // Listas con 0 elementos: se eliminan solas (si nunca trajeron nada, de una; si antes funcionaban, tras 2 cargas vacías seguidas)
+      if (P.pruneEmpty !== false && MV.acct && MV.acct.canEdit && MV.acct.canEdit()) {
+        var gone = lists.filter(function (l, i) { return !(all[i] || []).length && !l.count && l.zeroLoads >= (l.hadItems ? 2 : 1); });
+        if (gone.length) {
+          var ids = gone.map(function (l) { return l.id; });
+          all = all.filter(function (_, i) { return ids.indexOf(lists[i].id) < 0; });
+          S.lists = S.lists.filter(function (l) { return ids.indexOf(l.id) < 0; });
+          ids.forEach(function (id) { MV.idbDel('list:' + id); MV.idbDel('raw:' + id); });
+          failed = failed.filter(function (f) { return !gone.some(function (l) { return f.indexOf(l.name + ':') === 0; }); });
+          MV.toast(gone.length === 1 ? 'Se eliminó “' + gone[0].name + '” porque quedó con 0 elementos' : 'Se eliminaron ' + gone.length + ' listas que quedaron con 0 elementos', 5000);
+        }
+      }
       // Un solo aviso aunque fallen muchas (con 27 MAC no se llena la pantalla de mensajes)
       if (failed.length === 1) MV.toast('“' + failed[0].replace(': ', '”: '), 4000);
       else if (failed.length > 1) MV.toast(failed.length + ' listas no cargaron. Revísalas en Ajustes › Listas (puedes borrarlas juntas con "Seleccionar varias" › "Las que fallan").', 6000);

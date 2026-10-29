@@ -1473,6 +1473,7 @@
       '<button class="chip f" data-act="lselPick" data-arg="all">Todas</button><button class="chip f" data-act="lselPick" data-arg="none">Ninguna</button>' +
       (hasErr ? '<button class="chip f" data-act="lselPick" data-arg="err">Las que fallan</button>' : '') +
       (hasOff ? '<button class="chip f" data-act="lselPick" data-arg="off">Desactivadas</button>' : '') +
+      (S.lists.some(function (l) { return !l.count; }) ? '<button class="chip f" data-act="lselPick" data-arg="empty">Con 0 elementos</button>' : '') +
       (hasMac ? '<button class="chip f" data-act="lselPick" data-arg="mac">Portal MAC</button>' : '') + '</div>' +
       '<div class="btns"><button class="btn danger f" data-act="lselDelete"' + (n ? '' : ' disabled') + '>' + IC.trash + 'Eliminar' + (n ? ' (' + n + ')' : '') + '</button><button class="btn ghost f" data-act="lselCancel">Cancelar</button></div></div>';
   }
@@ -1501,6 +1502,7 @@
           '<button class="iconbtn f" data-act="listEpg" data-arg="' + l.id + '" aria-label="Guía EPG">' + IC.guide + '</button>' +
           '<button class="iconbtn f" data-act="listDelete" data-arg="' + l.id + '" aria-label="Eliminar">' + IC.trash + '</button></div>';
       }).join('') : '<p class="muted">No has agregado listas.</p>') +
+      '<div class="line"><div class="t"><b>Eliminar listas vacías</b><span>Si una lista carga con 0 elementos (vencida, MAC rechazada o enlace caído) se borra sola. Si antes funcionaba, espera a que llegue vacía dos veces seguidas para no borrarla por una falla pasajera.</span></div><button class="toggle f' + (P.pruneEmpty !== false ? ' on' : '') + '" data-act="pruneToggle" aria-label="Eliminar listas vacías"></button></div>' +
       '<div class="line"><div class="t"><b>Ocultar contenido repetido</b><span>Si una película, serie o canal está en varias listas (aunque se llame distinto, como "Animales" y "Animals"), se muestra una sola vez con la versión de mejor calidad: 4K, luego Full HD, HD y SD; latino primero. Las otras quedan de respaldo por si la principal falla.</span></div><button class="toggle f' + (P.dedupe !== false ? ' on' : '') + '" data-act="dedupeToggle" aria-label="Ocultar repetidos"></button></div>' +
       '<div class="btns" style="margin-top:14px"><button class="btn f" data-act="addList">' + IC.plus + 'Agregar lista</button><button class="btn ghost f" data-act="presets">Canales gratis</button><button class="btn ghost f" data-act="reloadAll">' + IC.refresh + 'Actualizar todo</button></div></div>' + dupesPanel();
   };
@@ -1848,6 +1850,7 @@
         '</div><div class="btns"><button class="btn ghost f" data-act="closeModal">Cerrar</button></div>');
     },
     hintGo: function () { MV.closeModal(); },
+    pruneToggle: function (_, el) { P.pruneEmpty = P.pruneEmpty === false; MV.savePrefs(); if (el) el.classList.toggle('on', P.pruneEmpty !== false); MV.toast(P.pruneEmpty !== false ? 'Las listas con 0 elementos se eliminarán solas' : 'Las listas vacías ya no se eliminan solas'); if (P.pruneEmpty !== false) MV.reloadCatalog(false).then(function () { if (view.name === 'settings') MV.rerender(); }); },
     dedupeToggle: function () { P.dedupe = P.dedupe === false; MV.savePrefs(); MV.toast(P.dedupe ? 'Mostrando solo la mejor versión de cada título' : 'Mostrando todas las versiones'); MV.reloadCatalog(false).then(MV.rerender); },
     tourAgain: function () { MV.tourReset(); MV.toast('Listo: el tutorial aparecerá otra vez en cada sección'); MV.go('home'); },
     go: function (a) { MV.closeModal(true); if (a === 'profileEdit') { editSel = null; pendingName = null; } MV.go(a); },
@@ -2177,7 +2180,7 @@
     lselPick: function (k) {
       if (!LSEL) return;
       LSEL = {};
-      S.lists.forEach(function (l) { if (k === 'all' || (k === 'err' && l.error) || (k === 'off' && l.enabled === false) || (k === 'mac' && l.type === 'stalker')) LSEL[l.id] = 1; });
+      S.lists.forEach(function (l) { if (k === 'all' || (k === 'err' && l.error) || (k === 'off' && l.enabled === false) || (k === 'empty' && !l.count) || (k === 'mac' && l.type === 'stalker')) LSEL[l.id] = 1; });
       MV.rerender();
     },
     lselDelete: function () {
