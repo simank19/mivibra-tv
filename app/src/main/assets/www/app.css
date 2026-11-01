@@ -611,3 +611,12 @@ html.lite .qbtn.bell svg, html.lite .qbtn.bell .dot { animation: none; }
 .pastebox { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; margin: 4px 0 12px; border-radius: 14px; border: 1px dashed var(--line); background: rgba(255,255,255,.03); }
 .pastebox span { color: var(--muted); font-size: 13px; }
 .pastebox .btns { margin: 6px 0 0; }
+
+/* ---------- Rendimiento en TV (onn, Chromecast, TV box) ---------- */
+/* Sin animación de entrada por tarjeta: con cientos de tarjetas cada cambio de sección se trababa */
+html.tv .card, html.tv .vcard, html.tv .utile, html.tv .row { animation: none !important; }
+html.lite .view-in, html.lite .view-in * { animation: none !important; }
+html.lite .spinner { animation: spin 1s linear infinite !important; }
+/* Las filas que no están en pantalla no se dibujan hasta acercarse (el navegador las salta) */
+html.tv .view-in > .row, html.tv #results > .row { content-visibility: auto; contain-intrinsic-size: auto 380px; }
+html.lite .card .shine { display: none; }

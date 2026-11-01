@@ -13,9 +13,16 @@
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   };
+  // Se llama miles de veces con los mismos textos: se recuerda el resultado (en TV box lentos era lo que más tardaba)
+  var NORM = new Map();
   MV.norm = function (s) {
-    return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    s = String(s || '');
+    var r = NORM.get(s); if (r !== undefined) return r;
+    r = s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
       .replace(/\b(hd|fhd|uhd|4k|sd|hevc|h265|1080p?|720p?|backup|alt)\b/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+    if (NORM.size > 150000) NORM.clear();
+    NORM.set(s, r);
+    return r;
   };
   MV.hash = function (s) { var h = 0; s = String(s); for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };
   MV.hue = function (s) { return D.HUES[parseInt(MV.hash(s), 36) % D.HUES.length]; };

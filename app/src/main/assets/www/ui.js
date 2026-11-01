@@ -170,8 +170,11 @@
   MV.rerender = function () {
     var f = document.activeElement, fid = f && f.dataset && f.dataset.fid, act = f && f.dataset && f.dataset.act, arg = f && f.dataset && f.dataset.arg;
     // Posición del foco entre los botones de la pantalla: si ese botón desaparece (lista eliminada), se queda en el vecino y no salta arriba
-    var allF = Array.prototype.slice.call(document.querySelectorAll('.view-in .f')), fIdx = allF.indexOf(f);
-    if (fIdx < 0 && MV._lastFocusIdx != null) fIdx = MV._lastFocusIdx;
+    // (solo se calcula cuando el botón no tiene identificador propio: recorrer miles de botones trababa los TV box)
+    var fIdx = -1;
+    if (f && !fid && f.closest && f.closest('.view-in') && !f.dataset.act) fIdx = Array.prototype.indexOf.call(document.querySelectorAll('.view-in .f'), f);
+    else if (f && !fid && act) { var same = document.querySelectorAll('.view-in [data-act="' + act + '"]'); fIdx = -2; MV._sameIdx = Array.prototype.indexOf.call(same, f); }
+    if (fIdx === -1 && MV._lastFocusIdx != null) fIdx = MV._lastFocusIdx;
     var main = document.querySelector('.main'), top = main ? main.scrollTop : 0;
     var strips = Array.prototype.map.call(document.querySelectorAll('.strip'), function (x) { return x.scrollLeft; });
     still = true; render(true); still = false;
@@ -180,6 +183,7 @@
     var el = (fid && document.querySelector('[data-fid="' + fid + '"]')) ||
       (act && document.querySelector('[data-act="' + act + '"]' + (arg != null ? '[data-arg="' + String(arg).replace(/"/g, '\\"') + '"]' : '')));
     if (!el && fIdx >= 0) { var nf = document.querySelectorAll('.view-in .f'); el = nf[Math.min(fIdx, nf.length - 1)] || null; }
+    if (!el && fIdx === -2 && act) { var ns = document.querySelectorAll('.view-in [data-act="' + act + '"]'); el = ns[Math.min(MV._sameIdx || 0, ns.length - 1)] || null; }
     MV._lastFocusIdx = null;
     if (el && !MV.modalOpen()) el.focus({ preventScroll: true }); else if (!MV.modalOpen()) MV.focusFirst();
   };
@@ -842,12 +846,14 @@
       OSC_IDX = {};
       D.OSCARS.forEach(function (o) { o[1].split('|').forEach(function (t) { var k = MV.norm(t); if (k) (OSC_IDX[k] = OSC_IDX[k] || []).push(o); }); });
     }
+    if (i.__oN === i.name && i.__oY === i.year) return i.__osc;
+    i.__oN = i.name; i.__oY = i.year; i.__osc = '';
     var k = MV.norm(MV.cleanTitle(i.name)), os = OSC_IDX[k];
     if (!os) return '';
     var y = +itemYear(i);
     if (!y) return k.length >= 6 ? os[0][2] : '';        // sin año: solo títulos largos (evita "Up", "Soul"…)
     var hit = os.find(function (o) { return Math.abs(o[0] - y) <= 1; });
-    return hit ? hit[2] : '';
+    return (i.__osc = hit ? hit[2] : '');
   }
   var yearSel = {};
   // Estreno: del año actual o del anterior (con año confirmado); "Estrenos" en la categoría solo cuenta si no se sabe el año
@@ -974,6 +980,12 @@
   var animeMode = 'all', animeYear = '', AIRING = { list: null, loading: false, ts: 0, error: '' };
   /** Año del título: el de la lista o el de la ficha; del nombre solo "(2024)" o "2024" al final (no "2097" o "2067" del título). */
   function itemYear(i) {
+    var my = i._meta && i._meta.year;
+    if (i.__yN === i.name && i.__yY === i.year && i.__yM === my) return i.__y;
+    i.__yN = i.name; i.__yY = i.year; i.__yM = my;
+    return (i.__y = itemYear0(i));
+  }
+  function itemYear0(i) {
     var now = new Date().getFullYear(), ok = function (y) { y = +y; return y >= 1900 && y <= now + 1 ? String(y) : ''; };
     var y = ok(i.year) || ok(i._meta && i._meta.year);
     if (y) return y;
@@ -1190,10 +1202,12 @@
       '<div class="kr"><button class="f w3" data-act="kbClear" data-v="' + target + '">Limpiar</button><button class="f w5" data-act="kb" data-arg=" " data-v="' + target + '">Espacio</button><button class="f w3 go" data-act="kbGo" data-v="' + target + '">Listo</button></div></div>';
   }
   /** Escribe en la caja indicada (el buscador general busca mientras escribes). */
+  var kbT = null;
   function kbSet(target, fn) {
     var i = document.getElementById(target); if (!i) return;
     i.value = fn(i.value || '');
-    if (target === 'searchIn') { query = i.value; showResults(); }
+    // Buscar espera una pausa corta entre letras (en TV box lentos cada búsqueda trababa el teclado)
+    if (target === 'searchIn') { query = i.value; clearTimeout(kbT); kbT = setTimeout(showResults, MV.lite ? 380 : 220); }
     else if (target === 'ytmIn' || target === 'ytIn' || target === 'musicIn') { /* se busca con Listo */ }
   }
 
@@ -1201,6 +1215,15 @@
   var query = '';
   // ---------- Buscador: relevancia, tolerante a errores y por tipo ----------
   var SIDX = { size: -1, rows: [] }, searchType = 'all', SEARCH_LIM = 60;
+  var SRCH = {}, VISC = {}, FUZZY = true, GENC = {};
+  /** Qué títulos puede ver este perfil (se recalcula solo si cambian las listas, el perfil o los filtros). */
+  function visibleMap() {
+    var k = [S.pid, MV.isKids(), !!P.latOnly, MV.adultOk ? MV.adultOk() : 0].join('|');
+    if (VISC.ref === S.items && VISC.k === k) return VISC.map;
+    var m = {}; MV.visible(S.items).forEach(function (i) { m[i.key] = 1; });
+    VISC = { ref: S.items, k: k, map: m };
+    return m;
+  }
   function searchIndex() {
     if (SIDX.size === S.items.length && SIDX.ref === S.items) return SIDX.rows;
     SIDX.rows = S.items.map(function (i) {
@@ -1243,7 +1266,7 @@
         var rw = r.words[m];
         if (rw === w) { hit = 60; break; }
         if (rw.indexOf(w) === 0) hit = Math.max(hit, 45);
-        else if (w.length >= 3 && hit < 25 && (near(w, rw) || (rw.length > w.length && (near(w, rw.slice(0, w.length)) || near(w, rw.slice(0, w.length + 1)))))) hit = 25;
+        else if (FUZZY && w.length >= 3 && hit < 25 && (near(w, rw) || (rw.length > w.length && (near(w, rw.slice(0, w.length)) || near(w, rw.slice(0, w.length + 1)))))) hit = 25;
         else if (rw.indexOf(w) >= 0) hit = Math.max(hit, 20);
       }
       if (!hit && r.extra.indexOf(w) >= 0) hit = 10;
@@ -1289,17 +1312,27 @@
     if (q.length < 2) {
       tbox.innerHTML = '';
       var rec = recentSearches();
-      var gens = MV.genresOf(MV.visible(S.items.filter(function (i) { return i.type !== 'live'; }))).slice(0, 10);
+      var vm = visibleMap();
+      if (GENC.map !== vm) GENC = { map: vm, list: MV.genresOf(S.items.filter(function (i) { return i.type !== 'live' && vm[i.key]; })).slice(0, 10) };
+      var gens = GENC.list;
       box.innerHTML = (P.tmdbKey && !MV.isKids() ? '<section class="row"><h3>Búsqueda inteligente</h3><div class="chips"><button class="chip f" data-act="smartNow">' + IC.movie + ' En cartelera</button><button class="chip f" data-act="smartSoon">Próximos estrenos</button></div><p class="muted" style="font-size:13px;margin:6px 0 0">También puedes escribir el nombre de un actor o director: te muestro sus películas y series que tienes.</p></section>' : '') +
         (rec.length ? '<section class="row"><h3>Búsquedas recientes <button class="btn ghost sm f" data-act="clearRecent" style="margin-left:8px">Borrar</button></h3><div class="chips">' + rec.map(function (r) { return '<button class="chip f" data-act="searchFor" data-arg="' + esc(r) + '">' + IC.history.replace('<svg', '<svg width="15" height="15"') + ' ' + esc(r) + '</button>'; }).join('') + '</div></section>' : '') +
         (gens.length ? '<section class="row"><h3>Explora por género</h3><div class="chips">' + gens.map(function (g) { return '<button class="chip f" data-act="searchFor" data-arg="' + esc(g.name) + '">' + esc(g.name) + ' <small>' + g.count + '</small></button>'; }).join('') + '</div></section>' : '') +
         '<p class="muted">Escribe al menos 2 letras. No importan las tildes ni las mayúsculas, y entiende pequeños errores de escritura.</p>';
       return;
     }
-    var qw = q.split(' ').filter(Boolean), vis = {};
-    MV.visible(S.items).forEach(function (i) { vis[i.key] = 1; });
-    var scored = [];
-    searchIndex().forEach(function (r) { if (!vis[r.it.key]) return; var sc = scoreRow(r, q, qw); if (sc > 0) scored.push({ it: r.it, sc: sc }); });
+    var qw = q.split(' ').filter(Boolean), vis = visibleMap();
+    var scored = [], idx = searchIndex();
+    // Al seguir escribiendo ("amo" → "amor") solo se revisan los que ya coincidían, no todo el catálogo
+    var pool = SRCH.q && q.indexOf(SRCH.q) === 0 && SRCH.ref === idx && SRCH.vis === vis ? SRCH.rows : idx, hits = [];
+    // Primero sin errores de tipeo (rápido); si casi no hay resultados, se vuelve a buscar aceptando una letra cambiada
+    FUZZY = false;
+    for (var pi = 0; pi < pool.length; pi++) { var r = pool[pi]; if (!vis[r.it.key]) continue; var sc = scoreRow(r, q, qw); if (sc > 0) { scored.push({ it: r.it, sc: sc }); hits.push(r); } }
+    if (scored.length < 25 && q.length >= 3) {
+      FUZZY = true; scored = []; hits = [];
+      for (pi = 0; pi < pool.length; pi++) { r = pool[pi]; if (!vis[r.it.key]) continue; sc = scoreRow(r, q, qw); if (sc > 0) { scored.push({ it: r.it, sc: sc }); hits.push(r); } }
+    }
+    SRCH = { q: q, ref: idx, vis: vis, rows: hits };
     scored.sort(function (a, b) { return b.sc - a.sc; });
     var roms = MV.isKids() ? [] : (MV.load('roms', []) || []).filter(isGame).filter(function (r) { var n = MV.norm(r.name); return qw.every(function (w) { return n.indexOf(w) >= 0 || n.split(' ').some(function (x) { return near(w, x); }); }); }).slice(0, 30);
     var counts = {}; STYPES.forEach(function (t) { counts[t[0]] = t[0] === 'games' ? roms.length : t[0] === 'all' ? scored.length + roms.length : scored.filter(function (x) { return typeOk(x.it, t[0]); }).length; });
@@ -1312,8 +1345,9 @@
       var live = scored.filter(function (x) { return x.it.type === 'live'; }).map(function (x) { return x.it; });
       var vod = scored.filter(function (x) { return x.it.type !== 'live'; }).map(function (x) { return x.it; });
       if (best.length && scored.length > best.length) html += row('Mejores coincidencias', best, best.every(function (b) { return b.type === 'live'; }) ? 'ch' : 'poster');
-      if (live.length) html += row('Canales', live.slice(0, 30), 'ch', live.length + '');
-      if (vod.length) html += row('Películas y series', vod.slice(0, 40), 'poster', vod.length + '');
+      var nL = MV.device.tv ? 18 : 30, nV = MV.device.tv ? 24 : 40;   // menos tarjetas por fila en TV: se dibuja mucho más rápido
+      if (live.length) html += row('Canales', live.slice(0, nL), 'ch', live.length + '');
+      if (vod.length) html += row('Películas y series', vod.slice(0, nV), 'poster', vod.length + '');
       if (roms.length) html += '<section class="row"><h3>Juegos</h3><div class="strip">' + roms.slice(0, 12).map(function (r, i) { return romCard(r, i); }).join('') + '</div></section>';
     } else if (searchType === 'games') {
       html = '<div class="grid">' + roms.map(function (r, i) { return romCard(r, i); }).join('') + '</div>';
@@ -3372,6 +3406,10 @@
   MV.on('catalog', publishHome);
   MV.on('profile', publishHome);
   MV.on('catalog', function () { if (!S.loading && MV.purgeAdult) MV.purgeAdult(); });
+  // El índice del buscador se arma en segundo plano apenas cargan las listas (la primera búsqueda ya no espera)
+  var idxT = null;
+  function buildIdx() { if (Date.now() - (MV._lastKey || 0) < 1500) { idxT = setTimeout(buildIdx, 2000); return; } searchIndex(); visibleMap(); }
+  MV.on('catalog', function () { if (S.loading) return; clearTimeout(idxT); idxT = setTimeout(buildIdx, 2500); });
   MV.on('catalog', function () { if (['boot', 'profiles', 'profileEdit', 'settings', 'games'].indexOf(view.name) < 0) MV.rerender(); });
   MV.on('epg', function () { if (view.name === 'guide' || view.name === 'live' || view.name === 'home') MV.rerender(); });
   MV.on('synced', function () { if (view.name === 'home' || view.name === 'history' || view.name === 'favs') MV.rerender(); });

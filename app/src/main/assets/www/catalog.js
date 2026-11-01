@@ -1190,7 +1190,16 @@
   };
 
   // ---------- Fichas: sinopsis y carátulas ----------
+  var CLEAN = new Map();
   MV.cleanTitle = function (name) {
+    name = String(name || '');
+    var c = CLEAN.get(name); if (c !== undefined) return c;
+    c = cleanTitle0(name);
+    if (CLEAN.size > 100000) CLEAN.clear();
+    CLEAN.set(name, c);
+    return c;
+  };
+  function cleanTitle0(name) {
     return String(name || '')
       .replace(/^[A-Z]{2,3}\s*[|:\-–]\s*/, '')
       .replace(/\[[^\]]*\]/g, ' ')
@@ -1198,7 +1207,7 @@
       .replace(/\b(4k|uhd|fhd|hd|sd|hevc|x26[45]|h26[45]|1080p|720p|480p|latino|lat|castellano|esp|sub|subtitulado|dual|multi|cam|ts)\b/gi, ' ')
       .replace(RX.episode, ' ')
       .replace(/\s{2,}/g, ' ').replace(/[\s\-–|:.]+$/, '').trim();
-  };
+  }
   function tmdb(path, params) {
     var key = (P.tmdbKey || '').trim();
     var bearer = key.indexOf('eyJ') === 0;
