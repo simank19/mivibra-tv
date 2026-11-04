@@ -1,0 +1,64 @@
+name: Compilar APK de prueba (ramas)
+
+# Ramas de prueba: compila y deja la APK como artefacto, sin publicar versión (no llega a los usuarios)
+on:
+  push:
+    branches-ignore: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Configurar cuenta MiVibra
+        env:
+          MV_FIREBASE: ${{ secrets.MV_FIREBASE }}
+          MV_ADMIN_EMAIL: ${{ secrets.MV_ADMIN_EMAIL }}
+          MV_GOOGLE_WEB_CLIENT: ${{ secrets.MV_GOOGLE_WEB_CLIENT }}
+          MV_GOOGLE_TV_CLIENT: ${{ secrets.MV_GOOGLE_TV_CLIENT }}
+          MV_GOOGLE_TV_SECRET: ${{ secrets.MV_GOOGLE_TV_SECRET }}
+        run: python3 .github/scripts/config.py
+
+      - name: Compilar
+        run: |
+          set -o pipefail
+          gradle assembleRelease --no-daemon --stacktrace 2>&1 | tee build.log
+
+      # Si falla, deja los errores como comentario del commit (fácil de revisar desde el celular)
+      - name: Reportar errores
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo '### Errores de compilación'
+            echo '```'
+            grep -E "^e: |error:|What went wrong|FAILURE|Could not|Execution failed|> |Unresolved|Caused by" build.log | head -120
+            echo '---'
+            tail -60 build.log
+            echo '```'
+          } > errors.md
+          gh api repos/${{ github.repository }}/commits/${{ github.sha }}/comments -F body=@errors.md
+
+      - name: Renombrar APK
+        run: |
+          mkdir -p out
+          cp app/build/outputs/apk/release/app-release.apk "out/MiVibraTV-prueba-${{ github.run_number }}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MiVibraTV-prueba-apk
+          path: out/*.apk
