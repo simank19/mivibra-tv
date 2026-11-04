@@ -99,7 +99,7 @@ object TvRows {
                 while (cur.moveToNext()) {
                     val pkg = cur.str("package_name")
                     if (pkg !in pkgs || cur.str("type") != TvContract.Channels.TYPE_PREVIEW) continue
-                    if (cur.getColumnIndex("browsable") >= 0 && cur.num("browsable") == 0L) continue
+                    // Se incluyen también los canales que no estaban agregados al inicio de Google (browsable=0)
                     val id = cur.num("_id")
                     val items = JSONArray()
                     try {
