@@ -18,9 +18,17 @@ import java.io.File
  */
 object TvRows {
     const val PERMISSION = "com.android.providers.tv.permission.READ_EPG_DATA"
+    const val LISTINGS = "android.permission.READ_TV_LISTINGS"
 
     fun supported() = Build.VERSION.SDK_INT >= 26
     fun granted(c: Context) = c.checkSelfPermission(PERMISSION) == PackageManager.PERMISSION_GRANTED
+
+    /** Para el diagnóstico: cuántas filas deja leer el sistema. */
+    fun debug(c: Context): String {
+        fun count(u: Uri) = try { c.contentResolver.query(u, null, null, null, null)?.use { it.count }?.toString() ?: "null" } catch (e: Exception) { "error: " + e.message }
+        return "watchNext=" + count(TvContract.WatchNextPrograms.CONTENT_URI) + " channels=" + count(TvContract.Channels.CONTENT_URI) +
+            " listings=" + (c.checkSelfPermission(LISTINGS) == PackageManager.PERMISSION_GRANTED)
+    }
 
     private fun Cursor.str(col: String): String = getColumnIndex(col).let { if (it >= 0 && !isNull(it)) getString(it) ?: "" else "" }
     private fun Cursor.num(col: String): Long = getColumnIndex(col).let { if (it >= 0 && !isNull(it)) getLong(it) else 0L }

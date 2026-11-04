@@ -101,6 +101,7 @@ class LauncherBridge(private val a: LauncherActivity) {
             .put("ok", TvRows.granted(a))
             .put("watchNext", TvRows.watchNext(a))
             .put("youtube", TvRows.channels(a, yt))
+            .put("debug", TvRows.debug(a))
             .toString()
     }
 

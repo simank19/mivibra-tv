@@ -98,8 +98,10 @@ class LauncherActivity : ComponentActivity() {
 
     /** Permiso para leer "Continuar viendo" y las filas de sugerencias de las apps (como el inicio de Google). */
     fun askTvPermission() {
-        if (!TvRows.supported() || TvRows.granted(this)) return
-        try { requestPermissions(arrayOf(TvRows.PERMISSION), 77) } catch (_: Exception) {}
+        if (!TvRows.supported()) return
+        val need = arrayOf(TvRows.PERMISSION, TvRows.LISTINGS).filter { checkSelfPermission(it) != android.content.pm.PackageManager.PERMISSION_GRANTED }
+        if (need.isEmpty()) return
+        try { requestPermissions(need.toTypedArray(), 77) } catch (_: Exception) {}
     }
 
     @Deprecated("Deprecated in Java")

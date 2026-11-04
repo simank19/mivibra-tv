@@ -277,7 +277,7 @@
   var tvT = 0;
   function loadTv() {
     if (!LB.tvRows) return;
-    call('tvRows').then(function (d) { setJSON('mvl.tv', d); renderTv(d); }).catch(function () {});
+    call('tvRows').then(function (d) { try { console.log('MVL tvRows ' + d.debug + ' wn=' + (d.watchNext || []).length + ' yt=' + (d.youtube || []).length); } catch (e) {} setJSON('mvl.tv', d); renderTv(d); }).catch(function () {});
   }
   L.onTvRows = loadTv;
 
