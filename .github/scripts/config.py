@@ -24,7 +24,8 @@ data = {
 }
 if not data['admin']:
     raise SystemExit('Falta el secreto MV_ADMIN_EMAIL')
-with open(out, 'w') as f:
-    f.write('window.MV_CONFIG = ' + json.dumps(data) + ';\n')
+for path in (out, 'inicio/src/main/assets/www/config.js'):  # MiVibra TV y la app Inicio MiVibra
+    with open(path, 'w') as f:
+        f.write('window.MV_CONFIG = ' + json.dumps(data) + ';\n')
 print('Cuenta MiVibra configurada para el proyecto', cfg['projectId'],
       '· Google:', bool(data['webClientId']), '· Código TV:', bool(data['tvClientId']))

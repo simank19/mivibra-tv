@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0D0C0B">
+<title>Fondos para tu TV · MiVibra</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: #0D0C0B; color: #F3EFEA; font: 16px/1.5 system-ui, -apple-system, Roboto, sans-serif; padding: 28px 20px 40px; }
+  header { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 20px; }
+  header img { width: 32px; height: 32px; }
+  h1 { font-size: 26px; line-height: 1.15; margin: 26px 0 8px; }
+  p { color: #B9B1A8; margin: 0 0 22px; }
+  label.pick { display: block; text-align: center; padding: 18px; border-radius: 16px; background: #FF6900; color: #0D0C0B; font-weight: 800; font-size: 18px; }
+  input { display: none; }
+  .tip { font-size: 14px; margin-top: 14px; }
+  .bar { height: 8px; border-radius: 8px; background: rgba(255,255,255,.1); overflow: hidden; margin: 24px 0 8px; }
+  .bar i { display: block; height: 100%; width: 0; background: #FF6900; transition: width .2s; }
+  #st { font-weight: 600; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 18px; }
+  .grid img { width: 100%; aspect-ratio: 16/9; object-fit: cover; border-radius: 8px; opacity: .45; transition: opacity .3s; }
+  .grid img.ok { opacity: 1; }
+</style>
+</head>
+<body>
+<header><img src="isotipo.svg" alt="">MiVibra</header>
+<h1>Fondos para tu TV</h1>
+<p>Elige fotos de tu galería o de Google Fotos. Se ven mejor las fotos horizontales.</p>
+<label class="pick" for="f">Elegir fotos</label>
+<input id="f" type="file" accept="image/*" multiple>
+<p class="tip">Si no ves Google Fotos, toca “Explorar” o el menú ☰ en el selector y elige Fotos.</p>
+<div id="prog" hidden><div class="bar"><i id="bar"></i></div><div id="st"></div></div>
+<div class="grid" id="grid"></div>
+<script>
+(function () {
+  var input = document.getElementById('f'), grid = document.getElementById('grid');
+  function shrink(file) {
+    return new Promise(function (ok, fail) {
+      var url = URL.createObjectURL(file), img = new Image();
+      img.onload = function () {
+        var s = Math.min(1, 1920 / img.width, 1920 / img.height);
+        var c = document.createElement('canvas');
+        c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        c.toBlob(function (b) { b ? ok({ blob: b, url: url }) : fail(new Error('No se pudo leer la foto')); }, 'image/jpeg', 0.88);
+      };
+      img.onerror = function () { fail(new Error('Formato no compatible')); };
+      img.src = url;
+    });
+  }
+  input.addEventListener('change', function () {
+    var files = Array.prototype.slice.call(input.files || []);
+    if (!files.length) return;
+    var done = 0, fails = 0, total = files.length;
+    document.getElementById('prog').hidden = false;
+    var st = document.getElementById('st'), bar = document.getElementById('bar');
+    function show() { st.textContent = 'Enviando ' + done + ' de ' + total + (fails ? ' · ' + fails + ' con error' : ''); bar.style.width = Math.round(done * 100 / total) + '%'; }
+    show();
+    (function next(i) {
+      if (i >= total) { st.textContent = '¡Listo! ' + (done - fails) + ' fotos ya están en tu TV.'; input.value = ''; return; }
+      shrink(files[i]).then(function (r) {
+        var t = document.createElement('img'); t.src = r.url; grid.appendChild(t);
+        return fetch('/subir', { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: r.blob }).then(function (res) {
+          if (!res.ok) throw new Error('error'); t.className = 'ok';
+        });
+      }).catch(function () { fails++; }).then(function () { done++; show(); next(i + 1); });
+    })(0);
+  });
+})();
+</script>
+</body>
+</html>

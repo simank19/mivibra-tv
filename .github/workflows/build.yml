@@ -35,7 +35,7 @@ jobs:
       - name: Compilar
         run: |
           set -o pipefail
-          gradle assembleRelease --no-daemon --stacktrace 2>&1 | tee build.log
+          gradle :app:assembleRelease --no-daemon --stacktrace 2>&1 | tee build.log
 
       # Si falla, deja los errores como comentario del commit (fácil de revisar desde el celular)
       - name: Reportar errores

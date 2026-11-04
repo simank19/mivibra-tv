@@ -255,6 +255,12 @@ class Bridge(private val a: MainActivity) {
     @JavascriptInterface
     fun publishHome(json: String) { HomeChannel.publish(a, json) }
 
+    /** Datos para la app Inicio MiVibra (por ahora la clave de YouTube). */
+    @JavascriptInterface
+    fun setInicio(json: String) {
+        try { java.io.File(a.filesDir, "inicio-datos.json").writeText(json) } catch (_: Exception) {}
+    }
+
     @JavascriptInterface
     fun play(json: String) {
         a.runOnUiThread { a.openPlayer(json) }

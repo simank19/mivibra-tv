@@ -16,4 +16,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "MiVibraTV"
-include(":app")
+include(":app", ":inicio")

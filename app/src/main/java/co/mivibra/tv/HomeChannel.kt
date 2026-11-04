@@ -18,7 +18,11 @@ import org.json.JSONArray
  */
 object HomeChannel {
     @SuppressLint("RestrictedApi")
+    /** Copia para la app "Inicio MiVibra" (se la entrega InicioProvider). */
+    fun saved(c: Context): String = try { java.io.File(c.filesDir, "inicio-recomendado.json").readText() } catch (_: Exception) { "[]" }
+
     fun publish(c: Context, json: String) {
+        try { java.io.File(c.filesDir, "inicio-recomendado.json").writeText(json) } catch (_: Exception) {}
         if (Build.VERSION.SDK_INT < 26 || !c.packageManager.hasSystemFeature("android.software.leanback")) return
         val app = c.applicationContext
         Thread {

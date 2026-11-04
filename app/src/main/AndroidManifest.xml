@@ -153,6 +153,11 @@
             android:exported="false"
             android:screenOrientation="sensorLandscape"
             android:theme="@style/Theme.MiVibra.Fullscreen" />
+        <!-- Le entrega a la app "Inicio MiVibra" las sugerencias y la clave de YouTube (solo a apps con la misma firma) -->
+        <provider
+            android:name=".InicioProvider"
+            android:authorities="co.mivibra.tv.inicio"
+            android:exported="true" />
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.files"

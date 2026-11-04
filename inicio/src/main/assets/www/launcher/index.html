@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0D0C0B">
+<title>Inicio MiVibra</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&amp;display=swap">
+<link rel="stylesheet" href="launcher.css">
+<script src="../qrcode.js"></script>
+<script src="../config.js"></script>
+<script src="launcher.js" defer></script>
+</head>
+<body>
+<!-- Fondo: dos capas que se intercambian con fundido -->
+<div id="wall" aria-hidden="true">
+  <div class="glow"><i></i><i></i></div>
+  <div class="ph" id="ph0"></div>
+  <div class="ph" id="ph1"></div>
+  <div class="shade"></div>
+</div>
+
+<header id="top">
+  <div class="brand"><img src="../img/isotipo.svg" alt=""><span>MiVibra</span></div>
+  <nav id="tabs">
+    <button class="f tab" data-view="home">Inicio</button>
+    <button class="f tab" data-view="apps">Apps</button>
+    <button class="f tab" data-view="photos">Fondos</button>
+    <button class="f tab" data-act="settings">Ajustes</button>
+  </nav>
+  <div class="stat">
+    <span id="weather"></span>
+    <span id="net" class="net"></span>
+    <span id="clock"></span>
+  </div>
+</header>
+
+<main id="views">
+  <section id="v-home" class="view">
+    <div class="hello">
+      <h1 id="greet">Hola</h1>
+      <p id="date"></p>
+    </div>
+    <div class="rows">
+      <div class="row-h">Destacados</div>
+      <div class="row big" id="pins"></div>
+      <div class="row-h" id="mvc-h" hidden>Seguir viendo en MiVibra TV</div>
+      <div class="row poster" id="mvc"></div>
+      <div class="row-h" id="mvr-h" hidden>Para ti en MiVibra TV</div>
+      <div class="row poster" id="mvr"></div>
+      <div class="row-h" id="yt-h" hidden>Tendencias en YouTube</div>
+      <div class="row video" id="yt"></div>
+      <div class="row-h" id="ytl-h" hidden>Tus me gusta en YouTube</div>
+      <div class="row video" id="ytl"></div>
+      <div class="row-h" id="inputs-h" hidden>Entradas</div>
+      <div class="row small" id="inputs"></div>
+    </div>
+  </section>
+
+  <section id="v-apps" class="view" hidden>
+    <div class="view-h"><h2>Todas las apps</h2><p>Botón ☰ del control para fijar en Destacados o mover</p></div>
+    <div class="grid" id="all"></div>
+  </section>
+
+  <section id="v-photos" class="view" hidden>
+    <div class="view-h"><h2>Fondos</h2><p id="photos-sub">Tus fotos como fondo del inicio</p></div>
+    <div class="opts">
+      <button class="f opt primary" data-act="upload">📱 Subir desde el celular</button>
+      <button class="f opt" data-act="gphotos">Conectar Google Fotos</button>
+      <button class="f opt" data-act="interval">Cambiar cada: <b id="o-int"></b></button>
+      <button class="f opt" data-act="blur">Desenfoque: <b id="o-blur"></b></button>
+      <button class="f opt" data-act="motion">Movimiento: <b id="o-motion"></b></button>
+      <button class="f opt" data-act="sound">Sonidos: <b id="o-sound"></b></button>
+      <button class="f opt" data-act="yt">YouTube en el inicio: <b id="o-yt"></b></button>
+      <button class="f opt" data-act="ytacct">Mi YouTube: <b id="o-ytacct"></b></button>
+      <button class="f opt danger" data-act="clearphotos">Borrar todas</button>
+    </div>
+    <div class="grid photos" id="thumbs"></div>
+  </section>
+</main>
+
+<div id="modal" hidden></div>
+<div id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

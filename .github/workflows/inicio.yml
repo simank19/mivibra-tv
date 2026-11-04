@@ -1,0 +1,71 @@
+name: Compilar Inicio MiVibra
+
+# App aparte (launcher). Se publica con etiqueta inicio-N y nunca como "latest",
+# así el actualizador de MiVibra TV no la confunde con su propia versión.
+on:
+  push:
+    paths:
+      - "inicio/**"
+      - ".github/workflows/inicio.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Configurar cuenta MiVibra
+        env:
+          MV_FIREBASE: ${{ secrets.MV_FIREBASE }}
+          MV_ADMIN_EMAIL: ${{ secrets.MV_ADMIN_EMAIL }}
+          MV_GOOGLE_WEB_CLIENT: ${{ secrets.MV_GOOGLE_WEB_CLIENT }}
+          MV_GOOGLE_TV_CLIENT: ${{ secrets.MV_GOOGLE_TV_CLIENT }}
+          MV_GOOGLE_TV_SECRET: ${{ secrets.MV_GOOGLE_TV_SECRET }}
+        run: python3 .github/scripts/config.py
+
+      - name: Compilar
+        run: |
+          set -o pipefail
+          gradle :inicio:assembleRelease --no-daemon --stacktrace 2>&1 | tee build.log
+
+      - name: Reportar errores
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo '### Errores de compilación (Inicio MiVibra)'
+            echo '```'
+            grep -E "^e: |error:|What went wrong|FAILURE|Could not|Execution failed|> |Unresolved|Caused by" build.log | head -120
+            echo '---'
+            tail -60 build.log
+            echo '```'
+          } > errors.md
+          gh api repos/${{ github.repository }}/commits/${{ github.sha }}/comments -F body=@errors.md
+
+      - name: Renombrar APK
+        run: |
+          mkdir -p out
+          cp inicio/build/outputs/apk/release/inicio-release.apk "out/InicioMiVibra-${{ github.run_number }}.apk"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: inicio-${{ github.run_number }}
+          name: Inicio MiVibra ${{ github.run_number }}${{ github.ref_name != 'main' && format(' (prueba {0})', github.ref_name) || '' }}
+          body: "Launcher estilo consola para Android TV. App aparte de MiVibra TV."
+          files: out/*.apk
+          prerelease: ${{ github.ref_name != 'main' }}
+          make_latest: false
