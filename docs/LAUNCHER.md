@@ -5,7 +5,8 @@ Pantalla de inicio para el televisor que viene dentro de MiVibra TV:
 - **Destacados:** MiVibra TV primero y tus apps fijadas en tarjetas grandes (se mueven con el botón ☰ del control).
 - **Entradas:** HDMI y AV del televisor, si la TV las reporta.
 - **Todas las apps** en cuadrícula.
-- **Fondos con tus fotos de Google Fotos:** escaneas un QR con el celular, eliges las fotos y la TV las descarga y las va turnando.
+- **Fondos con tus fotos:** "Subir desde el celular" muestra un QR; el celular (mismo Wi-Fi) elige fotos de la galería o de Google Fotos y las manda a la TV. No necesita configurar nada.
+- **Google Fotos directo** (opcional): con la cuenta de Google de la TV, después de activarlo en Google Cloud (abajo).
 - Reloj, clima de Bogotá, estado de la red, sonidos al moverse, desenfoque y movimiento del fondo opcionales.
 
 Solo se activa en televisores: en celulares y tablets no aparece como pantalla de inicio.
@@ -45,8 +46,8 @@ Se hace en el mismo proyecto de Google Cloud que ya usa MiVibra TV para el inici
    - Nombre del paquete: `co.mivibra.tv`
    - Huella SHA-1: `55:B3:A7:F0:24:0C:DD:3F:C1:62:9E:9F:FA:AE:CF:BB:D7:CE:46:55`
 
-Con eso, en la TV: **Fondos → Elegir de Google Fotos**. Si la TV tiene cuenta de Google, pide el permiso ahí mismo;
-si no, usa el código de `google.com/device` con el cliente de TV que ya está configurado (`MV_GOOGLE_TV_CLIENT`).
+Con eso, en la TV: **Fondos → Conectar Google Fotos** pide el permiso con la cuenta de Google de la TV.
+Google no permite este permiso con el código de `google.com/device`, por eso el camino sin configuración es "Subir desde el celular".
 
 Google ya no deja que las apps lean toda la biblioteca: siempre eliges qué fotos usar. Para agregar más, vuelve a
 tocar **Elegir de Google Fotos**. Las fotos quedan guardadas en la TV a tamaño 1080p.
