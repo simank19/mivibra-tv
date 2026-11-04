@@ -109,21 +109,34 @@ object Storage {
         return ins?.let { Net.ungzip(it).use { s -> s.readBytes().toString(Charsets.UTF_8) } } ?: ""
     }
 
-    /** BIOS conocidas que algunos núcleos necesitan (PlayStation, Lynx, Sega CD…). */
+    /** BIOS conocidas que algunos núcleos necesitan (PlayStation, Lynx, Sega CD, Dreamcast…). */
     val BIOS_NAMES = setOf(
         "scph5500.bin", "scph5501.bin", "scph5502.bin", "scph1001.bin", "scph7001.bin", "scph101.bin", "psxonpsp660.bin",
         "lynxboot.img", "bios_cd_u.bin", "bios_cd_e.bin", "bios_cd_j.bin", "bios7.bin", "bios9.bin", "firmware.bin",
-        "neogeo.zip", "syscard3.pce", "7800 bios (u).rom",
+        "neogeo.zip", "syscard3.pce", "7800 bios (u).rom", "gba_bios.bin", "gb_bios.bin", "gbc_bios.bin",
+        "dc_boot.bin", "dc_flash.bin", "sega_101.bin", "mpr-17933.bin", "saturn_bios.bin",
     )
+    /** Estas van en una subcarpeta del directorio de sistema (como las espera el núcleo). */
+    private val BIOS_SUBDIR = mapOf("dc_boot.bin" to "dc", "dc_flash.bin" to "dc")
+
+    /** Carpeta de BIOS de RetroArch en la memoria compartida (la predeterminada de RetroArch para Android). */
+    fun retroArchSystem(): File = File(android.os.Environment.getExternalStorageDirectory(), "RetroArch/system")
 
     fun importBios(ctx: Context, roots: List<String>): JSONArray {
         val sys = File(ctx.filesDir, "system").apply { mkdirs() }
+        // También para RetroArch, si MiVibra puede escribir en la memoria compartida
+        val ra = try { retroArchSystem().apply { mkdirs() }.takeIf { it.canWrite() } } catch (_: Exception) { null }
         val copied = JSONArray()
         for (root in roots) {
             if (root.startsWith("content://")) continue
-            File(root).walkTopDown().maxDepth(5).onEnter { !it.name.startsWith(".") && it.name != "Android" }.forEach { f ->
-                if (f.isFile && f.name.lowercase() in BIOS_NAMES) {
-                    f.copyTo(File(sys, f.name), overwrite = true)
+            File(root).walkTopDown().maxDepth(5).onEnter { !it.name.startsWith(".") && it.name != "Android" && it.absolutePath != ra?.absolutePath }.forEach { f ->
+                val low = f.name.lowercase()
+                if (f.isFile && low in BIOS_NAMES) {
+                    val sub = BIOS_SUBDIR[low]
+                    for (base in listOfNotNull(sys, ra)) {
+                        val dir = if (sub != null) File(base, sub).apply { mkdirs() } else base
+                        try { f.copyTo(File(dir, f.name), overwrite = true) } catch (_: Exception) {}
+                    }
                     copied.put(f.name)
                 }
             }

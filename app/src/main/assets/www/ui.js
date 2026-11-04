@@ -1511,7 +1511,7 @@
   var sysSel = 'all', gameGenre = '';
   function romGenres(r) { var s = romSystem(r); var g = D.classifyGenres(r.name, D.GAME_GENRES); if (s && s.port && g.indexOf('disparos') < 0 && /doom|quake|wolf/.test(s.id)) g.push('disparos'); if (s && s.id === 'cave' && g.indexOf('aventura') < 0) g.push('aventura'); return g; }
   /** ¿Es de verdad un juego? Descarta APK, documentos (README.md), listas .m3u y .zip/.iso que no son de juegos. */
-  var ROM_DIR = /\/(roms?|juegos|games|emuladore?s?|emulators?|emulation|retro\w*|arcade|mame|fbneo|fba|neogeo|cps\d?|snes|nes|sfc|genesis|megadrive|mega drive|gba|gbc|gb|n64|nds|psx|ps1|playstation|sega|nintendo|atari|pce|ports?|doom|quake)\//i;
+  var ROM_DIR = /\/(roms?|juegos|games|emuladore?s?|emulators?|emulation|retro\w*|arcade|mame|fbneo|fba|neogeo|cps\d?|snes|nes|sfc|genesis|megadrive|mega drive|gba|gbc|gb|n64|nds|psx|ps1|playstation|psp|gamecube|gcn|ngc|dreamcast|dc|sega|nintendo|atari|pce|ports?|doom|quake)\//i;
   function isGame(r) {
     var name = String(r.name || ''), low = name.toLowerCase(), path = String(r.path || '').toLowerCase(), size = +r.size || 0, ext = r.ext;
     if (/\.apk|\.xapk|\.apks/i.test(low) || /\/android\/(data|obb)\//.test(path)) return false;
@@ -1519,7 +1519,7 @@
     var mine = path.indexOf('/co.mivibra.tv/') >= 0 || ROM_DIR.test(path + '/');
     if (ext === 'zip') return mine;                                 // .zip solo en carpetas de juegos (roms, arcade…)
     if (ext === 'm3u') return /psx|ps1|playstation/.test(path);      // .m3u también son listas de TV
-    if (ext === 'iso') return size > 30e6 && (mine || /psx|ps1|playstation/.test(path));
+    if (ext === 'iso') return size > 30e6 && (mine || /psx|ps1|playstation|psp|gamecube|dreamcast/.test(path));
     if (ext === 'exe' || ext === 'pak') return true;                 // ya filtrados por nombre (Doukutsu.exe, pak0.pak)
     if (['md', 'gen', 'smd', '32x'].indexOf(ext) >= 0 && size && size < 65536) return false; // un .md de 5 KB es un documento
     if (size && size < 1024) return false;
@@ -1530,6 +1530,11 @@
     var ov = P.romSystem[r.path]; if (ov) return D.SYSTEMS.find(function (s) { return s.id === ov; });
     var name = (r.name || '').toLowerCase(), path = (r.path || '').toLowerCase();
     if (r.ext === 'zip') return /arcade|mame|fbneo|fba|neogeo|cps/.test(path) ? D.SYSTEMS.find(function (s) { return s.id === 'arcade'; }) : null;
+    // Discos de PSP, GameCube y Dreamcast: se reconocen por la carpeta (psp/, gamecube/, dreamcast/)
+    if (['iso', 'chd', 'cue', 'cso', 'rvz', 'gcm', 'gdi', 'cdi'].indexOf(r.ext) >= 0) {
+      var byPath = D.SYSTEMS.find(function (s) { return s.path && s.path.test(path); });
+      if (byPath) return byPath;
+    }
     return D.SYSTEMS.find(function (s) { return s.exts.indexOf(r.ext) >= 0 && (!s.match || s.match.test(name)); }) || null;
   }
   function romCard(r, i) {
@@ -1546,7 +1551,7 @@
     var recent = (MV.load('recentGames', []) || []).filter(function (r) { return roms.some(function (x) { return x.path === r.path; }); });
     var access = A ? A.hasStorageAccess() : true;
     var pads = A ? JSON.parse(A.gamepads()) : [];
-    return top('Juegos', '<button class="pill f" data-act="remoteQR">' + IC.phone.replace('<svg', '<svg width="18" height="18"') + 'Celular como mando</button>') +
+    return top('Juegos', '<button class="pill f" data-act="consoleOpen">' + IC.games.replace('<svg', '<svg width="18" height="18"') + 'Modo consola</button><button class="pill f" data-act="remoteQR">' + IC.phone.replace('<svg', '<svg width="18" height="18"') + 'Celular como mando</button>') +
       (!access ? '<div class="banner glass"><div class="t"><b>Permite el acceso a la memoria, USB y discos duros</b><br><span class="muted">Así MiVibra TV encuentra tus ROMs en cualquier unidad conectada.</span></div><button class="btn f" data-act="storageAccess">Permitir acceso</button></div>' : '') +
       '<div class="btns" style="margin-bottom:16px"><button class="btn f" data-act="scanRoms">' + IC.refresh + 'Buscar juegos</button><button class="btn ghost f" data-act="romRoots">' + IC.usb + 'Carpetas y unidades</button><button class="btn ghost f" data-act="romDownload">' + IC.download + 'Descargar desde enlace</button><button class="btn ghost f" data-act="importBios">Importar BIOS</button></div>' +
       '<p class="muted" style="margin:-6px 0 14px">' + (pads.length ? 'Mandos conectados: ' + pads.map(function (p) { return esc(p.name); }).join(', ') : 'Sin mandos físicos conectados. Usa un mando Bluetooth/USB o tu celular.') + '</p>' +
@@ -1563,6 +1568,9 @@
         (shown.length > (limits.games || 120) ? '<button class="btn ghost more f" data-act="more" data-arg="games">Ver más</button>' : '')
         : '<div class="empty glass"><h2>' + (roms.length ? 'No hay juegos de este sistema' : 'Aún no hay juegos') + '</h2><p class="muted">Conecta una USB o disco duro con tus ROMs (o cópialas a la memoria) y toca “Buscar juegos”. Los emuladores se descargan solos la primera vez que juegas cada sistema.</p></div>');
   };
+
+  // Juegos abre el modo consola (salvo que se haya elegido la vista clásica)
+  VIEWS.games.after = function () { if (!MV.load('gamesClassic', false) && MV.console && !MV.console.isOpen()) MV.console.open(); };
 
   // ---------- Ajustes ----------
   var setTab = 'lists';
@@ -1912,14 +1920,27 @@
   };
 
   // ---------- Juegos: abrir ROM ----------
+  /** Motor de cada consola: 'interno' (emulador de MiVibra) o 'retroarch' (app RetroArch). */
+  function gameEngine(s) { var e = (P.gameEngine || {})[s.id]; return s.ra ? 'retroarch' : (e || 'interno'); }
+  MV.gameEngine = gameEngine;
+  MV.setGameEngine = function (sysId, eng) { P.gameEngine = P.gameEngine || {}; P.gameEngine[sysId] = eng; MV.savePrefs(); };
+  function rememberGame(r) { var rec = (MV.load('recentGames', []) || []).filter(function (x) { return x.path !== r.path; }); rec.unshift(r); MV.save('recentGames', rec.slice(0, 30)); }
+  function playRetroArch(r, s) {
+    var info = {}; try { info = JSON.parse(A.retroArch()); } catch (e) {}
+    if (!info.installed) {
+      MV.confirm('Falta RetroArch', (s.ra ? s.name + ' se juega con RetroArch. ' : '') + 'Instálalo gratis desde Play Store y descarga el núcleo “' + (s.raCore || s.core) + '” en RetroArch → Actualizador en línea → Descargar núcleos.', 'Abrir Play Store')
+        .then(function (y) { if (y) A.openExternal('market://details?id=com.retroarch.aarch64'); });
+      return;
+    }
+    MV.call('playRetroArch', [JSON.stringify({ rom: r.path, core: s.raCore || s.core })]).then(function () { rememberGame(r); })
+      .catch(function (e) { MV.toast(e.message, 5000); });
+  }
   function playRom(r) {
     var s = romSystem(r);
     if (!s) { chooseSystem(r); return; }
+    if (A && gameEngine(s) === 'retroarch') { playRetroArch(r, s); return; }
     var start = function () {
-      MV.call('playGame', [JSON.stringify({ rom: r.path, core: s.core, title: r.name, shader: P.shader })]).then(function () {
-        var rec = (MV.load('recentGames', []) || []).filter(function (x) { return x.path !== r.path; });
-        rec.unshift(r); MV.save('recentGames', rec.slice(0, 30));
-      }).catch(function (e) { MV.toast(e.message, 4000); });
+      MV.call('playGame', [JSON.stringify({ rom: r.path, core: s.core, title: r.name, shader: P.shader })]).then(function () { rememberGame(r); }).catch(function (e) { MV.toast(e.message, 4000); });
     };
     if (!A) { MV.toast('Los juegos funcionan en la app instalada'); return; }
     if (A.coreInstalled(s.core)) { start(); return; }
@@ -1929,6 +1950,7 @@
       if (b && pct >= 0) b.style.width = pct + '%'; if (t) t.textContent = pct >= 0 ? pct + '%' : 'Descargando…';
     }).then(function () { MV.closeModal(true); start(); }).catch(function (e) { MV.closeModal(true); MV.toast(e.message, 5000); });
   }
+  MV.playRom = playRom; MV.romSystem = romSystem; MV.chooseSystem = function (r) { chooseSystem(r); };
   function chooseSystem(r) {
     MV._romPending = r;
     MV.modal('<h2>¿De qué sistema es “' + esc(r.name) + '”?</h2><p class="muted">Los .zip pueden ser de varios sistemas. Lo recordaremos para la próxima vez.</p><div class="sys">' +
@@ -2613,6 +2635,8 @@
     },
     remoteQR: function () { MV.modal('<h2>Celular como mando</h2><p>Mismo Wi-Fi, escanea el código y elige “Mando de juego”. Cada celular es un jugador; el joystick sirve para N64, PlayStation y los ports.</p><div id="qrBox2" style="display:flex;gap:20px;align-items:center;flex-wrap:wrap"></div>', { onOpen: function () { showQR(document.getElementById('qrBox2')); } }); }
   };
+  ACT.consoleOpen = function () { MV.save('gamesClassic', false); if (MV.console) MV.console.open(); };
+  MV.ACT = ACT;   // el frontend de juegos (console.js) usa las mismas acciones
   var pendingName = null;
   function keepName() { var i = document.getElementById('profName'); if (i) pendingName = i.value; }
   VIEWS.profileEdit.after = function () {

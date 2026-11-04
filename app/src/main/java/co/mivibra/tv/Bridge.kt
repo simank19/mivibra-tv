@@ -435,6 +435,27 @@ class Bridge(private val a: MainActivity) {
     @JavascriptInterface
     fun coreInstalled(core: String): Boolean = Cores.installed(a, core)
 
+    /** {installed, pkg, bios} de la app RetroArch. */
+    @JavascriptInterface
+    fun retroArch(): String = RetroArch.info(a)
+
+    /** Abre la ROM en RetroArch con su núcleo: {rom, core} */
+    @JavascriptInterface
+    fun playRetroArch(id: String, json: String) {
+        io.execute {
+            try {
+                val o = JSONObject(json)
+                val rom = Storage.toLocalFile(a, o.getString("rom"))
+                a.runOnUiThread {
+                    try { RetroArch.launch(a, rom.absolutePath, o.getString("core")); reply(id, true, rom.absolutePath) }
+                    catch (e: Exception) { reply(id, false, e.message ?: "No se pudo abrir RetroArch") }
+                }
+            } catch (e: Exception) {
+                reply(id, false, e.message ?: "No se pudo abrir RetroArch")
+            }
+        }
+    }
+
     @JavascriptInterface
     fun downloadCore(id: String, core: String, source: String?) {
         io.execute {

@@ -74,6 +74,10 @@
         <package android:name="com.viki.android" />
         <package android:name="com.viki.androidtv" />
         <package android:name="com.viki.android.tv" />
+        <!-- Juegos: abrir en RetroArch si está instalado -->
+        <package android:name="com.retroarch" />
+        <package android:name="com.retroarch.aarch64" />
+        <package android:name="com.retroarch.ra32" />
     </queries>
 
     <application
