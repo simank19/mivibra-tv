@@ -147,10 +147,10 @@
     document.documentElement.classList.toggle('has-photos', photos.length > 0);
     $('#photos-sub').textContent = photos.length
       ? photos.length + (photos.length === 1 ? ' foto' : ' fotos') + ' en la TV · se van turnando como fondo'
-      : 'Elige fotos de tu Google Fotos desde el celular y se van turnando como fondo';
+      : 'Sube fotos desde tu celular (galería o Google Fotos) y se van turnando como fondo';
     $('#thumbs').innerHTML = photos.length ? photos.map(function (p) {
       return '<button class="f tile photo" data-photo="' + esc(p) + '"><i class="bn" style="background-image:url(\'' + esc(p) + '\')"></i></button>';
-    }).join('') : '<div class="empty">Todavía no hay fotos. Usa “Elegir de Google Fotos”.</div>';
+    }).join('') : '<div class="empty">Todavía no hay fotos. Usa “Subir desde el celular”.</div>';
     order = shuffle(photos.slice()); wallIdx = -1;
     if (!photos.length) { $('#ph0').classList.remove('on'); $('#ph1').classList.remove('on'); }
     nextWall();
@@ -192,36 +192,34 @@
 
   function connectPhotos() {
     var flow = ++photoFlow;
-    modal('<h3>Google Fotos</h3><p>Pidiendo permiso a tu cuenta de Google…</p><div class="spin"></div>', true);
-    call('photosAuth').catch(function (e) {
-      if (flow !== photoFlow) throw e;
-      if (!(CFG.tvClientId && CFG.tvClientSecret)) throw e;
-      return byCode(flow);
-    }).then(function (token) {
+    modal('<h3>Google Fotos</h3><p>Pidiendo permiso a la cuenta de Google de la TV…</p><div class="spin"></div>', true);
+    call('photosAuth').then(function (token) {
       if (flow !== photoFlow) return;
       return pick(flow, token);
     }).catch(function (e) {
       if (flow !== photoFlow || /cancel/i.test(e.message)) return;
-      modal('<h3>No se pudo conectar</h3><p>' + esc(e.message) + '</p><p>Revisa que la TV tenga una cuenta de Google y que Google Fotos esté activado para MiVibra (docs/LAUNCHER.md).</p><div class="acts"><button class="f opt primary" data-act="gphotos">Intentar de nuevo</button><button class="f opt" data-act="close">Cerrar</button></div>');
+      modal('<h3>Google Fotos aún no está activado</h3><p>Falta activar Google Fotos para MiVibra en Google Cloud (guía en docs/LAUNCHER.md).</p><p style="font-size:.95rem;opacity:.7">' + esc(e.message) + '</p><p>Mientras tanto puedes subir tus fotos desde el celular: ahí también puedes elegirlas de Google Fotos.</p><div class="acts"><button class="f opt primary" data-act="upload">📱 Subir desde el celular</button><button class="f opt" data-act="close">Cerrar</button></div>');
     });
   }
 
-  // Respaldo: aprobar con un código en google.com/device
-  function byCode(flow) {
-    return call('photosDeviceCode', CFG.tvClientId).then(function (d) {
-      var url = d.verification_url || 'https://www.google.com/device';
-      modal('<h3>Conecta Google Fotos</h3><div class="qr-wrap"><div class="qr"><img src="' + qrImg(url) + '" alt=""></div><div><p>En tu celular abre <b>' + esc(url.replace('https://', '')) + '</b> y escribe:</p><div class="code">' + esc(d.user_code) + '</div></div></div><div class="acts"><button class="f opt" data-act="close">Cancelar</button></div>');
-      var every = (d.interval || 5) * 1000, until = Date.now() + (d.expires_in || 1800) * 1000;
-      return new Promise(function (ok, fail) {
-        (function poll() {
-          if (flow !== photoFlow) return fail(new Error('cancelado'));
-          if (Date.now() > until) return fail(new Error('El código venció'));
-          call('photosDeviceToken', CFG.tvClientId, CFG.tvClientSecret, d.device_code).then(function (t) {
-            if (t) ok(t); else setTimeout(poll, every);
-          }).catch(fail);
-        })();
-      });
-    });
+  // Subir desde el celular: QR a un servidor en la TV, sin cuentas ni configuración
+  var uploading = false, upCount = 0, upT = null;
+  function startUpload() {
+    var r = {};
+    try { r = JSON.parse(LB.uploadStart()); } catch (e) { r = { error: e.message }; }
+    if (!r.url) return modal('<h3>No se pudo abrir la subida</h3><p>' + esc(r.error || '') + '</p><div class="acts"><button class="f opt" data-act="close">Cerrar</button></div>');
+    uploading = true; upCount = 0;
+    modal('<h3>Sube fotos desde tu celular</h3><div class="qr-wrap"><div class="qr"><img src="' + qrImg(r.url) + '" alt=""></div><div><p>Con el celular en el mismo Wi-Fi, escanea el código o abre:</p><div class="code" style="font-size:1.5rem;letter-spacing:0">' + esc(r.url.replace('http://', '').replace(/\/$/, '')) + '</div><p style="margin-top:1rem">Elige fotos de tu galería o de Google Fotos.</p></div></div><p id="upst">Esperando fotos…</p><div class="acts"><button class="f opt primary" data-act="close">Listo</button></div>');
+  }
+  L.onPhotoUploaded = function (n) {
+    upCount = n;
+    var st = $('#upst'); if (st) st.textContent = n + (n === 1 ? ' foto recibida' : ' fotos recibidas') + ' ✓';
+    clearTimeout(upT); upT = setTimeout(function () { var had = photos.length; loadPhotos(); if (!had) nextWall(); }, 1200);
+  };
+  function stopUpload() {
+    if (!uploading) return;
+    uploading = false; try { LB.uploadStop(); } catch (e) {}
+    if (upCount) { loadPhotos(); toast(upCount + (upCount === 1 ? ' foto lista' : ' fotos listas') + ' como fondo'); }
   }
 
   function pick(flow, token) {
@@ -257,7 +255,7 @@
     m.hidden = true; m.innerHTML = '';
     if (modalPrev && document.body.contains(modalPrev)) modalPrev.focus(); else focusDefault();
   }
-  function cancelFlows() { photoFlow++; try { LB.photosCancel(); } catch (e) {} }
+  function cancelFlows() { photoFlow++; try { LB.photosCancel(); } catch (e) {} stopUpload(); }
 
   function menuFor(el) {
     if (!el) return;
@@ -340,6 +338,7 @@
       case 'mivibra': blip(980); LB.openMiVibra(); break;
       case 'settings': LB.openSettings(''); break;
       case 'gphotos': connectPhotos(); break;
+      case 'upload': photoFlow++; startUpload(); break;
       case 'close': cancelFlows(); closeModal(); break;
       case 'interval': var steps = [15, 30, 60, 300, 900]; P.interval = steps[(steps.indexOf(P.interval) + 1) % steps.length]; save(); applyPrefs(); nextWall(); break;
       case 'blur': P.blur = !P.blur; save(); applyPrefs(); break;
@@ -456,7 +455,8 @@
       status: function () { return '{"net":"wifi"}'; }, toast: function () {},
       photos: function () { return '[]'; }, deletePhoto: function () {}, clearPhotos: function () {},
       photosAuth: function (id) { setTimeout(function () { L._r(id, false, '"Vista previa"'); }, 300); },
-      photosCancel: function () {}
+      photosCancel: function () {},
+      uploadStart: function () { return '{"url":"http://192.168.0.3:8766/"}'; }, uploadStop: function () {}
     };
   }
 })();

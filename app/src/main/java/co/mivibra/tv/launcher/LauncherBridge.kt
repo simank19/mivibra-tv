@@ -21,7 +21,9 @@ class LauncherBridge(private val a: LauncherActivity) {
     private val pool = Executors.newCachedThreadPool()
     @Volatile private var photosCancel = false
 
-    fun close() { photosCancel = true; pool.shutdownNow() }
+    private var upload: PhotoUploadServer? = null
+
+    fun close() { photosCancel = true; uploadStop(); pool.shutdownNow() }
 
     /** Responde a una llamada de JS: L._r(id, ok, datoJSON) */
     private fun reply(id: String, ok: Boolean, json: String) {
@@ -169,4 +171,28 @@ class LauncherBridge(private val a: LauncherActivity) {
 
     @JavascriptInterface
     fun photosCancel() { photosCancel = true }
+
+    // ---------------- Subir fondos desde el celular (sin cuentas) ----------------
+
+    /** Prende el servidor de subida y devuelve {url} para el QR, o {error}. */
+    @JavascriptInterface
+    fun uploadStart(): String {
+        val ip = co.mivibra.tv.RemoteServer.localIp(a) ?: return JSONObject().put("error", "La TV no está conectada a una red").toString()
+        return try {
+            if (upload == null) {
+                upload = PhotoUploadServer(a) { n -> a.js("window.L&&L.onPhotoUploaded&&L.onPhotoUploaded($n)") }
+                    .also { it.start(fi.iki.elonen.NanoHTTPD.SOCKET_READ_TIMEOUT, false) }
+            }
+            JSONObject().put("url", "http://$ip:${PhotoUploadServer.PORT}/").toString()
+        } catch (e: Exception) {
+            upload = null
+            JSONObject().put("error", e.message ?: "No se pudo abrir la subida").toString()
+        }
+    }
+
+    @JavascriptInterface
+    fun uploadStop() {
+        try { upload?.stop() } catch (_: Exception) {}
+        upload = null
+    }
 }
