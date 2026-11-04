@@ -538,8 +538,27 @@
     var curRow = cur.closest('.row');
     if (curRow && (dir === 'left' || dir === 'right')) all = all.filter(function (el) { return el.closest('.row') === curRow; });
     var r = cur.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    // Arriba/abajo entre filas: siempre a la fila de al lado (aunque esté fuera de la pantalla), nunca saltarla
+    if (curRow && (dir === 'up' || dir === 'down') && $('#modal').hidden) {
+      var view = curRow.closest('.view');
+      var rows = $$('.row', view).filter(function (rw) { return $$('.f', rw).some(visible); });
+      var ri = rows.indexOf(curRow) + (dir === 'down' ? 1 : -1);
+      if (ri < 0) { var t = $('.tab.cur') || $('.tab'); if (t) { t.focus(); blip(); } return; }
+      var target = rows[ri]; if (!target) return;
+      var pick = null, pd = 1e9;
+      $$('.f', target).filter(visible).forEach(function (el) {
+        var q = el.getBoundingClientRect(), d = Math.abs(q.left + q.width / 2 - cx);
+        if (d < pd) { pd = d; pick = el; }
+      });
+      if (pick) { pick.focus(); scrollTo(pick); blip(); }
+      return;
+    }
     var best = null, bestS = 1e9;
-    all.forEach(function (el) {
+    // Primero el contenido; la barra de arriba solo si no hay nada más en esa dirección
+    var noTabs = all.filter(function (el) { return !el.classList.contains('tab'); });
+    var pool = cur.classList.contains('tab') ? all : noTabs;
+    function scan(list) {
+    list.forEach(function (el) {
       if (el === cur) return;
       var q = el.getBoundingClientRect(), x = q.left + q.width / 2, y = q.top + q.height / 2, dx = x - cx, dy = y - cy, p, s;
       if (dir === 'right') { if (q.left < r.right - r.width * 0.3 || dx <= 1) return; p = dx; s = Math.abs(dy); }
@@ -550,6 +569,9 @@
       var sc2 = (dir === 'left' || dir === 'right') ? p + s * 4 : p + s * 0.6;
       if (sc2 < bestS) { bestS = sc2; best = el; }
     });
+    }
+    scan(pool);
+    if (!best && pool !== all) scan(all);
     // Subir a la barra: ir a la pestaña actual
     if (best && best.classList.contains('tab') && !cur.classList.contains('tab')) best = $('.tab.cur') || best;
     if (best) { best.focus(); scrollTo(best); blip(); }
