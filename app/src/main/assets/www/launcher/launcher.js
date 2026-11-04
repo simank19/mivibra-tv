@@ -159,18 +159,48 @@
   // ---------------- Contenido sugerido: YouTube ----------------
   // Usa la clave de YouTube que ya tiene MiVibra TV (la pone el superadministrador). Tendencias en Colombia.
   function ytKey() { try { return (JSON.parse(localStorage.getItem('mv:prefs') || '{}') || {}).ytKey || ''; } catch (e) { return ''; } }
-  function renderYouTube(items) {
-    var show = P.yt && items && items.length;
-    $('#yt-h').hidden = !show;
-    $('#yt').innerHTML = show ? items.map(function (v) {
-      return '<button class="f tile vid" data-yt="' + esc(v.id) + '"><i class="bn" style="' + bg(v.thumb) + '"></i><span class="yt">YouTube</span>' +
-        '<span class="lb"><span class="tt">' + esc(v.title) + '</span><span class="ch">' + esc(v.channel) + '</span></span></button>';
-    }).join('') : '';
+  function ytAcct() { try { return JSON.parse(LB.ytConnected()); } catch (e) { return { on: false }; } }
+  function canConnectYT() { return !!(CFG.tvClientId && CFG.tvClientSecret && LB.ytCode); }
+  function vidCard(v) {
+    return '<button class="f tile vid" data-yt="' + esc(v.id) + '"><i class="bn" style="' + bg(v.thumb) + '"></i><span class="yt">YouTube</span>' +
+      '<span class="lb"><span class="tt">' + esc(v.title) + '</span><span class="ch">' + esc(v.channel) + '</span></span></button>';
   }
-  function loadYouTube() {
-    if (!P.yt) return renderYouTube([]);
-    var c = null; try { c = JSON.parse(localStorage.getItem('mvl.yt') || 'null'); } catch (e) {}
-    if (c && c.items) renderYouTube(c.items);
+  function ytRow(row, title, items, cta) {
+    var has = P.yt && items && items.length;
+    $('#' + row + '-h').hidden = !has; $('#' + row + '-h').textContent = title || '';
+    $('#' + row).innerHTML = has ? items.map(vidCard).join('') + (cta || '') : '';
+  }
+  var CTA = '<button class="f tile cta" data-act="ytconnect"><span class="yt">YouTube</span><b>Conectar mi YouTube</b><span>Tus suscripciones y tus me gusta aquí</span></button>';
+  function renderTrends(items) { ytRow('yt', 'Tendencias en YouTube', items, canConnectYT() ? CTA : ''); ytRow('ytl', '', []); }
+  function renderMine(d) {
+    var who = d.name ? ' · ' + d.name : '';
+    ytRow('yt', 'Nuevo de tus suscripciones' + who, d.subs || []);
+    ytRow('ytl', 'Tus me gusta en YouTube', d.likes || []);
+  }
+  function getJSON(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
+  function setJSON(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+
+  var ytBusy = false;
+  function loadYouTube(force) {
+    applyPrefs();
+    if (!P.yt) { ytRow('yt', '', []); ytRow('ytl', '', []); return; }
+    var acct = ytAcct();
+    if (acct.on && canConnectYT()) {
+      var m = getJSON('mvl.ytme');
+      if (m && (m.subs || []).length) renderMine(m);
+      if (!force && m && m.ts > Date.now() - 60 * 60e3) return;
+      if (ytBusy) return; ytBusy = true;
+      call('ytFeed', CFG.tvClientId, CFG.tvClientSecret).then(function (d) {
+        ytBusy = false; d.ts = Date.now(); setJSON('mvl.ytme', d);
+        if ((d.subs || []).length || (d.likes || []).length) renderMine(d); else trends();
+      }).catch(function () { ytBusy = false; if (!ytAcct().on) { localStorage.removeItem('mvl.ytme'); trends(); } else if (!m) trends(); });
+      return;
+    }
+    trends();
+  }
+  function trends() {
+    var c = getJSON('mvl.yt');
+    if (c && c.items) renderTrends(c.items);
     if (c && c.ts > Date.now() - 60 * 60e3) return;
     var key = ytKey(); if (!key) return;
     fetch('https://www.googleapis.com/youtube/v3/videos?part=snippet&chart=mostPopular&regionCode=CO&hl=es&maxResults=20&key=' + encodeURIComponent(key))
@@ -181,9 +211,40 @@
           var sn = v.snippet || {}, t = sn.thumbnails || {};
           return { id: v.id, title: sn.title || '', channel: sn.channelTitle || '', thumb: (t.maxres || t.high || t.medium || t.default || {}).url || '' };
         });
-        try { localStorage.setItem('mvl.yt', JSON.stringify({ ts: Date.now(), items: items })); } catch (e) {}
-        renderYouTube(items);
+        setJSON('mvl.yt', { ts: Date.now(), items: items });
+        if (!ytAcct().on) renderTrends(items);
       }).catch(function () {});
+  }
+
+  // Conectar con código en google.com/device (permiso de solo lectura)
+  var ytFlow = 0;
+  function connectYT() {
+    if (!canConnectYT()) return toast('Falta configurar el inicio de sesión de MiVibra TV');
+    var flow = ++ytFlow;
+    modal('<h3>Conectar mi YouTube</h3><p>Pidiendo el código a Google…</p><div class="spin"></div>', true);
+    call('ytCode', CFG.tvClientId).then(function (d) {
+      if (flow !== ytFlow) return;
+      var url = d.verification_url || 'https://www.google.com/device';
+      modal('<h3>Conectar mi YouTube</h3><div class="qr-wrap"><div class="qr"><img src="' + qrImg(url) + '" alt=""></div><div><p>En tu celular abre <b>' + esc(url.replace('https://', '')) + '</b>, entra con tu cuenta de YouTube y escribe:</p><div class="code">' + esc(d.user_code) + '</div><p style="margin-top:1rem;font-size:.95rem">Solo lectura: MiVibra no puede publicar, comentar ni borrar nada.</p></div></div><div class="acts"><button class="f opt" data-act="close">Cancelar</button></div>');
+      var every = Math.max(5, d.interval || 5) * 1000, until = Date.now() + (d.expires_in || 1800) * 1000;
+      (function poll() {
+        if (flow !== ytFlow) return;
+        if (Date.now() > until) return modal('<h3>El código venció</h3><div class="acts"><button class="f opt primary" data-act="ytconnect">Pedir otro</button><button class="f opt" data-act="close">Cerrar</button></div>');
+        call('ytPoll', CFG.tvClientId, CFG.tvClientSecret, d.device_code).then(function (ok) {
+          if (flow !== ytFlow) return;
+          if (ok !== true && ok !== 'true') return setTimeout(poll, every);
+          closeModal(); localStorage.removeItem('mvl.ytme');
+          var a = ytAcct(); toast('YouTube conectado' + (a.name ? ': ' + a.name : ''));
+          applyPrefs(); loadYouTube(true);
+        }).catch(function (e) {
+          if (flow !== ytFlow) return;
+          modal('<h3>No se pudo conectar</h3><p>' + esc(e.message) + '</p><div class="acts"><button class="f opt primary" data-act="ytconnect">Intentar de nuevo</button><button class="f opt" data-act="close">Cerrar</button></div>');
+        });
+      })();
+    }).catch(function (e) {
+      if (flow !== ytFlow) return;
+      modal('<h3>No se pudo conectar</h3><p>' + esc(e.message) + '</p><p>Revisa que en Google Cloud esté el permiso youtube.readonly (docs/LAUNCHER.md).</p><div class="acts"><button class="f opt" data-act="close">Cerrar</button></div>');
+    });
   }
 
   // ---------------- Fondos ----------------
@@ -229,6 +290,7 @@
     $('#o-motion').textContent = P.motion ? 'Sí' : 'No';
     $('#o-sound').textContent = P.sound ? 'Sí' : 'No';
     $('#o-yt').textContent = P.yt ? 'Sí' : 'No';
+    var ya = ytAcct(); $('#o-ytacct').textContent = ya.on ? (ya.name || 'Conectado') : 'Conectar';
   }
 
   // ---------------- Google Fotos ----------------
@@ -302,7 +364,7 @@
     m.hidden = true; m.innerHTML = '';
     if (modalPrev && document.body.contains(modalPrev)) modalPrev.focus(); else focusDefault();
   }
-  function cancelFlows() { photoFlow++; try { LB.photosCancel(); } catch (e) {} stopUpload(); }
+  function cancelFlows() { ytFlow++; photoFlow++; try { LB.photosCancel(); } catch (e) {} stopUpload(); }
 
   function menuFor(el) {
     if (!el) return;
@@ -394,6 +456,12 @@
       case 'motion': P.motion = !P.motion; save(); applyPrefs(); break;
       case 'sound': P.sound = !P.sound; save(); applyPrefs(); blip(); break;
       case 'yt': P.yt = !P.yt; save(); applyPrefs(); loadYouTube(); break;
+      case 'ytconnect': connectYT(); break;
+      case 'ytacct':
+        if (!ytAcct().on) return connectYT();
+        modal('<h3>Tu YouTube está conectado</h3><p>' + esc(ytAcct().name || '') + '</p><div class="acts"><button class="f opt" data-act="close">Cerrar</button><button class="f opt danger" data-act="ytout">Desconectar</button></div>');
+        break;
+      case 'ytout': LB.ytSignOut(); localStorage.removeItem('mvl.ytme'); closeModal(); applyPrefs(); loadYouTube(); toast('YouTube desconectado'); break;
       case 'clearphotos':
         if (!photos.length) return toast('No hay fotos');
         modal('<h3>¿Borrar todas las fotos?</h3><p>Se borran de la TV, no de tu Google Fotos.</p><div class="acts"><button class="f opt" data-act="close">No</button><button class="f opt danger" data-act="clearyes">Sí, borrar</button></div>');
@@ -429,6 +497,9 @@
     var cur = document.activeElement, sc = scope();
     var all = $$('.f', sc).filter(visible);
     if (!cur || !sc.contains(cur) || !cur.classList.contains('f')) { if (all[0]) { all[0].focus(); } return; }
+    // En una fila, izquierda/derecha no se salen de la fila
+    var curRow = cur.closest('.row');
+    if (curRow && (dir === 'left' || dir === 'right')) all = all.filter(function (el) { return el.closest('.row') === curRow; });
     var r = cur.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
     var best = null, bestS = 1e9;
     all.forEach(function (el) {
@@ -516,6 +587,8 @@
       photosCancel: function () {},
       mivibraRecs: function () { var a = []; for (var i = 0; i < 10; i++) a.push({ key: 'k' + i, title: 'Película de ejemplo ' + i, poster: '', play: i < 3 ? 'k' + i : '', pct: i < 3 ? 30 + i * 20 : 0 }); return JSON.stringify(a); },
       openMiVibraItem: function () {}, openYouTube: function () { return true; },
+      ytConnected: function () { return '{"on":false}'; }, ytCode: function (id) { setTimeout(function () { L._r(id, true, { user_code: 'ABCD-EFGH', device_code: 'x', verification_url: 'https://www.google.com/device' }); }, 200); },
+      ytPoll: function (id) { setTimeout(function () { L._r(id, true, false); }, 200); }, ytSignOut: function () {},
       uploadStart: function () { return '{"url":"http://192.168.0.3:8766/"}'; }, uploadStop: function () {}
     };
   }

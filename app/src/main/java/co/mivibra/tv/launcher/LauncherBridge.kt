@@ -75,6 +75,24 @@ class LauncherBridge(private val a: LauncherActivity) {
         } catch (_: Exception) { openMiVibra() }
     }
 
+    // ---------------- Tu cuenta de YouTube ----------------
+
+    @JavascriptInterface
+    fun ytConnected(): String = JSONObject().put("on", YouTubeAccount.connected(a)).put("name", YouTubeAccount.name(a)).toString()
+
+    @JavascriptInterface
+    fun ytCode(id: String, clientId: String) = bg(id) { YouTubeAccount.deviceCode(clientId).toString() }
+
+    @JavascriptInterface
+    fun ytPoll(id: String, clientId: String, secret: String, deviceCode: String) =
+        bg(id) { YouTubeAccount.poll(a, clientId, secret, deviceCode).toString() }
+
+    @JavascriptInterface
+    fun ytFeed(id: String, clientId: String, secret: String) = bg(id) { YouTubeAccount.feed(a, clientId, secret).toString() }
+
+    @JavascriptInterface
+    fun ytSignOut() = YouTubeAccount.signOut(a)
+
     /** Abre un video en la app de YouTube de la TV (o la primera que haya). */
     @JavascriptInterface
     fun openYouTube(videoId: String): Boolean {

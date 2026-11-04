@@ -52,6 +52,20 @@ Google no permite este permiso con el código de `google.com/device`, por eso el
 Google ya no deja que las apps lean toda la biblioteca: siempre eliges qué fotos usar. Para agregar más, vuelve a
 tocar **Elegir de Google Fotos**. Las fotos quedan guardadas en la TV a tamaño 1080p.
 
+## Tu cuenta de YouTube (Nuevo de tus suscripciones y Tus me gusta)
+
+En el inicio, al final de "Tendencias en YouTube", está **Conectar mi YouTube** (también en Fondos → Mi YouTube).
+La TV muestra un código para `google.com/device`; se usa el cliente de TV que ya tiene MiVibra (`MV_GOOGLE_TV_CLIENT`)
+con el permiso de solo lectura `youtube.readonly`. El token queda guardado solo en esa TV.
+
+En Google Cloud, en el proyecto del cliente de TV:
+1. **Biblioteca:** activa **YouTube Data API v3** (si la clave de YouTube de MiVibra es de otro proyecto, actívala también aquí).
+2. **Pantalla de consentimiento → Permisos:** agrega `https://www.googleapis.com/auth/youtube.readonly`.
+   Si la app está en *Prueba*, agrega tu correo como usuario de prueba. Si no está verificada, Google muestra
+   "Google no verificó esta app": toca *Avanzado → Ir a MiVibra* para seguir.
+
+Google no deja leer las recomendaciones personales del inicio de YouTube; por eso se muestran tus suscripciones y tus me gusta.
+
 ## Archivos
 
 - `app/src/main/java/co/mivibra/tv/launcher/` — `LauncherActivity`, `LauncherBridge`, `Apps` (apps y entradas), `GooglePhotos` (Picker API), `HomeSetup`.

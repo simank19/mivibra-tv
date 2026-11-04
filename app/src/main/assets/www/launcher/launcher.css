@@ -149,3 +149,7 @@ html.lite *, html.lite *::before, html.lite *::after { animation: none !importan
 .video .tile .tt { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-weight: 600; }
 .video .tile .ch { display: block; font-size: .8rem; font-weight: 500; color: var(--muted); margin-top: .15rem; }
 .video .tile .yt { position: absolute; top: .55rem; left: .55rem; padding: .1rem .45rem; border-radius: .35rem; background: #FF0000; color: #fff; font-size: .7rem; font-weight: 800; }
+.video .tile.cta { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: .5rem; background: linear-gradient(135deg, #2a0d0d, #1A1715); text-align: center; padding: 1rem; }
+.video .tile.cta b { font-size: 1.25rem; }
+.video .tile.cta span { font-size: .9rem; color: var(--muted); }
+.video .tile.cta .yt { position: static; }
