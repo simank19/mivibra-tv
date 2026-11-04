@@ -132,6 +132,7 @@
   function renderInputs() {
     var list = [];
     try { list = JSON.parse(LB.inputs()); } catch (e) {}
+    list.sort(function (a, b) { return a.label.localeCompare(b.label, 'es', { numeric: true }); });
     $('#inputs-h').hidden = !list.length;
     $('#inputs').innerHTML = list.map(function (i) {
       var t = i.type === 'hdmi' ? 'HDMI' : i.type === 'av' ? 'AV' : i.type === 'pc' ? 'PC' : 'Entrada';
