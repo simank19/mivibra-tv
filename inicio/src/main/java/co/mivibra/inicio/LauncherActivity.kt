@@ -56,7 +56,7 @@ class LauncherActivity : ComponentActivity() {
             javaScriptEnabled = true
             domStorageEnabled = true
             mediaPlaybackRequiresUserGesture = false
-            mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
             allowFileAccess = false
             textZoom = 100
             useWideViewPort = true
@@ -84,6 +84,7 @@ class LauncherActivity : ComponentActivity() {
         setContentView(web)
         web.requestFocus()
         web.loadUrl("https://appassets.androidplatform.net/assets/www/launcher/index.html")
+        askTvPermission()
 
         val f = IntentFilter().apply {
             addAction(Intent.ACTION_PACKAGE_ADDED)
@@ -93,6 +94,18 @@ class LauncherActivity : ComponentActivity() {
             addDataScheme("package")
         }
         ContextCompat.registerReceiver(this, pkgReceiver, f, ContextCompat.RECEIVER_EXPORTED)
+    }
+
+    /** Permiso para leer "Continuar viendo" y las filas de sugerencias de las apps (como el inicio de Google). */
+    fun askTvPermission() {
+        if (!TvRows.supported() || TvRows.granted(this)) return
+        try { requestPermissions(arrayOf(TvRows.PERMISSION), 77) } catch (_: Exception) {}
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 77) js("window.L&&L.onTvRows&&L.onTvRows()")
     }
 
     /** Botón Inicio estando ya en el launcher: vuelve arriba. */

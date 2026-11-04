@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <!-- Ver todas las apps instaladas para mostrarlas en el inicio -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
+    <!-- Leer "Continuar viendo" y las filas de sugerencias que publican YouTube, Netflix y demás apps -->
+    <uses-permission android:name="com.android.providers.tv.permission.READ_EPG_DATA" />
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 

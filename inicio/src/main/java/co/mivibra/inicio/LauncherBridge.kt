@@ -90,6 +90,26 @@ class LauncherBridge(private val a: LauncherActivity) {
     @JavascriptInterface
     fun ytSignOut() = YouTubeAccount.signOut(a)
 
+    // ---------------- Filas oficiales de Android TV (Continuar viendo y sugerencias de YouTube) ----------------
+
+    /** {ok, watchNext:[...], youtube:[{name, items}]}; ok=false si falta el permiso. */
+    @JavascriptInterface
+    fun tvRows(id: String) = bg(id) {
+        val yt = setOf("com.google.android.youtube.tv", "com.google.android.youtube.googletv", "com.google.android.youtube")
+        JSONObject()
+            .put("supported", TvRows.supported())
+            .put("ok", TvRows.granted(a))
+            .put("watchNext", TvRows.watchNext(a))
+            .put("youtube", TvRows.channels(a, yt))
+            .toString()
+    }
+
+    @JavascriptInterface
+    fun tvOpen(uri: String): Boolean = TvRows.open(a, uri)
+
+    @JavascriptInterface
+    fun tvAsk() { a.runOnUiThread { a.askTvPermission() } }
+
     /** Abre un video en la app de YouTube de la TV (o la primera que haya). */
     @JavascriptInterface
     fun openYouTube(videoId: String): Boolean {

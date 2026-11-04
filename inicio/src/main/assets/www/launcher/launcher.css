@@ -153,3 +153,9 @@ html.lite *, html.lite *::before, html.lite *::after { animation: none !importan
 .video .tile.cta b { font-size: 1.25rem; }
 .video .tile.cta span { font-size: .9rem; color: var(--muted); }
 .video .tile.cta .yt { position: static; }
+.video .tile .app { position: absolute; top: .55rem; left: .55rem; padding: .1rem .45rem; border-radius: .35rem; background: rgba(13,12,11,.75); color: #fff; font-size: .7rem; font-weight: 800; }
+.video .tile.ask { display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: .4rem; padding: 1rem; background: linear-gradient(135deg, #2b1405, #1A1715); }
+.video .tile.ask b { font-size: 1.15rem; }
+.video .tile.ask span { font-size: .9rem; color: var(--muted); }
+.video .tile .prog { left: 0; right: 0; bottom: 0; height: .28rem; border-radius: 0; }
+.video .tile:has(.prog) .lb { padding-bottom: .9rem; }

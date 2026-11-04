@@ -183,7 +183,7 @@
   var ytBusy = false;
   function loadYouTube(force) {
     applyPrefs();
-    if (!P.yt) { ytRow('yt', '', []); ytRow('ytl', '', []); return; }
+    if (!P.yt || tvOfficial) { ytRow('yt', '', []); ytRow('ytl', '', []); return; }
     var acct = ytAcct();
     if (acct.on && canConnectYT()) {
       var m = getJSON('mvl.ytme');
@@ -246,6 +246,40 @@
       modal('<h3>No se pudo conectar</h3><p>' + esc(e.message) + '</p><p>Revisa que en Google Cloud esté el permiso youtube.readonly (docs/INICIO.md).</p><div class="acts"><button class="f opt" data-act="close">Cerrar</button></div>');
     });
   }
+
+  // ---------------- Filas oficiales de Android TV ----------------
+  // Lo mismo que muestra el inicio de Google: "Continuar viendo" de todas las apps y las filas de YouTube
+  // (Recomendado, Suscripciones…), publicadas por la app oficial de YouTube.
+  var tvOfficial = false;
+  function tvCard(v) {
+    var isYt = /youtube/.test(v.pkg || '');
+    return '<button class="f tile vid" data-tv="' + esc(v.intent) + '"><i class="bn" style="' + bg(v.img) + '"></i>' +
+      (isYt ? '<span class="yt">YouTube</span>' : (v.app ? '<span class="app">' + esc(v.app) + '</span>' : '')) +
+      (v.pct ? '<span class="prog"><i style="width:' + Math.max(3, +v.pct) + '%"></i></span>' : '') +
+      '<span class="lb"><span class="tt">' + esc(v.title) + '</span>' + (v.sub ? '<span class="ch">' + esc(v.sub) + '</span>' : '') + '</span></button>';
+  }
+  function renderTv(d) {
+    var wn = (d.watchNext || []).filter(function (v) { return v.pkg !== 'co.mivibra.tv'; }); // MiVibra ya tiene su fila
+    if (d.supported && !d.ok) {
+      $('#wn-h').hidden = false;
+      $('#wn').innerHTML = '<button class="f tile ask" data-act="tvask"><b>Ver Continuar viendo y lo de YouTube</b><span>Toca para permitir que el inicio lea las filas de tus apps</span></button>';
+    } else {
+      $('#wn-h').hidden = !wn.length;
+      $('#wn').innerHTML = wn.map(tvCard).join('');
+    }
+    var yt = P.yt ? (d.youtube || []) : [];
+    tvOfficial = yt.length > 0;
+    $('#ytch').innerHTML = yt.map(function (ch) {
+      return '<div class="row-h">YouTube · ' + esc(ch.name) + '</div><div class="row video">' + ch.items.map(tvCard).join('') + '</div>';
+    }).join('');
+    loadYouTube();
+  }
+  var tvT = 0;
+  function loadTv() {
+    if (!LB.tvRows) return;
+    call('tvRows').then(function (d) { setJSON('mvl.tv', d); renderTv(d); }).catch(function () {});
+  }
+  L.onTvRows = loadTv;
 
   // ---------------- Fondos ----------------
   var wallIdx = -1, wallLayer = 0, wallT = null, order = [];
@@ -366,6 +400,8 @@
   }
   function cancelFlows() { ytFlow++; photoFlow++; try { LB.photosCancel(); } catch (e) {} stopUpload(); }
 
+  // Acción del menú abierto (se llama con OK del control o con toque)
+  var menuAct = null;
   function menuFor(el) {
     if (!el) return;
     var pkg = el.getAttribute('data-pkg'), ph = el.getAttribute('data-photo');
@@ -376,9 +412,8 @@
         '<button class="f opt" data-m="pin">' + (pinned ? 'Quitar de Destacados' : 'Fijar en Destacados') + '</button>' +
         (pinned ? '<button class="f opt" data-m="move">Mover en Destacados</button>' : '') +
         '<button class="f opt" data-m="info">Información de la app</button></div>');
-      $('#modal').onclick = function (ev) {
-        var b = ev.target.closest('[data-m]'); if (!b) return;
-        var m = b.getAttribute('data-m'); closeModal();
+      menuAct = function (m) {
+        closeModal();
         if (m === 'open') openApp(pkg);
         else if (m === 'pin') { if (pinned) P.pins.splice(P.pins.indexOf(pkg), 1); else P.pins.push(pkg); save(); renderPins(); renderAll(); toast(pinned ? 'Quitada de Destacados' : 'Fijada en Destacados'); refocus(pkg); }
         else if (m === 'move') startMove(pkg);
@@ -386,9 +421,8 @@
       };
     } else if (ph) {
       modal('<h3>Foto</h3><div class="menu"><button class="f opt" data-m="use">Usar ahora de fondo</button><button class="f opt danger" data-m="del">Borrar de la TV</button></div>');
-      $('#modal').onclick = function (ev) {
-        var b = ev.target.closest('[data-m]'); if (!b) return;
-        var m = b.getAttribute('data-m'); closeModal();
+      menuAct = function (m) {
+        closeModal();
         if (m === 'use') { showWall(ph); toast('Fondo cambiado'); }
         else if (m === 'del') { LB.deletePhoto(ph); loadPhotos(); focusDefault(); }
       };
@@ -438,11 +472,13 @@
   function activate(el) {
     if (!el) return;
     if (moving) return endMove();
+    if (el.getAttribute('data-m')) { var fn = menuAct; menuAct = null; if (fn) fn(el.getAttribute('data-m')); return; }
     var v = el.getAttribute('data-view'), act = el.getAttribute('data-act');
     if (el.getAttribute('data-pkg')) return openApp(el.getAttribute('data-pkg'));
     if (el.getAttribute('data-input')) { blip(980); if (!LB.openInput(el.getAttribute('data-input'))) toast('No se pudo abrir la entrada'); return; }
     if (el.getAttribute('data-photo')) return menuFor(el);
     if (el.getAttribute('data-mv')) { blip(980); return LB.openMiVibraItem(el.getAttribute('data-mv'), el.getAttribute('data-play') === '1'); }
+    if (el.getAttribute('data-tv')) { blip(980); if (!LB.tvOpen(el.getAttribute('data-tv'))) toast('No se pudo abrir'); return; }
     if (el.getAttribute('data-yt')) { blip(980); if (!LB.openYouTube(el.getAttribute('data-yt'))) toast('No se pudo abrir YouTube'); return; }
     if (v) { show(v); return focusDefault(); }
     switch (act) {
@@ -455,8 +491,9 @@
       case 'blur': P.blur = !P.blur; save(); applyPrefs(); break;
       case 'motion': P.motion = !P.motion; save(); applyPrefs(); break;
       case 'sound': P.sound = !P.sound; save(); applyPrefs(); blip(); break;
-      case 'yt': P.yt = !P.yt; save(); applyPrefs(); loadYouTube(); break;
+      case 'yt': P.yt = !P.yt; save(); applyPrefs(); loadTv(); loadYouTube(); break;
       case 'ytconnect': connectYT(); break;
+      case 'tvask': LB.tvAsk(); break;
       case 'ytacct':
         if (!ytAcct().on) return connectYT();
         modal('<h3>Tu YouTube está conectado</h3><p>' + esc(ytAcct().name || '') + '</p><div class="acts"><button class="f opt" data-act="close">Cerrar</button><button class="f opt danger" data-act="ytout">Desconectar</button></div>');
@@ -561,17 +598,18 @@
     show('home'); var first = $('#pins .f'); $('#pins').scrollLeft = 0; $('#v-home').scrollTop = 0; if (first) first.focus();
   };
   L.onMenu = function () { if ($('#modal').hidden) menuFor(document.activeElement); };
-  L.onResume = function () { tick(); status(); renderInputs(); renderMiVibra(); loadYouTube(); if (!wallT && order.length > 1) nextWall(); if (!document.activeElement || document.activeElement === document.body) focusDefault(); };
+  L.onResume = function () { tick(); status(); renderInputs(); renderMiVibra(); loadTv(); if (!wallT && order.length > 1) nextWall(); if (!document.activeElement || document.activeElement === document.body) focusDefault(); };
   L.onPause = function () { clearTimeout(wallT); wallT = null; };
   L.onAppsChanged = function () { loadApps(); };
 
   // ---------------- Arranque ----------------
-  applyPrefs(); tick(); status(); weather(); renderInputs(); renderMiVibra(); loadYouTube(); loadPhotos(); renderPins();
+  applyPrefs(); tick(); status(); weather(); renderInputs(); renderMiVibra(); (function () { var t = getJSON('mvl.tv'); if (t) renderTv(t); else loadYouTube(); })(); loadTv(); loadPhotos(); renderPins();
   $('.tab[data-view="home"]').classList.add('cur');
   loadApps().then(function () { focusDefault(); });
   setInterval(tick, 15000);
   setInterval(weather, 30 * 60 * 1000);
   setInterval(status, 20000);
+  setInterval(loadTv, 5 * 60e3);
 
   // ---------------- Vista previa sin Android ----------------
   function mock() {
@@ -586,6 +624,8 @@
       photosAuth: function (id) { setTimeout(function () { L._r(id, false, '"Vista previa"'); }, 300); },
       photosCancel: function () {},
       ytKey: function () { return ''; },
+      tvRows: function (id) { var w = []; for (var i = 0; i < 4; i++) w.push({ title: 'Video que dejaste a medias ' + i, sub: 'Canal ' + i, img: '', intent: 'x', pkg: i % 2 ? 'com.netflix.ninja' : 'com.google.android.youtube.tv', app: i % 2 ? 'Netflix' : 'YouTube', pct: 20 + i * 15 }); var it = []; for (var j = 0; j < 6; j++) it.push({ title: 'Recomendado para ti ' + j, sub: 'Canal', img: '', intent: 'y', pkg: 'com.google.android.youtube.tv' }); setTimeout(function () { L._r(id, true, { supported: true, ok: true, watchNext: w, youtube: [{ name: 'Recomendado', items: it }] }); }, 100); },
+      tvOpen: function () { return true; }, tvAsk: function () {},
       mivibraRecs: function () { var a = []; for (var i = 0; i < 10; i++) a.push({ key: 'k' + i, title: 'Película de ejemplo ' + i, poster: '', play: i < 3 ? 'k' + i : '', pct: i < 3 ? 30 + i * 20 : 0 }); return JSON.stringify(a); },
       openMiVibraItem: function () {}, openYouTube: function () { return true; },
       ytConnected: function () { return '{"on":false}'; }, ytCode: function (id) { setTimeout(function () { L._r(id, true, { user_code: 'ABCD-EFGH', device_code: 'x', verification_url: 'https://www.google.com/device' }); }, 200); },
