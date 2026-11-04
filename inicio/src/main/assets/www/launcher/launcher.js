@@ -120,6 +120,7 @@
     var h = '<button class="f tile hero" data-act="mivibra"><img src="../img/isotipo.svg" alt=""><span class="hx"><b>MiVibra TV</b><span>Películas, series y en vivo</span></span></button>';
     (P.pins || []).forEach(function (p) { if (byPkg[p]) h += tileHtml(byPkg[p]); });
     h += '<button class="f tile add" data-view="apps"><i class="ic" style="background-image:url(&quot;data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'%23F3EFEA\'%3E%3Cpath d=\'M4 4h7v7H4zm9 0h7v7h-7zM4 13h7v7H4zm11 0h2v3h3v2h-3v3h-2v-3h-3v-2h3z\'/%3E%3C/svg%3E&quot;)"></i><span class="lb">Todas las apps</span></button>';
+    h += '<button class="f tile add" data-act="organize"><i class="ic" style="background-image:url(&quot;data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23F3EFEA\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpath d=\'M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z\'/%3E%3C/svg%3E&quot;)"></i><span class="lb">Organizar</span></button>';
     $('#pins').innerHTML = h;
   }
 
@@ -464,6 +465,14 @@
     (el || $('.tab')).focus();
   }
 
+  // Modo organizar: para controles sin botón ☰. OK sobre una app abre sus opciones (fijar, quitar, mover)
+  var organizing = false;
+  function setOrganize(on) {
+    organizing = on;
+    document.documentElement.classList.toggle('organizing', on);
+    var b = $('#orgBtn'); if (b) b.textContent = on ? 'Listo' : 'Organizar';
+    if (on) toast('Modo organizar: elige una app y presiona OK');
+  }
   function openApp(pkg) {
     blip(980);
     if (!LB.launch(pkg)) toast('No se pudo abrir la app');
@@ -474,7 +483,7 @@
     if (moving) return endMove();
     if (el.getAttribute('data-m')) { var fn = menuAct; menuAct = null; if (fn) fn(el.getAttribute('data-m')); return; }
     var v = el.getAttribute('data-view'), act = el.getAttribute('data-act');
-    if (el.getAttribute('data-pkg')) return openApp(el.getAttribute('data-pkg'));
+    if (el.getAttribute('data-pkg')) return organizing ? menuFor(el) : openApp(el.getAttribute('data-pkg'));
     if (el.getAttribute('data-input')) { blip(980); if (!LB.openInput(el.getAttribute('data-input'))) toast('No se pudo abrir la entrada'); return; }
     if (el.getAttribute('data-photo')) return menuFor(el);
     if (el.getAttribute('data-mv')) { blip(980); return LB.openMiVibraItem(el.getAttribute('data-mv'), el.getAttribute('data-play') === '1'); }
@@ -484,6 +493,7 @@
     switch (act) {
       case 'mivibra': blip(980); LB.openMiVibra(); break;
       case 'settings': LB.openSettings(''); break;
+      case 'organize': setOrganize(!organizing); if (organizing && view === 'home') { var f = $('#pins .app'); if (f) { f.focus(); scrollTo(f); } } break;
       case 'gphotos': connectPhotos(); break;
       case 'upload': photoFlow++; startUpload(); break;
       case 'close': cancelFlows(); closeModal(); break;
@@ -612,6 +622,7 @@
   L.onBack = function () {
     if (!$('#modal').hidden) { cancelFlows(); return closeModal(); }
     if (moving) return endMove();
+    if (organizing) { setOrganize(false); toast('Listo'); return; }
     if (view !== 'home') { show('home'); return focusDefault(); }
     var first = $('#pins .f'); if (first) { first.focus(); $('#pins').scrollLeft = 0; $('#v-home').scrollTop = 0; }
   };

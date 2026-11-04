@@ -69,7 +69,7 @@
       '<div class="crow cgames">' + row + '</div>' +
       '<div class="crow cbtns">' + round('lib', 'lib', 'Biblioteca') + round('scan', 'usb', 'Buscar juegos') + round('bios', 'bios', 'Importar BIOS') +
       round('engine', 'engine', 'Emuladores') + round('phone', 'phone', 'Celular como mando') + round('classic', 'list', 'Vista clásica') + round('exit', 'exit', 'Salir') + '</div></section>' +
-      '<footer class="chint"><span><i>OK</i>Jugar</span><span><i>☰</i>Opciones</span><span><i>⟵</i>Atrás</span></footer>';
+      '<footer class="chint"><span><i>OK</i>Jugar</span><span><i>OK</i>Dejar presionado: opciones</span><span><i>⟵</i>Atrás</span></footer>';
   }
 
   function libHtml() {
@@ -82,7 +82,7 @@
     });
     if (by['?']) shelves.push('<div class="cshelf"><h3 style="--c:#6B7280"><i>?</i>Sin sistema<small>' + by['?'].length + ' · OK para elegir</small></h3><div class="crow cshelfrow">' + by['?'].map(function (r) { return tile(r, false); }).join('') + '</div></div>');
     return topBar() + '<section class="clib">' + (shelves.length ? shelves.join('') : '<div class="cnone"><h2>Aún no hay juegos</h2><p>Conecta tu USB con ROMs y usa “Buscar juegos” en el Inicio.</p></div>') + '</section>' +
-      '<footer class="chint"><span><i>OK</i>Jugar</span><span><i>☰</i>Opciones</span><span><i>⟵</i>Inicio</span></footer>';
+      '<footer class="chint"><span><i>OK</i>Jugar</span><span><i>OK</i>Dejar presionado: opciones</span><span><i>⟵</i>Inicio</span></footer>';
   }
 
   function render(focusSel) {
@@ -228,10 +228,23 @@
     if (!box || MV.modalOpen()) return;
     var k = e.key;
     if (k === 'ArrowLeft' || k === 'ArrowRight' || k === 'ArrowUp' || k === 'ArrowDown') move(k.replace('Arrow', '').toLowerCase());
-    else if ((k === 'Enter' || k === ' ' || k === 'NumpadEnter') && !e.repeat) { var a = document.activeElement; if (a && box.contains(a)) activate(a); }
+    else if (k === 'Enter' || k === ' ' || k === 'NumpadEnter') {
+      // OK juega al soltarlo; si se deja presionado abre las opciones (para controles sin botón ☰)
+      var a = document.activeElement;
+      if (!e.repeat) { okAt = Date.now(); okEl = a; okHeld = false; }
+      else if (!okHeld && okEl === a && Date.now() - okAt > 650 && a && a.getAttribute('data-rom')) { okHeld = true; options(a); }
+    }
     else if (k === 'ContextMenu') options(document.activeElement);
     else return;
     e.preventDefault(); e.stopImmediatePropagation();
+  }, true);
+  var okAt = 0, okEl = null, okHeld = false;
+  window.addEventListener('keyup', function (e) {
+    if (!box || MV.modalOpen() || (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'NumpadEnter')) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    var a = document.activeElement;
+    if (!okHeld && okEl && a === okEl && box.contains(a)) activate(a);
+    okEl = null; okHeld = false;
   }, true);
   document.addEventListener('click', function (e) {
     if (!box || !box.contains(e.target)) return;
