@@ -12,7 +12,7 @@
   var KEY = 'mvl.prefs';
   var P = load();
   function load() {
-    var d = { pins: null, interval: 60, blur: false, motion: true, sound: true };
+    var d = { pins: null, interval: 60, blur: false, motion: true, sound: true, yt: true };
     try { var s = JSON.parse(localStorage.getItem(KEY) || '{}'); for (var k in s) d[k] = s[k]; } catch (e) {}
     return d;
   }
@@ -140,6 +140,52 @@
     }).join('');
   }
 
+  // ---------------- Contenido sugerido: MiVibra TV ----------------
+  function bg(url) { return url ? 'background-image:url(\'' + esc(url).replace(/'/g, '%27') + '\')' : ''; }
+  function renderMiVibra() {
+    var list = [];
+    try { list = JSON.parse(LB.mivibraRecs()) || []; } catch (e) {}
+    var cont = list.filter(function (i) { return i.play; }), recs = list.filter(function (i) { return !i.play; });
+    function card(i) {
+      return '<button class="f tile mv has-bn" data-mv="' + esc(i.play || i.key) + '" data-play="' + (i.play ? 1 : 0) + '">' +
+        '<i class="bn" style="' + bg(i.poster) + '"></i>' +
+        (i.pct ? '<span class="prog"><i style="width:' + Math.max(3, +i.pct) + '%"></i></span>' : '') +
+        '<span class="lb">' + esc(i.title) + '</span></button>';
+    }
+    $('#mvc-h').hidden = !cont.length; $('#mvc').innerHTML = cont.map(card).join('');
+    $('#mvr-h').hidden = !recs.length; $('#mvr').innerHTML = recs.map(card).join('');
+  }
+
+  // ---------------- Contenido sugerido: YouTube ----------------
+  // Usa la clave de YouTube que ya tiene MiVibra TV (la pone el superadministrador). Tendencias en Colombia.
+  function ytKey() { try { return (JSON.parse(localStorage.getItem('mv:prefs') || '{}') || {}).ytKey || ''; } catch (e) { return ''; } }
+  function renderYouTube(items) {
+    var show = P.yt && items && items.length;
+    $('#yt-h').hidden = !show;
+    $('#yt').innerHTML = show ? items.map(function (v) {
+      return '<button class="f tile vid" data-yt="' + esc(v.id) + '"><i class="bn" style="' + bg(v.thumb) + '"></i><span class="yt">YouTube</span>' +
+        '<span class="lb"><span class="tt">' + esc(v.title) + '</span><span class="ch">' + esc(v.channel) + '</span></span></button>';
+    }).join('') : '';
+  }
+  function loadYouTube() {
+    if (!P.yt) return renderYouTube([]);
+    var c = null; try { c = JSON.parse(localStorage.getItem('mvl.yt') || 'null'); } catch (e) {}
+    if (c && c.items) renderYouTube(c.items);
+    if (c && c.ts > Date.now() - 60 * 60e3) return;
+    var key = ytKey(); if (!key) return;
+    fetch('https://www.googleapis.com/youtube/v3/videos?part=snippet&chart=mostPopular&regionCode=CO&hl=es&maxResults=20&key=' + encodeURIComponent(key))
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!j.items) return;
+        var items = j.items.map(function (v) {
+          var sn = v.snippet || {}, t = sn.thumbnails || {};
+          return { id: v.id, title: sn.title || '', channel: sn.channelTitle || '', thumb: (t.maxres || t.high || t.medium || t.default || {}).url || '' };
+        });
+        try { localStorage.setItem('mvl.yt', JSON.stringify({ ts: Date.now(), items: items })); } catch (e) {}
+        renderYouTube(items);
+      }).catch(function () {});
+  }
+
   // ---------------- Fondos ----------------
   var wallIdx = -1, wallLayer = 0, wallT = null, order = [];
   function loadPhotos() {
@@ -182,6 +228,7 @@
     $('#o-blur').textContent = P.blur ? 'Sí' : 'No';
     $('#o-motion').textContent = P.motion ? 'Sí' : 'No';
     $('#o-sound').textContent = P.sound ? 'Sí' : 'No';
+    $('#o-yt').textContent = P.yt ? 'Sí' : 'No';
   }
 
   // ---------------- Google Fotos ----------------
@@ -333,6 +380,8 @@
     if (el.getAttribute('data-pkg')) return openApp(el.getAttribute('data-pkg'));
     if (el.getAttribute('data-input')) { blip(980); if (!LB.openInput(el.getAttribute('data-input'))) toast('No se pudo abrir la entrada'); return; }
     if (el.getAttribute('data-photo')) return menuFor(el);
+    if (el.getAttribute('data-mv')) { blip(980); return LB.openMiVibraItem(el.getAttribute('data-mv'), el.getAttribute('data-play') === '1'); }
+    if (el.getAttribute('data-yt')) { blip(980); if (!LB.openYouTube(el.getAttribute('data-yt'))) toast('No se pudo abrir YouTube'); return; }
     if (v) { show(v); return focusDefault(); }
     switch (act) {
       case 'mivibra': blip(980); LB.openMiVibra(); break;
@@ -344,6 +393,7 @@
       case 'blur': P.blur = !P.blur; save(); applyPrefs(); break;
       case 'motion': P.motion = !P.motion; save(); applyPrefs(); break;
       case 'sound': P.sound = !P.sound; save(); applyPrefs(); blip(); break;
+      case 'yt': P.yt = !P.yt; save(); applyPrefs(); loadYouTube(); break;
       case 'clearphotos':
         if (!photos.length) return toast('No hay fotos');
         modal('<h3>¿Borrar todas las fotos?</h3><p>Se borran de la TV, no de tu Google Fotos.</p><div class="acts"><button class="f opt" data-act="close">No</button><button class="f opt danger" data-act="clearyes">Sí, borrar</button></div>');
@@ -357,6 +407,14 @@
   function visible(el) { return el.offsetParent !== null && !el.closest('[hidden]'); }
   function scrollTo(el) {
     var row = el.closest('.row, .grid');
+    var home = el.closest('#v-home');
+    if (home) {
+      if (!row || row.id === 'pins') home.scrollTop = 0;
+      else {
+        var h = row.previousElementSibling, ref = (h && h.classList.contains('row-h') ? h : row).getBoundingClientRect().top;
+        home.scrollTop += ref - home.getBoundingClientRect().top - 16;
+      }
+    }
     if (!row) return;
     var r = el.getBoundingClientRect(), b = row.getBoundingClientRect(), pad = el.offsetWidth * 0.3;
     if (row.classList.contains('row')) {
@@ -425,19 +483,19 @@
     if (!$('#modal').hidden) { cancelFlows(); return closeModal(); }
     if (moving) return endMove();
     if (view !== 'home') { show('home'); return focusDefault(); }
-    var first = $('#pins .f'); if (first) { first.focus(); $('#pins').scrollLeft = 0; }
+    var first = $('#pins .f'); if (first) { first.focus(); $('#pins').scrollLeft = 0; $('#v-home').scrollTop = 0; }
   };
   L.onHome = function () {
     cancelFlows(); closeModal(); if (moving) endMove();
-    show('home'); var first = $('#pins .f'); $('#pins').scrollLeft = 0; if (first) first.focus();
+    show('home'); var first = $('#pins .f'); $('#pins').scrollLeft = 0; $('#v-home').scrollTop = 0; if (first) first.focus();
   };
   L.onMenu = function () { if ($('#modal').hidden) menuFor(document.activeElement); };
-  L.onResume = function () { tick(); status(); renderInputs(); if (!wallT && order.length > 1) nextWall(); if (!document.activeElement || document.activeElement === document.body) focusDefault(); };
+  L.onResume = function () { tick(); status(); renderInputs(); renderMiVibra(); loadYouTube(); if (!wallT && order.length > 1) nextWall(); if (!document.activeElement || document.activeElement === document.body) focusDefault(); };
   L.onPause = function () { clearTimeout(wallT); wallT = null; };
   L.onAppsChanged = function () { loadApps(); };
 
   // ---------------- Arranque ----------------
-  applyPrefs(); tick(); status(); weather(); renderInputs(); loadPhotos(); renderPins();
+  applyPrefs(); tick(); status(); weather(); renderInputs(); renderMiVibra(); loadYouTube(); loadPhotos(); renderPins();
   $('.tab[data-view="home"]').classList.add('cur');
   loadApps().then(function () { focusDefault(); });
   setInterval(tick, 15000);
@@ -456,6 +514,8 @@
       photos: function () { return '[]'; }, deletePhoto: function () {}, clearPhotos: function () {},
       photosAuth: function (id) { setTimeout(function () { L._r(id, false, '"Vista previa"'); }, 300); },
       photosCancel: function () {},
+      mivibraRecs: function () { var a = []; for (var i = 0; i < 10; i++) a.push({ key: 'k' + i, title: 'Película de ejemplo ' + i, poster: '', play: i < 3 ? 'k' + i : '', pct: i < 3 ? 30 + i * 20 : 0 }); return JSON.stringify(a); },
+      openMiVibraItem: function () {}, openYouTube: function () { return true; },
       uploadStart: function () { return '{"url":"http://192.168.0.3:8766/"}'; }, uploadStop: function () {}
     };
   }

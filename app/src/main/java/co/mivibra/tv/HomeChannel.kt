@@ -18,7 +18,11 @@ import org.json.JSONArray
  */
 object HomeChannel {
     @SuppressLint("RestrictedApi")
+    /** Copia para el launcher "Inicio MiVibra" (fila de MiVibra TV). */
+    fun saved(c: Context): String = try { java.io.File(c.filesDir, "launcher-recomendado.json").readText() } catch (_: Exception) { "[]" }
+
     fun publish(c: Context, json: String) {
+        try { java.io.File(c.filesDir, "launcher-recomendado.json").writeText(json) } catch (_: Exception) {}
         if (Build.VERSION.SDK_INT < 26 || !c.packageManager.hasSystemFeature("android.software.leanback")) return
         val app = c.applicationContext
         Thread {

@@ -3396,9 +3396,12 @@
       var key = i.parent || i.key, base = S.byKey[key] || i, poster = MV.poster(base);
       if (seen[key] || !/^https?:/.test(poster || '')) return;
       seen[key] = 1;
-      out.push({ key: key, title: base.name, desc: base.plot || base.group || '', poster: poster, type: base.type });
+      var o = { key: key, title: base.name, desc: base.plot || base.group || '', poster: poster, type: base.type };
+      // Inicio MiVibra (launcher): lo que vas viendo sigue donde iba, con su barra de avance
+      if (cont.indexOf(i) >= 0 && i.dur) { o.play = i.key; o.pct = Math.min(99, Math.round(i.pos * 100 / i.dur)); }
+      out.push(o);
     });
-    var sig = JSON.stringify(out.map(function (x) { return x.key; }));
+    var sig = JSON.stringify(out.map(function (x) { return x.key + (x.pct || ''); }));
     if (!out.length || sig === homeSig) return;
     homeSig = sig;
     try { A.publishHome(JSON.stringify(out)); } catch (e) {}

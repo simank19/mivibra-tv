@@ -59,6 +59,37 @@ class LauncherBridge(private val a: LauncherActivity) {
         a.startActivity(Intent(a, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
+    // ---------------- Contenido sugerido ----------------
+
+    /** Lo que MiVibra TV publicó para el inicio: [{key,title,poster,type,play?,pct?}] */
+    @JavascriptInterface
+    fun mivibraRecs(): String = co.mivibra.tv.HomeChannel.saved(a)
+
+    /** Abre un título de MiVibra: play=true sigue viendo; si no, abre su ficha. */
+    @JavascriptInterface
+    fun openMiVibraItem(key: String, play: Boolean) {
+        val uri = android.net.Uri.parse("mivibra://" + (if (play) "play" else "open") + "?key=" + android.net.Uri.encode(key))
+        try {
+            a.startActivity(Intent(Intent.ACTION_VIEW, uri).setClass(a, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (_: Exception) { openMiVibra() }
+    }
+
+    /** Abre un video en la app de YouTube de la TV (o la primera que haya). */
+    @JavascriptInterface
+    fun openYouTube(videoId: String): Boolean {
+        val uri = android.net.Uri.parse("https://www.youtube.com/watch?v=" + android.net.Uri.encode(videoId))
+        val pkgs = listOf("com.google.android.youtube.tv", "com.google.android.youtube.googletv", "com.google.android.youtube")
+        for (p in pkgs) {
+            if (!Apps.hasPackage(a, p)) continue
+            try {
+                a.startActivity(Intent(Intent.ACTION_VIEW, uri).setPackage(p).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                return true
+            } catch (_: Exception) {}
+        }
+        return try { a.startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true } catch (_: Exception) { false }
+    }
+
     @JavascriptInterface
     fun openSettings(which: String?) {
         val action = when (which) {
