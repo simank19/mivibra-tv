@@ -91,6 +91,8 @@ dependencies {
     implementation("androidx.credentials:credentials:1.3.0")
     implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
+    // Permiso de Google Fotos (fondos del launcher) con la cuenta de la TV
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
 
     // Servidor local para usar el celular como mando
     implementation("org.nanohttpd:nanohttpd-websocket:2.3.1")

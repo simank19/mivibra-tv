@@ -124,6 +124,33 @@
             </intent-filter>
         </activity>
 
+        <!-- Pantalla de inicio MiVibra (launcher estilo consola). Se elige como inicio de la TV. -->
+        <activity
+            android:name=".launcher.LauncherActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density"
+            android:exported="true"
+            android:label="Inicio MiVibra"
+            android:launchMode="singleTask"
+            android:stateNotNeeded="true"
+            android:clearTaskOnLaunch="true"
+            android:excludeFromRecents="true"
+            android:resumeWhilePausing="true"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.MiVibra.Fullscreen" />
+        <!-- Se activa solo en televisores (HomeSetup), así en celulares no aparece como inicio -->
+        <activity-alias
+            android:name=".launcher.HomeAlias"
+            android:targetActivity=".launcher.LauncherActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:label="Inicio MiVibra">
+            <intent-filter android:priority="2">
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity-alias>
+
         <activity
             android:name=".diag.DiagActivity"
             android:exported="false"

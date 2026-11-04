@@ -95,6 +95,7 @@ class MainActivity : ComponentActivity() {
         web.loadUrl("https://appassets.androidplatform.net/assets/www/index.html")
 
         RemoteHub.setMain(this)
+        co.mivibra.tv.launcher.HomeSetup.ensure(this)
         val filter = IntentFilter().apply {
             addAction(Intent.ACTION_MEDIA_MOUNTED)
             addAction(Intent.ACTION_MEDIA_UNMOUNTED)
