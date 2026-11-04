@@ -3492,7 +3492,8 @@
     if (!S.profiles.length) { editSel = null; MV.go('profileEdit', null, { replace: true }); }
     // Siempre se empieza eligiendo perfil (la cuenta de Google se pide antes, si no hay sesión)
     else MV.go('profiles', null, { replace: true });
-    if (S.lists.length) MV.reloadCatalog(false);
+    // Lo último guardado aparece de una vez; las listas viejas se actualizan en segundo plano
+    if (S.lists.length) MV.startCatalog();
   }
 
   // ---------- Tutorial guiado (una sola vez por sección y por perfil) ----------

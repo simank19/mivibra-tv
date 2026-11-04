@@ -900,6 +900,56 @@
     });
   };
 
+  /**
+   * Arranque rápido: muestra de una vez lo último que se cargó (aunque tenga más de 12 horas)
+   * y actualiza en segundo plano solo las listas viejas, sin hacer esperar.
+   * Si nunca se ha cargado nada (primera vez), hace la carga normal.
+   */
+  var bgRunning = false;
+  MV.startCatalog = function () {
+    var lists = S.lists.filter(function (l) { return l.enabled !== false; });
+    if (!lists.length) return Promise.resolve();
+    return Promise.all(lists.map(function (l) {
+      return MV.idbGet('list:' + l.id).then(function (c) { return c && c.v === 6 && c.items ? c : null; }).catch(function () { return null; });
+    })).then(function (caches) {
+      if (!caches.some(function (c) { return c && c.items.length; })) return MV.reloadCatalog(false);
+      var all = caches.map(function (c) { return c ? c.items.map(retag) : []; });
+      lastAll = all; combine(all);
+      S.loading = false; MV.emit('catalog');
+      MV.loadEpg(false);
+      setTimeout(function () { MV.checkDupes(false); }, 6000);
+      // Solo las listas viejas o sin guardar se vuelven a pedir, una por una y sin bloquear la pantalla
+      var stale = lists.map(function (l, i) {
+        var c = caches[i], age = l.type === 'web' ? 3600e3 : 12 * 3600e3;
+        return !c || c.ts < Date.now() - age ? i : -1;
+      }).filter(function (i) { return i >= 0; });
+      if (stale.length) setTimeout(function () { refreshInBackground(lists, stale); }, 5000);
+    });
+  };
+  function refreshInBackground(lists, idxs) {
+    if (bgRunning) return;
+    bgRunning = true;
+    var changed = false, k = 0;
+    function next() {
+      if (k >= idxs.length) return Promise.resolve();
+      var i = idxs[k++], l = lists[i];
+      return loadList(l, false).then(function (items) {
+        if (lastAll && lastAll[i] !== undefined && items && items.length) { lastAll[i] = items; changed = true; }
+      }).catch(function () {}).then(next);
+    }
+    Promise.all([next(), next()]).then(function () {
+      bgRunning = false;
+      MV.saveLists();
+      if (!changed) return;
+      // Se combina cuando no se esté usando el control (para que nada se mueva mientras navegas)
+      (function apply() {
+        if (S.loading) return;
+        if (Date.now() - (MV._lastKey || 0) < 4000 || (MV.modalOpen && MV.modalOpen())) { setTimeout(apply, 3000); return; }
+        combine(lastAll); MV.emit('catalog');
+      })();
+    });
+  }
+
   // ---------- Canales repetidos: probar todas las señales y quedarse con la que funciona ----------
   var PROBE_TTL = 6 * 3600e3;
   var PROBE = MV.load('probe', {});
