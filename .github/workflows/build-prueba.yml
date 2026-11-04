@@ -62,3 +62,14 @@ jobs:
         with:
           name: MiVibraTV-prueba-apk
           path: out/*.apk
+
+      # Versión de prueba para descargar desde la TV o el PC. Es "prerelease" y su etiqueta no empieza
+      # por build-, así que el actualizador de la app (releases/latest y releases.atom) no la ofrece a nadie.
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: prueba-${{ github.run_number }}
+          name: Prueba ${{ github.ref_name }} ${{ github.run_number }}
+          body: "Versión de prueba de la rama ${{ github.ref_name }}. No se instala sola en los equipos."
+          files: out/*.apk
+          prerelease: true
+          make_latest: false
