@@ -323,8 +323,6 @@ class GameActivity : ComponentActivity() {
     }
     private val lastHat = HashMap<Int, Pair<Float, Float>>()
 
-    override fun onPause() { super.onPause(); if (::retroView.isInitialized) releaseEverything() }
-
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (configStep >= 0) return configKey(event)
         if (pad?.visibility == View.VISIBLE && fromGamepad(event.source) && KeyEvent.isGamepadButton(event.keyCode)) setPadVisible(false)
@@ -506,6 +504,7 @@ class GameActivity : ComponentActivity() {
 
     override fun onPause() {
         saveSram()
+        if (::retroView.isInitialized) releaseEverything()
         super.onPause()
     }
 
