@@ -1797,7 +1797,7 @@
       '<div class="line"><div class="t"><b>Versión instalada: ' + esc(MV.device.versionCode || '—') + '</b><span>' + (MV.latestVersion ? (MV.latestVersion > (MV.device.versionCode || 0) ? 'Hay una versión nueva: ' + MV.latestVersion : 'Estás al día (última publicada: ' + MV.latestVersion + ')') : 'Toca Buscar para comparar con la última publicada') + '</span></div>' +
       '<button class="btn f" data-act="checkUpdate">' + IC.refresh + (MV.pendingUpdate ? 'Actualizar ahora' : 'Buscar actualizaciones') + '</button></div>' +
       '<p>Reproductor de listas IPTV para Android TV, celular y tablet. MiVibra TV no incluye ni vende contenido: reproduce las listas que tú agregas y canales gratuitos públicos.</p>' +
-      '<h3>Licencias y créditos</h3><p style="font-size:13px;line-height:1.6">Código de MiVibra TV: GPL-3.0 · Emulación: LibretroDroid y núcleos libretro (GPL; algunos núcleos solo permiten uso no comercial) · Avatares: alohe/avatars (MIT) · Reproductor: AndroidX Media3 (Apache 2.0) · Servidor del mando: NanoHTTPD (BSD) · Código QR: qrcode-generator (MIT) · Canales gratis: Free-TV/IPTV e iptv-org · Fichas: TMDB y MyAnimeList (Jikan) · Cine clásico: Internet Archive · Freedoom (BSD) · Íconos de consolas: KyleBing/retro-game-console-icons (CC BY 4.0).</p>' +
+      '<h3>Licencias y créditos</h3><p style="font-size:13px;line-height:1.6">Código de MiVibra TV: GPL-3.0 · Emulación: LibretroDroid y núcleos libretro (GPL; algunos núcleos solo permiten uso no comercial) · Avatares: alohe/avatars (MIT) · Reproductor: AndroidX Media3 (Apache 2.0) · Servidor del mando: NanoHTTPD (BSD) · Código QR: qrcode-generator (MIT) · Canales gratis: Free-TV/IPTV e iptv-org · Fichas: TMDB y MyAnimeList (Jikan) · Cine clásico: Internet Archive · Freedoom (BSD) · Íconos de consolas: KyleBing/retro-game-console-icons (CC BY 4.0) · Marcos de consolas: libretro/overlay-borders (MIT; colecciones Nosh01 y NyNy77).</p>' +
       '<p style="font-size:12px">Este producto usa la API de TMDB pero no está respaldado ni certificado por TMDB.</p></div>';
   };
 
@@ -2003,7 +2003,7 @@
     if (A && gameEngine(s) === 'retroarch') { playRetroArch(r, s); return; }
     var start = function () {
       var go = function (rom) {
-        return MV.call('playGame', [JSON.stringify({ rom: rom, core: s.core, title: r.name, shader: P.shader })]).then(function () { rememberGame(r); });
+        return MV.call('playGame', [JSON.stringify({ rom: rom, core: s.core, title: r.name, shader: P.shader, sys: s.id })]).then(function () { rememberGame(r); });
       };
       // ROM de consola en .zip: se descomprime una vez (Arcade se juega tal cual)
       var job = (r.ext === 'zip' || r.ext === '7z') && s.id !== 'arcade'

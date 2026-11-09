@@ -97,6 +97,8 @@ class GameActivity : ComponentActivity() {
         root.addView(loading, FrameLayout.LayoutParams(-1, -1))
         setContentView(root)
         retroView.requestFocus()
+        gameRoot = root
+        root.post { loadOverlay() }
 
         var firstFrame = false
         lifecycleScope.launch {
@@ -489,11 +491,55 @@ class GameActivity : ComponentActivity() {
         private val DPAD_KEYS = setOf(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT)
     }
 
+    // ---------------- Marco de la consola (bezel) ----------------
+    private var gameRoot: FrameLayout? = null
+    private var overlayView: android.widget.ImageView? = null
+    private val sys get() = intent.getStringExtra("sys") ?: ""
+
+    private fun loadOverlay() {
+        if (!Overlays.enabled(this, sys)) return
+        lifecycleScope.launch {
+            val res = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val f = Overlays.fetch(this@GameActivity, sys) ?: return@withContext null
+                val bmp = Overlays.decode(f) ?: return@withContext null
+                val hole = Overlays.hole(bmp)
+                if (hole == null) { bmp.recycle(); null } else Pair(bmp, hole)
+            } ?: return@launch
+            if (isFinishing || !Overlays.enabled(this@GameActivity, sys)) return@launch
+            applyOverlay(res.first, res.second)
+        }
+    }
+
+    private fun applyOverlay(bmp: android.graphics.Bitmap, hole: android.graphics.Rect) {
+        val root = gameRoot ?: return
+        val rw = root.width.toFloat(); val rh = root.height.toFloat()
+        if (rw <= 0 || rh <= 0) return
+        // El marco es 16:9 y se estira a la pantalla; el juego va exactamente en el hueco
+        val sx = rw / bmp.width; val sy = rh / bmp.height
+        val lp = FrameLayout.LayoutParams((hole.width() * sx).toInt(), (hole.height() * sy).toInt(), Gravity.TOP or Gravity.START)
+        lp.leftMargin = (hole.left * sx).toInt(); lp.topMargin = (hole.top * sy).toInt()
+        retroView.layoutParams = lp
+        overlayView?.let { root.removeView(it) }
+        val iv = android.widget.ImageView(this).apply {
+            setImageBitmap(bmp); scaleType = android.widget.ImageView.ScaleType.FIT_XY
+            isFocusable = false; isClickable = false
+        }
+        root.addView(iv, 1, FrameLayout.LayoutParams(-1, -1))
+        overlayView = iv
+    }
+
+    private fun removeOverlay() {
+        overlayView?.let { gameRoot?.removeView(it) }
+        overlayView = null
+        retroView.layoutParams = FrameLayout.LayoutParams(-1, -1, Gravity.CENTER)
+    }
+
     private fun showMenu() {
         releaseEverything()
         pad?.releaseAll()
         val padItem = if (pad == null) null else if (pad?.visibility == View.VISIBLE) "Ocultar controles en pantalla" else "Mostrar controles en pantalla"
-        val items = listOfNotNull("Continuar", "Guardar partida", "Cargar partida", "Reiniciar juego", "Configurar mando", "Probar mando", "Salir del juego", padItem).toTypedArray()
+        val frameItem = if (!Overlays.available(sys)) null else if (Overlays.enabled(this, sys)) "Quitar marco" else "Poner marco"
+        val items = listOfNotNull("Continuar", "Guardar partida", "Cargar partida", "Reiniciar juego", frameItem, "Configurar mando", "Probar mando", "Salir del juego", padItem).toTypedArray()
         AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
             .setTitle(intent.getStringExtra("title") ?: "Juego")
             .setItems(items) { d, which ->
@@ -505,6 +551,8 @@ class GameActivity : ComponentActivity() {
                     "Reiniciar juego" -> retroView.reset()
                     "Configurar mando" -> startConfig()
                     "Probar mando" -> startTest()
+                    "Quitar marco" -> { Overlays.setEnabled(this, sys, false); removeOverlay() }
+                    "Poner marco" -> { Overlays.setEnabled(this, sys, true); Toast.makeText(this, "Poniendo el marco…", Toast.LENGTH_SHORT).show(); loadOverlay() }
                     "Salir del juego" -> { saveSram(); finish() }
                     padItem -> { val show = pad?.visibility != View.VISIBLE; padHiddenByUser = !show; setPadVisible(show) }
                 }

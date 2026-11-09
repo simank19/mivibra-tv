@@ -184,7 +184,9 @@
       ' Con RetroArch, descarga cada núcleo en RetroArch → Actualizador en línea → Descargar núcleos. Sus BIOS se copian a ' + esc(ra.bios || 'RetroArch/system') + ' al usar “Importar BIOS”.</p>' +
       list.map(function (s) {
         var e = MV.gameEngine(s);
-        return '<div class="line"><div class="t"><b>' + esc(s.name) + '</b><span>' + (e === 'retroarch' ? 'RetroArch · núcleo ' + esc(s.raCore || s.core) : 'Emulador de MiVibra') + (s.ra ? ' (solo RetroArch)' : '') + '</span></div>' +
+        var ov = A && A.overlay ? A.overlay(s.id) : -1;
+        return '<div class="line"><div class="t"><b>' + esc(s.name) + '</b><span>' + (e === 'retroarch' ? 'RetroArch · núcleo ' + esc(s.raCore || s.core) : 'Emulador de MiVibra') + (s.ra ? ' (solo RetroArch)' : '') + (ov >= 0 && e !== 'retroarch' ? ' · Marco ' + (ov ? 'puesto' : 'quitado') : '') + '</span></div>' +
+          (ov >= 0 && e !== 'retroarch' ? '<button class="btn ghost sm f" data-act="consoleFrame" data-arg="' + s.id + '">' + (ov ? 'Quitar marco' : 'Poner marco') + '</button>' : '') +
           (s.ra ? '' : '<button class="btn ghost sm f" data-act="consoleEngine" data-arg="' + s.id + '">' + (e === 'retroarch' ? 'Usar MiVibra' : 'Usar RetroArch') + '</button>') + '</div>';
       }).join('') + (ra.installed ? '' : '<div class="btns"><button class="btn f" data-act="consoleGetRA">Instalar RetroArch</button></div>'));
   }
@@ -194,6 +196,7 @@
       MV.setGameEngine(id, MV.gameEngine(s) === 'retroarch' ? 'interno' : 'retroarch');
       MV.closeModal(true); engines();
     };
+    MV.ACT.consoleFrame = function (id) { if (A && A.setOverlay) A.setOverlay(id, A.overlay(id) !== 1); MV.closeModal(true); engines(); };
     MV.ACT.consoleGetRA = function () { if (A) A.openExternal('market://details?id=' + (MV.raPkg || 'com.retroarch.ra32')); };
   }
 

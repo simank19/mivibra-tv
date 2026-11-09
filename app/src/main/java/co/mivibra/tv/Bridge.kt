@@ -458,6 +458,13 @@ class Bridge(private val a: MainActivity) {
         }
     }
 
+    /** Marco (bezel) de cada consola: -1 = no hay para esa consola, 0 = apagado, 1 = encendido */
+    @JavascriptInterface
+    fun overlay(sys: String): Int = if (!Overlays.available(sys)) -1 else if (Overlays.enabled(a, sys)) 1 else 0
+
+    @JavascriptInterface
+    fun setOverlay(sys: String, on: Boolean) = Overlays.setEnabled(a, sys, on)
+
     /** {installed, pkg, bios} de la app RetroArch. */
     @JavascriptInterface
     fun retroArch(): String = RetroArch.info(a)
@@ -507,6 +514,7 @@ class Bridge(private val a: MainActivity) {
                             .putExtra("rom", rom.absolutePath)
                             .putExtra("title", o.optString("title"))
                             .putExtra("shader", o.optString("shader", "default"))
+                            .putExtra("sys", o.optString("sys"))
                     )
                 }
                 reply(id, true, rom.absolutePath)
