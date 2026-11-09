@@ -157,6 +157,32 @@ class LauncherActivity : ComponentActivity() {
         pending.remove(requestCode)?.invoke(resultCode, data)
     }
 
+    // Mandos: la cruceta (HAT) y la palanca izquierda mueven el foco como las flechas del control
+    private var lastHat = 0
+    private var lastAxis = 0L
+    override fun dispatchGenericMotionEvent(ev: android.view.MotionEvent): Boolean {
+        if ((ev.source and android.view.InputDevice.SOURCE_JOYSTICK) == android.view.InputDevice.SOURCE_JOYSTICK && ev.action == android.view.MotionEvent.ACTION_MOVE) {
+            fun dir(x: Float, y: Float, th: Float) = when {
+                y < -th -> KeyEvent.KEYCODE_DPAD_UP
+                y > th -> KeyEvent.KEYCODE_DPAD_DOWN
+                x < -th -> KeyEvent.KEYCODE_DPAD_LEFT
+                x > th -> KeyEvent.KEYCODE_DPAD_RIGHT
+                else -> 0
+            }
+            fun send(code: Int) {
+                val t = android.os.SystemClock.uptimeMillis()
+                web.dispatchKeyEvent(KeyEvent(t, t, KeyEvent.ACTION_DOWN, code, 0))
+                web.dispatchKeyEvent(KeyEvent(t, t, KeyEvent.ACTION_UP, code, 0))
+                lastAxis = t
+            }
+            val hat = dir(ev.getAxisValue(android.view.MotionEvent.AXIS_HAT_X), ev.getAxisValue(android.view.MotionEvent.AXIS_HAT_Y), 0.5f)
+            if (hat != lastHat) { lastHat = hat; if (hat != 0) send(hat); return true }
+            val stick = dir(ev.getAxisValue(android.view.MotionEvent.AXIS_X), ev.getAxisValue(android.view.MotionEvent.AXIS_Y), 0.6f)
+            if (stick != 0 && android.os.SystemClock.uptimeMillis() - lastAxis > 220) { send(stick); return true }
+        }
+        return super.dispatchGenericMotionEvent(ev)
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         when (event.keyCode) {
             // En el inicio, Atrás nunca cierra la pantalla: solo cierra paneles
@@ -168,7 +194,7 @@ class LauncherActivity : ComponentActivity() {
                 }
                 return true
             }
-            KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+            KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_BUTTON_START, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
                 return web.dispatchKeyEvent(KeyEvent(event.downTime, event.eventTime, event.action, KeyEvent.KEYCODE_ENTER, event.repeatCount))
             }
             KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_BUTTON_Y, KeyEvent.KEYCODE_BUTTON_X -> {

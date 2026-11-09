@@ -435,6 +435,27 @@ class Bridge(private val a: MainActivity) {
     @JavascriptInterface
     fun coreInstalled(core: String): Boolean = Cores.installed(a, core)
 
+    /** Extensiones de lo que trae un .zip (para reconocer la consola). */
+    @JavascriptInterface
+    fun zipExts(path: String): String = if (path.startsWith("content://")) "[]" else Storage.zipExts(path).toString()
+
+    /** Descomprime la ROM de un .zip y responde la ruta del juego: {path, exts:[..]} */
+    @JavascriptInterface
+    fun unzipRom(id: String, json: String) {
+        io.execute {
+            try {
+                val o = JSONObject(json)
+                val src = Storage.toLocalFile(a, o.getString("path"))
+                val arr = o.optJSONArray("exts") ?: JSONArray()
+                val exts = (0 until arr.length()).map { arr.getString(it).lowercase() }
+                val out = Storage.unzipRom(a, src.absolutePath, exts)
+                reply(id, true, out)
+            } catch (e: Exception) {
+                reply(id, false, e.message ?: "No se pudo abrir el .zip")
+            }
+        }
+    }
+
     /** {installed, pkg, bios} de la app RetroArch. */
     @JavascriptInterface
     fun retroArch(): String = RetroArch.info(a)

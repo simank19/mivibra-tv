@@ -224,7 +224,7 @@ class MainActivity : ComponentActivity() {
                 }
                 return true
             }
-            KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+            KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_BUTTON_START, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
                 return web.dispatchKeyEvent(KeyEvent(event.downTime, event.eventTime, event.action, KeyEvent.KEYCODE_ENTER, event.repeatCount))
             }
             KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_BUTTON_Y, KeyEvent.KEYCODE_BUTTON_X -> {
@@ -243,9 +243,31 @@ class MainActivity : ComponentActivity() {
         return super.dispatchKeyEvent(event)
     }
 
+    private var lastHat = 0
+
     /** La palanca izquierda de un mando también mueve el foco en los menús. */
     override fun dispatchGenericMotionEvent(ev: MotionEvent): Boolean {
         if ((ev.source and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK && ev.action == MotionEvent.ACTION_MOVE) {
+            // La cruceta de muchos mandos llega como "HAT" (no como teclas): también mueve el foco
+            val hx = ev.getAxisValue(MotionEvent.AXIS_HAT_X)
+            val hy = ev.getAxisValue(MotionEvent.AXIS_HAT_Y)
+            val hat = when {
+                hy < -0.5f -> KeyEvent.KEYCODE_DPAD_UP
+                hy > 0.5f -> KeyEvent.KEYCODE_DPAD_DOWN
+                hx < -0.5f -> KeyEvent.KEYCODE_DPAD_LEFT
+                hx > 0.5f -> KeyEvent.KEYCODE_DPAD_RIGHT
+                else -> 0
+            }
+            if (hat != lastHat) {
+                lastHat = hat
+                if (hat != 0) {
+                    val t = SystemClock.uptimeMillis()
+                    web.dispatchKeyEvent(KeyEvent(t, t, KeyEvent.ACTION_DOWN, hat, 0))
+                    web.dispatchKeyEvent(KeyEvent(t, t, KeyEvent.ACTION_UP, hat, 0))
+                    lastAxisNav = t
+                }
+                return true
+            }
             val x = ev.getAxisValue(MotionEvent.AXIS_X)
             val y = ev.getAxisValue(MotionEvent.AXIS_Y)
             val now = SystemClock.uptimeMillis()

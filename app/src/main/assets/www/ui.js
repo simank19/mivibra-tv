@@ -1526,10 +1526,31 @@
     return true;
   }
   MV.isGame = isGame;
+  // Lo que trae cada .zip se mira una sola vez y se recuerda
+  var ZIPX = MV.load('zipExts', {}) || {}, zipSaveT = null;
+  function zipInner(r) {
+    if (ZIPX[r.path]) return ZIPX[r.path];
+    var out = [];
+    if (A && A.zipExts && !/^content:/.test(r.path)) { try { out = JSON.parse(A.zipExts(r.path)) || []; } catch (e) {} }
+    ZIPX[r.path] = out;
+    clearTimeout(zipSaveT); zipSaveT = setTimeout(function () { MV.save('zipExts', ZIPX); }, 1500);
+    return out;
+  }
   function romSystem(r) {
     var ov = P.romSystem[r.path]; if (ov) return D.SYSTEMS.find(function (s) { return s.id === ov; });
     var name = (r.name || '').toLowerCase(), path = (r.path || '').toLowerCase();
-    if (r.ext === 'zip') return /arcade|mame|fbneo|fba|neogeo|cps/.test(path) ? D.SYSTEMS.find(function (s) { return s.id === 'arcade'; }) : null;
+    if (r.ext === 'zip') {
+      if (/arcade|mame|fbneo|fba|neogeo|cps/.test(path)) return D.SYSTEMS.find(function (s) { return s.id === 'arcade'; });
+      // ROM de consola comprimida (Super Mario World.zip con el .sfc adentro): se mira qué trae
+      var inner = zipInner(r);
+      for (var zi = 0; zi < inner.length; zi++) {
+        var zs = D.SYSTEMS.find(function (s) { return !s.port && s.id !== 'arcade' && s.exts.indexOf(inner[zi]) >= 0; });
+        if (zs) return zs;
+      }
+      // Sin pistas: la carpeta (snes/, gba/, psx/…) dice la consola
+      var byDir = D.SYSTEMS.find(function (s) { return !s.port && s.id !== 'arcade' && new RegExp('/(' + s.id + (s.id === 'md' ? '|genesis|megadrive' : s.id === 'psx' ? '|ps1|playstation' : s.id === 'snes' ? '|sfc|supernintendo' : '') + ')/').test(path); });
+      return byDir || null;
+    }
     // Discos de PSP, GameCube y Dreamcast: se reconocen por la carpeta (psp/, gamecube/, dreamcast/)
     if (['iso', 'chd', 'cue', 'cso', 'rvz', 'gcm', 'gdi', 'cdi'].indexOf(r.ext) >= 0) {
       var byPath = D.SYSTEMS.find(function (s) { return s.path && s.path.test(path); });
@@ -1940,7 +1961,14 @@
     if (!s) { chooseSystem(r); return; }
     if (A && gameEngine(s) === 'retroarch') { playRetroArch(r, s); return; }
     var start = function () {
-      MV.call('playGame', [JSON.stringify({ rom: r.path, core: s.core, title: r.name, shader: P.shader })]).then(function () { rememberGame(r); }).catch(function (e) { MV.toast(e.message, 4000); });
+      var go = function (rom) {
+        return MV.call('playGame', [JSON.stringify({ rom: rom, core: s.core, title: r.name, shader: P.shader })]).then(function () { rememberGame(r); });
+      };
+      // ROM de consola en .zip: se descomprime una vez (Arcade se juega tal cual)
+      var job = r.ext === 'zip' && s.id !== 'arcade'
+        ? (MV.toast('Abriendo el .zip…', 2500), MV.call('unzipRom', [JSON.stringify({ path: r.path, exts: s.exts })]).then(go))
+        : go(r.path);
+      job.catch(function (e) { MV.toast(e.message, 4000); });
     };
     if (!A) { MV.toast('Los juegos funcionan en la app instalada'); return; }
     if (A.coreInstalled(s.core)) { start(); return; }
@@ -1953,7 +1981,7 @@
   MV.playRom = playRom; MV.romSystem = romSystem; MV.chooseSystem = function (r) { chooseSystem(r); };
   function chooseSystem(r) {
     MV._romPending = r;
-    MV.modal('<h2>¿De qué sistema es “' + esc(r.name) + '”?</h2><p class="muted">Los .zip pueden ser de varios sistemas. Lo recordaremos para la próxima vez.</p><div class="sys">' +
+    MV.modal('<h2>¿De qué consola es “' + esc(r.name) + '”?</h2><p class="muted">No se pudo saber por el nombre ni por lo que trae adentro. Lo recordaremos para la próxima vez.</p><div class="sys">' +
       D.SYSTEMS.map(function (s) { return '<button class="sysb f" data-act="romSys" data-arg="' + s.id + '"><i style="background:' + s.color + '">' + s.mono + '</i><b>' + s.name + '</b></button>'; }).join('') + '</div>');
   }
 
