@@ -152,7 +152,7 @@ class GameActivity : ComponentActivity() {
     }
 
     /** Los celulares van después de los mandos físicos: si hay 1 mando, el primer celular es el jugador 2. */
-    private fun portFor(slot: Int): Int = (physicalPads() + slot).coerceIn(0, 3)
+    private fun portFor(slot: Int): Int = (ports.size + slot).coerceIn(0, 3)
 
     fun remoteKey(slot: Int, keyCode: Int, down: Boolean) {
         retroView.sendKeyEvent(if (down) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, keyCode, portFor(slot))
@@ -188,13 +188,24 @@ class GameActivity : ComponentActivity() {
 
     // ---------------- Mandos físicos (Bluetooth / USB) ----------------
 
-    /** Jugador de cada mando físico: el primero que se conectó es el 1, el segundo el 2… */
-    private fun physicalPort(deviceId: Int): Int {
-        val ids = InputDevice.getDeviceIds().filter { id ->
-            val d = InputDevice.getDevice(id)
-            d != null && !d.isVirtual && fromGamepad(d.sources)
-        }.sorted()
-        return ids.indexOf(deviceId).coerceIn(0, 3)
+    /**
+     * Jugador de cada mando físico, según el orden en que se usan: el primer mando que
+     * presiona un botón es el jugador 1. Algunos mandos (y el control de la TV) aparecen
+     * como varios dispositivos (p. ej. "Xbox 360 dpad"); lo que no ha presionado un botón
+     * va al jugador 1 para que nunca quede "mudo" en otro puerto.
+     */
+    private val ports = LinkedHashMap<String, Int>()
+    private fun padKey(id: Int): String {
+        val d = InputDevice.getDevice(id) ?: return "id$id"
+        return "${d.vendorId}:${d.productId}:${d.name.replace(Regex("(?i)\\s*(dpad|keyboard|consumer control|system control)$"), "")}"
+    }
+    private fun physicalPort(deviceId: Int, isButton: Boolean = false): Int {
+        val k = padKey(deviceId)
+        ports[k]?.let { return it }
+        if (!isButton) return 0
+        val port = ports.size.coerceAtMost(3)
+        ports[k] = port
+        return port
     }
 
     private var selectDown = false
@@ -308,13 +319,15 @@ class GameActivity : ComponentActivity() {
                 Toast.makeText(this, "Botón no reconocido (${KeyEvent.keyCodeToString(code)}). Abre el menú › Configurar mando", Toast.LENGTH_LONG).show()
             return super.dispatchKeyEvent(event)
         }
-        if (physical && announced.add(-event.deviceId - 1000))
-            Toast.makeText(this, "Mando: ${dev?.name}", Toast.LENGTH_SHORT).show()
+        if (physical && event.action == KeyEvent.ACTION_DOWN && announced.add(-event.deviceId - 1000)) {
+            val j = if (fromGamepad(event.source)) physicalPort(event.deviceId, true) + 1 else 1
+            Toast.makeText(this, "Mando: ${dev?.name} · Jugador $j", Toast.LENGTH_SHORT).show()
+        }
         if (event.repeatCount == 0) {
             if (sent == KeyEvent.KEYCODE_BUTTON_SELECT) selectDown = event.action == KeyEvent.ACTION_DOWN
             if (sent == KeyEvent.KEYCODE_BUTTON_START) startDown = event.action == KeyEvent.ACTION_DOWN
             if (selectDown && startDown) { selectDown = false; startDown = false; showMenu(); return true }
-            retroView.sendKeyEvent(event.action, sent, if (physical && fromGamepad(event.source)) physicalPort(event.deviceId) else 0)
+            retroView.sendKeyEvent(event.action, sent, if (physical && fromGamepad(event.source)) physicalPort(event.deviceId, true) else 0)
         }
         return true
     }
