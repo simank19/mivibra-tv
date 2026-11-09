@@ -15,7 +15,12 @@
   function roms() {
     var list = (MV.load('roms', []) || []).filter(function (r) { return MV.isGame ? MV.isGame(r) : true; });
     list = list.filter(function (r) { return r.ext !== 'exe' || /doukutsu\.exe$/i.test(r.name); }).filter(function (r) { return r.ext !== 'pak' || /^pak0\.pak$/i.test(r.name); });
-    return list;
+    // El mismo juego repetido (enviado dos veces, o en .zip y suelto) sale una sola vez
+    var seen = {};
+    return list.filter(function (r) {
+      var s = MV.romSystem(r), k = title(r).toLowerCase() + '|' + (s ? s.id : '?');
+      if (seen[k]) return false; seen[k] = 1; return true;
+    });
   }
   function title(r) { return String(r.name || '').replace(/\.[^.]+$/, '').replace(/\s*[\(\[][^\)\]]*[\)\]]/g, '').replace(/_/g, ' ').trim() || r.name; }
   // Portadas de la base pública de libretro (por nombre No-Intro / Redump del archivo)
@@ -63,13 +68,23 @@
   function homeHtml() {
     var all = roms(), rec = (MV.load('recentGames', []) || []).filter(function (r) { return all.some(function (x) { return x.path === r.path; }); });
     var seen = {}, list = [];
-    rec.concat(all.slice().sort(function (a, b) { return title(a).localeCompare(title(b)); })).forEach(function (r) { if (!seen[r.path] && list.length < 40) { seen[r.path] = 1; list.push(r); } });
-    var row = list.length ? list.map(function (r) { return tile(r, true); }).join('') +
-      (all.length > list.length ? '<button class="cf ctile big more" data-act="lib" data-title="Ver toda la biblioteca" data-sys="' + all.length + ' juegos"><span class="cv"><i class="mono">+' + (all.length - list.length) + '</i><b class="nm">Toda la biblioteca</b></span></button>' : '')
+    rec.forEach(function (r) { if (!seen[r.path] && list.length < 12) { seen[r.path] = 1; list.push(r); } });
+    var recLabel = list.length ? 'Jugados recientemente' : 'Tus juegos';
+    if (!list.length) list = all.slice().sort(function (a, b) { return title(a).localeCompare(title(b)); }).slice(0, 12);
+    // Consolas con juegos: una tarjeta por consola
+    var by = {}; all.forEach(function (r) { var s = MV.romSystem(r); var id = s ? s.id : '?'; by[id] = (by[id] || 0) + 1; });
+    var cons = systems().filter(function (s) { return by[s.id]; }).map(function (s) {
+      return '<button class="cf ctile csys" data-act="sys" data-arg="' + s.id + '" data-title="' + esc(s.name) + '" data-sys="' + by[s.id] + (by[s.id] === 1 ? ' juego' : ' juegos') + '">' +
+        '<span class="cv" style="--c:' + s.color + '"><i class="mono">' + esc(s.mono) + '</i><b class="nm">' + esc(s.name) + '</b><small>' + by[s.id] + '</small></span></button>';
+    });
+    if (by['?']) cons.push('<button class="cf ctile csys" data-act="sys" data-arg="?" data-title="Sin sistema" data-sys="' + by['?'] + ' por elegir"><span class="cv" style="--c:#6B7280"><i class="mono">?</i><b class="nm">Sin sistema</b><small>' + by['?'] + '</small></span></button>');
+    var row = all.length ? list.map(function (r) { return tile(r, true); }).join('')
       : '<button class="cf ctile big empty" data-act="scan" data-title="Buscar juegos" data-sys="Conecta tu USB y presiona OK"><span class="cv"><i class="mono">' + ic('usb') + '</i><b class="nm">Conecta tu USB con ROMs y presiona OK</b></span></button>';
     return topBar() +
       '<section class="chome"><div class="csel"><b id="ctitle"></b><span id="csys"></span></div>' +
+      (all.length ? '<h4 class="clabel">' + recLabel + '</h4>' : '') +
       '<div class="crow cgames">' + row + '</div>' +
+      (cons.length ? '<h4 class="clabel">Consolas</h4><div class="crow cconsoles">' + cons.join('') + '</div>' : '') +
       '<div class="crow cbtns">' + round('lib', 'lib', 'Biblioteca') + round('scan', 'usb', 'Buscar juegos') + round('bios', 'bios', 'Importar BIOS') +
       round('send', 'send', 'Enviar desde el celular') + round('engine', 'engine', 'Emuladores') + round('phone', 'phone', 'Celular como mando') + round('del', 'trash', delMode ? 'Terminar de borrar' : 'Borrar juegos') + round('classic', 'list', 'Vista clásica') + round('exit', 'exit', 'Salir') + '</div></section>' +
       (delMode ? '<footer class="chint del"><span><i>OK</i>Borrar el juego elegido</span><span><i>⟵</i>Terminar de borrar</span></footer>' :
@@ -81,10 +96,10 @@
     all.forEach(function (r) { var s = MV.romSystem(r); var id = s ? s.id : '?'; (by[id] = by[id] || []).push(r); });
     var shelves = systems().filter(function (s) { return by[s.id]; }).map(function (s) {
       var list = by[s.id].sort(function (a, b) { return title(a).localeCompare(title(b)); });
-      return '<div class="cshelf"><h3 style="--c:' + s.color + '"><i>' + esc(s.mono) + '</i>' + esc(s.name) + '<small>' + list.length + (MV.gameEngine(s) === 'retroarch' ? ' · RetroArch' : '') + '</small></h3>' +
+      return '<div class="cshelf" data-sys="' + s.id + '"><h3 style="--c:' + s.color + '"><i>' + esc(s.mono) + '</i>' + esc(s.name) + '<small>' + list.length + (MV.gameEngine(s) === 'retroarch' ? ' · RetroArch' : '') + '</small></h3>' +
         '<div class="crow cshelfrow">' + list.slice(0, 150).map(function (r) { return tile(r, false); }).join('') + '</div></div>';
     });
-    if (by['?']) shelves.push('<div class="cshelf"><h3 style="--c:#6B7280"><i>?</i>Sin sistema<small>' + by['?'].length + ' · OK para elegir</small></h3><div class="crow cshelfrow">' + by['?'].map(function (r) { return tile(r, false); }).join('') + '</div></div>');
+    if (by['?']) shelves.push('<div class="cshelf" data-sys="?"><h3 style="--c:#6B7280"><i>?</i>Sin sistema<small>' + by['?'].length + ' · OK para elegir</small></h3><div class="crow cshelfrow">' + by['?'].map(function (r) { return tile(r, false); }).join('') + '</div></div>');
     return topBar() + '<section class="clib">' + (shelves.length ? shelves.join('') : '<div class="cnone"><h2>Aún no hay juegos</h2><p>Conecta tu USB y usa “Buscar juegos”, o usa “Enviar desde el celular” en el Inicio.</p></div>') + '</section>' +
       (delMode ? '<footer class="chint del"><span><i>OK</i>Borrar el juego elegido</span><span><i>⟵</i>Terminar de borrar</span></footer>' :
       '<footer class="chint"><span><i>OK</i>Jugar</span><span><i>OK</i>Dejar presionado: opciones</span><span><i>⟵</i>Inicio</span></footer>');
@@ -111,6 +126,8 @@
       if (r.left < b.left + pad) row.scrollLeft -= (b.left + pad - r.left);
       else if (r.right > b.right - pad) row.scrollLeft += (r.right - (b.right - pad));
     }
+    var home = el.closest('.chome');
+    if (home && row) { var hr = row.getBoundingClientRect(), hb = home.getBoundingClientRect(); if (hr.bottom > hb.bottom) home.scrollTop += hr.bottom - hb.bottom + 20; else if (hr.top < hb.top + 120) home.scrollTop -= (hb.top + 120 - hr.top); }
     var lib = el.closest('.clib');
     if (lib) { var sh = el.closest('.cshelf'); if (sh) lib.scrollTop += sh.getBoundingClientRect().top - lib.getBoundingClientRect().top - lib.clientHeight * 0.18; }
     var t = $('#ctitle', box), s = $('#csys', box);
@@ -146,6 +163,7 @@
     if (k && reg[k]) { if (delMode) { askDelete(reg[k]); return; } blip(990); MV.playRom(reg[k]); return; }
     switch (el.getAttribute('data-act')) {
       case 'lib': tab = 'lib'; render(); break;
+      case 'sys': tab = 'lib'; render('.cshelf[data-sys="' + el.getAttribute('data-arg') + '"] .cf'); break;
       case 'scan': MV.ACT.scanRoms(); break;
       case 'bios': MV.ACT.importBios(); break;
       case 'engine': engines(); break;

@@ -70,3 +70,13 @@ html.console-open #app { visibility: hidden; }
 .ctile.cdel::after { content: '✕'; position: absolute; top: .4em; right: .4em; width: 1.6em; height: 1.6em; border-radius: 50%; background: #DC2626; color: #fff; display: grid; place-items: center; font-weight: 700; }
 .ctile.cdel:focus { box-shadow: 0 0 0 .22em #0E0D0C, 0 0 0 .45em #DC2626, 0 1.4em 3em rgba(0,0,0,.6); }
 .chint.del i { background: #DC2626; }
+
+/* Inicio por consolas */
+.chome { justify-content: flex-start; overflow-y: auto; scrollbar-width: none; }
+.clabel { margin: .4em 3.6em 0; font-size: 1.05em; font-weight: 800; color: #A39C94; letter-spacing: .02em; }
+.chome .cgames { padding-top: 1em; padding-bottom: 1.2em; }
+.chome .ctile.big { width: 14em; height: 14em; }
+.cconsoles { padding: 1em 3.6em 1.2em; }
+.ctile.csys { width: 13em; height: 7.5em; }
+.ctile.csys .nm { font-size: 1.3em; -webkit-line-clamp: 2; }
+.ctile.csys small { position: absolute; right: .8em; top: .7em; font-weight: 800; font-size: 1.1em; color: #fff; background: rgba(0,0,0,.3); border-radius: 99em; padding: .1em .7em; }
