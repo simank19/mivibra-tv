@@ -35,7 +35,7 @@
     { id: 'ngp', name: 'Neo Geo Pocket', core: 'mednafen_ngp', exts: ['ngp', 'ngc'], color: '#14A38B', mono: 'NGP', thumbs: 'SNK - Neo Geo Pocket Color' },
     { id: 'ws', name: 'WonderSwan', core: 'mednafen_wswan', exts: ['ws', 'wsc'], color: '#7A3FD1', mono: 'WS', thumbs: 'Bandai - WonderSwan Color' },
     { id: 'arcade', name: 'Arcade', core: 'fbneo', exts: ['zip'], color: '#FFD15C', mono: 'ARC', thumbs: 'FBNeo - Arcade Games' },
-    { id: 'neogeo', name: 'Neo Geo', core: 'fbneo', exts: ['zip'], color: '#3B82F6', mono: 'NEO' },
+    { id: 'neogeo', name: 'Neo Geo', core: 'fbneo', exts: ['zip', 'neo'], color: '#3B82F6', mono: 'NEO' },
     // Solo con RetroArch (núcleos pesados que vienen en RetroArch): se elige la carpeta por nombre (psp, gamecube, dreamcast)
     { id: 'psp', name: 'PSP', core: 'ppsspp', exts: ['cso'], path: /\/(psp)\//i, color: '#2F3A8F', mono: 'PSP', ra: true, thumbs: 'Sony - PlayStation Portable' },
     { id: 'dc', name: 'Dreamcast', core: 'flycast', exts: ['cdi', 'gdi'], path: /\/(dreamcast|dc)\//i, color: '#F97316', mono: 'DC', ra: true, thumbs: 'Sega - Dreamcast' },

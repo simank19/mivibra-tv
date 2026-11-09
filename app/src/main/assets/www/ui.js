@@ -2018,14 +2018,19 @@
     if (/^(rar|tar|gz)$/i.test(r.ext || '')) { MV.toast('El formato .' + r.ext + ' no se puede abrir. Envíalo en .zip, .7z o sin comprimir.'); return; }
     var s = romSystem(r);
     if (!s) { chooseSystem(r); return; }
+    // Neo Geo en formato .neo (NeoSD/TerraOnion, un solo archivo): lo abre el emulador Geolith, no FBNeo
+    if (s.id === 'neogeo' && (r.ext === 'neo' || (/^(zip|7z)$/.test(r.ext || '') && zipInner(r).indexOf('neo') >= 0)))
+      s = Object.assign({}, s, { core: 'geolith', src: 'bb', exts: ['neo'], geolith: true });
     if (A && gameEngine(s) === 'retroarch') { playRetroArch(r, s); return; }
     var start = function () {
+      // Geolith busca neogeo.zip en la carpeta de BIOS: si la enviaste como juego, se copia ahí primero
+      if (s.geolith && !MV._neoBiosChecked) { MV._neoBiosChecked = 1; MV.call('importBios', [JSON.stringify([A.downloadsDir()])]).then(start, start); return; }
       var go = function (rom) {
-        return MV.call('playGame', [JSON.stringify({ rom: rom, core: s.core, title: MV.romTitle(r) || r.name, shader: P.shader, sys: s.id })]).then(function () { rememberGame(r); });
+        return MV.call('playGame', [JSON.stringify({ rom: rom, core: s.core, title: MV.romTitle(r) || r.name, shader: P.shader, sys: s.id, vars: s.geolith ? { geolith_system_type: 'mvs' } : undefined })]).then(function () { rememberGame(r); });
       };
       // ROM de consola en .zip: se descomprime una vez (Arcade se juega tal cual)
       // Neo Geo: el .zip necesita su nombre corto (kof98.zip) y la BIOS neogeo.zip al lado
-      var arc = (s.id === 'neogeo' || s.id === 'arcade') && /^(zip|7z)$/.test(r.ext || '') && !/^content:/.test(r.path), neo = arc ? arcId(r) : null;
+      var arc = !s.geolith && (s.id === 'neogeo' || s.id === 'arcade') && /^(zip|7z)$/.test(r.ext || '') && !/^content:/.test(r.path), neo = arc ? arcId(r) : null;
       // Neo Geo que no se pudo reconocer: mostrar qué trae el archivo en vez del error del emulador
       if (s.id === 'neogeo' && arc && !neo && !MV._neoForce) {
         var inside = []; try { inside = JSON.parse(A.archiveNames(r.path)); } catch (e) {}

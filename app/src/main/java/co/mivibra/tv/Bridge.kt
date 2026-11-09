@@ -550,6 +550,7 @@ class Bridge(private val a: MainActivity) {
                             .putExtra("title", o.optString("title"))
                             .putExtra("shader", o.optString("shader", "default"))
                             .putExtra("sys", o.optString("sys"))
+                            .putExtra("vars", o.optJSONObject("vars")?.toString())
                     )
                 }
                 reply(id, true, rom.absolutePath)

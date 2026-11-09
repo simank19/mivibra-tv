@@ -69,6 +69,13 @@ class GameActivity : ComponentActivity() {
                 "sharp" -> ShaderConfig.Sharp
                 else -> ShaderConfig.Default
             }
+            // Opciones del núcleo (por ejemplo Neo Geo en modo arcade MVS)
+            intent.getStringExtra("vars")?.let { js ->
+                try {
+                    val o = org.json.JSONObject(js)
+                    variables = o.keys().asSequence().map { k -> com.swordfish.libretrodroid.Variable(k, o.getString(k)) }.toList().toTypedArray()
+                } catch (_: Exception) {}
+            }
             rumbleEventsEnabled = true
             preferLowLatencyAudio = true
         }
