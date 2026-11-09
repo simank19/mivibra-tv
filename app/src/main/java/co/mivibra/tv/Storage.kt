@@ -112,45 +112,63 @@ object Storage {
     // ---------------- ROMs dentro de .zip ----------------
 
     /** Extensiones de lo que hay dentro del .zip (las más grandes primero), para saber de qué consola es. */
+    /** Una entrada de un comprimido (.zip o .7z). */
+    private class Entry(val name: String, val size: Long)
+
+    private fun is7z(path: String) = path.lowercase().endsWith(".7z")
+
+    private fun entries(path: String): List<Entry> {
+        if (is7z(path)) {
+            if (android.os.Build.VERSION.SDK_INT < 26) throw IllegalStateException("Los .7z necesitan Android 8 o más nuevo")
+            return SevenZ.list(File(path)).map { Entry(it.first, it.second) }
+        }
+        java.util.zip.ZipFile(path).use { z ->
+            return z.entries().toList().filter { !it.isDirectory }.map { Entry(it.name, it.size) }
+        }
+    }
+
     fun zipExts(path: String): JSONArray {
         val out = JSONArray()
         try {
-            java.util.zip.ZipFile(path).use { z ->
-                z.entries().toList().filter { !it.isDirectory && !it.name.contains("__MACOSX") }
-                    .sortedByDescending { it.size }.take(8)
-                    .forEach { out.put(it.name.substringAfterLast('.', "").lowercase()) }
-            }
-        } catch (_: Exception) {}
+            entries(path).filter { !it.name.contains("__MACOSX") }
+                .sortedByDescending { it.size }.take(8)
+                .forEach { out.put(it.name.substringAfterLast('.', "").lowercase()) }
+        } catch (_: Throwable) {}
         return out
     }
 
     /**
-     * Saca la ROM del .zip a la caché de la app (una sola vez) y devuelve la ruta del archivo a jugar.
+     * Saca la ROM del .zip o .7z a la caché de la app (una sola vez) y devuelve la ruta del archivo a jugar.
      * Para PlayStation saca también los .bin del .cue. Se guardan como mucho 6 juegos descomprimidos.
      */
     fun unzipRom(ctx: Context, path: String, exts: List<String>): String {
         val base = File(ctx.cacheDir, "unzip").apply { mkdirs() }
         val src = File(path)
         val dir = File(base, Integer.toHexString((src.absolutePath + src.length() + src.lastModified()).hashCode()))
-        java.util.zip.ZipFile(src).use { z ->
-            val entries = z.entries().toList().filter { !it.isDirectory && !it.name.contains("__MACOSX") }
-            val main = entries.filter { it.name.substringAfterLast('.', "").lowercase() in exts }.maxByOrNull { it.size }
-                ?: throw IllegalStateException("El .zip no trae un juego de esta consola")
-            val target = File(dir, File(main.name).name)
-            if (target.exists() && target.length() == main.size) { dir.setLastModified(System.currentTimeMillis()); return target.absolutePath }
-            dir.deleteRecursively(); dir.mkdirs()
-            val need = entries.filter { it == main || File(it.name).parent == File(main.name).parent }
-                .filter { it == main || it.name.substringAfterLast('.', "").lowercase() in setOf("bin", "img", "sub", "ccd", "iso", "cue", "m3u") }
-            val total = need.sumOf { it.size.coerceAtLeast(0) }
-            if (total > base.usableSpace - 100L * 1024 * 1024) throw IllegalStateException("No hay espacio para descomprimir el juego")
-            for (e in need) {
-                val out = File(dir, File(e.name).name)
-                z.getInputStream(e).use { inp -> out.outputStream().buffered(256 * 1024).use { inp.copyTo(it, 256 * 1024) } }
+        val all = entries(path).filter { !it.name.contains("__MACOSX") }
+        val main = all.filter { it.name.substringAfterLast('.', "").lowercase() in exts }.maxByOrNull { it.size }
+            ?: throw IllegalStateException("El comprimido no trae un juego de esta consola")
+        val target = File(dir, File(main.name).name)
+        if (target.exists() && target.length() == main.size) { dir.setLastModified(System.currentTimeMillis()); return target.absolutePath }
+        dir.deleteRecursively(); dir.mkdirs()
+        val need = all.filter { it == main || File(it.name).parent == File(main.name).parent }
+            .filter { it == main || it.name.substringAfterLast('.', "").lowercase() in setOf("bin", "img", "sub", "ccd", "iso", "cue", "m3u") }
+            .map { it.name }.toSet()
+        val total = all.filter { it.name in need }.sumOf { it.size.coerceAtLeast(0) }
+        if (total > base.usableSpace - 100L * 1024 * 1024) throw IllegalStateException("No hay espacio para descomprimir el juego")
+        if (is7z(path)) {
+            SevenZ.extract(src, need, dir)
+        } else {
+            java.util.zip.ZipFile(src).use { z ->
+                for (e in z.entries().toList().filter { it.name in need }) {
+                    val out = File(dir, File(e.name).name)
+                    z.getInputStream(e).use { inp -> out.outputStream().buffered(256 * 1024).use { inp.copyTo(it, 256 * 1024) } }
+                }
             }
-            // Limpieza: deja solo los 6 más recientes
-            base.listFiles()?.filter { it.isDirectory && it != dir }?.sortedByDescending { it.lastModified() }?.drop(5)?.forEach { it.deleteRecursively() }
-            return target.absolutePath
         }
+        // Limpieza: deja solo los 6 más recientes
+        base.listFiles()?.filter { it.isDirectory && it != dir }?.sortedByDescending { it.lastModified() }?.drop(5)?.forEach { it.deleteRecursively() }
+        return target.absolutePath
     }
 
     /** BIOS conocidas que algunos núcleos necesitan (PlayStation, Lynx, Sega CD, Dreamcast…). */

@@ -97,4 +97,7 @@ dependencies {
 
     // Emulación de consolas (núcleos libretro)
     implementation("com.github.Swordfish90:LibretroDroid:0.14.0")
+    // ROMs comprimidas en .7z
+    implementation("org.apache.commons:commons-compress:1.21")
+    implementation("org.tukaani:xz:1.9")
 }

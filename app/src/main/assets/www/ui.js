@@ -1523,7 +1523,7 @@
     // Lo que enviaste desde el celular siempre aparece (si no se sabe la consola, en "Sin sistema")
     if (own) return !/\.(part|tmp|txt|nfo|jpg|png|srm|state)$/i.test(low);
     var mine = own || path.indexOf('/co.mivibra.tv/') >= 0 || ROM_DIR.test(path + '/');
-    if (ext === 'zip') return mine;                                 // .zip solo en carpetas de juegos (roms, arcade…)
+    if (ext === 'zip' || ext === '7z') return mine;                                 // .zip solo en carpetas de juegos (roms, arcade…)
     if (ext === 'm3u') return /psx|ps1|playstation/.test(path);      // .m3u también son listas de TV
     if (ext === 'iso') return size > 30e6 && (mine || /psx|ps1|playstation|psp|gamecube|dreamcast/.test(path));
     if (ext === 'exe' || ext === 'pak') return true;                 // ya filtrados por nombre (Doukutsu.exe, pak0.pak)
@@ -1535,7 +1535,7 @@
   // Lo que trae cada .zip se mira una sola vez y se recuerda
   var ZIPX = MV.load('zipExts', {}) || {}, zipSaveT = null;
   function zipInner(r) {
-    if (ZIPX[r.path]) return ZIPX[r.path];
+    if (ZIPX[r.path] && ZIPX[r.path].length) return ZIPX[r.path];
     var out = [];
     if (A && A.zipExts && !/^content:/.test(r.path)) { try { out = JSON.parse(A.zipExts(r.path)) || []; } catch (e) {} }
     ZIPX[r.path] = out;
@@ -1545,7 +1545,7 @@
   function romSystem(r) {
     var ov = P.romSystem[r.path];
     // Un .zip marcado como Arcade que en realidad trae una ROM de consola (enviado con la versión anterior) se corrige solo
-    if (ov === 'arcade' && r.ext === 'zip') {
+    if (ov === 'arcade' && (r.ext === 'zip' || r.ext === '7z')) {
       var zin = zipInner(r);
       for (var zq = 0; zq < zin.length; zq++) {
         var real = D.SYSTEMS.find(function (s) { return !s.port && s.id !== 'arcade' && s.exts.indexOf(zin[zq]) >= 0; });
@@ -1554,7 +1554,7 @@
     }
     if (ov) return D.SYSTEMS.find(function (s) { return s.id === ov; });
     var name = (r.name || '').toLowerCase(), path = (r.path || '').toLowerCase();
-    if (r.ext === 'zip') {
+    if (r.ext === 'zip' || r.ext === '7z') {
       // ROM de consola comprimida (Super Mario World.zip con el .sfc adentro): se mira qué trae, aunque esté en una carpeta de Arcade
       var inner = zipInner(r);
       for (var zi = 0; zi < inner.length; zi++) {
@@ -1990,7 +1990,7 @@
       .catch(function (e) { MV.toast(e.message, 5000); });
   }
   function playRom(r) {
-    if (/^(7z|rar|tar|gz)$/i.test(r.ext || '')) { MV.toast('El formato .' + r.ext + ' no se puede abrir. Envíalo en .zip o sin comprimir.'); return; }
+    if (/^(rar|tar|gz)$/i.test(r.ext || '')) { MV.toast('El formato .' + r.ext + ' no se puede abrir. Envíalo en .zip, .7z o sin comprimir.'); return; }
     var s = romSystem(r);
     if (!s) { chooseSystem(r); return; }
     if (A && gameEngine(s) === 'retroarch') { playRetroArch(r, s); return; }
@@ -1999,7 +1999,7 @@
         return MV.call('playGame', [JSON.stringify({ rom: rom, core: s.core, title: r.name, shader: P.shader })]).then(function () { rememberGame(r); });
       };
       // ROM de consola en .zip: se descomprime una vez (Arcade se juega tal cual)
-      var job = r.ext === 'zip' && s.id !== 'arcade'
+      var job = (r.ext === 'zip' || r.ext === '7z') && s.id !== 'arcade'
         ? (MV.toast('Abriendo el .zip…', 2500), MV.call('unzipRom', [JSON.stringify({ path: r.path, exts: s.exts })]).then(go))
         : go(r.path);
       job.catch(function (e) { MV.toast(e.message, 4000); });
