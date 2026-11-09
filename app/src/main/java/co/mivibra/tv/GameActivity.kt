@@ -201,31 +201,134 @@ class GameActivity : ComponentActivity() {
     private var startDown = false
     private val triggers = HashMap<Int, Boolean>()
 
+    // Mandos genéricos (modo D-input / PC) mandan BUTTON_1..12 en vez de A/B/X/Y
+    private val GENERIC = mapOf(
+        KeyEvent.KEYCODE_BUTTON_1 to KeyEvent.KEYCODE_BUTTON_Y, KeyEvent.KEYCODE_BUTTON_2 to KeyEvent.KEYCODE_BUTTON_B,
+        KeyEvent.KEYCODE_BUTTON_3 to KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_BUTTON_4 to KeyEvent.KEYCODE_BUTTON_X,
+        KeyEvent.KEYCODE_BUTTON_5 to KeyEvent.KEYCODE_BUTTON_L1, KeyEvent.KEYCODE_BUTTON_6 to KeyEvent.KEYCODE_BUTTON_R1,
+        KeyEvent.KEYCODE_BUTTON_7 to KeyEvent.KEYCODE_BUTTON_L2, KeyEvent.KEYCODE_BUTTON_8 to KeyEvent.KEYCODE_BUTTON_R2,
+        KeyEvent.KEYCODE_BUTTON_9 to KeyEvent.KEYCODE_BUTTON_SELECT, KeyEvent.KEYCODE_BUTTON_10 to KeyEvent.KEYCODE_BUTTON_START,
+        KeyEvent.KEYCODE_BUTTON_11 to KeyEvent.KEYCODE_BUTTON_THUMBL, KeyEvent.KEYCODE_BUTTON_12 to KeyEvent.KEYCODE_BUTTON_THUMBR,
+        KeyEvent.KEYCODE_BUTTON_C to KeyEvent.KEYCODE_BUTTON_X, KeyEvent.KEYCODE_BUTTON_Z to KeyEvent.KEYCODE_BUTTON_Y,
+        KeyEvent.KEYCODE_DPAD_CENTER to KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_ENTER to KeyEvent.KEYCODE_BUTTON_A,
+        KeyEvent.KEYCODE_SPACE to KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_ESCAPE to KeyEvent.KEYCODE_BUTTON_B)
+
+    private val RETRO_KEYS = setOf(
+        KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BUTTON_X, KeyEvent.KEYCODE_BUTTON_Y,
+        KeyEvent.KEYCODE_BUTTON_L1, KeyEvent.KEYCODE_BUTTON_R1, KeyEvent.KEYCODE_BUTTON_L2, KeyEvent.KEYCODE_BUTTON_R2,
+        KeyEvent.KEYCODE_BUTTON_SELECT, KeyEvent.KEYCODE_BUTTON_START, KeyEvent.KEYCODE_BUTTON_THUMBL, KeyEvent.KEYCODE_BUTTON_THUMBR,
+        KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT)
+
+    private fun mapKey(ev: KeyEvent): Int? {
+        val custom = customMap(ev.device)
+        custom[ev.keyCode]?.let { return it }
+        if (ev.keyCode in RETRO_KEYS) return ev.keyCode
+        return GENERIC[ev.keyCode]
+    }
+
+    // ---- Asignación personalizada de botones (menú › Configurar mando) ----
+    private val prefs by lazy { getSharedPreferences("mandos", MODE_PRIVATE) }
+    private val mapCache = HashMap<String, Map<Int, Int>>()
+    private fun devKey(d: InputDevice?) = "map_" + (d?.descriptor ?: d?.name ?: "x")
+    private fun customMap(d: InputDevice?): Map<Int, Int> = mapCache.getOrPut(devKey(d)) {
+        (prefs.getString(devKey(d), "") ?: "").split(',').mapNotNull {
+            val p = it.split(':'); if (p.size == 2) (p[0].toIntOrNull() ?: return@mapNotNull null) to (p[1].toIntOrNull() ?: return@mapNotNull null) else null
+        }.toMap()
+    }
+
+    private val CONFIG_STEPS = listOf(
+        "ARRIBA (cruceta)" to KeyEvent.KEYCODE_DPAD_UP, "ABAJO (cruceta)" to KeyEvent.KEYCODE_DPAD_DOWN,
+        "IZQUIERDA (cruceta)" to KeyEvent.KEYCODE_DPAD_LEFT, "DERECHA (cruceta)" to KeyEvent.KEYCODE_DPAD_RIGHT,
+        "A  (abajo · X en PlayStation)" to KeyEvent.KEYCODE_BUTTON_A, "B  (derecha · ○ en PlayStation)" to KeyEvent.KEYCODE_BUTTON_B,
+        "X  (izquierda · □ en PlayStation)" to KeyEvent.KEYCODE_BUTTON_X, "Y  (arriba · △ en PlayStation)" to KeyEvent.KEYCODE_BUTTON_Y,
+        "L1" to KeyEvent.KEYCODE_BUTTON_L1, "R1" to KeyEvent.KEYCODE_BUTTON_R1, "L2" to KeyEvent.KEYCODE_BUTTON_L2, "R2" to KeyEvent.KEYCODE_BUTTON_R2,
+        "SELECT" to KeyEvent.KEYCODE_BUTTON_SELECT, "START" to KeyEvent.KEYCODE_BUTTON_START)
+    private var configStep = -1
+    private var configDevice: InputDevice? = null
+    private val configMap = HashMap<Int, Int>()
+    private var configView: TextView? = null
+
+    private fun startConfig() {
+        configStep = 0; configDevice = null; configMap.clear()
+        val root = window.decorView.findViewById<FrameLayout>(android.R.id.content)
+        configView = TextView(this).apply {
+            setTextColor(Color.WHITE); textSize = 26f; gravity = Gravity.CENTER
+            setBackgroundColor(0xE6000000.toInt())
+        }
+        root.addView(configView, FrameLayout.LayoutParams(-1, -1))
+        showConfigStep()
+    }
+
+    private fun showConfigStep() {
+        if (configStep >= CONFIG_STEPS.size) { finishConfig(); return }
+        configView?.text = "Configurar mando  (${configStep + 1}/${CONFIG_STEPS.size})\n\nPresiona en el mando:\n\n${CONFIG_STEPS[configStep].first}\n\n" +
+            "Si tu mando no tiene ese botón, presiona Atrás en el control de la TV para saltarlo."
+    }
+
+    private fun finishConfig() {
+        val d = configDevice
+        if (d != null && configMap.isNotEmpty()) {
+            prefs.edit().putString(devKey(d), configMap.entries.joinToString(",") { "${it.key}:${it.value}" }).apply()
+            mapCache.remove(devKey(d))
+            Toast.makeText(this, "Mando \"${d.name}\" configurado", Toast.LENGTH_LONG).show()
+        }
+        (configView?.parent as? FrameLayout)?.removeView(configView)
+        configView = null; configStep = -1
+        retroView.requestFocus()
+    }
+
+    private fun configKey(event: KeyEvent): Boolean {
+        if (event.action != KeyEvent.ACTION_DOWN || event.repeatCount > 0) return true
+        val fromPad = event.device != null && !event.device.isVirtual && event.keyCode != KeyEvent.KEYCODE_BACK
+        if (!fromPad) { configStep++; showConfigStep(); return true }   // Atrás = saltar
+        if (configDevice == null) configDevice = event.device
+        if (event.deviceId != configDevice?.id) return true
+        configMap[event.keyCode] = CONFIG_STEPS[configStep].second
+        configStep++; showConfigStep()
+        return true
+    }
+
+    private var announced = HashSet<Int>()
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (configStep >= 0) return configKey(event)
         if (pad?.visibility == View.VISIBLE && fromGamepad(event.source) && KeyEvent.isGamepadButton(event.keyCode)) setPadVisible(false)
-        if (event.keyCode == KeyEvent.KEYCODE_BUTTON_MODE || event.keyCode == KeyEvent.KEYCODE_MENU) {
+        val code = event.keyCode
+        if (code == KeyEvent.KEYCODE_BUTTON_MODE || code == KeyEvent.KEYCODE_MENU) {
             if (event.action == KeyEvent.ACTION_UP) showMenu()
             return true
         }
-        val code = event.keyCode
-        val isPadKey = KeyEvent.isGamepadButton(code) || code in DPAD_KEYS
-        if (isPadKey && (fromGamepad(event.source) || code in DPAD_KEYS || code == KeyEvent.KEYCODE_DPAD_CENTER)) {
-            // El OK del control remoto de la TV funciona como botón A
-            val sent = if (code == KeyEvent.KEYCODE_DPAD_CENTER) KeyEvent.KEYCODE_BUTTON_A else code
-            if (event.repeatCount == 0) {
-                // SELECT + START juntos abren el menú (para mandos sin botón de menú)
-                if (sent == KeyEvent.KEYCODE_BUTTON_SELECT) selectDown = event.action == KeyEvent.ACTION_DOWN
-                if (sent == KeyEvent.KEYCODE_BUTTON_START) startDown = event.action == KeyEvent.ACTION_DOWN
-                if (selectDown && startDown) { selectDown = false; startDown = false; showMenu(); return true }
-                retroView.sendKeyEvent(event.action, sent, if (fromGamepad(event.source)) physicalPort(event.deviceId) else 0)
-            }
-            return true
+        if (code == KeyEvent.KEYCODE_BACK && customMap(event.device)[code] == null) return super.dispatchKeyEvent(event)
+        val sent = mapKey(event)
+        val dev = event.device
+        val physical = dev != null && !dev.isVirtual
+        if (sent == null) {
+            // Botón que no conocemos: avisamos una vez para que se pueda configurar
+            if (physical && event.action == KeyEvent.ACTION_DOWN && announced.add(code))
+                Toast.makeText(this, "Botón no reconocido (${KeyEvent.keyCodeToString(code)}). Abre el menú › Configurar mando", Toast.LENGTH_LONG).show()
+            return super.dispatchKeyEvent(event)
         }
-        return super.dispatchKeyEvent(event)
+        if (physical && announced.add(-event.deviceId - 1000))
+            Toast.makeText(this, "Mando: ${dev?.name}", Toast.LENGTH_SHORT).show()
+        if (event.repeatCount == 0) {
+            if (sent == KeyEvent.KEYCODE_BUTTON_SELECT) selectDown = event.action == KeyEvent.ACTION_DOWN
+            if (sent == KeyEvent.KEYCODE_BUTTON_START) startDown = event.action == KeyEvent.ACTION_DOWN
+            if (selectDown && startDown) { selectDown = false; startDown = false; showMenu(); return true }
+            retroView.sendKeyEvent(event.action, sent, if (physical && fromGamepad(event.source)) physicalPort(event.deviceId) else 0)
+        }
+        return true
     }
 
     /** Palancas, cruceta "HAT" y gatillos analógicos de los mandos. */
     override fun dispatchGenericMotionEvent(ev: android.view.MotionEvent): Boolean {
+        if (configStep >= 0) {
+            // En la configuración, la cruceta tipo "HAT" ya funciona sola: se salta ese paso
+            if (configStep < 4 && (ev.getAxisValue(android.view.MotionEvent.AXIS_HAT_X) != 0f || ev.getAxisValue(android.view.MotionEvent.AXIS_HAT_Y) != 0f)) {
+                if (configDevice == null) configDevice = ev.device
+                configStep = 4; showConfigStep()
+            }
+            return true
+        }
         if (fromGamepad(ev.source) && ev.action == android.view.MotionEvent.ACTION_MOVE) {
             if (pad?.visibility == View.VISIBLE) setPadVisible(false)
             val port = physicalPort(ev.deviceId)
@@ -255,19 +358,20 @@ class GameActivity : ComponentActivity() {
     private fun showMenu() {
         pad?.releaseAll()
         val padItem = if (pad == null) null else if (pad?.visibility == View.VISIBLE) "Ocultar controles en pantalla" else "Mostrar controles en pantalla"
-        val items = listOfNotNull("Continuar", "Guardar partida", "Cargar partida", "Reiniciar juego", "Salir del juego", padItem).toTypedArray()
+        val items = listOfNotNull("Continuar", "Guardar partida", "Cargar partida", "Reiniciar juego", "Configurar mando", "Salir del juego", padItem).toTypedArray()
         AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
             .setTitle(intent.getStringExtra("title") ?: "Juego")
             .setItems(items) { d, which ->
-                when (which) {
-                    1 -> saveState()
-                    2 -> loadState()
-                    3 -> retroView.reset()
-                    4 -> { saveSram(); finish() }
-                    5 -> { val show = pad?.visibility != View.VISIBLE; padHiddenByUser = !show; setPadVisible(show) }
-                }
                 d.dismiss()
                 retroView.requestFocus()
+                when (items[which]) {
+                    "Guardar partida" -> saveState()
+                    "Cargar partida" -> loadState()
+                    "Reiniciar juego" -> retroView.reset()
+                    "Configurar mando" -> startConfig()
+                    "Salir del juego" -> { saveSram(); finish() }
+                    padItem -> { val show = pad?.visibility != View.VISIBLE; padHiddenByUser = !show; setPadVisible(show) }
+                }
             }
             .show()
     }
