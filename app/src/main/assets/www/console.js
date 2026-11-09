@@ -82,7 +82,7 @@
         '<div class="crow cshelfrow">' + list.slice(0, 150).map(function (r) { return tile(r, false); }).join('') + '</div></div>';
     });
     if (by['?']) shelves.push('<div class="cshelf"><h3 style="--c:#6B7280"><i>?</i>Sin sistema<small>' + by['?'].length + ' · OK para elegir</small></h3><div class="crow cshelfrow">' + by['?'].map(function (r) { return tile(r, false); }).join('') + '</div></div>');
-    return topBar() + '<section class="clib">' + (shelves.length ? shelves.join('') : '<div class="cnone"><h2>Aún no hay juegos</h2><p>Conecta tu USB con ROMs y usa “Buscar juegos” en el Inicio.</p></div>') + '</section>' +
+    return topBar() + '<section class="clib">' + (shelves.length ? shelves.join('') : '<div class="cnone"><h2>Aún no hay juegos</h2><p>Conecta tu USB y usa “Buscar juegos”, o usa “Enviar desde el celular” en el Inicio.</p></div>') + '</section>' +
       '<footer class="chint"><span><i>OK</i>Jugar</span><span><i>OK</i>Dejar presionado: opciones</span><span><i>⟵</i>Inicio</span></footer>';
   }
 
@@ -198,6 +198,7 @@
     document.body.appendChild(box);
     document.documentElement.classList.add('console-open');
     render();
+    if (MV.syncOwnRoms) MV.syncOwnRoms();
     clockT = setInterval(tick, 15000);
     // Buscar juegos, BIOS o cambio de sistema: se actualiza solo cuando cambia la lista
     watchT = setInterval(function () { if (!MV.modalOpen() && roms().length !== lastCount) render(); }, 1200);

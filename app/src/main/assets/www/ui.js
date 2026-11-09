@@ -1602,8 +1602,26 @@
         : '<div class="empty glass"><h2>' + (roms.length ? 'No hay juegos de este sistema' : 'Aún no hay juegos') + '</h2><p class="muted">Conecta una USB o disco duro con tus ROMs (o cópialas a la memoria) y toca “Buscar juegos”. Los emuladores se descargan solos la primera vez que juegas cada sistema.</p></div>');
   };
 
+  /**
+   * La carpeta propia de MiVibra (juegos enviados desde el celular o descargados) se revisa sola al entrar a Juegos:
+   * lo nuevo se agrega y lo borrado se quita, sin tener que usar "Buscar juegos".
+   */
+  var ownSyncAt = 0;
+  MV.syncOwnRoms = function () {
+    if (!A || !A.downloadsDir || Date.now() - ownSyncAt < 5000) return;
+    ownSyncAt = Date.now();
+    var dl = A.downloadsDir();
+    MV.call('scanRoms', [JSON.stringify([dl]), JSON.stringify(D.ROM_EXTS)]).then(function (found) {
+      found = (found || []).filter(isGame);
+      var list = MV.load('roms', []) || [], before = JSON.stringify(list.map(function (r) { return r.path; }));
+      var inDl = function (r) { return String(r.path || '').indexOf(dl) === 0; };
+      list = list.filter(function (r) { return !inDl(r) || found.some(function (f) { return f.path === r.path; }); });
+      found.forEach(function (f) { if (!list.some(function (r) { return r.path === f.path; })) list.push(f); });
+      if (JSON.stringify(list.map(function (r) { return r.path; })) !== before) { MV.save('roms', list); if (view.name === 'games' && !MV.modalOpen()) MV.rerender(); }
+    }).catch(function () {});
+  };
   // Juegos abre el modo consola (salvo que se haya elegido la vista clásica)
-  VIEWS.games.after = function () { if (!MV.load('gamesClassic', false) && MV.console && !MV.console.isOpen()) MV.console.open(); };
+  VIEWS.games.after = function () { MV.syncOwnRoms(); if (!MV.load('gamesClassic', false) && MV.console && !MV.console.isOpen()) MV.console.open(); };
 
   // ---------- Ajustes ----------
   var setTab = 'lists';
