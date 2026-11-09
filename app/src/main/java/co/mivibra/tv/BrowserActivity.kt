@@ -431,13 +431,27 @@ class BrowserActivity : ComponentActivity() {
             .create()
         input.setOnEditorActionListener { _, _, _ -> send(true); true }
         dlg.setOnDismissListener { typing = false; web.requestFocus() }
-        dlg.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
+        dlg.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE or WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN)
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        // En TV el teclado solo sale si se pide con fuerza y cuando la ventanita ya tiene el foco
+        fun openKeyboard() {
+            if (!dlg.isShowing) return
+            input.requestFocus()
+            dlg.window?.let { w -> WindowCompat.getInsetsController(w, input).show(WindowInsetsCompat.Type.ime()) }
+            @Suppress("DEPRECATION")
+            if (!imm.showSoftInput(input, InputMethodManager.SHOW_FORCED)) imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0)
+        }
+        // OK sobre el campo también abre el teclado
+        input.setOnClickListener { openKeyboard() }
+        input.setOnKeyListener { _, k, ev ->
+            if (ev.action == KeyEvent.ACTION_UP && (k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER) && input.text.isEmpty()) { openKeyboard(); true } else false
+        }
+        dlg.setOnShowListener {
+            input.postDelayed({ openKeyboard() }, 120)
+            input.postDelayed({ openKeyboard() }, 600)
+        }
         dlg.show()
         input.requestFocus()
-        input.postDelayed({
-            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-            imm.showSoftInput(input, InputMethodManager.SHOW_IMPLICIT)
-        }, 150)
     }
 
     /** Pone el texto en el campo de la página como si se hubiera escrito (sirve con Google, YouTube y páginas React). */
