@@ -386,9 +386,17 @@ class GameActivity : ComponentActivity() {
             val dev = ev.device
             fun has(a: Int) = dev?.getMotionRange(a, ev.source) != null
             fun dz(v: Float) = if (kotlin.math.abs(v) < 0.2f) 0f else v
-            if (has(android.view.MotionEvent.AXIS_HAT_X)) {
-                val h = Pair(ax(android.view.MotionEvent.AXIS_HAT_X), ax(android.view.MotionEvent.AXIS_HAT_Y))
-                if (lastHat[ev.deviceId] != h) { lastHat[ev.deviceId] = h; retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_DPAD, h.first, h.second, port) }
+            // Cruceta = HAT del mando, o la palanca izquierda si la HAT está suelta
+            // (los juegos de PlayStation 1, NES, SNES… solo entienden la cruceta)
+            if (has(android.view.MotionEvent.AXIS_HAT_X) || has(android.view.MotionEvent.AXIS_X)) {
+                fun dir(v: Float) = if (v > 0.5f) 1f else if (v < -0.5f) -1f else 0f
+                var hx = if (has(android.view.MotionEvent.AXIS_HAT_X)) dir(ax(android.view.MotionEvent.AXIS_HAT_X)) else 0f
+                var hy = if (has(android.view.MotionEvent.AXIS_HAT_Y)) dir(ax(android.view.MotionEvent.AXIS_HAT_Y)) else 0f
+                if (hx == 0f && hy == 0f && has(android.view.MotionEvent.AXIS_X)) {
+                    hx = dir(ax(android.view.MotionEvent.AXIS_X)); hy = dir(ax(android.view.MotionEvent.AXIS_Y))
+                }
+                val h = Pair(hx, hy)
+                if (lastHat[port] != h) { lastHat[port] = h; retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_DPAD, hx, hy, port) }
             }
             if (has(android.view.MotionEvent.AXIS_X))
                 retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, dz(ax(android.view.MotionEvent.AXIS_X)), dz(ax(android.view.MotionEvent.AXIS_Y)), port)
