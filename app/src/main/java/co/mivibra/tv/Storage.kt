@@ -37,9 +37,19 @@ object Storage {
         } catch (_: Exception) {
         }
         // Algunos TV box montan USB/discos aquí sin reportarlos como volúmenes
-        for (base in listOf("/storage", "/mnt/media_rw", "/mnt/usb", "/mnt/usb_storage")) {
+        // (en algunos van un nivel más adentro: /mnt/usb/sda1, /mnt/usb_storage/USB_DISK0/udisk0…)
+        val skip = setOf("self", "emulated", "sdcard0", "runtime", "secure", "asec", "obb", "user", "expand", "appfuse", "pass_through", "vendor", "product")
+        for (base in listOf("/storage", "/mnt/media_rw", "/mnt/usb", "/mnt/usb_storage", "/mnt/usbdrive", "/mnt/udisk", "/mnt/sdcard/usb", "/mnt/external_sd", "/mnt/extsd", "/udisk", "/usbotg")) {
             File(base).listFiles()?.forEach { f ->
-                if (f.isDirectory && f.name != "self" && f.name != "emulated" && f.canRead()) add("USB / Disco (${f.name})", f.absolutePath, true)
+                if (!f.isDirectory || f.name in skip) return@forEach
+                if (f.canRead() && (f.list()?.isNotEmpty() == true)) {
+                    val inner = f.listFiles()?.filter { it.isDirectory && Regex("(?i)^(sd[a-z]\\d*|udisk\\d*|usb.*|disk\\d*|part\\d*)$").matches(it.name) && it.canRead() }.orEmpty()
+                    if (inner.isNotEmpty()) inner.forEach { add("USB / Disco (${it.name})", it.absolutePath, true) }
+                    else add("USB / Disco (${f.name})", f.absolutePath, true)
+                } else if (base == "/storage" && Regex("^[0-9A-F]{4}-[0-9A-F]{4}$").matches(f.name)) {
+                    // USB montada pero sin permiso para leerla todavía
+                    add("USB / Disco (${f.name})", f.absolutePath, true)
+                }
             }
         }
         // Carpeta propia donde se guardan las ROMs descargadas

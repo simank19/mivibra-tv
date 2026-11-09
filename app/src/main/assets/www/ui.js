@@ -2712,7 +2712,7 @@
       if (!A) return;
       var roots = JSON.parse(A.storageRoots()).filter(function (r) { return !/Descargas de MiVibra/.test(r.name); });
       var anyLocked = roots.some(function (r) { return !r.readable; });
-      var picked = P.romRoots.filter(function (p) { return p.indexOf('content://') === 0; });
+      var rp = roots.map(function (r) { return r.path; }), picked = P.romRoots.filter(function (p) { return rp.indexOf(p) < 0 && p !== A.downloadsDir(); });
       MV._scanRoots = roots.map(function (r) { return r.path; }).concat(picked);
       MV.modal('<h2>¿Dónde busco los juegos?</h2><p class="muted">Conecta la USB o el disco antes de elegir. Si no aparece, usa “Elegir carpeta”.</p>' +
         '<div class="btns" style="flex-direction:column;align-items:stretch">' +
@@ -2722,9 +2722,37 @@
         }).join('') +
         picked.map(function (p, j) { return '<button class="btn ghost f" data-act="scanIn" data-arg="' + (roots.length + j) + '">📁 ' + esc(decodeURIComponent(p.split('/tree/')[1] || p)) + '</button>'; }).join('') +
         '<button class="btn ghost f" data-act="scanIn" data-arg="all">🔎 Buscar en todas</button>' +
-        '<button class="btn ghost f" data-act="scanPick">📂 Elegir carpeta o unidad…</button>' +
-        (anyLocked ? '<button class="btn ghost f" data-act="storageAccess">🔓 Dar permiso para leer USB y discos</button>' : '') +
-        '</div>');
+        '<button class="btn ghost f" data-act="scanBrowse" data-arg="/">📂 Explorar carpetas…</button>' +
+        '<button class="btn ghost f" data-act="scanPick">🗂️ Selector de Android…</button>' +
+        (anyLocked || (A.hasStorageAccess && !A.hasStorageAccess()) ? '<button class="btn ghost f" data-act="storageAccess">🔓 Dar permiso para leer USB y discos</button>' : '') +
+        '<button class="btn ghost f" data-act="scanChooser">🔄 Actualizar (después de conectar la USB)</button>' +
+        '</div>' + (roots.length <= 1 ? '<p class="muted" style="margin-top:10px">No veo ninguna USB ni disco. Revisa que esté bien conectada, toca “Dar permiso” si aparece, o entra a “Explorar carpetas” y busca en /storage o /mnt.</p>' : ''));
+    },
+    // Explorador propio (no depende del selector de Android, que muchas TV no traen)
+    scanBrowse: function (path) {
+      path = path || '/';
+      MV.call('listDir', [path]).then(function (items) {
+        var dirs = (items || []).filter(function (f) { return f.dir; });
+        var games = (items || []).filter(function (f) { return !f.dir && D.ROM_EXTS.indexOf(String(f.name).split('.').pop().toLowerCase()) >= 0; }).length;
+        var up = path === '/' ? null : path.replace(/\/[^\/]+\/?$/, '') || '/';
+        MV._browse = { path: path, dirs: dirs.map(function (d) { return d.path; }), up: up };
+        MV.closeModal(true);
+        MV.modal('<h2>📂 ' + esc(path) + '</h2><p class="muted">' + dirs.length + ' carpetas' + (games ? ' · ' + games + ' archivos de juegos aquí' : '') + '</p>' +
+          '<div class="btns" style="flex-direction:column;align-items:stretch;max-height:52vh;overflow:auto">' +
+          '<button class="btn f" data-act="scanHere">🔎 Buscar juegos en esta carpeta</button>' +
+          (up ? '<button class="btn ghost f" data-act="scanBrowseIdx" data-arg="up">⬆ Subir</button>' : '') +
+          (path === '/' ? ['/storage', '/mnt', '/sdcard'].map(function (q) { return '<button class="btn ghost f" data-act="scanBrowse" data-arg="' + q + '">📁 ' + q + '</button>'; }).join('') : '') +
+          dirs.slice(0, 200).map(function (d, i) { return '<button class="btn ghost f" data-act="scanBrowseIdx" data-arg="' + i + '">📁 ' + esc(d.name) + '</button>'; }).join('') +
+          '</div>');
+      }).catch(function () {
+        MV.toast('No se puede abrir ' + path + (A.hasStorageAccess && !A.hasStorageAccess() ? '. Toca “Dar permiso para leer USB y discos”.' : ''), 4500);
+      });
+    },
+    scanBrowseIdx: function (i) { var b = MV._browse || {}; ACT.scanBrowse(i === 'up' ? b.up : b.dirs[+i]); },
+    scanHere: function () {
+      var p = (MV._browse || {}).path; if (!p) return;
+      if (P.romRoots.indexOf(p) < 0) { P.romRoots.push(p); MV.savePrefs(); }
+      MV._scanRoots = [p]; ACT.scanIn('0');
     },
     scanIn: function (arg) {
       var all = MV._scanRoots || [];
