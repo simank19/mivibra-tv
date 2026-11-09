@@ -290,7 +290,10 @@ class GameActivity : ComponentActivity() {
 
     private fun configKey(event: KeyEvent): Boolean {
         if (event.action != KeyEvent.ACTION_DOWN || event.repeatCount > 0) return true
-        val fromPad = event.device != null && !event.device.isVirtual && event.keyCode != KeyEvent.KEYCODE_BACK
+        // Atrás del control de la TV = saltar; el botón Back/Select del mando sí se puede asignar
+        val samePad = configDevice != null && event.deviceId == configDevice?.id
+        val fromPad = event.device != null && !event.device.isVirtual &&
+            (event.keyCode != KeyEvent.KEYCODE_BACK || samePad || fromGamepad(event.source))
         if (!fromPad) { configStep++; showConfigStep(); return true }   // Atrás = saltar
         if (configDevice == null) configDevice = event.device
         if (event.deviceId != configDevice?.id) return true
@@ -340,6 +343,23 @@ class GameActivity : ComponentActivity() {
                 if (configDevice == null) configDevice = ev.device
                 configStep = 4; showConfigStep()
             }
+            // L2 / R2: en muchos mandos (Xbox 360) son gatillos analógicos, no botones
+            val target = CONFIG_STEPS.getOrNull(configStep)?.second
+            if (target == KeyEvent.KEYCODE_BUTTON_L2 || target == KeyEvent.KEYCODE_BUTTON_R2) {
+                if (configDevice != null && ev.deviceId != configDevice?.id) return true
+                for (a in TRIGGER_AXES) {
+                    if (configMap.containsKey(10000 + a)) continue
+                    val v = ev.getAxisValue(a)
+                    val k = ev.deviceId * 100 + a
+                    val rest = minOf(axisRest[k] ?: 0f, v); axisRest[k] = rest
+                    if (v - rest > 0.6f) {
+                        if (configDevice == null) configDevice = ev.device
+                        configMap[10000 + a] = target
+                        configStep++; showConfigStep()
+                        break
+                    }
+                }
+            }
             return true
         }
         if (fromGamepad(ev.source) && ev.action == android.view.MotionEvent.ACTION_MOVE) {
@@ -348,8 +368,6 @@ class GameActivity : ComponentActivity() {
             fun ax(a: Int) = ev.getAxisValue(a)
             retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_DPAD, ax(android.view.MotionEvent.AXIS_HAT_X), ax(android.view.MotionEvent.AXIS_HAT_Y), port)
             retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, ax(android.view.MotionEvent.AXIS_X), ax(android.view.MotionEvent.AXIS_Y), port)
-            retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_RIGHT, ax(android.view.MotionEvent.AXIS_Z), ax(android.view.MotionEvent.AXIS_RZ), port)
-            // Gatillos: algunos mandos los mandan como eje y no como botón
             fun trig(key: Int, v: Float) {
                 val on = v > 0.5f
                 if (triggers[port * 1000 + key] != on) {
@@ -357,14 +375,38 @@ class GameActivity : ComponentActivity() {
                     retroView.sendKeyEvent(if (on) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, key, port)
                 }
             }
-            trig(KeyEvent.KEYCODE_BUTTON_L2, maxOf(ax(android.view.MotionEvent.AXIS_LTRIGGER), ax(android.view.MotionEvent.AXIS_BRAKE)))
-            trig(KeyEvent.KEYCODE_BUTTON_R2, maxOf(ax(android.view.MotionEvent.AXIS_RTRIGGER), ax(android.view.MotionEvent.AXIS_GAS)))
+            val custom = customMap(ev.device).filterKeys { it >= 10000 }
+            if (custom.isEmpty()) {
+                retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_RIGHT, ax(android.view.MotionEvent.AXIS_Z), ax(android.view.MotionEvent.AXIS_RZ), port)
+                // Gatillos: algunos mandos los mandan como eje y no como botón
+                trig(KeyEvent.KEYCODE_BUTTON_L2, maxOf(ax(android.view.MotionEvent.AXIS_LTRIGGER), ax(android.view.MotionEvent.AXIS_BRAKE)))
+                trig(KeyEvent.KEYCODE_BUTTON_R2, maxOf(ax(android.view.MotionEvent.AXIS_RTRIGGER), ax(android.view.MotionEvent.AXIS_GAS)))
+            } else {
+                // Gatillos configurados a mano; si usan Z/RZ, la palanca derecha va por RX/RY
+                val used = custom.keys.map { it - 10000 }
+                val zUsed = android.view.MotionEvent.AXIS_Z in used || android.view.MotionEvent.AXIS_RZ in used
+                if (zUsed) retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_RIGHT, ax(android.view.MotionEvent.AXIS_RX), ax(android.view.MotionEvent.AXIS_RY), port)
+                else retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_RIGHT, ax(android.view.MotionEvent.AXIS_Z), ax(android.view.MotionEvent.AXIS_RZ), port)
+                for ((code, key) in custom) {
+                    val a = code - 10000
+                    val v = ax(a); val k = ev.deviceId * 100 + a
+                    val rest = minOf(axisRest[k] ?: 0f, v); axisRest[k] = rest
+                    trig(key, (v - rest) * 0.8f)
+                }
+            }
             return true
         }
         return super.dispatchGenericMotionEvent(ev)
     }
 
+    private val axisRest = HashMap<Int, Float>()
+
     companion object {
+        private val TRIGGER_AXES = intArrayOf(
+            android.view.MotionEvent.AXIS_LTRIGGER, android.view.MotionEvent.AXIS_RTRIGGER,
+            android.view.MotionEvent.AXIS_BRAKE, android.view.MotionEvent.AXIS_GAS,
+            android.view.MotionEvent.AXIS_Z, android.view.MotionEvent.AXIS_RZ,
+            android.view.MotionEvent.AXIS_RX, android.view.MotionEvent.AXIS_RY)
         private val DPAD_KEYS = setOf(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT)
     }
 
