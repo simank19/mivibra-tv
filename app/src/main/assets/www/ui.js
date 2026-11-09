@@ -1989,6 +1989,13 @@
     MV.call('playRetroArch', [JSON.stringify({ rom: r.path, core: s.raCore || s.core })]).then(function () { rememberGame(r); })
       .catch(function (e) { MV.toast(e.message, 5000); });
   }
+  // Aviso con porcentaje mientras se descomprime un .zip / .7z
+  function unzipBox(r, pct) {
+    var b = document.getElementById('unzipBox');
+    if (!r) { if (b) b.remove(); return; }
+    if (!b) { b = document.createElement('div'); b.id = 'unzipBox'; b.style.cssText = 'position:fixed;left:50%;bottom:8vh;transform:translateX(-50%);z-index:99;background:rgba(14,13,12,.92);color:#F3EFEA;padding:1.2vw 2.4vw;border-radius:1vw;font:600 1.4vw var(--ui);box-shadow:0 1vw 3vw rgba(0,0,0,.6);min-width:30vw;text-align:center'; document.body.appendChild(b); }
+    b.innerHTML = 'Preparando “' + esc(String(r.name || '').replace(/\.[^.]+$/, '')) + '”… ' + (pct || 0) + '%<div style="margin-top:.8vw;height:.5vw;border-radius:1vw;background:rgba(255,255,255,.15);overflow:hidden"><i style="display:block;height:100%;width:' + (pct || 0) + '%;background:var(--accent,#FF6900)"></i></div>';
+  }
   function playRom(r) {
     if (/^(rar|tar|gz)$/i.test(r.ext || '')) { MV.toast('El formato .' + r.ext + ' no se puede abrir. Envíalo en .zip, .7z o sin comprimir.'); return; }
     var s = romSystem(r);
@@ -2000,7 +2007,7 @@
       };
       // ROM de consola en .zip: se descomprime una vez (Arcade se juega tal cual)
       var job = (r.ext === 'zip' || r.ext === '7z') && s.id !== 'arcade'
-        ? (MV.toast('Abriendo el .zip…', 2500), MV.call('unzipRom', [JSON.stringify({ path: r.path, exts: s.exts })]).then(go))
+        ? (unzipBox(r, 0), MV.call('unzipRom', [JSON.stringify({ path: r.path, exts: s.exts })], function (p) { unzipBox(r, p); }).then(function (x) { unzipBox(null); return go(x); }, function (e) { unzipBox(null); throw e; }))
         : go(r.path);
       job.catch(function (e) { MV.toast(e.message, 4000); });
     };

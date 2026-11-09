@@ -141,7 +141,7 @@ object Storage {
      * Saca la ROM del .zip o .7z a la caché de la app (una sola vez) y devuelve la ruta del archivo a jugar.
      * Para PlayStation saca también los .bin del .cue. Se guardan como mucho 6 juegos descomprimidos.
      */
-    fun unzipRom(ctx: Context, path: String, exts: List<String>): String {
+    fun unzipRom(ctx: Context, path: String, exts: List<String>, onPct: (Int) -> Unit = {}): String {
         val base = File(ctx.cacheDir, "unzip").apply { mkdirs() }
         val src = File(path)
         val dir = File(base, Integer.toHexString((src.absolutePath + src.length() + src.lastModified()).hashCode()))
@@ -156,16 +156,24 @@ object Storage {
             .map { it.name }.toSet()
         val total = all.filter { it.name in need }.sumOf { it.size.coerceAtLeast(0) }
         if (total > base.usableSpace - 100L * 1024 * 1024) throw IllegalStateException("No hay espacio para descomprimir el juego")
-        if (is7z(path)) {
-            SevenZ.extract(src, need, dir)
-        } else {
-            java.util.zip.ZipFile(src).use { z ->
-                for (e in z.entries().toList().filter { it.name in need }) {
-                    val out = File(dir, File(e.name).name)
-                    z.getInputStream(e).use { inp -> out.outputStream().buffered(256 * 1024).use { inp.copyTo(it, 256 * 1024) } }
+        var done = 0L; var lastPct = -1
+        val tick: (Int) -> Unit = { n -> done += n; val p = if (total > 0) (done * 100 / total).toInt() else 0; if (p != lastPct) { lastPct = p; onPct(p) } }
+        try {
+            if (is7z(path)) {
+                SevenZ.extract(src, need, dir, tick)
+            } else {
+                java.util.zip.ZipFile(src).use { z ->
+                    for (e in z.entries().toList().filter { it.name in need }) {
+                        val out = File(dir, File(e.name).name)
+                        z.getInputStream(e).use { inp -> out.outputStream().buffered(256 * 1024).use { o ->
+                            val buf = ByteArray(256 * 1024)
+                            while (true) { val n = inp.read(buf); if (n < 0) break; o.write(buf, 0, n); tick(n) }
+                        } }
+                    }
                 }
             }
-        }
+        } catch (t: Throwable) { dir.deleteRecursively(); throw t }
+        if (!target.exists()) throw IllegalStateException("No se encontró el juego dentro del comprimido")
         // Limpieza: deja solo los 6 más recientes
         base.listFiles()?.filter { it.isDirectory && it != dir }?.sortedByDescending { it.lastModified() }?.drop(5)?.forEach { it.deleteRecursively() }
         return target.absolutePath

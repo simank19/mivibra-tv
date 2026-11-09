@@ -437,7 +437,7 @@ class Bridge(private val a: MainActivity) {
 
     /** Extensiones de lo que trae un .zip (para reconocer la consola). */
     @JavascriptInterface
-    fun zipExts(path: String): String = if (path.startsWith("content://")) "[]" else Storage.zipExts(path).toString()
+    fun zipExts(path: String): String = if (path.startsWith("content://")) "[]" else try { Storage.zipExts(path).toString() } catch (_: Throwable) { "[]" }
 
     /** Descomprime la ROM de un .zip y responde la ruta del juego: {path, exts:[..]} */
     @JavascriptInterface
@@ -448,10 +448,12 @@ class Bridge(private val a: MainActivity) {
                 val src = Storage.toLocalFile(a, o.getString("path"))
                 val arr = o.optJSONArray("exts") ?: JSONArray()
                 val exts = (0 until arr.length()).map { arr.getString(it).lowercase() }
-                val out = Storage.unzipRom(a, src.absolutePath, exts)
+                val out = Storage.unzipRom(a, src.absolutePath, exts) { progress(id, it) }
                 reply(id, true, out)
-            } catch (e: Exception) {
-                reply(id, false, e.message ?: "No se pudo abrir el .zip")
+            } catch (e: OutOfMemoryError) {
+                reply(id, false, "El TV no tiene memoria suficiente para abrir este .7z. Envíalo en .zip o sin comprimir.")
+            } catch (e: Throwable) {
+                reply(id, false, (e.message ?: e.javaClass.simpleName).let { "No se pudo abrir el comprimido: $it" })
             }
         }
     }
