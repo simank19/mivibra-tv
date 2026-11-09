@@ -88,3 +88,11 @@ html.console-open #app { visibility: hidden; }
 .ctile.csys .cv .mono.sysbig .sysic { width: 4.2em; height: 4.2em; }
 .ctile.csys .nm { font-size: 1.15em; }
 .cshelf h3 i .sysic { width: 2.4em; height: 2.4em; display: block; }
+
+/* Íconos a color: sobre fondo oscuro, que es como fueron dibujados */
+.sysimg { object-fit: contain; }
+.ctile.csys .cv { background: linear-gradient(150deg, color-mix(in srgb, var(--c) 30%, #1B1916), #0E0D0C 75%); border: .1em solid color-mix(in srgb, var(--c) 45%, transparent); }
+.ctile.csys .cv .mono.sysbig .sysimg { width: 5.4em; height: 5.4em; margin: -.6em -.2em; }
+.cshelf h3 i:has(.sysimg) { background: transparent; padding: 0; }
+.cshelf h3 i .sysimg { width: 3em; height: 3em; }
+.cv:not(.art) .mono .sysimg { width: 4em; height: 4em; }

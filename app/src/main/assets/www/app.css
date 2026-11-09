@@ -624,3 +624,5 @@ html.lite .card .shine { display: none; }
 /* Íconos de consolas */
 .sysb i .sysic { width: 70%; height: 70%; color: #fff; }
 .card .th .mono .sysic { width: 2.2em; height: 2.2em; display: block; }
+.sysb i .sysimg { width: 92%; height: 92%; }
+.sysb i:has(.sysimg) { background: #1B1916 !important; }

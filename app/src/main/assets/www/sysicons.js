@@ -61,7 +61,10 @@
     '?': '<rect x="6" y="14" width="36" height="20" rx="10"/><path d="M21 21c0-2 1.5-3 3-3s3 1 3 3c0 2.5-3 2.5-3 5"/>' + dot(24, 30, 1.4)
   };
 
+  // Íconos a color de KyleBing/retro-game-console-icons (CC BY 4.0); los demás usan el dibujo de línea
+  var PNG = ['nes', 'snes', 'gb', 'gbc', 'gba', 'n64', 'nds', 'md', 'sms', 'gg', 'psx', 'a26', 'a78', 'lynx', 'pce', 'ngp', 'ws', 'arcade', 'psp', 'dc', 'doom', 'quake', 'cave'];
   MV.sysIcon = function (id) {
+    if (PNG.indexOf(id) >= 0) return '<img class="sysic sysimg" src="img/consoles/' + id + '.png" alt="" loading="lazy">';
     var body = I[id] || I['?'];
     return '<svg class="sysic" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + body + '</svg>';
   };
