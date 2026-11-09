@@ -240,7 +240,7 @@ class GameActivity : ComponentActivity() {
     // ---- Asignación personalizada de botones (menú › Configurar mando) ----
     private val prefs by lazy { getSharedPreferences("mandos", MODE_PRIVATE) }
     private val mapCache = HashMap<String, Map<Int, Int>>()
-    private fun devKey(d: InputDevice?) = "map_" + (d?.descriptor ?: d?.name ?: "x")
+    private fun devKey(d: InputDevice?) = "map2_" + (d?.descriptor ?: d?.name ?: "x")
     private fun customMap(d: InputDevice?): Map<Int, Int> = mapCache.getOrPut(devKey(d)) {
         (prefs.getString(devKey(d), "") ?: "").split(',').mapNotNull {
             val p = it.split(':'); if (p.size == 2) (p[0].toIntOrNull() ?: return@mapNotNull null) to (p[1].toIntOrNull() ?: return@mapNotNull null) else null
@@ -248,8 +248,6 @@ class GameActivity : ComponentActivity() {
     }
 
     private val CONFIG_STEPS = listOf(
-        "ARRIBA (cruceta)" to KeyEvent.KEYCODE_DPAD_UP, "ABAJO (cruceta)" to KeyEvent.KEYCODE_DPAD_DOWN,
-        "IZQUIERDA (cruceta)" to KeyEvent.KEYCODE_DPAD_LEFT, "DERECHA (cruceta)" to KeyEvent.KEYCODE_DPAD_RIGHT,
         "A  (abajo · X en PlayStation)" to KeyEvent.KEYCODE_BUTTON_A, "B  (derecha · ○ en PlayStation)" to KeyEvent.KEYCODE_BUTTON_B,
         "X  (izquierda · □ en PlayStation)" to KeyEvent.KEYCODE_BUTTON_X, "Y  (arriba · △ en PlayStation)" to KeyEvent.KEYCODE_BUTTON_Y,
         "L1" to KeyEvent.KEYCODE_BUTTON_L1, "R1" to KeyEvent.KEYCODE_BUTTON_R1, "L2" to KeyEvent.KEYCODE_BUTTON_L2, "R2" to KeyEvent.KEYCODE_BUTTON_R2,
@@ -260,6 +258,7 @@ class GameActivity : ComponentActivity() {
     private var configView: TextView? = null
 
     private fun startConfig() {
+        releaseEverything(); configHeld = -1
         configStep = 0; configDevice = null; configMap.clear()
         val root = window.decorView.findViewById<FrameLayout>(android.R.id.content)
         configView = TextView(this).apply {
@@ -288,21 +287,43 @@ class GameActivity : ComponentActivity() {
         retroView.requestFocus()
     }
 
+    private var configHeld = -1
     private fun configKey(event: KeyEvent): Boolean {
-        if (event.action != KeyEvent.ACTION_DOWN || event.repeatCount > 0) return true
-        // Atrás del control de la TV = saltar; el botón Back/Select del mando sí se puede asignar
+        val code = event.keyCode
+        if (event.action == KeyEvent.ACTION_UP) { if (code == configHeld) configHeld = -1; return true }
+        if (event.repeatCount > 0 || configHeld != -1) return true          // hay que soltar antes del siguiente
+        if (code in DPAD_KEYS || code == KeyEvent.KEYCODE_DPAD_CENTER) return true   // la cruceta ya funciona sola
         val samePad = configDevice != null && event.deviceId == configDevice?.id
         val fromPad = event.device != null && !event.device.isVirtual &&
-            (event.keyCode != KeyEvent.KEYCODE_BACK || samePad || fromGamepad(event.source))
-        if (!fromPad) { configStep++; showConfigStep(); return true }   // Atrás = saltar
+            (code != KeyEvent.KEYCODE_BACK || samePad || fromGamepad(event.source))
+        if (!fromPad) { configStep++; showConfigStep(); return true }   // Atrás del control de la TV = saltar
         if (configDevice == null) configDevice = event.device
         if (event.deviceId != configDevice?.id) return true
-        configMap[event.keyCode] = CONFIG_STEPS[configStep].second
+        if (configMap.containsKey(code)) return true                    // ese botón ya quedó asignado
+        configHeld = code
+        configMap[code] = CONFIG_STEPS[configStep].second
         configStep++; showConfigStep()
         return true
     }
 
     private var announced = HashSet<Int>()
+
+    /** Estado de cada botón enviado al emulador, para no dejar nada "pegado". */
+    private val pressed = HashSet<Int>()
+    private fun press(port: Int, key: Int, down: Boolean) {
+        val id = port * 1000 + key
+        if (down) { if (!pressed.add(id)) return } else if (!pressed.remove(id)) return
+        retroView.sendKeyEvent(if (down) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, key, port)
+    }
+    private fun releaseEverything() {
+        for (id in pressed.toList()) retroView.sendKeyEvent(KeyEvent.ACTION_UP, id % 1000, id / 1000)
+        pressed.clear(); triggers.clear(); lastHat.clear()
+        for (port in 0..3) for (src in intArrayOf(GLRetroView.MOTION_SOURCE_DPAD, GLRetroView.MOTION_SOURCE_ANALOG_LEFT, GLRetroView.MOTION_SOURCE_ANALOG_RIGHT))
+            retroView.sendMotionEvent(src, 0f, 0f, port)
+    }
+    private val lastHat = HashMap<Int, Pair<Float, Float>>()
+
+    override fun onPause() { super.onPause(); if (::retroView.isInitialized) releaseEverything() }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (configStep >= 0) return configKey(event)
@@ -330,7 +351,8 @@ class GameActivity : ComponentActivity() {
             if (sent == KeyEvent.KEYCODE_BUTTON_SELECT) selectDown = event.action == KeyEvent.ACTION_DOWN
             if (sent == KeyEvent.KEYCODE_BUTTON_START) startDown = event.action == KeyEvent.ACTION_DOWN
             if (selectDown && startDown) { selectDown = false; startDown = false; showMenu(); return true }
-            retroView.sendKeyEvent(event.action, sent, if (physical && fromGamepad(event.source)) physicalPort(event.deviceId, true) else 0)
+            val port = if (physical && fromGamepad(event.source)) physicalPort(event.deviceId, true) else 0
+            press(port, sent, event.action == KeyEvent.ACTION_DOWN)
         }
         return true
     }
@@ -338,11 +360,6 @@ class GameActivity : ComponentActivity() {
     /** Palancas, cruceta "HAT" y gatillos analógicos de los mandos. */
     override fun dispatchGenericMotionEvent(ev: android.view.MotionEvent): Boolean {
         if (configStep >= 0) {
-            // En la configuración, la cruceta tipo "HAT" ya funciona sola: se salta ese paso
-            if (configStep < 4 && (ev.getAxisValue(android.view.MotionEvent.AXIS_HAT_X) != 0f || ev.getAxisValue(android.view.MotionEvent.AXIS_HAT_Y) != 0f)) {
-                if (configDevice == null) configDevice = ev.device
-                configStep = 4; showConfigStep()
-            }
             // L2 / R2: en muchos mandos (Xbox 360) son gatillos analógicos, no botones
             val target = CONFIG_STEPS.getOrNull(configStep)?.second
             if (target == KeyEvent.KEYCODE_BUTTON_L2 || target == KeyEvent.KEYCODE_BUTTON_R2) {
@@ -366,18 +383,25 @@ class GameActivity : ComponentActivity() {
             if (pad?.visibility == View.VISIBLE) setPadVisible(false)
             val port = physicalPort(ev.deviceId)
             fun ax(a: Int) = ev.getAxisValue(a)
-            retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_DPAD, ax(android.view.MotionEvent.AXIS_HAT_X), ax(android.view.MotionEvent.AXIS_HAT_Y), port)
-            retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, ax(android.view.MotionEvent.AXIS_X), ax(android.view.MotionEvent.AXIS_Y), port)
+            val dev = ev.device
+            fun has(a: Int) = dev?.getMotionRange(a, ev.source) != null
+            fun dz(v: Float) = if (kotlin.math.abs(v) < 0.2f) 0f else v
+            if (has(android.view.MotionEvent.AXIS_HAT_X)) {
+                val h = Pair(ax(android.view.MotionEvent.AXIS_HAT_X), ax(android.view.MotionEvent.AXIS_HAT_Y))
+                if (lastHat[ev.deviceId] != h) { lastHat[ev.deviceId] = h; retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_DPAD, h.first, h.second, port) }
+            }
+            if (has(android.view.MotionEvent.AXIS_X))
+                retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, dz(ax(android.view.MotionEvent.AXIS_X)), dz(ax(android.view.MotionEvent.AXIS_Y)), port)
             fun trig(key: Int, v: Float) {
                 val on = v > 0.5f
                 if (triggers[port * 1000 + key] != on) {
                     triggers[port * 1000 + key] = on
-                    retroView.sendKeyEvent(if (on) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, key, port)
+                    press(port, key, on)
                 }
             }
             val custom = customMap(ev.device).filterKeys { it >= 10000 }
             if (custom.isEmpty()) {
-                retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_RIGHT, ax(android.view.MotionEvent.AXIS_Z), ax(android.view.MotionEvent.AXIS_RZ), port)
+                retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_RIGHT, dz(ax(android.view.MotionEvent.AXIS_Z)), dz(ax(android.view.MotionEvent.AXIS_RZ)), port)
                 // Gatillos: algunos mandos los mandan como eje y no como botón
                 trig(KeyEvent.KEYCODE_BUTTON_L2, maxOf(ax(android.view.MotionEvent.AXIS_LTRIGGER), ax(android.view.MotionEvent.AXIS_BRAKE)))
                 trig(KeyEvent.KEYCODE_BUTTON_R2, maxOf(ax(android.view.MotionEvent.AXIS_RTRIGGER), ax(android.view.MotionEvent.AXIS_GAS)))
@@ -385,8 +409,8 @@ class GameActivity : ComponentActivity() {
                 // Gatillos configurados a mano; si usan Z/RZ, la palanca derecha va por RX/RY
                 val used = custom.keys.map { it - 10000 }
                 val zUsed = android.view.MotionEvent.AXIS_Z in used || android.view.MotionEvent.AXIS_RZ in used
-                if (zUsed) retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_RIGHT, ax(android.view.MotionEvent.AXIS_RX), ax(android.view.MotionEvent.AXIS_RY), port)
-                else retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_RIGHT, ax(android.view.MotionEvent.AXIS_Z), ax(android.view.MotionEvent.AXIS_RZ), port)
+                if (zUsed) retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_RIGHT, dz(ax(android.view.MotionEvent.AXIS_RX)), dz(ax(android.view.MotionEvent.AXIS_RY)), port)
+                else retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_RIGHT, dz(ax(android.view.MotionEvent.AXIS_Z)), dz(ax(android.view.MotionEvent.AXIS_RZ)), port)
                 for ((code, key) in custom) {
                     val a = code - 10000
                     val v = ax(a); val k = ev.deviceId * 100 + a
@@ -411,6 +435,7 @@ class GameActivity : ComponentActivity() {
     }
 
     private fun showMenu() {
+        releaseEverything()
         pad?.releaseAll()
         val padItem = if (pad == null) null else if (pad?.visibility == View.VISIBLE) "Ocultar controles en pantalla" else "Mostrar controles en pantalla"
         val items = listOfNotNull("Continuar", "Guardar partida", "Cargar partida", "Reiniciar juego", "Configurar mando", "Salir del juego", padItem).toTypedArray()
