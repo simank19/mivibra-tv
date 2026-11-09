@@ -364,11 +364,12 @@ class BrowserActivity : ComponentActivity() {
         val t = SystemClock.uptimeMillis()
         val loc = IntArray(2); web.getLocationOnScreen(loc)
         val x = cursor.px - loc[0]; val y = cursor.py - loc[1]
+        if (down) web.evaluateJavascript(REMEMBER_FIELD, null)
         val ev = MotionEvent.obtain(t, t, if (down) MotionEvent.ACTION_DOWN else MotionEvent.ACTION_UP, x, y, 0)
         ev.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
         web.dispatchTouchEvent(ev); ev.recycle()
         cursor.down = down; cursor.invalidate()
-        if (!down) web.postDelayed({ keyboardIfTyping(x, y) }, 300)
+        if (!down) { web.postDelayed({ keyboardIfTyping(x, y) }, 250); web.postDelayed({ keyboardIfTyping(x, y) }, 900) }
     }
 
     /**
@@ -381,14 +382,18 @@ class BrowserActivity : ComponentActivity() {
         "try{while(e&&e.tagName==='IFRAME'&&e.contentDocument&&e.contentDocument.activeElement){e=e.contentDocument.activeElement;while(e&&e.shadowRoot&&e.shadowRoot.activeElement)e=e.shadowRoot.activeElement}}catch(x){}return e}" +
         "var e=deep(document.activeElement);if(!e)return null;var t=(e.tagName||'').toUpperCase();var ok=e.isContentEditable||" +
         "(t==='TEXTAREA'&&!e.readOnly&&!e.disabled)||(t==='INPUT'&&!e.readOnly&&!e.disabled&&!/^(button|submit|reset|checkbox|radio|range|color|file|image|hidden)$/i.test(e.type||''));" +
-        "if(!ok)return null;var at=__AT__;if(at){var h=document.elementFromPoint(at[0],at[1]);var host=e.getRootNode&&e.getRootNode().host;" +
-        "if(!(h&&(h.tagName==='IFRAME'||h===e||h.contains(e)||e.contains(h)||(host&&(host===h||host.contains(h)||h.contains(host))))))return null}" +
+        "if(!ok)return null;var at=__AT__;if(at){var h=document.elementFromPoint(at[0]*innerWidth,at[1]*innerHeight);var host=e.getRootNode&&e.getRootNode().host;" +
+        "if(!(h&&(h.tagName==='IFRAME'||h===e||h.contains(e)||e.contains(h)||(host&&(host===h||host.contains(h)||h.contains(host)))))&&e===window.__mvPrev)return null}" +
         "window.__mvField=e;return JSON.stringify({v:e.isContentEditable?e.textContent:(e.value||''),p:e.placeholder||e.getAttribute('aria-label')||e.title||'',t:e.type||'',s:!!(e.form||e.closest('form'))||/search|buscar|q$/i.test((e.name||'')+(e.id||'')+(e.getAttribute('aria-label')||''))})})()"
+
+    /** Guarda qué campo tenía el foco antes del clic: si después del clic hay otro campo enfocado, fue por el clic. */
+    private val REMEMBER_FIELD = "(function(){function deep(e){while(e&&e.shadowRoot&&e.shadowRoot.activeElement)e=e.shadowRoot.activeElement;return e}" +
+        "var e=deep(document.activeElement);var t=e&&(e.tagName||'').toUpperCase();window.__mvPrev=(e&&(e.isContentEditable||t==='INPUT'||t==='TEXTAREA'))?e:null})()"
 
     private fun keyboardIfTyping(x: Float = -1f, y: Float = -1f) {
         if (typing) return
         // Con el cursor: solo si el clic cayó sobre el campo (si no, un campo que quedó enfocado antes lo abriría a cada clic)
-        val at = if (x < 0) "null" else "[${x / web.scale},${y / web.scale}]"
+        val at = if (x < 0 || web.width == 0) "null" else "[${x / web.width},${y / web.height}]"   // fracción de la pantalla; en la página se pasa a píxeles CSS
         web.evaluateJavascript(FIND_FIELD.replace("__AT__", at)) { v ->
             if (v == null || v == "null" || typing) return@evaluateJavascript
             try {

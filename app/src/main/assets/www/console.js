@@ -82,7 +82,7 @@
     var row = all.length ? list.map(function (r) { return tile(r, true); }).join('')
       : '<button class="cf ctile big empty" data-act="scan" data-title="Buscar juegos" data-sys="Conecta tu USB y presiona OK"><span class="cv"><i class="mono">' + ic('usb') + '</i><b class="nm">Conecta tu USB con ROMs y presiona OK</b></span></button>';
     return topBar() +
-      '<section class="chome"><div class="csel"><b id="ctitle"></b><span id="csys"></span></div>' +
+      '<section class="chome"><div class="csel"><b id="ctitle"></b><span id="csys"></span><p id="cdesc"></p></div>' +
       (all.length ? '<h4 class="clabel">' + recLabel + '</h4>' : '') +
       '<div class="crow cgames">' + row + '</div>' +
       (cons.length ? '<h4 class="clabel">Consolas</h4><div class="crow cconsoles">' + cons.join('') + '</div>' : '') +
@@ -101,7 +101,7 @@
         '<div class="crow cshelfrow">' + list.slice(0, 150).map(function (r) { return tile(r, false); }).join('') + '</div></div>';
     });
     if (by['?']) shelves.push('<div class="cshelf" data-sys="?"><h3 style="--c:#6B7280"><i>?</i>Sin sistema<small>' + by['?'].length + ' · OK para elegir</small></h3><div class="crow cshelfrow">' + by['?'].map(function (r) { return tile(r, false); }).join('') + '</div></div>');
-    return topBar() + '<section class="clib">' + (shelves.length ? shelves.join('') : '<div class="cnone"><h2>Aún no hay juegos</h2><p>Conecta tu USB y usa “Buscar juegos”, o usa “Enviar desde el celular” en el Inicio.</p></div>') + '</section>' +
+    return topBar() + '<div class="csel clibsel"><b id="ctitle"></b><span id="csys"></span><p id="cdesc"></p></div><section class="clib">' + (shelves.length ? shelves.join('') : '<div class="cnone"><h2>Aún no hay juegos</h2><p>Conecta tu USB y usa “Buscar juegos”, o usa “Enviar desde el celular” en el Inicio.</p></div>') + '</section>' +
       (delMode ? '<footer class="chint del"><span><i>OK</i>Borrar el juego elegido</span><span><i>⟵</i>Terminar de borrar</span></footer>' :
       '<footer class="chint"><span><i>OK</i>Jugar</span><span><i>OK</i>Dejar presionado: opciones</span><span><i>⟵</i>Inicio</span></footer>');
   }
@@ -147,7 +147,7 @@
     var bg = $('.cbg', box);
     if (!bg) { bg = document.createElement('div'); bg.className = 'cbg'; box.insertBefore(bg, box.firstChild); }
     clearInterval(heroCycle);
-    if (!r) { bg.classList.remove('on'); heroRom = null; return; }
+    if (!r) { bg.classList.remove('on'); heroRom = null; var d0 = $('#cdesc', box); if (d0) d0.textContent = ''; return; }
     if (heroRom === r) return;
     heroRom = r;
     var s = MV.romSystem(r), sh = MV.gameShots ? MV.gameShots(r, s) : {}, urls = [sh.snap, sh.title].filter(Boolean), ok = [];
@@ -165,7 +165,13 @@
     if (!ok.length) { bg.classList.remove('on'); }
     else { var i = 0; show(ok[0]); heroCycle = setInterval(function () { if (ok.length > 1 && box) { i = (i + 1) % ok.length; show(ok[i]); } }, 4000); }
     // Datos del juego debajo del título
-    var line = function (m) { var c = $('#csys', box); if (c && heroRom === r) { var l = MV.gameMetaLine ? MV.gameMetaLine(m) : ''; c.textContent = (s ? s.name : 'Elegir sistema') + (l ? ' · ' + l : ''); } };
+    var line = function (m) {
+      if (!box || heroRom !== r) return;
+      var c = $('#csys', box), d = $('#cdesc', box), l = MV.gameMetaLine ? MV.gameMetaLine(m) : '';
+      if (c) c.textContent = (s ? s.name : 'Elegir sistema') + (l ? ' · ' + l : '');
+      if (d) d.textContent = m && m.desc ? m.desc : (m && m.none ? '' : 'Buscando información…');
+    };
+    line(null);
     var m = MV.gameMeta ? MV.gameMeta(r) : null;
     if (m) line(m); else if (MV.scrapeGame) MV.scrapeGame(r, s).then(line);
   }
