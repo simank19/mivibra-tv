@@ -17,43 +17,53 @@ object Overlays {
     private const val NOSH = "Nosh01%201440%20Plain/"
     private const val NYNY = "NyNy77%201080%20Bezel/"
 
-    private val FILES = mapOf(
-        "nes" to NOSH + "Nintendo-Entertainment-System-Bezel-16x9-2560x1440.png",
-        "snes" to NOSH + "Super-Nintendo-Entertainment-System-Bezel-16x9-2560x1440.png",
-        "gb" to NOSH + "Nintendo-Game-Boy-Bezel-16x9-2560x1440.png",
-        "gbc" to NOSH + "Nintendo-Game-Boy-Color-Bezel-16x9-2560x1440.png",
-        "gba" to NOSH + "Nintendo-Game-Boy-Advance-Bezel-16x9-2560x1440.png",
-        "n64" to NOSH + "Nintendo-64-Bezel-16x9-2560x1440.png",
-        "md" to NOSH + "Sega-Genesis-Bezel-16x9-2560x1440.png",
-        "sms" to NOSH + "Sega-Master-System-Bezel-16x9-2560x1440.png",
-        "gg" to NOSH + "Sega-Game-Gear-Bezel-16x9-2560x1440.png",
-        "psx" to NOSH + "Sony-Playstation-Bezel-16x9-2560x1440.png",
-        "psp" to NOSH + "Sony-Playstation-Portable-Bezel-16x9-2560x1440.png",
-        "a26" to NOSH + "Atari-2600-Bezel-16x9-2560x1440.png",
-        "a78" to NOSH + "Atari-7800-Bezel-16x9-2560x1440.png",
-        "lynx" to NOSH + "Atari-Lynx-Horizontal-Bezel-16x9-2560x1440.png",
-        "pce" to NOSH + "NEC-PC-Engine-Bezel-16x9-2560x1440.png",
-        "ngp" to NOSH + "SNK-Neo-Geo-Pocket-Color-Bezel-16x9-2560x1440.png",
-        "ws" to NOSH + "Bandai-WonderSwan-Color-Horizontal-Bezel-16x9-2560x1440.png",
-        "arcade" to NOSH + "MAME-Horizontal-Bezel-16x9-2560x1440.png",
-        "doom" to NOSH + "DOOM-Bezel-16x9-2560x1440.png",
-        "dc" to NYNY + "SegaDreamcast-nyny77.png",
-        "gc" to NYNY + "NintendoGameCube-nyny77.png",
+    private fun n(f: String) = NOSH + f + "-Bezel-16x9-2560x1440.png"
+    private fun y(f: String) = NYNY + f + "-nyny77.png"
+
+    /** Estilos por consola: el 1 (Nosh01, consola y control a los lados) y el 2 (NyNy77, pantalla tipo TV antigua). */
+    private val STYLES: Map<String, List<String>> = mapOf(
+        "nes" to listOf(n("Nintendo-Entertainment-System"), y("NintendoEntertainmentSystem")),
+        "snes" to listOf(n("Super-Nintendo-Entertainment-System"), y("NintendoSuperNintendo")),
+        "gb" to listOf(n("Nintendo-Game-Boy"), y("NintendoGameBoy")),
+        "gbc" to listOf(n("Nintendo-Game-Boy-Color"), y("NintendoGameBoyColorBleu")),
+        "gba" to listOf(n("Nintendo-Game-Boy-Advance")),
+        "n64" to listOf(n("Nintendo-64"), y("NintendoN64")),
+        "md" to listOf(n("Sega-Genesis"), y("SegaGenesis")),
+        "sms" to listOf(n("Sega-Master-System"), y("SegaMasterSystem")),
+        "gg" to listOf(n("Sega-Game-Gear"), y("SegaGameGear")),
+        "psx" to listOf(n("Sony-Playstation"), y("SonyPlaystation")),
+        "psp" to listOf(n("Sony-Playstation-Portable")),
+        "a26" to listOf(n("Atari-2600"), y("Atari2600")),
+        "a78" to listOf(n("Atari-7800"), y("Atari7800")),
+        "lynx" to listOf(n("Atari-Lynx-Horizontal"), y("AtariLynxBezel")),
+        "pce" to listOf(n("NEC-PC-Engine"), y("NECPCEngine")),
+        "ngp" to listOf(n("SNK-Neo-Geo-Pocket-Color"), y("SNKNeoGeoPocketColor")),
+        "ws" to listOf(n("Bandai-WonderSwan-Color-Horizontal"), y("BandaiWonderSwanColor")),
+        "arcade" to listOf(n("MAME-Horizontal"), y("Mame")),
+        "doom" to listOf(n("DOOM")),
+        "dc" to listOf(y("SegaDreamcast")),
+        "gc" to listOf(y("NintendoGameCube")),
     )
 
-    fun available(sys: String) = sys in FILES
+    fun available(sys: String) = sys in STYLES
+    fun styleCount(sys: String) = STYLES[sys]?.size ?: 0
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences("marcos", Context.MODE_PRIVATE)
     fun enabled(ctx: Context, sys: String) = available(sys) && prefs(ctx).getBoolean(sys, true)
     fun setEnabled(ctx: Context, sys: String, on: Boolean) { prefs(ctx).edit().putBoolean(sys, on).apply() }
+    fun style(ctx: Context, sys: String) = prefs(ctx).getInt("style_$sys", 0).coerceIn(0, (styleCount(sys) - 1).coerceAtLeast(0))
+    fun setStyle(ctx: Context, sys: String, i: Int) { prefs(ctx).edit().putInt("style_$sys", i).putBoolean(sys, true).apply() }
+    fun styleName(i: Int) = "Marco ${i + 1}"
 
-    fun file(ctx: Context, sys: String) = File(File(ctx.filesDir, "marcos").apply { mkdirs() }, "$sys.png")
+    fun file(ctx: Context, sys: String, i: Int = style(ctx, sys)) =
+        File(File(ctx.filesDir, "marcos").apply { mkdirs() }, if (i == 0) "$sys.png" else "${sys}_$i.png")
 
-    /** Descarga el marco si falta. Devuelve el archivo o null si no se pudo. */
+    /** Descarga el marco elegido si falta. Devuelve el archivo o null si no se pudo. */
     fun fetch(ctx: Context, sys: String): File? {
-        val f = file(ctx, sys)
+        val i = style(ctx, sys)
+        val f = file(ctx, sys, i)
         if (f.exists() && f.length() > 0) return f
-        val path = FILES[sys] ?: return null
+        val path = STYLES[sys]?.getOrNull(i) ?: return null
         return try {
             val c = URL(BASE + path).openConnection() as HttpURLConnection
             c.connectTimeout = 15000; c.readTimeout = 30000

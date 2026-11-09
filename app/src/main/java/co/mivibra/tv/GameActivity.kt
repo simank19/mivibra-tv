@@ -528,6 +528,25 @@ class GameActivity : ComponentActivity() {
         overlayView = iv
     }
 
+    /** Elegir estilo de marco (o ninguno) para esta consola. */
+    private fun chooseFrame() {
+        val n = Overlays.styleCount(sys)
+        val names = (0 until n).map { Overlays.styleName(it) } + "Sin marco"
+        val cur = if (!Overlays.enabled(this, sys)) n else Overlays.style(this, sys)
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle("Marco de la consola")
+            .setSingleChoiceItems(names.toTypedArray(), cur) { d, which ->
+                d.dismiss(); retroView.requestFocus()
+                if (which == n) { Overlays.setEnabled(this, sys, false); removeOverlay() }
+                else {
+                    Overlays.setStyle(this, sys, which)
+                    if (!Overlays.file(this, sys, which).exists()) Toast.makeText(this, "Descargando el marco…", Toast.LENGTH_SHORT).show()
+                    loadOverlay()
+                }
+            }
+            .show()
+    }
+
     private fun removeOverlay() {
         overlayView?.let { gameRoot?.removeView(it) }
         overlayView = null
@@ -538,7 +557,7 @@ class GameActivity : ComponentActivity() {
         releaseEverything()
         pad?.releaseAll()
         val padItem = if (pad == null) null else if (pad?.visibility == View.VISIBLE) "Ocultar controles en pantalla" else "Mostrar controles en pantalla"
-        val frameItem = if (!Overlays.available(sys)) null else if (Overlays.enabled(this, sys)) "Quitar marco" else "Poner marco"
+        val frameItem = if (!Overlays.available(sys)) null else "Marco: " + (if (Overlays.enabled(this, sys)) Overlays.styleName(Overlays.style(this, sys)) else "sin marco")
         val items = listOfNotNull("Continuar", "Guardar partida", "Cargar partida", "Reiniciar juego", frameItem, "Configurar mando", "Probar mando", "Salir del juego", padItem).toTypedArray()
         AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
             .setTitle(intent.getStringExtra("title") ?: "Juego")
@@ -551,8 +570,7 @@ class GameActivity : ComponentActivity() {
                     "Reiniciar juego" -> retroView.reset()
                     "Configurar mando" -> startConfig()
                     "Probar mando" -> startTest()
-                    "Quitar marco" -> { Overlays.setEnabled(this, sys, false); removeOverlay() }
-                    "Poner marco" -> { Overlays.setEnabled(this, sys, true); Toast.makeText(this, "Poniendo el marco…", Toast.LENGTH_SHORT).show(); loadOverlay() }
+                    frameItem -> chooseFrame()
                     "Salir del juego" -> { saveSram(); finish() }
                     padItem -> { val show = pad?.visibility != View.VISIBLE; padHiddenByUser = !show; setPadVisible(show) }
                 }

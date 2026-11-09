@@ -184,9 +184,11 @@
       ' Con RetroArch, descarga cada núcleo en RetroArch → Actualizador en línea → Descargar núcleos. Sus BIOS se copian a ' + esc(ra.bios || 'RetroArch/system') + ' al usar “Importar BIOS”.</p>' +
       list.map(function (s) {
         var e = MV.gameEngine(s);
-        var ov = A && A.overlay ? A.overlay(s.id) : -1;
-        return '<div class="line"><div class="t"><b>' + esc(s.name) + '</b><span>' + (e === 'retroarch' ? 'RetroArch · núcleo ' + esc(s.raCore || s.core) : 'Emulador de MiVibra') + (s.ra ? ' (solo RetroArch)' : '') + (ov >= 0 && e !== 'retroarch' ? ' · Marco ' + (ov ? 'puesto' : 'quitado') : '') + '</span></div>' +
-          (ov >= 0 && e !== 'retroarch' ? '<button class="btn ghost sm f" data-act="consoleFrame" data-arg="' + s.id + '">' + (ov ? 'Quitar marco' : 'Poner marco') + '</button>' : '') +
+        var ov = A && A.overlay ? A.overlay(s.id) : -1, ovs = null;
+        if (ov >= 0 && A.overlayStyles) { try { ovs = JSON.parse(A.overlayStyles(s.id)); } catch (e) {} }
+        var ovName = ovs ? (ovs.cur >= ovs.n ? 'sin marco' : 'Marco ' + (ovs.cur + 1) + ' de ' + ovs.n) : (ov ? 'puesto' : 'quitado');
+        return '<div class="line"><div class="t"><b>' + esc(s.name) + '</b><span>' + (e === 'retroarch' ? 'RetroArch · núcleo ' + esc(s.raCore || s.core) : 'Emulador de MiVibra') + (s.ra ? ' (solo RetroArch)' : '') + (ov >= 0 && e !== 'retroarch' ? ' · ' + ovName : '') + '</span></div>' +
+          (ov >= 0 && e !== 'retroarch' ? '<button class="btn ghost sm f" data-act="consoleFrame" data-arg="' + s.id + '">Cambiar marco</button>' : '') +
           (s.ra ? '' : '<button class="btn ghost sm f" data-act="consoleEngine" data-arg="' + s.id + '">' + (e === 'retroarch' ? 'Usar MiVibra' : 'Usar RetroArch') + '</button>') + '</div>';
       }).join('') + (ra.installed ? '' : '<div class="btns"><button class="btn f" data-act="consoleGetRA">Instalar RetroArch</button></div>'));
   }
@@ -196,7 +198,11 @@
       MV.setGameEngine(id, MV.gameEngine(s) === 'retroarch' ? 'interno' : 'retroarch');
       MV.closeModal(true); engines();
     };
-    MV.ACT.consoleFrame = function (id) { if (A && A.setOverlay) A.setOverlay(id, A.overlay(id) !== 1); MV.closeModal(true); engines(); };
+    MV.ACT.consoleFrame = function (id) {
+      if (A && A.nextOverlay) A.nextOverlay(id); else if (A && A.setOverlay) A.setOverlay(id, A.overlay(id) !== 1);
+      MV.closeModal(true); engines();
+      setTimeout(function () { var b = document.querySelector('[data-act="consoleFrame"][data-arg="' + id + '"]'); if (b) b.focus(); }, 60);
+    };
     MV.ACT.consoleGetRA = function () { if (A) A.openExternal('market://details?id=' + (MV.raPkg || 'com.retroarch.ra32')); };
   }
 

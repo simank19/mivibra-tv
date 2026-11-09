@@ -465,6 +465,22 @@ class Bridge(private val a: MainActivity) {
     @JavascriptInterface
     fun setOverlay(sys: String, on: Boolean) = Overlays.setEnabled(a, sys, on)
 
+    /** {n: estilos disponibles, cur: el elegido (n = sin marco)} */
+    @JavascriptInterface
+    fun overlayStyles(sys: String): String {
+        val n = Overlays.styleCount(sys)
+        return JSONObject().put("n", n).put("cur", if (Overlays.enabled(a, sys)) Overlays.style(a, sys) else n).toString()
+    }
+
+    /** Siguiente opción: Marco 1 → Marco 2 → … → Sin marco → Marco 1 */
+    @JavascriptInterface
+    fun nextOverlay(sys: String) {
+        val n = Overlays.styleCount(sys); if (n == 0) return
+        val cur = if (Overlays.enabled(a, sys)) Overlays.style(a, sys) else n
+        val next = (cur + 1) % (n + 1)
+        if (next == n) Overlays.setEnabled(a, sys, false) else Overlays.setStyle(a, sys, next)
+    }
+
     /** {installed, pkg, bios} de la app RetroArch. */
     @JavascriptInterface
     fun retroArch(): String = RetroArch.info(a)
