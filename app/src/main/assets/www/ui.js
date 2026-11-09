@@ -1520,6 +1520,8 @@
     if (/\.apk|\.xapk|\.apks/i.test(low) || (!own && /\/android\/(data|obb)\//.test(path))) return false;
     if (/^(readme|license|licence|changelog|copying|authors|contributing|notice|history|install)\b/i.test(low)) return false;
     if (own && /\/_bios\//.test(path)) return false;
+    // Lo que enviaste desde el celular siempre aparece (si no se sabe la consola, en "Sin sistema")
+    if (own) return !/\.(part|tmp|txt|nfo|jpg|png|srm|state)$/i.test(low);
     var mine = own || path.indexOf('/co.mivibra.tv/') >= 0 || ROM_DIR.test(path + '/');
     if (ext === 'zip') return mine;                                 // .zip solo en carpetas de juegos (roms, arcade…)
     if (ext === 'm3u') return /psx|ps1|playstation/.test(path);      // .m3u también son listas de TV
@@ -1612,7 +1614,7 @@
     if (!A || !A.downloadsDir || Date.now() - ownSyncAt < 1500) return;
     ownSyncAt = Date.now();
     var dl = A.downloadsDir();
-    MV.call('scanRoms', [JSON.stringify([dl]), JSON.stringify(D.ROM_EXTS)]).then(function (found) {
+    MV.call('scanRoms', [JSON.stringify([dl]), JSON.stringify(['*'])]).then(function (found) {
       found = (found || []).filter(isGame);
       var list = MV.load('roms', []) || [], before = JSON.stringify(list.map(function (r) { return r.path; }));
       var inDl = function (r) { return String(r.path || '').indexOf(dl) === 0; };
@@ -1988,6 +1990,7 @@
       .catch(function (e) { MV.toast(e.message, 5000); });
   }
   function playRom(r) {
+    if (/^(7z|rar|tar|gz)$/i.test(r.ext || '')) { MV.toast('El formato .' + r.ext + ' no se puede abrir. Envíalo en .zip o sin comprimir.'); return; }
     var s = romSystem(r);
     if (!s) { chooseSystem(r); return; }
     if (A && gameEngine(s) === 'retroarch') { playRetroArch(r, s); return; }

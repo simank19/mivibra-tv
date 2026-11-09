@@ -64,7 +64,7 @@ object Storage {
         var n = 0
         fun put(name: String, path: String, size: Long) {
             val ext = name.substringAfterLast('.', "").lowercase()
-            if (ext in exts && n < limit) {
+            if ((ext in exts || ("*" in exts && ext != "part")) && n < limit) {
                 out.put(JSONObject().put("name", name).put("path", path).put("size", size).put("ext", ext))
                 n++
             }

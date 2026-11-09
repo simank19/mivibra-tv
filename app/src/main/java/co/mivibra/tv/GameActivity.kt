@@ -308,6 +308,42 @@ class GameActivity : ComponentActivity() {
 
     private var announced = HashSet<Int>()
 
+    // ---- Probar mando: muestra en vivo lo que manda el mando (para revisar problemas) ----
+    private var testView: TextView? = null
+    private val testLines = ArrayDeque<String>()
+    private fun startTest() {
+        releaseEverything()
+        val root = window.decorView.findViewById<FrameLayout>(android.R.id.content)
+        testView = TextView(this).apply {
+            setTextColor(Color.WHITE); textSize = 15f; typeface = android.graphics.Typeface.MONOSPACE
+            setBackgroundColor(0xE6000000.toInt()); setPadding(40, 30, 40, 30)
+        }
+        root.addView(testView, FrameLayout.LayoutParams(-1, -1))
+        testLog("Probar mando — presiona botones y mueve la cruceta y las palancas.\nPara salir presiona Atrás en el control de la TV.")
+    }
+    private fun testLog(line: String) {
+        testLines.addLast(line); while (testLines.size > 22) testLines.removeFirst()
+        testView?.text = testLines.joinToString("\n")
+    }
+    private fun testKey(e: KeyEvent): Boolean {
+        val d = e.device
+        if (e.keyCode == KeyEvent.KEYCODE_BACK && (d == null || !fromGamepad(e.source)) && e.action == KeyEvent.ACTION_UP) {
+            (testView?.parent as? FrameLayout)?.removeView(testView); testView = null; testLines.clear(); retroView.requestFocus(); return true
+        }
+        if (e.repeatCount == 0) testLog("${if (e.action == KeyEvent.ACTION_DOWN) "▼" else "▲"} ${KeyEvent.keyCodeToString(e.keyCode).removePrefix("KEYCODE_")}  · ${d?.name} #${e.deviceId}  src=0x${Integer.toHexString(e.source)}")
+        return true
+    }
+    private val testLast = HashMap<Int, String>()
+    private fun testMotion(ev: android.view.MotionEvent): Boolean {
+        val d = ev.device ?: return true
+        val parts = d.motionRanges.map { it.axis }.distinct().mapNotNull { a ->
+            val v = ev.getAxisValue(a); if (kotlin.math.abs(v) > 0.15f) "${android.view.MotionEvent.axisToString(a).removePrefix("AXIS_")}=${"%.1f".format(v)}" else null
+        }
+        val line = "~ ${d.name} #${ev.deviceId}: " + (if (parts.isEmpty()) "(centro)" else parts.joinToString(" "))
+        if (testLast[ev.deviceId] != line) { testLast[ev.deviceId] = line; testLog(line) }
+        return true
+    }
+
     /** Estado de cada botón enviado al emulador, para no dejar nada "pegado". */
     private val pressed = HashSet<Int>()
     private fun press(port: Int, key: Int, down: Boolean) {
@@ -317,13 +353,23 @@ class GameActivity : ComponentActivity() {
     }
     private fun releaseEverything() {
         for (id in pressed.toList()) retroView.sendKeyEvent(KeyEvent.ACTION_UP, id % 1000, id / 1000)
-        pressed.clear(); triggers.clear(); lastHat.clear()
+        pressed.clear(); triggers.clear(); lastHat.clear(); devHat.clear()
         for (port in 0..3) for (src in intArrayOf(GLRetroView.MOTION_SOURCE_DPAD, GLRetroView.MOTION_SOURCE_ANALOG_LEFT, GLRetroView.MOTION_SOURCE_ANALOG_RIGHT))
             retroView.sendMotionEvent(src, 0f, 0f, port)
     }
     private val lastHat = HashMap<Int, Pair<Float, Float>>()
+    private val devHat = HashMap<Int, Pair<Int, Pair<Float, Float>>>()
+    /** Un eje que al empezar no está en el centro (gatillo o eje raro) no se usa como palanca. */
+    private val axisFirst = HashMap<Int, Float>()
+    private fun stickOk(ev: android.view.MotionEvent, a: Int): Boolean {
+        if (ev.device?.getMotionRange(a, ev.source) == null) return false
+        val k = ev.deviceId * 100 + a
+        val first = axisFirst.getOrPut(k) { ev.getAxisValue(a) }
+        return kotlin.math.abs(first) < 0.5f
+    }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (testView != null) return testKey(event)
         if (configStep >= 0) return configKey(event)
         if (pad?.visibility == View.VISIBLE && fromGamepad(event.source) && KeyEvent.isGamepadButton(event.keyCode)) setPadVisible(false)
         val code = event.keyCode
@@ -357,6 +403,7 @@ class GameActivity : ComponentActivity() {
 
     /** Palancas, cruceta "HAT" y gatillos analógicos de los mandos. */
     override fun dispatchGenericMotionEvent(ev: android.view.MotionEvent): Boolean {
+        if (testView != null) return testMotion(ev)
         if (configStep >= 0) {
             // L2 / R2: en muchos mandos (Xbox 360) son gatillos analógicos, no botones
             val target = CONFIG_STEPS.getOrNull(configStep)?.second
@@ -385,18 +432,20 @@ class GameActivity : ComponentActivity() {
             fun has(a: Int) = dev?.getMotionRange(a, ev.source) != null
             fun dz(v: Float) = if (kotlin.math.abs(v) < 0.2f) 0f else v
             // Cruceta = HAT del mando, o la palanca izquierda si la HAT está suelta
-            // (los juegos de PlayStation 1, NES, SNES… solo entienden la cruceta)
-            if (has(android.view.MotionEvent.AXIS_HAT_X) || has(android.view.MotionEvent.AXIS_X)) {
-                fun dir(v: Float) = if (v > 0.5f) 1f else if (v < -0.5f) -1f else 0f
-                var hx = if (has(android.view.MotionEvent.AXIS_HAT_X)) dir(ax(android.view.MotionEvent.AXIS_HAT_X)) else 0f
-                var hy = if (has(android.view.MotionEvent.AXIS_HAT_Y)) dir(ax(android.view.MotionEvent.AXIS_HAT_Y)) else 0f
-                if (hx == 0f && hy == 0f && has(android.view.MotionEvent.AXIS_X)) {
-                    hx = dir(ax(android.view.MotionEvent.AXIS_X)); hy = dir(ax(android.view.MotionEvent.AXIS_Y))
-                }
-                val h = Pair(hx, hy)
-                if (lastHat[port] != h) { lastHat[port] = h; retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_DPAD, hx, hy, port) }
+            // (los juegos de PlayStation 1, NES, SNES… solo entienden la cruceta).
+            // Se guarda por dispositivo y se combina, para que un mando "doble" no deje nada pegado.
+            fun dir(v: Float) = if (v > 0.5f) 1f else if (v < -0.5f) -1f else 0f
+            var hx = 0f; var hy = 0f
+            if (has(android.view.MotionEvent.AXIS_HAT_X)) { hx = dir(ax(android.view.MotionEvent.AXIS_HAT_X)); hy = dir(ax(android.view.MotionEvent.AXIS_HAT_Y)) }
+            if (hx == 0f && hy == 0f && stickOk(ev, android.view.MotionEvent.AXIS_X) && stickOk(ev, android.view.MotionEvent.AXIS_Y)) {
+                hx = dir(ax(android.view.MotionEvent.AXIS_X)); hy = dir(ax(android.view.MotionEvent.AXIS_Y))
             }
-            if (has(android.view.MotionEvent.AXIS_X))
+            devHat[ev.deviceId] = Pair(port, Pair(hx, hy))
+            var cx = 0f; var cy = 0f
+            for ((p2, h2) in devHat.values) if (p2 == port) { if (cx == 0f) cx = h2.first; if (cy == 0f) cy = h2.second }
+            val h = Pair(cx, cy)
+            if (lastHat[port] != h) { lastHat[port] = h; retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_DPAD, cx, cy, port) }
+            if (stickOk(ev, android.view.MotionEvent.AXIS_X) && stickOk(ev, android.view.MotionEvent.AXIS_Y))
                 retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, dz(ax(android.view.MotionEvent.AXIS_X)), dz(ax(android.view.MotionEvent.AXIS_Y)), port)
             fun trig(key: Int, v: Float) {
                 val on = v > 0.5f
@@ -444,7 +493,7 @@ class GameActivity : ComponentActivity() {
         releaseEverything()
         pad?.releaseAll()
         val padItem = if (pad == null) null else if (pad?.visibility == View.VISIBLE) "Ocultar controles en pantalla" else "Mostrar controles en pantalla"
-        val items = listOfNotNull("Continuar", "Guardar partida", "Cargar partida", "Reiniciar juego", "Configurar mando", "Salir del juego", padItem).toTypedArray()
+        val items = listOfNotNull("Continuar", "Guardar partida", "Cargar partida", "Reiniciar juego", "Configurar mando", "Probar mando", "Salir del juego", padItem).toTypedArray()
         AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
             .setTitle(intent.getStringExtra("title") ?: "Juego")
             .setItems(items) { d, which ->
@@ -455,6 +504,7 @@ class GameActivity : ComponentActivity() {
                     "Cargar partida" -> loadState()
                     "Reiniciar juego" -> retroView.reset()
                     "Configurar mando" -> startConfig()
+                    "Probar mando" -> startTest()
                     "Salir del juego" -> { saveSram(); finish() }
                     padItem -> { val show = pad?.visibility != View.VISIBLE; padHiddenByUser = !show; setPadVisible(show) }
                 }
