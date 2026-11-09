@@ -1513,6 +1513,7 @@
   /** ¿Es de verdad un juego? Descarta APK, documentos (README.md), listas .m3u y .zip/.iso que no son de juegos. */
   var ROM_DIR = /\/(roms?|juegos|games|emuladore?s?|emulators?|emulation|retro\w*|arcade|mame|fbneo|fba|neogeo|cps\d?|snes|nes|sfc|genesis|megadrive|mega drive|gba|gbc|gb|n64|nds|psx|ps1|playstation|psp|gamecube|gcn|ngc|dreamcast|dc|sega|nintendo|atari|pce|ports?|doom|quake)\//i;
   function isGame(r) {
+    if ((MV.load('romsHidden', []) || []).indexOf(r.path) >= 0) return false;
     var name = String(r.name || ''), low = name.toLowerCase(), path = String(r.path || '').toLowerCase(), size = +r.size || 0, ext = r.ext;
     // La carpeta propia de MiVibra (ROMs enviadas desde el celular o descargadas) vive en Android/data: esa sí cuenta
     var own = path.indexOf('/android/data/co.mivibra.tv/') >= 0;
@@ -1608,7 +1609,7 @@
    */
   var ownSyncAt = 0;
   MV.syncOwnRoms = function () {
-    if (!A || !A.downloadsDir || Date.now() - ownSyncAt < 5000) return;
+    if (!A || !A.downloadsDir || Date.now() - ownSyncAt < 1500) return;
     ownSyncAt = Date.now();
     var dl = A.downloadsDir();
     MV.call('scanRoms', [JSON.stringify([dl]), JSON.stringify(D.ROM_EXTS)]).then(function (found) {

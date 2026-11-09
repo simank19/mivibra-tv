@@ -30,10 +30,11 @@
       (t ? '<img loading="lazy" src="' + esc(t) + '" alt="" onload="this.parentNode.classList.add(\'art\')" onerror="this.remove()">' : '') + '</span>';
   }
   var reg = {};
+  var delMode = false;
   function tile(r, big) {
     var s = MV.romSystem(r), k = 'g' + Object.keys(reg).length; reg[k] = r;
     var eng = s ? MV.gameEngine(s) : '';
-    return '<button class="cf ctile' + (big ? ' big' : '') + '" data-rom="' + k + '" data-title="' + esc(title(r)) + '" data-sys="' + esc(s ? s.name : 'Elegir sistema') + (eng === 'retroarch' ? ' · RetroArch' : '') + '">' + cover(r, s) + '</button>';
+    return '<button class="cf ctile' + (big ? ' big' : '') + (delMode ? ' cdel' : '') + '" data-rom="' + k + '" data-title="' + esc(title(r)) + '" data-sys="' + esc(s ? s.name : 'Elegir sistema') + (eng === 'retroarch' ? ' · RetroArch' : '') + '">' + cover(r, s) + '</button>';
   }
 
   // ---------------- Pantallas ----------------
@@ -53,6 +54,7 @@
     phone: '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>',
     list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
     send: '<rect x="2" y="3" width="8" height="15" rx="1.5"/><path d="M5.5 15h1M13 10h8M18 7l3 3-3 3M14 21h7a1 1 0 0 0 1-1v-4"/>',
+    trash: '<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/>',
     exit: '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/>'
   };
   function ic(n) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + IC[n] + '</svg>'; }
@@ -69,8 +71,9 @@
       '<section class="chome"><div class="csel"><b id="ctitle"></b><span id="csys"></span></div>' +
       '<div class="crow cgames">' + row + '</div>' +
       '<div class="crow cbtns">' + round('lib', 'lib', 'Biblioteca') + round('scan', 'usb', 'Buscar juegos') + round('bios', 'bios', 'Importar BIOS') +
-      round('send', 'send', 'Enviar desde el celular') + round('engine', 'engine', 'Emuladores') + round('phone', 'phone', 'Celular como mando') + round('classic', 'list', 'Vista clásica') + round('exit', 'exit', 'Salir') + '</div></section>' +
-      '<footer class="chint"><span><i>OK</i>Jugar</span><span><i>OK</i>Dejar presionado: opciones</span><span><i>⟵</i>Atrás</span></footer>';
+      round('send', 'send', 'Enviar desde el celular') + round('engine', 'engine', 'Emuladores') + round('phone', 'phone', 'Celular como mando') + round('del', 'trash', delMode ? 'Terminar de borrar' : 'Borrar juegos') + round('classic', 'list', 'Vista clásica') + round('exit', 'exit', 'Salir') + '</div></section>' +
+      (delMode ? '<footer class="chint del"><span><i>OK</i>Borrar el juego elegido</span><span><i>⟵</i>Terminar de borrar</span></footer>' :
+      '<footer class="chint"><span><i>OK</i>Jugar</span><span><i>OK</i>Dejar presionado: opciones</span><span><i>⟵</i>Atrás</span></footer>');
   }
 
   function libHtml() {
@@ -83,7 +86,8 @@
     });
     if (by['?']) shelves.push('<div class="cshelf"><h3 style="--c:#6B7280"><i>?</i>Sin sistema<small>' + by['?'].length + ' · OK para elegir</small></h3><div class="crow cshelfrow">' + by['?'].map(function (r) { return tile(r, false); }).join('') + '</div></div>');
     return topBar() + '<section class="clib">' + (shelves.length ? shelves.join('') : '<div class="cnone"><h2>Aún no hay juegos</h2><p>Conecta tu USB y usa “Buscar juegos”, o usa “Enviar desde el celular” en el Inicio.</p></div>') + '</section>' +
-      '<footer class="chint"><span><i>OK</i>Jugar</span><span><i>OK</i>Dejar presionado: opciones</span><span><i>⟵</i>Inicio</span></footer>';
+      (delMode ? '<footer class="chint del"><span><i>OK</i>Borrar el juego elegido</span><span><i>⟵</i>Terminar de borrar</span></footer>' :
+      '<footer class="chint"><span><i>OK</i>Jugar</span><span><i>OK</i>Dejar presionado: opciones</span><span><i>⟵</i>Inicio</span></footer>');
   }
 
   function render(focusSel) {
@@ -139,7 +143,7 @@
   // ---------------- Acciones ----------------
   function activate(el) {
     var k = el.getAttribute('data-rom');
-    if (k && reg[k]) { blip(990); MV.playRom(reg[k]); return; }
+    if (k && reg[k]) { if (delMode) { askDelete(reg[k]); return; } blip(990); MV.playRom(reg[k]); return; }
     switch (el.getAttribute('data-act')) {
       case 'lib': tab = 'lib'; render(); break;
       case 'scan': MV.ACT.scanRoms(); break;
@@ -148,6 +152,7 @@
       case 'phone': MV.ACT.remoteQR(); break;
       case 'send': MV.ACT.romsFromPhone(); break;
       case 'classic': MV.save('gamesClassic', true); close(); if (MV.rerender) MV.rerender(); break;
+      case 'del': delMode = !delMode; render('.cbtns [data-act="del"]'); if (delMode) MV.toast('Elige con OK el juego que quieres borrar'); break;
       case 'exit': close(true); break;
     }
   }
@@ -182,18 +187,35 @@
     MV.modal('<h2>' + esc(title(r)) + '</h2><p class="muted">' + esc(s ? s.name : 'Sistema sin elegir') + ' · ' + esc(r.path) + '</p><div class="btns" style="flex-direction:column;align-items:stretch">' +
       '<button class="btn f" data-act="consolePlay">Jugar</button>' +
       (s && !s.ra ? '<button class="btn ghost f" data-act="consoleSwap">' + (MV.gameEngine(s) === 'retroarch' ? 'Jugar ' + esc(s.name) + ' con el emulador de MiVibra' : 'Jugar ' + esc(s.name) + ' con RetroArch') + '</button>' : '') +
-      '<button class="btn ghost f" data-act="consoleSys">Cambiar sistema</button></div>');
+      '<button class="btn ghost f" data-act="consoleSys">Cambiar sistema</button>' +
+      '<button class="btn danger f" data-act="consoleDel">Borrar juego</button></div>');
+  }
+
+  // Borrar: si el archivo está en la carpeta de MiVibra (enviado desde el celular) se elimina del TV;
+  // si está en la USB solo se quita de la biblioteca (no se vuelve a agregar al buscar juegos).
+  function askDelete(r) {
+    var own = /\/android\/data\/co\.mivibra\.tv\//i.test(r.path || '');
+    MV.confirm('¿Borrar “' + title(r) + '”?', own ? 'Se elimina del TV y libera espacio. Su partida guardada se conserva.' : 'Se quita de la biblioteca. El archivo sigue en tu USB.', 'Borrar').then(function (yes) {
+      if (!yes) return;
+      if (own && A && A.deleteFile) { try { A.deleteFile(r.path); } catch (e) {} }
+      if (!own) { var hid = MV.load('romsHidden', []) || []; if (hid.indexOf(r.path) < 0) { hid.push(r.path); MV.save('romsHidden', hid); } }
+      MV.save('roms', (MV.load('roms', []) || []).filter(function (x) { return x.path !== r.path; }));
+      MV.save('recentGames', (MV.load('recentGames', []) || []).filter(function (x) { return x.path !== r.path; }));
+      MV.toast('Borrado: ' + title(r));
+      if (box) render(delMode ? '.cf.ctile' : null);
+    });
   }
   if (MV.ACT) {
     MV.ACT.consolePlay = function () { MV.closeModal(true); MV.playRom(MV._consoleRom); };
     MV.ACT.consoleSwap = function () { var s = MV.romSystem(MV._consoleRom); MV.setGameEngine(s.id, MV.gameEngine(s) === 'retroarch' ? 'interno' : 'retroarch'); MV.closeModal(true); render(); };
+    MV.ACT.consoleDel = function () { MV.closeModal(true); askDelete(MV._consoleRom); };
     MV.ACT.consoleSys = function () { MV.closeModal(true); MV.chooseSystem(MV._consoleRom); };
   }
 
   // ---------------- Abrir y cerrar ----------------
   function open() {
     if (box) return;
-    tab = 'home';
+    tab = 'home'; delMode = false;
     box = document.createElement('div'); box.id = 'console'; box.setAttribute('role', 'application');
     document.body.appendChild(box);
     document.documentElement.classList.add('console-open');
@@ -215,6 +237,7 @@
   // Atrás: Biblioteca → Inicio → salir de Juegos
   var origBack = MV.onBack;
   MV.onBack = function () {
+    if (box && !MV.modalOpen() && delMode) { delMode = false; render('.cbtns [data-act="del"]'); return true; }
     if (box && !MV.modalOpen()) { if (tab === 'lib') { tab = 'home'; render('.cbtns [data-act="lib"]'); } else close(true); return true; }
     return origBack.apply(this, arguments);
   };
