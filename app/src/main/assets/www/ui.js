@@ -1543,14 +1543,16 @@
     return out;
   }
   // ¿Es un juego de Neo Geo? (por el nombre corto o por lo que trae adentro). Se mira una vez y se recuerda.
-  var ARCX = MV.load('arcIds', {}) || {}, arcSaveT = null;
+  var ARCX = MV.load('arcIds2', {}) || {}, arcSaveT = null, arcTried = {};
   function arcId(r) {
     if (!r || !/^(zip|7z)$/.test(r.ext || '')) return null;
-    if (r.path in ARCX) return ARCX[r.path];
+    if (ARCX[r.path]) return ARCX[r.path];
+    if (r.path in ARCX && ARCX[r.path] === null && arcTried[r.path]) return null;
+    arcTried[r.path] = 1;
     var out = null;
     if (A && A.arcadeId && !/^content:/.test(r.path)) { try { out = JSON.parse(A.arcadeId(r.path)); } catch (e) {} }
     ARCX[r.path] = out;
-    clearTimeout(arcSaveT); arcSaveT = setTimeout(function () { MV.save('arcIds', ARCX); }, 1500);
+    clearTimeout(arcSaveT); arcSaveT = setTimeout(function () { MV.save('arcIds2', ARCX); }, 1500);
     return out;
   }
   MV.arcId = arcId;
@@ -2023,16 +2025,16 @@
       };
       // ROM de consola en .zip: se descomprime una vez (Arcade se juega tal cual)
       // Neo Geo: el .zip necesita su nombre corto (kof98.zip) y la BIOS neogeo.zip al lado
-      var neo = s.id === 'neogeo' ? arcId(r) : null;
-      var job = neo ? MV.call('arcadePrepare', [JSON.stringify({ path: r.path, set: neo.set })]).then(function (p) {
-          if (!p.bios) MV.toast('Falta la BIOS de Neo Geo (neogeo.zip). Envíala desde el celular eligiendo “BIOS”.', 6000);
+      var arc = (s.id === 'neogeo' || s.id === 'arcade') && /^(zip|7z)$/.test(r.ext || '') && !/^content:/.test(r.path), neo = arc ? arcId(r) : null;
+      var job = arc ? MV.call('arcadePrepare', [JSON.stringify({ path: r.path, set: neo ? neo.set : '' })]).then(function (p) {
+          if (neo && !p.bios) MV.toast('Falta la BIOS de Neo Geo (neogeo.zip). Envíala desde el celular eligiendo “BIOS”.', 6000);
           if (p.renamed && p.path !== r.path) {
             // Lo enviado desde el celular quedó renombrado: se actualiza la biblioteca
             var list = MV.load('roms', []) || [], old = r.path;
             list.forEach(function (x) { if (x.path === old) { x.path = p.path; x.name = p.path.split('/').pop(); } });
             MV.save('roms', list);
             ARCX[p.path] = ARCX[old]; if (P.romSystem[old]) { P.romSystem[p.path] = P.romSystem[old]; MV.savePrefs(); }
-            MV.save('arcIds', ARCX);
+            MV.save('arcIds2', ARCX);
             r = Object.assign({}, r, { path: p.path, name: p.path.split('/').pop() });
           }
           return go(p.path);
@@ -2363,6 +2365,7 @@
     webGo: function () { var v = ((document.getElementById('webIn') || {}).value || '').trim(); openBrowser(v); },
     webOpen: function (u) { openBrowser(u); },
     stype: function (t) { searchType = t; showResults(); var el = document.querySelector('[data-act="stype"][data-arg="' + t + '"]'); if (el) el.focus(); },
+    voiceGo: function (q) { MV.go('search'); setTimeout(function () { ACT.searchFor(q); }, 80); },
     searchFor: function (q) { query = q; var i = document.getElementById('searchIn'); if (i) i.value = q; saveRecent(q); showResults(); },
     clearRecent: function () { MV.save('recentSearch', []); showResults(); },
     langMenu: function (key) {
@@ -2762,7 +2765,12 @@
     if (view.name === 'games' && !MV.modalOpen()) MV.rerender();
   };
   ACT.consoleOpen = function () { MV.save('gamesClassic', false); if (MV.console) MV.console.open(); };
-  MV.ACT = ACT;   // el frontend de juegos (console.js) usa las mismas acciones
+  MV.ACT = ACT;
+  // Búsqueda por voz con el botón del control: en Juegos busca juegos, en lo demás busca películas, series y canales
+  MV.voiceSearch = function (q) {
+    if (MV.console && MV.console.isOpen() && MV.console.search) { MV.console.search(q); return; }
+    ACT.voiceGo(q);
+  };   // el frontend de juegos (console.js) usa las mismas acciones
   var pendingName = null;
   function keepName() { var i = document.getElementById('profName'); if (i) pendingName = i.value; }
   VIEWS.profileEdit.after = function () {

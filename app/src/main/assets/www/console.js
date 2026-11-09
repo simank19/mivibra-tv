@@ -49,7 +49,7 @@
     try { pads = A ? JSON.parse(A.gamepads()) : []; } catch (e) {}
     return '<header class="ctop"><div class="cme">' + (p ? '<img src="' + esc(MV.avatarOf(p.avatar)) + '" alt=""><b>' + esc(p.name) + '</b>' : '<b>Juegos</b>') + '</div>' +
       '<nav class="ctabs"><span class="' + (tab === 'home' ? 'on' : '') + '">Inicio</span><span class="' + (tab === 'lib' ? 'on' : '') + '">Biblioteca</span></nav>' +
-      '<div class="cstat"><span class="cpad" title="Mandos">' + PAD + (pads.length || '') + '</span><span id="cclock"></span></div></header>';
+      '<div class="cstat"><span class="cver">v' + esc((MV.device && MV.device.versionCode) || '') + '</span><span class="cpad" title="Mandos">' + PAD + (pads.length || '') + '</span><span id="cclock"></span></div></header>';
   }
   var PAD = '<svg viewBox="0 0 24 24" width="1.3em" height="1.3em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 8h10a4 4 0 0 1 4 4v2.5a2.5 2.5 0 0 1-4.6 1.4L15 14H9l-1.4 1.9A2.5 2.5 0 0 1 3 14.5V12a4 4 0 0 1 4-4z"/><path d="M8 11v3M6.5 12.5h3"/></svg>';
   var IC = {
@@ -327,7 +327,18 @@
     document.documentElement.classList.remove('console-open');
     if (back && MV.onBack) MV.onBack();
   }
-  MV.console = { open: open, close: close, isOpen: function () { return !!box; } };
+  function voiceFind(q) {
+    var n = function (z) { return String(z).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim(); };
+    var w = n(q).split(' ').filter(Boolean);
+    var hit = roms().map(function (r) { var tt = n(title(r)); return { r: r, s: w.filter(function (x) { return tt.indexOf(x) >= 0; }).length }; })
+      .filter(function (x) { return x.s > 0; }).sort(function (a, b) { return b.s - a.s; })[0];
+    if (!hit) { MV.toast('No encontré “' + q + '” en tus juegos'); return; }
+    tab = 'lib'; render();
+    var el = $$('.cshelfrow .cf', box).filter(function (e) { return reg[e.getAttribute('data-rom')] === hit.r; })[0];
+    if (el) focus(el);
+    MV.toast('🎤 ' + title(hit.r));
+  }
+  MV.console = { open: open, close: close, isOpen: function () { return !!box; }, search: voiceFind };
 
   // Atrás: Biblioteca → Inicio → salir de Juegos
   var origBack = MV.onBack;

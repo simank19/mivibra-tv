@@ -403,12 +403,19 @@ class BrowserActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Cajita para escribir con teclado propio en pantalla (en muchas TV el teclado del sistema no sale):
+     * letras, números, borrar, espacio, búsqueda por voz y Buscar. También funciona el teclado del sistema si aparece.
+     */
+    private var voiceTarget: EditText? = null
     private fun askText(current: String, hint: String, type: String) {
         typing = true
+        val d = resources.displayMetrics.density
+        fun dp(v: Int) = (v * d).toInt()
         val input = EditText(this).apply {
             setText(current); setSelection(text.length)
             this.hint = hint.ifBlank { "Escribe aquí" }
-            setSingleLine(true)
+            setSingleLine(true); textSize = 20f
             inputType = when (type.lowercase()) {
                 "password" -> InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
                 "email" -> InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
@@ -417,41 +424,84 @@ class BrowserActivity : ComponentActivity() {
                 else -> InputType.TYPE_CLASS_TEXT
             }
             imeOptions = EditorInfo.IME_ACTION_GO
+            if (isTv) showSoftInputOnFocus = false     // en TV usamos el teclado de abajo
         }
-        val pad = (20 * resources.displayMetrics.density).toInt()
-        val box = FrameLayout(this).apply { setPadding(pad, pad / 2, pad, 0); addView(input) }
+        voiceTarget = input
         var dlg: android.app.AlertDialog? = null
+        var upper = false
         fun send(go: Boolean) { fillField(input.text.toString(), go); dlg?.dismiss() }
+        fun type(t: String) { val st = input.selectionStart.coerceAtLeast(0); input.text.insert(st, t) }
+        fun back() { val st = input.selectionStart; if (st > 0) input.text.delete(st - 1, st) }
+
+        val keys = ArrayList<TextView>()
+        fun key(label: String, weight: Float = 1f, onClick: () -> Unit) = TextView(this).apply {
+            text = label; gravity = Gravity.CENTER; textSize = 18f; setTextColor(Color.WHITE)
+            isFocusable = true; isClickable = true
+            background = android.graphics.drawable.StateListDrawable().apply {
+                addState(intArrayOf(android.R.attr.state_focused), GradientDrawable().apply { cornerRadius = dp(8).toFloat(); setColor(0xFFFF6900.toInt()) })
+                addState(intArrayOf(), GradientDrawable().apply { cornerRadius = dp(8).toFloat(); setColor(0x33FFFFFF) })
+            }
+            layoutParams = LinearLayout.LayoutParams(0, dp(44), weight).apply { setMargins(dp(3), dp(3), dp(3), dp(3)) }
+            setOnClickListener { onClick() }
+        }
+        val grid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(8), 0, 0) }
+        val letterRows = listOf("1234567890", "qwertyuiop", "asdfghjklñ", "zxcvbnm.-_", "@/:?&=#.com")
+        for (row in letterRows) {
+            val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            val items = if (row == "@/:?&=#.com") listOf("@", "/", ":", "?", "&", "=", "#", ".com") else row.map { it.toString() }
+            for (ch in items) {
+                val k = key(ch) { type(if (upper && ch.length == 1) ch.uppercase() else ch) }
+                if (ch.length == 1 && ch[0].isLetter()) keys.add(k)
+                line.addView(k)
+            }
+            grid.addView(line)
+        }
+        val last = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        last.addView(key("⇧", 1.2f) { upper = !upper; keys.forEach { k -> k.text = if (upper) k.text.toString().uppercase() else k.text.toString().lowercase() } })
+        last.addView(key("Espacio", 3f) { type(" ") })
+        last.addView(key("⌫ Borrar", 1.6f) { back() })
+        last.addView(key("🎤 Voz", 1.4f) { voiceInput() })
+        last.addView(key("Buscar ↵", 1.8f) { send(true) })
+        grid.addView(last)
+
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), dp(4))
+            addView(input); addView(grid)
+        }
         dlg = android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
             .setTitle(if (hint.isBlank()) "Escribir" else hint)
             .setView(box)
-            .setPositiveButton("Buscar / Enviar") { _, _ -> send(true) }
             .setNeutralButton("Solo escribir") { _, _ -> send(false) }
             .setNegativeButton("Cancelar", null)
             .create()
         input.setOnEditorActionListener { _, _, _ -> send(true); true }
-        dlg.setOnDismissListener { typing = false; web.requestFocus() }
-        dlg.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE or WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN)
-        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-        // En TV el teclado solo sale si se pide con fuerza y cuando la ventanita ya tiene el foco
-        fun openKeyboard() {
-            if (!dlg.isShowing) return
-            input.requestFocus()
-            dlg.window?.let { w -> WindowCompat.getInsetsController(w, input).show(WindowInsetsCompat.Type.ime()) }
-            @Suppress("DEPRECATION")
-            if (!imm.showSoftInput(input, InputMethodManager.SHOW_FORCED)) imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0)
-        }
-        // OK sobre el campo también abre el teclado
-        input.setOnClickListener { openKeyboard() }
-        input.setOnKeyListener { _, k, ev ->
-            if (ev.action == KeyEvent.ACTION_UP && (k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER) && input.text.isEmpty()) { openKeyboard(); true } else false
-        }
-        dlg.setOnShowListener {
-            input.postDelayed({ openKeyboard() }, 120)
-            input.postDelayed({ openKeyboard() }, 600)
-        }
+        dlg.setOnDismissListener { typing = false; voiceTarget = null; web.requestFocus() }
+        dlg.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN)
         dlg.show()
-        input.requestFocus()
+        dlg.window?.setLayout((resources.displayMetrics.widthPixels * 0.72).toInt(), WindowManager.LayoutParams.WRAP_CONTENT)
+        // En TV el foco empieza en el teclado (letra "q"); en celular, en el campo con su teclado normal
+        if (isTv) grid.post { (grid.getChildAt(1) as? LinearLayout)?.getChildAt(0)?.requestFocus() }
+        else input.post {
+            input.requestFocus()
+            (getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(input, InputMethodManager.SHOW_IMPLICIT)
+        }
+    }
+
+    /** Dictado por voz para la cajita de texto */
+    private fun voiceInput() {
+        val i = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "es-CO")
+        try { @Suppress("DEPRECATION") startActivityForResult(i, 7301) } catch (_: Exception) { toast("Este TV no tiene dictado por voz") }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        @Suppress("DEPRECATION") super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 7301 && resultCode == RESULT_OK) {
+            val t = data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull() ?: return
+            voiceTarget?.let { it.setText(t); it.setSelection(t.length) }
+        }
     }
 
     /** Pone el texto en el campo de la página como si se hubiera escrito (sirve con Google, YouTube y páginas React). */

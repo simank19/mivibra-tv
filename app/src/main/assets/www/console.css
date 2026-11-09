@@ -127,3 +127,4 @@ html.console-open #app { visibility: hidden; }
 
 .cbg { display: none; }
 #console { transition: background-image .5s; }
+.cver { color: #6B645D; font-size: .8em; font-weight: 600; }

@@ -63,7 +63,10 @@ class RemoteServer(private val ctx: Context, port: Int = PORT) : NanoWSD(port) {
         return try {
             val bytes = ctx.assets.open(asset).use { it.readBytes() }
             val mime = if (asset.endsWith(".svg")) "image/svg+xml" else "text/html; charset=utf-8"
-            NanoHTTPD.newFixedLengthResponse(Response.Status.OK, mime, bytes.inputStream(), bytes.size.toLong())
+            NanoHTTPD.newFixedLengthResponse(Response.Status.OK, mime, bytes.inputStream(), bytes.size.toLong()).apply {
+                // Que el celular siempre cargue la versión nueva de la página (lista de consolas, etc.)
+                addHeader("Cache-Control", "no-store, no-cache, must-revalidate"); addHeader("Pragma", "no-cache")
+            }
         } catch (e: IOException) {
             NanoHTTPD.newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", e.message ?: "error")
         }

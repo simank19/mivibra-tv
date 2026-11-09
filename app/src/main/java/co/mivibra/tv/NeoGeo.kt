@@ -34,6 +34,16 @@ object NeoGeo {
         java.util.zip.ZipFile(path).use { z -> return z.entries().toList().filter { !it.isDirectory }.map { it.crc } }
     }
 
+    /** Si el comprimido trae adentro otro .zip/.7z (y nada más importante), su nombre. */
+    fun innerArchive(path: String): String? = try {
+        val names: List<String> = if (path.lowercase().endsWith(".7z")) {
+            if (android.os.Build.VERSION.SDK_INT >= 26) SevenZ.list(File(path)).map { it.first } else emptyList()
+        } else java.util.zip.ZipFile(path).use { z -> z.entries().toList().filter { !it.isDirectory }.map { it.name } }
+        val arch = names.filter { it.lowercase().endsWith(".zip") || it.lowercase().endsWith(".7z") }
+        val other = names.filter { it !in arch && !Regex("(?i)\\.(txt|nfo|url|htm|html|jpg|png|diz)$").containsMatchIn(it) }
+        if (arch.size == 1 && other.isEmpty()) arch[0] else null
+    } catch (_: Throwable) { null }
+
     /** {set, title, parent} si es un juego de Neo Geo; null si no. */
     fun identify(ctx: Context, path: String): JSONObject? {
         val low = path.lowercase()
@@ -41,6 +51,11 @@ object NeoGeo {
         val base = File(path).nameWithoutExtension.lowercase()
         val sets = load(ctx)
         sets.firstOrNull { it.name == base }?.let { return JSONObject().put("set", it.name).put("title", it.title).put("parent", it.parent ?: "") }
+        // Muchos sitios entregan el juego "envuelto": Metal Slug X.zip → adentro mslugx.zip
+        innerArchive(path)?.let { inner ->
+            val ib = File(inner).nameWithoutExtension.lowercase()
+            sets.firstOrNull { it.name == ib }?.let { return JSONObject().put("set", it.name).put("title", it.title).put("parent", it.parent ?: "").put("inner", inner) }
+        }
         val have = try { entryCrcs(path).toHashSet() } catch (_: Throwable) { return null }
         if (have.isEmpty()) return null
         var best: Set? = null; var bestScore = 0.0
@@ -61,13 +76,25 @@ object NeoGeo {
      * Lo enviado desde el celular se renombra; lo de la USB se copia una vez a la carpeta de la app.
      */
     fun prepare(ctx: Context, path: String, set: String): JSONObject {
-        val src = File(path)
-        val ext = src.extension.lowercase()
+        var src = File(path)
         val own = ctx.getExternalFilesDir(null)?.absolutePath?.let { path.startsWith(it) } == true
+        val outDir = if (own) src.parentFile!! else File(ctx.filesDir, "arcade").apply { mkdirs() }
+        // 1) Comprimido dentro de comprimido: se saca el de adentro (que es el que entiende el emulador)
+        innerArchive(path)?.let { inner ->
+            val name = if (set.isNotBlank()) "$set.${File(inner).extension.lowercase()}" else File(inner).name
+            val target = File(outDir, name)
+            if (!target.exists()) {
+                if (path.lowercase().endsWith(".7z")) SevenZ.extract(src, setOf(inner), outDir).also { File(outDir, File(inner).name).let { f -> if (f != target) f.renameTo(target) } }
+                else java.util.zip.ZipFile(src).use { z -> z.getInputStream(z.getEntry(inner)).use { i -> target.outputStream().use { i.copyTo(it, 256 * 1024) } } }
+            }
+            if (own && target.exists()) src.delete()   // el envoltorio ya no hace falta
+            src = target
+        }
+        val ext = src.extension.lowercase()
         var game = src
-        if (src.nameWithoutExtension.lowercase() != set) {
-            val dir = if (own) src.parentFile!! else File(ctx.filesDir, "arcade").apply { mkdirs() }
-            val target = File(dir, "$set.$ext")
+        // 2) Nombre corto que exige el emulador
+        if (set.isNotBlank() && src.nameWithoutExtension.lowercase() != set) {
+            val target = File(outDir, "$set.$ext")
             if (own && !target.exists() && src.renameTo(target)) game = target
             else {
                 if (!target.exists() || target.length() != src.length()) src.copyTo(target, overwrite = true)

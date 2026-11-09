@@ -210,7 +210,29 @@ class MainActivity : ComponentActivity() {
 
     private var backDown = false
 
+    /** Botón de micrófono / búsqueda del control: dictar y buscar en MiVibra */
+    fun voiceSearch() {
+        val i = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "es-CO")
+            .putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "¿Qué quieres ver o jugar?")
+        try {
+            startForResult(i) { code, data ->
+                val t = data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+                if (code == RESULT_OK && !t.isNullOrBlank()) js("window.MV&&MV.voiceSearch&&MV.voiceSearch(" + JSONObject.quote(t) + ")")
+            }
+        } catch (_: Exception) {
+            js("window.MV&&MV.toast&&MV.toast('Este TV no tiene búsqueda por voz disponible')")
+        }
+    }
+
+    override fun onSearchRequested(): Boolean { voiceSearch(); return true }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.keyCode == KeyEvent.KEYCODE_SEARCH || event.keyCode == KeyEvent.KEYCODE_VOICE_ASSIST) {
+            if (event.action == KeyEvent.ACTION_UP) voiceSearch()
+            return true
+        }
         when (event.keyCode) {
             KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_ESCAPE -> {
                 // Solo cuenta un Atrás completo (bajar y soltar aquí): al cerrarse el teclado de la TV llega un "soltar" suelto
