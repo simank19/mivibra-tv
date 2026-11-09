@@ -143,27 +143,31 @@
   // ---------------- Vista previa del juego elegido ----------------
   // Al pasar por un juego: su pantalla de título y una captura se alternan de fondo, con año, género y estudio.
   var heroT = null, heroCycle = null, heroRom = null;
+  // La imagen va como fondo del propio modo consola (en algunas TV las capas encima de las filas con scroll no se ven)
+  var BASE_BG = 'radial-gradient(120% 90% at 85% -10%, rgba(255,105,0,.22), transparent 55%), radial-gradient(90% 80% at -10% 110%, rgba(76,141,255,.14), transparent 55%)';
+  function setHeroBg(url) {
+    if (!box) return;
+    if (!url) { box.style.backgroundImage = ''; box.style.backgroundSize = ''; box.style.backgroundPosition = ''; box.style.backgroundRepeat = ''; return; }
+    box.style.backgroundImage = 'linear-gradient(90deg, #0E0D0C 40%, rgba(14,13,12,.55) 52%, rgba(14,13,12,0) 66%), ' +
+      'linear-gradient(0deg, #0E0D0C 34%, rgba(14,13,12,.5) 44%, rgba(14,13,12,0) 60%), url("' + url.replace(/"/g, '%22') + '"), ' + BASE_BG;
+    box.style.backgroundSize = '100% 100%, 100% 100%, 60% 66%, 100% 100%, 100% 100%';
+    box.style.backgroundPosition = '0 0, 0 0, right top, 0 0, 0 0';
+    box.style.backgroundRepeat = 'no-repeat';
+  }
   function hero(r) {
     if (!box) return;
-    var bg = $('.cbg', box);
-    if (!bg) { bg = document.createElement('div'); bg.className = 'cbg'; box.insertBefore(bg, box.firstChild); }
     clearInterval(heroCycle);
-    if (!r) { bg.classList.remove('on'); heroRom = null; var d0 = $('#cdesc', box); if (d0) d0.textContent = ''; return; }
+    if (!r) { setHeroBg(null); heroRom = null; var d0 = $('#cdesc', box); if (d0) d0.textContent = ''; return; }
     if (heroRom === r) return;
     heroRom = r;
-    var s = MV.romSystem(r), sh = MV.gameShots ? MV.gameShots(r, s) : {}, urls = [sh.snap, sh.title].filter(Boolean), ok = [];
+    var s = MV.romSystem(r), sh = MV.gameShots ? MV.gameShots(r, s) : {}, ok = [sh.snap, sh.title].filter(Boolean);
     var show = function (u) {
-      var im = document.createElement('img'); im.alt = '';
-      im.onload = function () {
-        if (heroRom !== r) return;
-        $$('img', bg).forEach(function (o) { o.classList.add('out'); setTimeout(function () { o.remove(); }, 900); });
-        bg.appendChild(im); requestAnimationFrame(function () { im.classList.add('in'); }); bg.classList.add('on');
-      };
-      im.onerror = function () { var i = ok.indexOf(u); if (i >= 0) ok.splice(i, 1); };
+      var im = new Image();
+      im.onload = function () { if (heroRom === r) setHeroBg(u); };
+      im.onerror = function () { var i = ok.indexOf(u); if (i >= 0) ok.splice(i, 1); if (heroRom === r && !ok.length) setHeroBg(null); };
       im.src = u;
     };
-    ok = urls.slice();
-    if (!ok.length) { bg.classList.remove('on'); }
+    if (!ok.length) setHeroBg(null);
     else { var i = 0; show(ok[0]); heroCycle = setInterval(function () { if (ok.length > 1 && box) { i = (i + 1) % ok.length; show(ok[i]); } }, 4000); }
     // Datos del juego debajo del título
     var line = function (m) {

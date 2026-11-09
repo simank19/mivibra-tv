@@ -1,5 +1,5 @@
 /* Modo consola de Juegos — diseño propio de MiVibra. 1em = 1/96 del ancho de la pantalla. */
-#console { position: fixed; inset: 0; z-index: 40; font-size: calc(100vw / 96); color: #F3EFEA; font-family: var(--ui);
+#console { image-rendering: auto; position: fixed; inset: 0; z-index: 40; font-size: calc(100vw / 96); color: #F3EFEA; font-family: var(--ui);
   background: radial-gradient(120% 90% at 85% -10%, rgba(255,105,0,.22), transparent 55%), radial-gradient(90% 80% at -10% 110%, rgba(76,141,255,.14), transparent 55%), #0E0D0C;
   display: flex; flex-direction: column; animation: cin .35s var(--ease) both; overflow: hidden; }
 @keyframes cin { from { opacity: 0; transform: scale(1.02); } }
@@ -124,3 +124,6 @@ html.console-open #app { visibility: hidden; }
 #cdesc { margin: .45em 0 0; max-width: 46em; color: #CFC8C0; font-size: 1em; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 0; }
 .csel { height: auto; min-height: 4.6em; }
 .clibsel { flex: none; padding-top: .6em; padding-bottom: .4em; }
+
+.cbg { display: none; }
+#console { transition: background-image .5s; }
