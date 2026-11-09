@@ -1514,9 +1514,12 @@
   var ROM_DIR = /\/(roms?|juegos|games|emuladore?s?|emulators?|emulation|retro\w*|arcade|mame|fbneo|fba|neogeo|cps\d?|snes|nes|sfc|genesis|megadrive|mega drive|gba|gbc|gb|n64|nds|psx|ps1|playstation|psp|gamecube|gcn|ngc|dreamcast|dc|sega|nintendo|atari|pce|ports?|doom|quake)\//i;
   function isGame(r) {
     var name = String(r.name || ''), low = name.toLowerCase(), path = String(r.path || '').toLowerCase(), size = +r.size || 0, ext = r.ext;
-    if (/\.apk|\.xapk|\.apks/i.test(low) || /\/android\/(data|obb)\//.test(path)) return false;
+    // La carpeta propia de MiVibra (ROMs enviadas desde el celular o descargadas) vive en Android/data: esa sí cuenta
+    var own = path.indexOf('/android/data/co.mivibra.tv/') >= 0;
+    if (/\.apk|\.xapk|\.apks/i.test(low) || (!own && /\/android\/(data|obb)\//.test(path))) return false;
     if (/^(readme|license|licence|changelog|copying|authors|contributing|notice|history|install)\b/i.test(low)) return false;
-    var mine = path.indexOf('/co.mivibra.tv/') >= 0 || ROM_DIR.test(path + '/');
+    if (own && /\/_bios\//.test(path)) return false;
+    var mine = own || path.indexOf('/co.mivibra.tv/') >= 0 || ROM_DIR.test(path + '/');
     if (ext === 'zip') return mine;                                 // .zip solo en carpetas de juegos (roms, arcade…)
     if (ext === 'm3u') return /psx|ps1|playstation/.test(path);      // .m3u también son listas de TV
     if (ext === 'iso') return size > 30e6 && (mine || /psx|ps1|playstation|psp|gamecube|dreamcast/.test(path));
@@ -1537,16 +1540,25 @@
     return out;
   }
   function romSystem(r) {
-    var ov = P.romSystem[r.path]; if (ov) return D.SYSTEMS.find(function (s) { return s.id === ov; });
+    var ov = P.romSystem[r.path];
+    // Un .zip marcado como Arcade que en realidad trae una ROM de consola (enviado con la versión anterior) se corrige solo
+    if (ov === 'arcade' && r.ext === 'zip') {
+      var zin = zipInner(r);
+      for (var zq = 0; zq < zin.length; zq++) {
+        var real = D.SYSTEMS.find(function (s) { return !s.port && s.id !== 'arcade' && s.exts.indexOf(zin[zq]) >= 0; });
+        if (real) return real;
+      }
+    }
+    if (ov) return D.SYSTEMS.find(function (s) { return s.id === ov; });
     var name = (r.name || '').toLowerCase(), path = (r.path || '').toLowerCase();
     if (r.ext === 'zip') {
-      if (/arcade|mame|fbneo|fba|neogeo|cps/.test(path)) return D.SYSTEMS.find(function (s) { return s.id === 'arcade'; });
-      // ROM de consola comprimida (Super Mario World.zip con el .sfc adentro): se mira qué trae
+      // ROM de consola comprimida (Super Mario World.zip con el .sfc adentro): se mira qué trae, aunque esté en una carpeta de Arcade
       var inner = zipInner(r);
       for (var zi = 0; zi < inner.length; zi++) {
         var zs = D.SYSTEMS.find(function (s) { return !s.port && s.id !== 'arcade' && s.exts.indexOf(inner[zi]) >= 0; });
         if (zs) return zs;
       }
+      if (/arcade|mame|fbneo|fba|neogeo|cps/.test(path)) return D.SYSTEMS.find(function (s) { return s.id === 'arcade'; });
       // Sin pistas: la carpeta (snes/, gba/, psx/…) dice la consola
       var byDir = D.SYSTEMS.find(function (s) { return !s.port && s.id !== 'arcade' && new RegExp('/(' + s.id + (s.id === 'md' ? '|genesis|megadrive' : s.id === 'psx' ? '|ps1|playstation' : s.id === 'snes' ? '|sfc|supernintendo' : '') + ')/').test(path); });
       return byDir || null;
