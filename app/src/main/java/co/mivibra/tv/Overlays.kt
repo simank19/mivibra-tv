@@ -40,6 +40,7 @@ object Overlays {
         "ngp" to listOf(n("SNK-Neo-Geo-Pocket-Color"), y("SNKNeoGeoPocketColor")),
         "ws" to listOf(n("Bandai-WonderSwan-Color-Horizontal"), y("BandaiWonderSwanColor")),
         "arcade" to listOf(n("MAME-Horizontal"), y("Mame")),
+        "neogeo" to listOf(n("SNK-Neo-Geo-Horizontal"), y("SNKNeoGeo")),
         "doom" to listOf(n("DOOM")),
         "dc" to listOf(y("SegaDreamcast")),
         "gc" to listOf(y("NintendoGameCube")),

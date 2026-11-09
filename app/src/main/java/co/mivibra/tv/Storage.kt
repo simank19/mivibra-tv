@@ -206,6 +206,8 @@ object Storage {
                     for (base in listOfNotNull(sys, ra)) {
                         val dir = if (sub != null) File(base, sub).apply { mkdirs() } else base
                         try { f.copyTo(File(dir, f.name), overwrite = true) } catch (_: Exception) {}
+                        // FBNeo busca la BIOS de Neo Geo en system/fbneo
+                        if (low == "neogeo.zip") try { f.copyTo(File(File(base, "fbneo").apply { mkdirs() }, f.name), overwrite = true) } catch (_: Exception) {}
                     }
                     copied.put(f.name)
                 }

@@ -62,7 +62,7 @@
   };
 
   // Íconos a color de KyleBing/retro-game-console-icons (CC BY 4.0); los demás usan el dibujo de línea
-  var PNG = ['nes', 'snes', 'gb', 'gbc', 'gba', 'n64', 'nds', 'md', 'sms', 'gg', 'psx', 'a26', 'a78', 'lynx', 'pce', 'ngp', 'ws', 'arcade', 'psp', 'dc', 'doom', 'quake', 'cave'];
+  var PNG = ['nes', 'snes', 'gb', 'gbc', 'gba', 'n64', 'nds', 'md', 'sms', 'gg', 'psx', 'a26', 'a78', 'lynx', 'pce', 'ngp', 'ws', 'arcade', 'neogeo', 'psp', 'dc', 'doom', 'quake', 'cave'];
   MV.sysIcon = function (id) {
     if (PNG.indexOf(id) >= 0) return '<img class="sysic sysimg" src="img/consoles/' + id + '.png" alt="" loading="lazy">';
     var body = I[id] || I['?'];

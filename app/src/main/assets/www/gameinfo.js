@@ -13,6 +13,7 @@
   function persist() { clearTimeout(saveT); saveT = setTimeout(function () { MV.save(KEY, all()); }, 800); }
 
   function title(r) {
+    var nt = MV.romTitle && MV.romTitle(r); if (nt) return nt;
     return String(r.name || '').replace(/\.[^.]+$/, '').replace(/\s*[\(\[][^\)\]]*[\)\]]/g, '').replace(/_/g, ' ').trim() || r.name;
   }
   MV.gameTitle = title;

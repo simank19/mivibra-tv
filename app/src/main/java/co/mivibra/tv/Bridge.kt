@@ -481,6 +481,21 @@ class Bridge(private val a: MainActivity) {
         if (next == n) Overlays.setEnabled(a, sys, false) else Overlays.setStyle(a, sys, next)
     }
 
+    /** Juego de Neo Geo dentro de un .zip/.7z: {set,title,parent} o "null" */
+    @JavascriptInterface
+    fun arcadeId(path: String): String = if (path.startsWith("content://")) "null" else try { NeoGeo.identify(a, path)?.toString() ?: "null" } catch (_: Throwable) { "null" }
+
+    /** Pone el nombre corto y la BIOS al lado: {path, bios, renamed} */
+    @JavascriptInterface
+    fun arcadePrepare(id: String, json: String) {
+        io.execute {
+            try {
+                val o = JSONObject(json)
+                reply(id, true, NeoGeo.prepare(a, o.getString("path"), o.getString("set")))
+            } catch (e: Throwable) { reply(id, false, e.message ?: "No se pudo preparar el juego") }
+        }
+    }
+
     /** {installed, pkg, bios} de la app RetroArch. */
     @JavascriptInterface
     fun retroArch(): String = RetroArch.info(a)

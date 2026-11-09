@@ -22,7 +22,8 @@
       if (seen[k]) return false; seen[k] = 1; return true;
     });
   }
-  function title(r) { return String(r.name || '').replace(/\.[^.]+$/, '').replace(/\s*[\(\[][^\)\]]*[\)\]]/g, '').replace(/_/g, ' ').trim() || r.name; }
+  function title(r) { var nt = MV.romTitle && MV.romTitle(r); if (nt) return nt;
+    return String(r.name || '').replace(/\.[^.]+$/, '').replace(/\s*[\(\[][^\)\]]*[\)\]]/g, '').replace(/_/g, ' ').trim() || r.name; }
   // Portadas de la base pública de libretro (por nombre No-Intro / Redump del archivo)
   function thumb(r, s) {
     if (!s || !s.thumbs) return '';

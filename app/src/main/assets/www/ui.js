@@ -1542,8 +1542,24 @@
     clearTimeout(zipSaveT); zipSaveT = setTimeout(function () { MV.save('zipExts', ZIPX); }, 1500);
     return out;
   }
+  // ¿Es un juego de Neo Geo? (por el nombre corto o por lo que trae adentro). Se mira una vez y se recuerda.
+  var ARCX = MV.load('arcIds', {}) || {}, arcSaveT = null;
+  function arcId(r) {
+    if (!r || !/^(zip|7z)$/.test(r.ext || '')) return null;
+    if (r.path in ARCX) return ARCX[r.path];
+    var out = null;
+    if (A && A.arcadeId && !/^content:/.test(r.path)) { try { out = JSON.parse(A.arcadeId(r.path)); } catch (e) {} }
+    ARCX[r.path] = out;
+    clearTimeout(arcSaveT); arcSaveT = setTimeout(function () { MV.save('arcIds', ARCX); }, 1500);
+    return out;
+  }
+  MV.arcId = arcId;
+  MV.romTitle = function (r) { var a = arcId(r); return a && a.title ? a.title.replace(/\s*\([^)]*\)\s*$/, '') : null; };
+  var NEOGEO = function () { return D.SYSTEMS.find(function (s) { return s.id === 'neogeo'; }); };
   function romSystem(r) {
     var ov = P.romSystem[r.path];
+    // Lo que se marcó como Arcade y en realidad es Neo Geo va a su propia consola
+    if ((ov === 'arcade' || !ov) && /^(zip|7z)$/.test(r.ext || '') && arcId(r)) return NEOGEO();
     // Un .zip marcado como Arcade que en realidad trae una ROM de consola (enviado con la versión anterior) se corrige solo
     if (ov === 'arcade' && (r.ext === 'zip' || r.ext === '7z')) {
       var zin = zipInner(r);
@@ -2003,10 +2019,25 @@
     if (A && gameEngine(s) === 'retroarch') { playRetroArch(r, s); return; }
     var start = function () {
       var go = function (rom) {
-        return MV.call('playGame', [JSON.stringify({ rom: rom, core: s.core, title: r.name, shader: P.shader, sys: s.id })]).then(function () { rememberGame(r); });
+        return MV.call('playGame', [JSON.stringify({ rom: rom, core: s.core, title: MV.romTitle(r) || r.name, shader: P.shader, sys: s.id })]).then(function () { rememberGame(r); });
       };
       // ROM de consola en .zip: se descomprime una vez (Arcade se juega tal cual)
-      var job = (r.ext === 'zip' || r.ext === '7z') && s.id !== 'arcade'
+      // Neo Geo: el .zip necesita su nombre corto (kof98.zip) y la BIOS neogeo.zip al lado
+      var neo = s.id === 'neogeo' ? arcId(r) : null;
+      var job = neo ? MV.call('arcadePrepare', [JSON.stringify({ path: r.path, set: neo.set })]).then(function (p) {
+          if (!p.bios) MV.toast('Falta la BIOS de Neo Geo (neogeo.zip). Envíala desde el celular eligiendo “BIOS”.', 6000);
+          if (p.renamed && p.path !== r.path) {
+            // Lo enviado desde el celular quedó renombrado: se actualiza la biblioteca
+            var list = MV.load('roms', []) || [], old = r.path;
+            list.forEach(function (x) { if (x.path === old) { x.path = p.path; x.name = p.path.split('/').pop(); } });
+            MV.save('roms', list);
+            ARCX[p.path] = ARCX[old]; if (P.romSystem[old]) { P.romSystem[p.path] = P.romSystem[old]; MV.savePrefs(); }
+            MV.save('arcIds', ARCX);
+            r = Object.assign({}, r, { path: p.path, name: p.path.split('/').pop() });
+          }
+          return go(p.path);
+        })
+        : (r.ext === 'zip' || r.ext === '7z') && s.id !== 'arcade'
         ? (unzipBox(r, 0), MV.call('unzipRom', [JSON.stringify({ path: r.path, exts: s.exts })], function (p) { unzipBox(r, p); }).then(function (x) { unzipBox(null); return go(x); }, function (e) { unzipBox(null); throw e; }))
         : go(r.path);
       job.catch(function (e) { MV.toast(e.message, 4000); });

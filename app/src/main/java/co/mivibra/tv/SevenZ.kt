@@ -10,6 +10,9 @@ object SevenZ {
     fun list(f: File): List<Pair<String, Long>> =
         SevenZFile(f).use { z -> z.entries.filter { !it.isDirectory }.map { it.name to it.size } }
 
+    fun crcs(f: File): List<Long> =
+        SevenZFile(f).use { z -> z.entries.filter { !it.isDirectory && it.hasCrc }.map { it.crcValue } }
+
     fun extract(f: File, names: Set<String>, dir: File, tick: (Int) -> Unit = {}) {
         SevenZFile(f).use { z ->
             val buf = ByteArray(256 * 1024)
