@@ -1543,7 +1543,7 @@
     return out;
   }
   // ¿Es un juego de Neo Geo? (por el nombre corto o por lo que trae adentro). Se mira una vez y se recuerda.
-  var ARCX = MV.load('arcIds2', {}) || {}, arcSaveT = null, arcTried = {};
+  var ARCX = MV.load('arcIds3', {}) || {}, arcSaveT = null, arcTried = {};
   function arcId(r) {
     if (!r || !/^(zip|7z)$/.test(r.ext || '')) return null;
     if (ARCX[r.path]) return ARCX[r.path];
@@ -1552,7 +1552,7 @@
     var out = null;
     if (A && A.arcadeId && !/^content:/.test(r.path)) { try { out = JSON.parse(A.arcadeId(r.path)); } catch (e) {} }
     ARCX[r.path] = out;
-    clearTimeout(arcSaveT); arcSaveT = setTimeout(function () { MV.save('arcIds2', ARCX); }, 1500);
+    clearTimeout(arcSaveT); arcSaveT = setTimeout(function () { MV.save('arcIds3', ARCX); }, 1500);
     return out;
   }
   MV.arcId = arcId;
@@ -2026,6 +2026,18 @@
       // ROM de consola en .zip: se descomprime una vez (Arcade se juega tal cual)
       // Neo Geo: el .zip necesita su nombre corto (kof98.zip) y la BIOS neogeo.zip al lado
       var arc = (s.id === 'neogeo' || s.id === 'arcade') && /^(zip|7z)$/.test(r.ext || '') && !/^content:/.test(r.path), neo = arc ? arcId(r) : null;
+      // Neo Geo que no se pudo reconocer: mostrar qué trae el archivo en vez del error del emulador
+      if (s.id === 'neogeo' && arc && !neo && !MV._neoForce) {
+        var inside = []; try { inside = JSON.parse(A.archiveNames(r.path)); } catch (e) {}
+        MV._neoRom = r;
+        MV.modal('<h2>No reconozco este juego de Neo Geo</h2><p>El emulador necesita el juego con su nombre corto (por ejemplo <b>kof2003.zip</b>) y no pude saber cuál es por lo que trae adentro.</p>' +
+          '<p class="muted">Archivo: ' + esc(r.name) + '</p><div style="max-height:30vh;overflow:auto;font:13px monospace;background:rgba(0,0,0,.25);padding:10px;border-radius:8px">' +
+          (inside.length ? inside.map(esc).join('<br>') : 'No se pudo leer el contenido (¿archivo dañado?)') + '</div>' +
+          '<p class="muted">Mándale una foto de esta lista a quien te ayuda con MiVibra, o renombra el .zip con su nombre corto de MAME.</p>' +
+          '<div class="btns"><button class="btn f" data-act="neoForce">Intentar igual</button><button class="btn ghost f" data-act="closeModal">Cerrar</button></div>');
+        return;
+      }
+      MV._neoForce = false;
       var job = arc ? MV.call('arcadePrepare', [JSON.stringify({ path: r.path, set: neo ? neo.set : '' })]).then(function (p) {
           if (neo && !p.bios) MV.toast('Falta la BIOS de Neo Geo (neogeo.zip). Envíala desde el celular eligiendo “BIOS”.', 6000);
           if (p.renamed && p.path !== r.path) {
@@ -2034,7 +2046,7 @@
             list.forEach(function (x) { if (x.path === old) { x.path = p.path; x.name = p.path.split('/').pop(); } });
             MV.save('roms', list);
             ARCX[p.path] = ARCX[old]; if (P.romSystem[old]) { P.romSystem[p.path] = P.romSystem[old]; MV.savePrefs(); }
-            MV.save('arcIds2', ARCX);
+            MV.save('arcIds3', ARCX);
             r = Object.assign({}, r, { path: p.path, name: p.path.split('/').pop() });
           }
           return go(p.path);
@@ -2365,6 +2377,7 @@
     webGo: function () { var v = ((document.getElementById('webIn') || {}).value || '').trim(); openBrowser(v); },
     webOpen: function (u) { openBrowser(u); },
     stype: function (t) { searchType = t; showResults(); var el = document.querySelector('[data-act="stype"][data-arg="' + t + '"]'); if (el) el.focus(); },
+    neoForce: function () { MV.closeModal(true); MV._neoForce = true; playRom(MV._neoRom); },
     voiceGo: function (q) { MV.go('search'); setTimeout(function () { ACT.searchFor(q); }, 80); },
     searchFor: function (q) { query = q; var i = document.getElementById('searchIn'); if (i) i.value = q; saveRecent(q); showResults(); },
     clearRecent: function () { MV.save('recentSearch', []); showResults(); },

@@ -485,6 +485,10 @@ class Bridge(private val a: MainActivity) {
     @JavascriptInterface
     fun arcadeId(path: String): String = if (path.startsWith("content://")) "null" else try { NeoGeo.identify(a, path)?.toString() ?: "null" } catch (_: Throwable) { "null" }
 
+    /** Archivos de adentro de un .zip/.7z (para mostrar qué trae) */
+    @JavascriptInterface
+    fun archiveNames(path: String): String = org.json.JSONArray(NeoGeo.entryNames(path).take(40)).toString()
+
     /** Pone el nombre corto y la BIOS al lado: {path, bios, renamed} */
     @JavascriptInterface
     fun arcadePrepare(id: String, json: String) {

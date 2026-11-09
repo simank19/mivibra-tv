@@ -10,7 +10,7 @@ import java.io.File
  * le pone al .zip el nombre corto que el emulador exige (kof98.zip) junto a la BIOS neogeo.zip.
  */
 object NeoGeo {
-    private class Set(val name: String, val title: String, val parent: String?, val crcs: HashSet<Long>)
+    private class Set(val name: String, val title: String, val parent: String?, val crcs: HashSet<Long>, val files: HashSet<String>)
     @Volatile private var db: List<Set>? = null
 
     private fun load(ctx: Context): List<Set> {
@@ -20,11 +20,18 @@ object NeoGeo {
         for (k in o.keys()) {
             val g = o.getJSONObject(k); val c = g.getJSONArray("c")
             val crcs = HashSet<Long>(); for (i in 0 until c.length()) crcs.add(c.getString(i).toLong(16))
-            out.add(Set(k, g.optString("t").substringBefore(" / ").trim(), g.optString("p").takeIf { it.isNotEmpty() && it != "null" }, crcs))
+            val n = g.optJSONArray("n"); val files = HashSet<String>(); if (n != null) for (i in 0 until n.length()) files.add(n.getString(i))
+            out.add(Set(k, g.optString("t").substringBefore(" / ").trim(), g.optString("p").takeIf { it.isNotEmpty() && it != "null" }, crcs, files))
         }
         db = out
         return out
     }
+
+    /** Nombres de los archivos de adentro (sin carpetas, en minúsculas) */
+    fun entryNames(path: String): List<String> = try {
+        if (path.lowercase().endsWith(".7z")) { if (android.os.Build.VERSION.SDK_INT >= 26) SevenZ.list(File(path)).map { it.first } else emptyList() }
+        else java.util.zip.ZipFile(path).use { z -> z.entries().toList().filter { !it.isDirectory }.map { it.name } }
+    } catch (_: Throwable) { emptyList() }
 
     private fun entryCrcs(path: String): List<Long> {
         if (path.lowercase().endsWith(".7z")) {
@@ -66,9 +73,26 @@ object NeoGeo {
             val score = hit.toDouble() / s.crcs.size + hit * 1e-4
             if (score > bestScore) { bestScore = score; best = s }
         }
-        val b = best ?: return null
-        if (bestScore < 0.6) return null
-        return JSONObject().put("set", b.name).put("title", b.title).put("parent", b.parent ?: "")
+        fun res(b: Set, how: String) = JSONObject().put("set", b.name).put("title", b.title).put("parent", b.parent ?: "").put("how", how)
+        if (best != null && bestScore >= 0.6) return res(best, "crc")
+        // 2) Por los nombres de los archivos (otra versión del mismo juego, con huellas distintas)
+        val names = entryNames(path).map { File(it).name.lowercase() }.toHashSet()
+        var bn: Set? = null; var bnScore = 0.0
+        for (s in sets) {
+            if (s.files.isEmpty()) continue
+            val hit = s.files.count { it in names }; if (hit == 0) continue
+            val sc = hit.toDouble() / s.files.size + hit * 1e-4
+            if (sc > bnScore) { bnScore = sc; bn = s }
+        }
+        if (bn != null && bnScore >= 0.5) return res(bn, "names")
+        // 3) Por el número del juego en Neo Geo (271-p1.p1 → 271 = King of Fighters 2003): el original de esa familia
+        val ngh = names.mapNotNull { Regex("^(\\d{3})-").find(it)?.groupValues?.get(1) }.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key
+        if (ngh != null) {
+            val fam = sets.filter { st -> st.files.count { it.startsWith("$ngh-") } * 2 >= st.files.size }
+            (fam.firstOrNull { it.parent == null } ?: fam.firstOrNull())?.let { return res(it, "ngh") }
+        }
+        if (best != null && bestScore >= 0.3) return res(best, "crc-low")
+        return null
     }
 
     /**
