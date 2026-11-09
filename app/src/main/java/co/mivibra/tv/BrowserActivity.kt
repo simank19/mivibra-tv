@@ -368,6 +368,23 @@ class BrowserActivity : ComponentActivity() {
         ev.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
         web.dispatchTouchEvent(ev); ev.recycle()
         cursor.down = down; cursor.invalidate()
+        if (!down) web.postDelayed({ keyboardIfTyping() }, 250)
+    }
+
+    /** En TV el teclado no sale solo al elegir un campo de texto: si lo que quedó enfocado se escribe, se abre. */
+    private fun keyboardIfTyping() {
+        val js = "(function(){var e=document.activeElement;while(e&&e.shadowRoot&&e.shadowRoot.activeElement)e=e.shadowRoot.activeElement;" +
+            "if(!e)return false;if(e.isContentEditable)return true;var t=(e.tagName||'').toUpperCase();" +
+            "if(t==='TEXTAREA')return !e.readOnly&&!e.disabled;" +
+            "if(t==='INPUT')return !e.readOnly&&!e.disabled&&!/^(button|submit|reset|checkbox|radio|range|color|file|image|hidden)$/i.test(e.type||'');return false})()"
+        web.evaluateJavascript(js) { v ->
+            if (v == "true") {
+                web.requestFocus()
+                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                @Suppress("DEPRECATION")
+                imm.showSoftInput(web, InputMethodManager.SHOW_FORCED)
+            }
+        }
     }
 
     override fun dispatchKeyEvent(e: KeyEvent): Boolean {
@@ -406,6 +423,13 @@ class BrowserActivity : ComponentActivity() {
                 KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_PAGE_UP -> { if (e.action == KeyEvent.ACTION_DOWN) web.pageUp(false); return true }
                 KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_PAGE_DOWN -> { if (e.action == KeyEvent.ACTION_DOWN) web.pageDown(false); return true }
             }
+        }
+        // Sin cursor (moviéndose por los enlaces): OK sobre un campo de texto también abre el teclado
+        if (!cursorOn && customView == null && e.action == KeyEvent.ACTION_UP &&
+            (e.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || e.keyCode == KeyEvent.KEYCODE_ENTER) && web.hasFocus()) {
+            val r = super.dispatchKeyEvent(e)
+            web.postDelayed({ keyboardIfTyping() }, 200)
+            return r
         }
         return super.dispatchKeyEvent(e)
     }

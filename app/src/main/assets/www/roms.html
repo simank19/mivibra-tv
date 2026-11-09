@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0D0C0B">
+<title>Enviar juegos a la TV · MiVibra</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: #0D0C0B; color: #F3EFEA; font: 16px/1.5 system-ui, -apple-system, Roboto, sans-serif; padding: 24px 18px 48px; }
+  header { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 20px; }
+  header img { width: 30px; height: 30px; }
+  h1 { font-size: 25px; line-height: 1.15; margin: 22px 0 6px; }
+  p { color: #B9B1A8; margin: 0 0 16px; }
+  .free { font-size: 14px; color: #B9B1A8; }
+  label.pick { display: block; text-align: center; padding: 17px; border-radius: 16px; background: #FF6900; color: #0D0C0B; font-weight: 800; font-size: 18px; margin-top: 8px; }
+  label.pick.alt { background: rgba(255,255,255,.08); color: #F3EFEA; font-size: 16px; padding: 13px; }
+  input[type=file] { display: none; }
+  .list { margin-top: 22px; display: flex; flex-direction: column; gap: 10px; }
+  .it { background: #1A1715; border: 1px solid rgba(255,255,255,.1); border-radius: 14px; padding: 12px 14px; }
+  .it .top { display: flex; gap: 10px; align-items: center; }
+  .it b { flex: 1; font-size: 15px; word-break: break-all; }
+  .it small { color: #B9B1A8; }
+  select { background: #0D0C0B; color: #F3EFEA; border: 1px solid rgba(255,255,255,.2); border-radius: 10px; padding: 7px 8px; font: inherit; font-size: 14px; max-width: 48%; }
+  .bar { height: 6px; border-radius: 6px; background: rgba(255,255,255,.1); overflow: hidden; margin-top: 10px; }
+  .bar i { display: block; height: 100%; width: 0; background: #FF6900; transition: width .2s; }
+  .ok .bar i { background: #22C55E; }
+  .err .bar i { background: #FF7A6B; }
+  .st { font-size: 13px; margin-top: 6px; color: #B9B1A8; }
+  button.go { width: 100%; margin-top: 18px; padding: 16px; border: 0; border-radius: 16px; background: #F3EFEA; color: #0D0C0B; font: inherit; font-weight: 800; font-size: 17px; }
+  button.go:disabled { opacity: .4; }
+  .tip { font-size: 13px; color: #8E877F; margin-top: 18px; }
+</style>
+</head>
+<body>
+<header><img src="/isotipo.svg" alt="">MiVibra</header>
+<h1>Enviar juegos a la TV</h1>
+<p>Elige las ROMs de tu celular. Llegan directo a la sección Juegos de MiVibra TV.</p>
+<div class="free" id="free"></div>
+<label class="pick" for="f">Elegir ROMs</label>
+<input id="f" type="file" multiple>
+<label class="pick alt" for="b">Elegir BIOS</label>
+<input id="b" type="file" multiple>
+<div class="list" id="list"></div>
+<button class="go" id="go" disabled>Enviar a la TV</button>
+<p class="tip">Mantén esta página abierta hasta que termine. Para PlayStation envía juntos el .cue y sus .bin. Las ROMs en .zip o .iso te piden elegir la consola. Las BIOS se instalan solas si son las que usan los emuladores (por ejemplo scph5501.bin o gba_bios.bin).</p>
+<script>
+(function () {
+  var SYS = [{"id":"nes","n":"NES","e":["nes","fds","unf","unif"]},{"id":"snes","n":"Super Nintendo","e":["smc","sfc","swc","fig"]},{"id":"gb","n":"Game Boy","e":["gb"]},{"id":"gbc","n":"Game Boy Color","e":["gbc"]},{"id":"gba","n":"Game Boy Advance","e":["gba"]},{"id":"n64","n":"Nintendo 64","e":["n64","z64","v64"]},{"id":"nds","n":"Nintendo DS","e":["nds"]},{"id":"md","n":"Sega Genesis","e":["gen","smd","md","32x"]},{"id":"sms","n":"Master System","e":["sms"]},{"id":"gg","n":"Game Gear","e":["gg"]},{"id":"psx","n":"PlayStation","e":["cue","pbp","chd","m3u"]},{"id":"a26","n":"Atari 2600","e":["a26"]},{"id":"a78","n":"Atari 7800","e":["a78"]},{"id":"lynx","n":"Atari Lynx","e":["lnx"]},{"id":"pce","n":"PC Engine","e":["pce"]},{"id":"ngp","n":"Neo Geo Pocket","e":["ngp","ngc"]},{"id":"ws","n":"WonderSwan","e":["ws","wsc"]},{"id":"arcade","n":"Arcade","e":[]},{"id":"psp","n":"PSP","e":["cso"]},{"id":"dc","n":"Dreamcast","e":["cdi","gdi"]},{"id":"gc","n":"GameCube","e":["rvz","gcm"]}];
+  var queue = [], busy = false, $ = function (id) { return document.getElementById(id); };
+  function ext(n) { var m = /\.([^.]+)$/.exec(n); return m ? m[1].toLowerCase() : ''; }
+  function guess(name) { var e = ext(name); for (var i = 0; i < SYS.length; i++) if (SYS[i].e.indexOf(e) >= 0) return SYS[i].id; return ''; }
+  function size(b) { return b > 1073741824 ? (b / 1073741824).toFixed(1) + ' GB' : b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB'; }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function info() { fetch('/roms/info').then(function (r) { return r.json(); }).then(function (j) { $('free').textContent = 'Espacio libre en la TV: ' + size(j.free); }).catch(function () {}); }
+  info();
+
+  function add(files, bios) {
+    var arr = Array.prototype.slice.call(files || []);
+    // Los .bin de PlayStation toman la consola de su .cue
+    var cueSys = arr.some(function (f) { return ext(f.name) === 'cue'; }) ? 'psx' : '';
+    arr.forEach(function (f) {
+      var e = ext(f.name), sys = bios ? 'bios' : (guess(f.name) || (e === 'bin' && cueSys) || (e === 'zip' ? 'arcade' : ''));
+      var it = { f: f, sys: sys, bios: bios, el: document.createElement('div') };
+      it.el.className = 'it';
+      var opts = bios ? '<option value="bios">BIOS</option>' : '<option value="">Elige la consola</option>' + SYS.map(function (s) { return '<option value="' + s.id + '"' + (s.id === sys ? ' selected' : '') + '>' + esc(s.n) + '</option>'; }).join('');
+      it.el.innerHTML = '<div class="top"><b>' + esc(f.name) + '</b><select' + (bios ? ' disabled' : '') + '>' + opts + '</select></div><small>' + size(f.size) + '</small><div class="bar"><i></i></div><div class="st"></div>';
+      it.el.querySelector('select').onchange = function (ev) { it.sys = ev.target.value; ready(); };
+      $('list').appendChild(it.el); queue.push(it);
+    });
+    ready();
+  }
+  function ready() { $('go').disabled = busy || !queue.some(function (q) { return !q.done; }); }
+  $('f').onchange = function () { add(this.files, false); this.value = ''; };
+  $('b').onchange = function () { add(this.files, true); this.value = ''; };
+
+  $('go').onclick = function () {
+    var missing = queue.filter(function (q) { return !q.done && !q.sys; });
+    if (missing.length) { alert('Elige la consola de: ' + missing.map(function (q) { return q.f.name; }).join(', ')); return; }
+    busy = true; ready();
+    (function next() {
+      var it = queue.filter(function (q) { return !q.done && !q.sending; })[0];
+      if (!it) { busy = false; ready(); info(); return; }
+      it.sending = true;
+      var st = it.el.querySelector('.st'), bar = it.el.querySelector('.bar i');
+      st.textContent = 'Enviando…';
+      var x = new XMLHttpRequest();
+      x.open('POST', '/roms/upload?name=' + encodeURIComponent(it.f.name) + '&sys=' + encodeURIComponent(it.sys));
+      x.setRequestHeader('Content-Type', 'application/octet-stream');
+      x.upload.onprogress = function (e) { if (e.lengthComputable) { var p = Math.round(e.loaded * 100 / e.total); bar.style.width = p + '%'; st.textContent = 'Enviando ' + p + '%'; } };
+      x.onload = function () {
+        var j = {}; try { j = JSON.parse(x.responseText); } catch (e) {}
+        it.done = true; it.sending = false;
+        if (x.status === 200 && j.ok) { it.el.classList.add('ok'); bar.style.width = '100%'; st.textContent = it.bios ? (j.bios ? '✓ BIOS instalada' : '✓ Recibida (no es una BIOS que use un emulador)') : '✓ Ya está en la TV'; }
+        else { it.el.classList.add('err'); st.textContent = 'Error: ' + (j.error || 'no se pudo enviar'); }
+        next();
+      };
+      x.onerror = function () { it.done = true; it.sending = false; it.el.classList.add('err'); st.textContent = 'Se perdió la conexión con la TV'; next(); };
+      x.send(it.f);
+    })();
+  };
+})();
+</script>
+</body>
+</html>

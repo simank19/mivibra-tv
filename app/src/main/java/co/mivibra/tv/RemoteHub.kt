@@ -54,6 +54,11 @@ object RemoteHub {
         "SELECT" to KeyEvent.KEYCODE_BUTTON_SELECT,
     )
 
+    /** Llegó una ROM o BIOS desde el celular: la app la agrega a Juegos sin tener que buscar. */
+    fun romReceived(json: String) {
+        ui.post { main?.js("window.MV&&MV.onRomReceived&&MV.onRomReceived(" + json + ")") }
+    }
+
     /** Modo control remoto: simula la tecla en la pantalla actual. */
     fun navKey(name: String, down: Boolean?) {
         if (name == "HOME") {

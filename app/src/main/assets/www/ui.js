@@ -1553,7 +1553,7 @@
     var pads = A ? JSON.parse(A.gamepads()) : [];
     return top('Juegos', '<button class="pill f" data-act="consoleOpen">' + IC.games.replace('<svg', '<svg width="18" height="18"') + 'Modo consola</button><button class="pill f" data-act="remoteQR">' + IC.phone.replace('<svg', '<svg width="18" height="18"') + 'Celular como mando</button>') +
       (!access ? '<div class="banner glass"><div class="t"><b>Permite el acceso a la memoria, USB y discos duros</b><br><span class="muted">Así MiVibra TV encuentra tus ROMs en cualquier unidad conectada.</span></div><button class="btn f" data-act="storageAccess">Permitir acceso</button></div>' : '') +
-      '<div class="btns" style="margin-bottom:16px"><button class="btn f" data-act="scanRoms">' + IC.refresh + 'Buscar juegos</button><button class="btn ghost f" data-act="romRoots">' + IC.usb + 'Carpetas y unidades</button><button class="btn ghost f" data-act="romDownload">' + IC.download + 'Descargar desde enlace</button><button class="btn ghost f" data-act="importBios">Importar BIOS</button></div>' +
+      '<div class="btns" style="margin-bottom:16px"><button class="btn f" data-act="scanRoms">' + IC.refresh + 'Buscar juegos</button><button class="btn ghost f" data-act="romRoots">' + IC.usb + 'Carpetas y unidades</button><button class="btn ghost f" data-act="romsFromPhone">' + IC.phone + 'Enviar desde el celular</button><button class="btn ghost f" data-act="romDownload">' + IC.download + 'Descargar desde enlace</button><button class="btn ghost f" data-act="importBios">Importar BIOS</button></div>' +
       '<p class="muted" style="margin:-6px 0 14px">' + (pads.length ? 'Mandos conectados: ' + pads.map(function (p) { return esc(p.name); }).join(', ') : 'Sin mandos físicos conectados. Usa un mando Bluetooth/USB o tu celular.') + '</p>' +
       chips([{ name: 'all', label: 'Todo' }, { name: 'ports', label: 'Ports' }].concat(D.SYSTEMS.map(function (s) { return { name: s.id, label: s.name }; })).map(function (s) { return s.name; }), sysSel, 'sysSel')
         .replace(/data-arg="([^"]+)">([^<]+)</g, function (m, id) {
@@ -2634,6 +2634,32 @@
       MV.call('importBios', [JSON.stringify(roots)]).then(function (arr) { MV.toast(arr.length ? 'BIOS importadas: ' + arr.join(', ') : 'No se encontraron archivos BIOS conocidos', 4500); });
     },
     remoteQR: function () { MV.modal('<h2>Celular como mando</h2><p>Mismo Wi-Fi, escanea el código y elige “Mando de juego”. Cada celular es un jugador; el joystick sirve para N64, PlayStation y los ports.</p><div id="qrBox2" style="display:flex;gap:20px;align-items:center;flex-wrap:wrap"></div>', { onOpen: function () { showQR(document.getElementById('qrBox2')); } }); }
+  };
+  // ---------- Enviar ROMs desde el celular ----------
+  var phoneRoms = 0;
+  ACT.romsFromPhone = function () {
+    phoneRoms = 0;
+    MV.modal('<h2>Enviar juegos desde el celular</h2><p>Con el celular en el mismo Wi-Fi, escanea el código, elige tus ROMs (o BIOS) y toca “Enviar a la TV”. Aparecen solas en Juegos.</p><div id="qrRoms" style="display:flex;gap:20px;align-items:center;flex-wrap:wrap"></div><p class="muted" id="romsCount" style="margin-top:12px">Esperando archivos…</p>', {
+      onOpen: function () {
+        var box = document.getElementById('qrRoms'); if (!box) return;
+        if (!A) { box.innerHTML = '<p class="muted">Disponible en la app instalada.</p>'; return; }
+        var r = JSON.parse(A.remoteStart());
+        if (!r.ok || !r.url) { box.innerHTML = '<p>Conecta la TV a una red Wi-Fi para recibir archivos del celular.</p>'; return; }
+        var url = r.url + 'roms', qr = window.qrcode(0, 'M'); qr.addData(url); qr.make();
+        box.innerHTML = '<div class="qr">' + qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true }) + '</div><div><p style="margin:0 0 6px">O abre en el navegador del celular:</p><h2 style="font:800 26px var(--brand);margin:0">' + esc(url.replace(/^http:\/\//, '')) + '</h2></div>';
+      }
+    });
+  };
+  MV.onRomReceived = function (r) {
+    if (r.bios) { MV.toast('BIOS recibida: ' + r.name); return; }
+    var list = MV.load('roms', []) || [];
+    if (!list.some(function (x) { return x.path === r.path; })) list.push({ name: r.name, path: r.path, ext: r.ext, size: r.size });
+    MV.save('roms', list);
+    if (r.sys && r.sys !== 'bios') { P.romSystem[r.path] = r.sys; MV.savePrefs(); }
+    phoneRoms++;
+    var c = document.getElementById('romsCount'); if (c) c.textContent = phoneRoms + (phoneRoms === 1 ? ' juego recibido' : ' juegos recibidos') + ' · el último: ' + r.name;
+    else MV.toast('Llegó ' + r.name);
+    if (view.name === 'games' && !MV.modalOpen()) MV.rerender();
   };
   ACT.consoleOpen = function () { MV.save('gamesClassic', false); if (MV.console) MV.console.open(); };
   MV.ACT = ACT;   // el frontend de juegos (console.js) usa las mismas acciones

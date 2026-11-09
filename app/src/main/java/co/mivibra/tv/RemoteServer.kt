@@ -51,8 +51,12 @@ class RemoteServer(private val ctx: Context, port: Int = PORT) : NanoWSD(port) {
 
     override fun serveHttp(session: IHTTPSession): Response {
         val path = session.uri ?: "/"
+        // Enviar ROMs y BIOS desde el celular
+        if (path == "/roms/info") return romInfo()
+        if (path == "/roms/upload" && session.method == NanoHTTPD.Method.POST) return romUpload(session)
         val asset = when {
             path == "/" || path == "/index.html" -> "www/pad.html"
+            path == "/roms" || path == "/roms/" -> "www/roms.html"
             path == "/isotipo.svg" -> "www/img/isotipo.svg"
             else -> null
         } ?: return NanoHTTPD.newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "No encontrado")
@@ -63,6 +67,56 @@ class RemoteServer(private val ctx: Context, port: Int = PORT) : NanoWSD(port) {
         } catch (e: IOException) {
             NanoHTTPD.newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", e.message ?: "error")
         }
+    }
+
+    // ---------------- ROMs desde el celular ----------------
+
+    /** Carpeta donde llegan las ROMs (la de MiVibra, que ya se busca con "Buscar juegos"; no necesita permisos). */
+    private fun romDir(): java.io.File = (ctx.getExternalFilesDir("roms") ?: java.io.File(ctx.filesDir, "roms")).apply { mkdirs() }
+
+    private fun romInfo(): Response {
+        val d = romDir()
+        val o = JSONObject().put("free", d.usableSpace).put("dir", d.absolutePath)
+        return NanoHTTPD.newFixedLengthResponse(Response.Status.OK, "application/json", o.toString())
+    }
+
+    private fun romUpload(session: IHTTPSession): Response {
+        fun err(msg: String) = NanoHTTPD.newFixedLengthResponse(Response.Status.BAD_REQUEST, "application/json", JSONObject().put("ok", false).put("error", msg).toString())
+        val q = session.parameters
+        val name = java.io.File(q["name"]?.firstOrNull() ?: "").name.trim()
+        val sys = (q["sys"]?.firstOrNull() ?: "").lowercase()
+        if (name.isEmpty() || name.startsWith(".")) return err("Nombre no válido")
+        if (!sys.matches(Regex("[a-z0-9]{1,12}"))) return err("Consola no válida")
+        val len = session.headers["content-length"]?.toLongOrNull() ?: return err("Falta el tamaño")
+        val dir = romDir()
+        if (len > dir.usableSpace - 50L * 1024 * 1024) return err("No hay espacio en la TV")
+        val isBios = sys == "bios"
+        val target = java.io.File(if (isBios) java.io.File(dir, "_bios") else java.io.File(dir, sys), name).apply { parentFile?.mkdirs() }
+        val part = java.io.File(target.path + ".part")
+        try {
+            val inp = session.inputStream
+            part.outputStream().buffered(256 * 1024).use { out ->
+                val buf = ByteArray(256 * 1024)
+                var left = len
+                while (left > 0) {
+                    val r = inp.read(buf, 0, if (left < buf.size) left.toInt() else buf.size)
+                    if (r <= 0) break
+                    out.write(buf, 0, r); left -= r
+                }
+                if (left > 0) throw IOException("Se cortó la subida")
+            }
+            if (target.exists()) target.delete()
+            if (!part.renameTo(target)) throw IOException("No se pudo guardar")
+        } catch (e: Exception) {
+            part.delete()
+            return err(e.message ?: "Error al recibir")
+        }
+        // BIOS: se instalan para el emulador de MiVibra y para RetroArch
+        val bios = if (isBios) Storage.importBios(ctx, listOf(target.parent ?: "")).length() else 0
+        val info = JSONObject().put("name", target.name).put("path", target.absolutePath).put("ext", target.extension.lowercase())
+            .put("size", target.length()).put("sys", sys).put("bios", isBios)
+        RemoteHub.romReceived(info.toString())
+        return NanoHTTPD.newFixedLengthResponse(Response.Status.OK, "application/json", JSONObject().put("ok", true).put("bios", bios).toString())
     }
 
     override fun openWebSocket(handshake: IHTTPSession): WebSocket = Pad(handshake)
