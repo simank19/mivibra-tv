@@ -186,13 +186,70 @@ class GameActivity : ComponentActivity() {
     }
     private var padHiddenByUser = false
 
+    // ---------------- Mandos físicos (Bluetooth / USB) ----------------
+
+    /** Jugador de cada mando físico: el primero que se conectó es el 1, el segundo el 2… */
+    private fun physicalPort(deviceId: Int): Int {
+        val ids = InputDevice.getDeviceIds().filter { id ->
+            val d = InputDevice.getDevice(id)
+            d != null && !d.isVirtual && fromGamepad(d.sources)
+        }.sorted()
+        return ids.indexOf(deviceId).coerceIn(0, 3)
+    }
+
+    private var selectDown = false
+    private var startDown = false
+    private val triggers = HashMap<Int, Boolean>()
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (pad?.visibility == View.VISIBLE && fromGamepad(event.source) && KeyEvent.isGamepadButton(event.keyCode)) setPadVisible(false)
         if (event.keyCode == KeyEvent.KEYCODE_BUTTON_MODE || event.keyCode == KeyEvent.KEYCODE_MENU) {
             if (event.action == KeyEvent.ACTION_UP) showMenu()
             return true
         }
+        val code = event.keyCode
+        val isPadKey = KeyEvent.isGamepadButton(code) || code in DPAD_KEYS
+        if (isPadKey && (fromGamepad(event.source) || code in DPAD_KEYS || code == KeyEvent.KEYCODE_DPAD_CENTER)) {
+            // El OK del control remoto de la TV funciona como botón A
+            val sent = if (code == KeyEvent.KEYCODE_DPAD_CENTER) KeyEvent.KEYCODE_BUTTON_A else code
+            if (event.repeatCount == 0) {
+                // SELECT + START juntos abren el menú (para mandos sin botón de menú)
+                if (sent == KeyEvent.KEYCODE_BUTTON_SELECT) selectDown = event.action == KeyEvent.ACTION_DOWN
+                if (sent == KeyEvent.KEYCODE_BUTTON_START) startDown = event.action == KeyEvent.ACTION_DOWN
+                if (selectDown && startDown) { selectDown = false; startDown = false; showMenu(); return true }
+                retroView.sendKeyEvent(event.action, sent, if (fromGamepad(event.source)) physicalPort(event.deviceId) else 0)
+            }
+            return true
+        }
         return super.dispatchKeyEvent(event)
+    }
+
+    /** Palancas, cruceta "HAT" y gatillos analógicos de los mandos. */
+    override fun dispatchGenericMotionEvent(ev: android.view.MotionEvent): Boolean {
+        if (fromGamepad(ev.source) && ev.action == android.view.MotionEvent.ACTION_MOVE) {
+            if (pad?.visibility == View.VISIBLE) setPadVisible(false)
+            val port = physicalPort(ev.deviceId)
+            fun ax(a: Int) = ev.getAxisValue(a)
+            retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_DPAD, ax(android.view.MotionEvent.AXIS_HAT_X), ax(android.view.MotionEvent.AXIS_HAT_Y), port)
+            retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, ax(android.view.MotionEvent.AXIS_X), ax(android.view.MotionEvent.AXIS_Y), port)
+            retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_RIGHT, ax(android.view.MotionEvent.AXIS_Z), ax(android.view.MotionEvent.AXIS_RZ), port)
+            // Gatillos: algunos mandos los mandan como eje y no como botón
+            fun trig(key: Int, v: Float) {
+                val on = v > 0.5f
+                if (triggers[port * 1000 + key] != on) {
+                    triggers[port * 1000 + key] = on
+                    retroView.sendKeyEvent(if (on) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, key, port)
+                }
+            }
+            trig(KeyEvent.KEYCODE_BUTTON_L2, maxOf(ax(android.view.MotionEvent.AXIS_LTRIGGER), ax(android.view.MotionEvent.AXIS_BRAKE)))
+            trig(KeyEvent.KEYCODE_BUTTON_R2, maxOf(ax(android.view.MotionEvent.AXIS_RTRIGGER), ax(android.view.MotionEvent.AXIS_GAS)))
+            return true
+        }
+        return super.dispatchGenericMotionEvent(ev)
+    }
+
+    companion object {
+        private val DPAD_KEYS = setOf(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT)
     }
 
     private fun showMenu() {

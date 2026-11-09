@@ -1980,7 +1980,7 @@
     var info = {}; try { info = JSON.parse(A.retroArch()); } catch (e) {}
     if (!info.installed) {
       MV.confirm('Falta RetroArch', (s.ra ? s.name + ' se juega con RetroArch. ' : '') + 'Instálalo gratis desde Play Store y descarga el núcleo “' + (s.raCore || s.core) + '” en RetroArch → Actualizador en línea → Descargar núcleos.', 'Abrir Play Store')
-        .then(function (y) { if (y) A.openExternal('market://details?id=com.retroarch.aarch64'); });
+        .then(function (y) { if (y) A.openExternal('market://details?id=' + (MV.raPkg || 'com.retroarch.ra32')); });
       return;
     }
     MV.call('playRetroArch', [JSON.stringify({ rom: r.path, core: s.raCore || s.core })]).then(function () { rememberGame(r); })

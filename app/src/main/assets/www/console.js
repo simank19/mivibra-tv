@@ -171,7 +171,7 @@
       MV.setGameEngine(id, MV.gameEngine(s) === 'retroarch' ? 'interno' : 'retroarch');
       MV.closeModal(true); engines();
     };
-    MV.ACT.consoleGetRA = function () { if (A) A.openExternal('market://details?id=com.retroarch.aarch64'); };
+    MV.ACT.consoleGetRA = function () { if (A) A.openExternal('market://details?id=' + (MV.raPkg || 'com.retroarch.ra32')); };
   }
 
   // Opciones de un juego (botón ☰)
