@@ -151,6 +151,18 @@ class BrowserActivity : ComponentActivity() {
             }
         }
         web.webChromeClient = object : WebChromeClient() {
+            // Micrófono para páginas como YouTube o Google (búsqueda por voz): se pide permiso una vez a Android
+            override fun onPermissionRequest(request: android.webkit.PermissionRequest) {
+                val wantsMic = request.resources.contains(android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE)
+                if (!wantsMic) { request.deny(); return }
+                val res = arrayOf(android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE)
+                if (checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    runOnUiThread { request.grant(res) }
+                } else {
+                    pendingMic = request
+                    @Suppress("DEPRECATION") requestPermissions(arrayOf(android.Manifest.permission.RECORD_AUDIO), 7302)
+                }
+            }
             override fun onShowCustomView(view: View, callback: CustomViewCallback) {
                 customView = view; customCallback = callback
                 root.addView(view, FrameLayout.LayoutParams(-1, -1))
@@ -484,6 +496,18 @@ class BrowserActivity : ComponentActivity() {
         else input.post {
             input.requestFocus()
             (getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).showSoftInput(input, InputMethodManager.SHOW_IMPLICIT)
+        }
+    }
+
+    private var pendingMic: android.webkit.PermissionRequest? = null
+
+    @Deprecated("Deprecated in Java")
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+        @Suppress("DEPRECATION") super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 7302) {
+            val r = pendingMic ?: return; pendingMic = null
+            if (grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED) r.grant(arrayOf(android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE))
+            else { r.deny(); toast("Sin permiso de micrófono no se puede buscar por voz") }
         }
     }
 
