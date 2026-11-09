@@ -368,23 +368,84 @@ class BrowserActivity : ComponentActivity() {
         ev.source = android.view.InputDevice.SOURCE_TOUCHSCREEN
         web.dispatchTouchEvent(ev); ev.recycle()
         cursor.down = down; cursor.invalidate()
-        if (!down) web.postDelayed({ keyboardIfTyping() }, 250)
+        if (!down) web.postDelayed({ keyboardIfTyping(x, y) }, 300)
     }
 
-    /** En TV el teclado no sale solo al elegir un campo de texto: si lo que quedó enfocado se escribe, se abre. */
-    private fun keyboardIfTyping() {
-        val js = "(function(){var e=document.activeElement;while(e&&e.shadowRoot&&e.shadowRoot.activeElement)e=e.shadowRoot.activeElement;" +
-            "if(!e)return false;if(e.isContentEditable)return true;var t=(e.tagName||'').toUpperCase();" +
-            "if(t==='TEXTAREA')return !e.readOnly&&!e.disabled;" +
-            "if(t==='INPUT')return !e.readOnly&&!e.disabled&&!/^(button|submit|reset|checkbox|radio|range|color|file|image|hidden)$/i.test(e.type||'');return false})()"
-        web.evaluateJavascript(js) { v ->
-            if (v == "true") {
-                web.requestFocus()
-                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-                @Suppress("DEPRECATION")
-                imm.showSoftInput(web, InputMethodManager.SHOW_FORCED)
-            }
+    /**
+     * En TV el teclado del sistema casi nunca sale dentro de una página (Google, YouTube…).
+     * Si lo que quedó elegido es un campo de texto, abrimos nuestra propia cajita de texto
+     * (que sí saca el teclado y el dictado por voz) y luego escribimos lo que pongas en la página.
+     */
+    private var typing = false
+    private val FIND_FIELD = "(function(){function deep(e){while(e&&e.shadowRoot&&e.shadowRoot.activeElement)e=e.shadowRoot.activeElement;" +
+        "try{while(e&&e.tagName==='IFRAME'&&e.contentDocument&&e.contentDocument.activeElement){e=e.contentDocument.activeElement;while(e&&e.shadowRoot&&e.shadowRoot.activeElement)e=e.shadowRoot.activeElement}}catch(x){}return e}" +
+        "var e=deep(document.activeElement);if(!e)return null;var t=(e.tagName||'').toUpperCase();var ok=e.isContentEditable||" +
+        "(t==='TEXTAREA'&&!e.readOnly&&!e.disabled)||(t==='INPUT'&&!e.readOnly&&!e.disabled&&!/^(button|submit|reset|checkbox|radio|range|color|file|image|hidden)$/i.test(e.type||''));" +
+        "if(!ok)return null;var at=__AT__;if(at){var h=document.elementFromPoint(at[0],at[1]);var host=e.getRootNode&&e.getRootNode().host;" +
+        "if(!(h&&(h.tagName==='IFRAME'||h===e||h.contains(e)||e.contains(h)||(host&&(host===h||host.contains(h)||h.contains(host))))))return null}" +
+        "window.__mvField=e;return JSON.stringify({v:e.isContentEditable?e.textContent:(e.value||''),p:e.placeholder||e.getAttribute('aria-label')||e.title||'',t:e.type||'',s:!!(e.form||e.closest('form'))||/search|buscar|q$/i.test((e.name||'')+(e.id||'')+(e.getAttribute('aria-label')||''))})})()"
+
+    private fun keyboardIfTyping(x: Float = -1f, y: Float = -1f) {
+        if (typing) return
+        // Con el cursor: solo si el clic cayó sobre el campo (si no, un campo que quedó enfocado antes lo abriría a cada clic)
+        val at = if (x < 0) "null" else "[${x / web.scale},${y / web.scale}]"
+        web.evaluateJavascript(FIND_FIELD.replace("__AT__", at)) { v ->
+            if (v == null || v == "null" || typing) return@evaluateJavascript
+            try {
+                val o = org.json.JSONObject(org.json.JSONTokener(v).nextValue() as String)
+                askText(o.optString("v"), o.optString("p"), o.optString("t"))
+            } catch (_: Exception) {}
         }
+    }
+
+    private fun askText(current: String, hint: String, type: String) {
+        typing = true
+        val input = EditText(this).apply {
+            setText(current); setSelection(text.length)
+            this.hint = hint.ifBlank { "Escribe aquí" }
+            setSingleLine(true)
+            inputType = when (type.lowercase()) {
+                "password" -> InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+                "email" -> InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+                "number", "tel" -> InputType.TYPE_CLASS_NUMBER
+                "url" -> InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+                else -> InputType.TYPE_CLASS_TEXT
+            }
+            imeOptions = EditorInfo.IME_ACTION_GO
+        }
+        val pad = (20 * resources.displayMetrics.density).toInt()
+        val box = FrameLayout(this).apply { setPadding(pad, pad / 2, pad, 0); addView(input) }
+        var dlg: android.app.AlertDialog? = null
+        fun send(go: Boolean) { fillField(input.text.toString(), go); dlg?.dismiss() }
+        dlg = android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle(if (hint.isBlank()) "Escribir" else hint)
+            .setView(box)
+            .setPositiveButton("Buscar / Enviar") { _, _ -> send(true) }
+            .setNeutralButton("Solo escribir") { _, _ -> send(false) }
+            .setNegativeButton("Cancelar", null)
+            .create()
+        input.setOnEditorActionListener { _, _, _ -> send(true); true }
+        dlg.setOnDismissListener { typing = false; web.requestFocus() }
+        dlg.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
+        dlg.show()
+        input.requestFocus()
+        input.postDelayed({
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.showSoftInput(input, InputMethodManager.SHOW_IMPLICIT)
+        }, 150)
+    }
+
+    /** Pone el texto en el campo de la página como si se hubiera escrito (sirve con Google, YouTube y páginas React). */
+    private fun fillField(text: String, go: Boolean) {
+        val q = org.json.JSONObject.quote(text)
+        val js = "(function(){var e=window.__mvField;if(!e)return;try{e.focus()}catch(x){}var v=$q;" +
+            "if(e.isContentEditable){e.textContent=v}else{var pr=e.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;" +
+            "var d=Object.getOwnPropertyDescriptor(pr,'value');if(d&&d.set)d.set.call(e,v);else e.value=v}" +
+            "e.dispatchEvent(new InputEvent('input',{bubbles:true,composed:true,data:v,inputType:'insertText'}));e.dispatchEvent(new Event('change',{bubbles:true}));" +
+            (if (go) "setTimeout(function(){var f=e.form||(e.closest&&e.closest('form'));if(f){try{f.requestSubmit?f.requestSubmit():f.submit();return}catch(x){}}" +
+                "var o={key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true,cancelable:true,composed:true};e.dispatchEvent(new KeyboardEvent('keydown',o));e.dispatchEvent(new KeyboardEvent('keypress',o));e.dispatchEvent(new KeyboardEvent('keyup',o))},150);" else "") +
+            "})()"
+        web.evaluateJavascript(js, null)
     }
 
     override fun dispatchKeyEvent(e: KeyEvent): Boolean {
