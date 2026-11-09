@@ -229,7 +229,7 @@
     switch (el.getAttribute('data-act')) {
       case 'lib': tab = 'lib'; render(); break;
       case 'sys': tab = 'lib'; render('.cshelf[data-sys="' + el.getAttribute('data-arg') + '"] .cf'); break;
-      case 'scan': MV.ACT.scanRoms(); break;
+      case 'scan': (MV.ACT.scanChooser || MV.ACT.scanRoms)(); break;
       case 'bios': MV.ACT.importBios(); break;
       case 'engine': engines(); break;
       case 'phone': MV.ACT.remoteQR(); break;

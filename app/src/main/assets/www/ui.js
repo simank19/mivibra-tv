@@ -2707,6 +2707,48 @@
       MV.call('pickFolder', []).then(function (uri) { if (P.romRoots.indexOf(uri) < 0) P.romRoots.push(uri); MV.savePrefs(); MV.closeModal(true); ACT.romRoots(); })
         .catch(function (e) { if (e.message !== 'cancel') MV.toast(e.message === 'nopicker' ? 'Este equipo no tiene selector de carpetas: usa la lista de unidades y permite el acceso.' : e.message, 4500); });
     },
+    // Elegir en qué unidad buscar: memoria, USB, disco o una carpeta
+    scanChooser: function () {
+      if (!A) return;
+      var roots = JSON.parse(A.storageRoots()).filter(function (r) { return !/Descargas de MiVibra/.test(r.name); });
+      var anyLocked = roots.some(function (r) { return !r.readable; });
+      var picked = P.romRoots.filter(function (p) { return p.indexOf('content://') === 0; });
+      MV._scanRoots = roots.map(function (r) { return r.path; }).concat(picked);
+      MV.modal('<h2>¿Dónde busco los juegos?</h2><p class="muted">Conecta la USB o el disco antes de elegir. Si no aparece, usa “Elegir carpeta”.</p>' +
+        '<div class="btns" style="flex-direction:column;align-items:stretch">' +
+        roots.map(function (r, i) {
+          var usb = r.removable || /usb|disco|sd/i.test(r.name);
+          return '<button class="btn ' + (i ? 'ghost ' : '') + 'f" data-act="scanIn" data-arg="' + i + '"' + (r.readable ? '' : ' disabled') + '>' + (usb ? '💾 ' : '📱 ') + esc(r.name) + (r.readable ? '' : ' (sin permiso)') + '</button>';
+        }).join('') +
+        picked.map(function (p, j) { return '<button class="btn ghost f" data-act="scanIn" data-arg="' + (roots.length + j) + '">📁 ' + esc(decodeURIComponent(p.split('/tree/')[1] || p)) + '</button>'; }).join('') +
+        '<button class="btn ghost f" data-act="scanIn" data-arg="all">🔎 Buscar en todas</button>' +
+        '<button class="btn ghost f" data-act="scanPick">📂 Elegir carpeta o unidad…</button>' +
+        (anyLocked ? '<button class="btn ghost f" data-act="storageAccess">🔓 Dar permiso para leer USB y discos</button>' : '') +
+        '</div>');
+    },
+    scanIn: function (arg) {
+      var all = MV._scanRoots || [];
+      var roots = arg === 'all' ? all.filter(function (p, i) { return true; }) : [all[+arg]].filter(Boolean);
+      var dl = A.downloadsDir(); if (arg === 'all' && roots.indexOf(dl) < 0) roots.push(dl);
+      MV.closeModal(true);
+      MV.modal('<h2>Buscando juegos…</h2><div class="spinner" style="margin:20px auto"></div><p class="muted">Revisando ' + (roots.length === 1 ? esc(decodeURIComponent(String(roots[0]).split('/tree/').pop())) : roots.length + ' ubicaciones') + '.</p>');
+      MV.call('scanRoms', [JSON.stringify(roots), JSON.stringify(D.ROM_EXTS)]).then(function (found) {
+        found = found.filter(isGame);
+        // Se suman a la biblioteca; lo de otras unidades se conserva
+        var inScanned = function (p) { return roots.some(function (r) { return String(p).indexOf(r) === 0; }); };
+        var list = (MV.load('roms', []) || []).filter(function (r) { return !inScanned(r.path); });
+        found.forEach(function (f) { if (!list.some(function (r) { return r.path === f.path; })) list.push(f); });
+        MV.save('roms', list); MV.closeModal(true);
+        MV.toast(found.length + (found.length === 1 ? ' juego encontrado' : ' juegos encontrados')); MV.rerender();
+      }).catch(function (e) { MV.closeModal(true); MV.toast(e.message); });
+    },
+    scanPick: function () {
+      MV.call('pickFolder', []).then(function (uri) {
+        if (P.romRoots.indexOf(uri) < 0) { P.romRoots.push(uri); MV.savePrefs(); }
+        MV._scanRoots = (MV._scanRoots || []).concat([uri]);
+        ACT.scanIn(String(MV._scanRoots.length - 1));
+      }).catch(function (e) { if (e.message !== 'cancel') MV.toast(e.message === 'nopicker' ? 'Esta TV no trae el selector de carpetas de Android. Usa “Dar permiso para leer USB y discos”.' : e.message, 5000); });
+    },
     scanRoms: function () {
       if (!A) return;
       var roots = P.romRoots.slice();
