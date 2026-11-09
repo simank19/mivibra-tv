@@ -1575,7 +1575,7 @@
   }
   function romCard(r, i) {
     var s = romSystem(r); var k = 'rom:' + r.path; MV.reg[k] = { key: k, rom: r, name: r.name, type: 'rom' };
-    return '<button class="card wide f" style="--h:' + (s ? s.color : '#6B7280') + ';animation-delay:' + Math.min(i, 12) * 0.04 + 's" data-act="playRom" data-key="' + esc(k) + '"><div class="th"><span class="mono">' + esc(s ? s.mono : '?') + '</span><span class="tag">' + esc(s ? s.name : 'Elegir sistema') + '</span></div><div class="meta"><b>' + esc(r.name.replace(/\.[^.]+$/, '')) + '</b><span>' + esc(r.path.split('/').slice(-2, -1)[0] || '') + '</span></div></button>';
+    return '<button class="card wide f" style="--h:' + (s ? s.color : '#6B7280') + ';animation-delay:' + Math.min(i, 12) * 0.04 + 's" data-act="playRom" data-key="' + esc(k) + '"><div class="th"><span class="mono">' + (MV.sysIcon ? MV.sysIcon(s ? s.id : '?') : esc(s ? s.mono : '?')) + '</span><span class="tag">' + esc(s ? s.name : 'Elegir sistema') + '</span></div><div class="meta"><b>' + esc(r.name.replace(/\.[^.]+$/, '')) + '</b><span>' + esc(r.path.split('/').slice(-2, -1)[0] || '') + '</span></div></button>';
   }
   VIEWS.games = function () {
     var roms = (MV.load('roms', []) || []).filter(function (r) { return !r.ext || r.ext !== 'exe' || /doukutsu\.exe$/i.test(r.name); }).filter(function (r) { return r.ext !== 'pak' || /^pak0\.pak$/i.test(r.name); }).filter(isGame);
@@ -2023,7 +2023,7 @@
   function chooseSystem(r) {
     MV._romPending = r;
     MV.modal('<h2>¿De qué consola es “' + esc(r.name) + '”?</h2><p class="muted">No se pudo saber por el nombre ni por lo que trae adentro. Lo recordaremos para la próxima vez.</p><div class="sys">' +
-      D.SYSTEMS.map(function (s) { return '<button class="sysb f" data-act="romSys" data-arg="' + s.id + '"><i style="background:' + s.color + '">' + s.mono + '</i><b>' + s.name + '</b></button>'; }).join('') + '</div>');
+      D.SYSTEMS.map(function (s) { return '<button class="sysb f" data-act="romSys" data-arg="' + s.id + '"><i style="background:' + s.color + '">' + (MV.sysIcon ? MV.sysIcon(s.id) : s.mono) + '</i><b>' + s.name + '</b></button>'; }).join('') + '</div>');
   }
 
   // ---------- Diálogos ----------

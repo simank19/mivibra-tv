@@ -31,7 +31,7 @@
   }
   function cover(r, s, cls) {
     var c = s ? s.color : '#6B7280', t = thumb(r, s);
-    return '<span class="cv ' + (cls || '') + '" style="--c:' + c + '"><i class="mono">' + esc(s ? s.mono : '?') + '</i><b class="nm">' + esc(title(r)) + '</b>' +
+    return '<span class="cv ' + (cls || '') + '" style="--c:' + c + '"><i class="mono">' + (MV.sysIcon ? MV.sysIcon(s ? s.id : '?') : esc(s ? s.mono : '?')) + '</i><b class="nm">' + esc(title(r)) + '</b>' +
       (t ? '<img loading="lazy" src="' + esc(t) + '" alt="" onload="this.parentNode.classList.add(\'art\')" onerror="this.remove()">' : '') + '</span>';
   }
   var reg = {};
@@ -75,7 +75,7 @@
     var by = {}; all.forEach(function (r) { var s = MV.romSystem(r); var id = s ? s.id : '?'; by[id] = (by[id] || 0) + 1; });
     var cons = systems().filter(function (s) { return by[s.id]; }).map(function (s) {
       return '<button class="cf ctile csys" data-act="sys" data-arg="' + s.id + '" data-title="' + esc(s.name) + '" data-sys="' + by[s.id] + (by[s.id] === 1 ? ' juego' : ' juegos') + '">' +
-        '<span class="cv" style="--c:' + s.color + '"><i class="mono">' + esc(s.mono) + '</i><b class="nm">' + esc(s.name) + '</b><small>' + by[s.id] + '</small></span></button>';
+        '<span class="cv" style="--c:' + s.color + '"><i class="mono sysbig">' + (MV.sysIcon ? MV.sysIcon(s.id) : esc(s.mono)) + '</i><b class="nm">' + esc(s.name) + '</b><small>' + by[s.id] + '</small></span></button>';
     });
     if (by['?']) cons.push('<button class="cf ctile csys" data-act="sys" data-arg="?" data-title="Sin sistema" data-sys="' + by['?'] + ' por elegir"><span class="cv" style="--c:#6B7280"><i class="mono">?</i><b class="nm">Sin sistema</b><small>' + by['?'] + '</small></span></button>');
     var row = all.length ? list.map(function (r) { return tile(r, true); }).join('')
@@ -96,7 +96,7 @@
     all.forEach(function (r) { var s = MV.romSystem(r); var id = s ? s.id : '?'; (by[id] = by[id] || []).push(r); });
     var shelves = systems().filter(function (s) { return by[s.id]; }).map(function (s) {
       var list = by[s.id].sort(function (a, b) { return title(a).localeCompare(title(b)); });
-      return '<div class="cshelf" data-sys="' + s.id + '"><h3 style="--c:' + s.color + '"><i>' + esc(s.mono) + '</i>' + esc(s.name) + '<small>' + list.length + (MV.gameEngine(s) === 'retroarch' ? ' · RetroArch' : '') + '</small></h3>' +
+      return '<div class="cshelf" data-sys="' + s.id + '"><h3 style="--c:' + s.color + '"><i>' + (MV.sysIcon ? MV.sysIcon(s.id) : esc(s.mono)) + '</i>' + esc(s.name) + '<small>' + list.length + (MV.gameEngine(s) === 'retroarch' ? ' · RetroArch' : '') + '</small></h3>' +
         '<div class="crow cshelfrow">' + list.slice(0, 150).map(function (r) { return tile(r, false); }).join('') + '</div></div>';
     });
     if (by['?']) shelves.push('<div class="cshelf" data-sys="?"><h3 style="--c:#6B7280"><i>?</i>Sin sistema<small>' + by['?'].length + ' · OK para elegir</small></h3><div class="crow cshelfrow">' + by['?'].map(function (r) { return tile(r, false); }).join('') + '</div></div>');

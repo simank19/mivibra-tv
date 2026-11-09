@@ -80,3 +80,11 @@ html.console-open #app { visibility: hidden; }
 .ctile.csys { width: 13em; height: 7.5em; }
 .ctile.csys .nm { font-size: 1.3em; -webkit-line-clamp: 2; }
 .ctile.csys small { position: absolute; right: .8em; top: .7em; font-weight: 800; font-size: 1.1em; color: #fff; background: rgba(0,0,0,.3); border-radius: 99em; padding: .1em .7em; }
+
+/* Íconos de consolas */
+.cv .mono .sysic { width: 2.6em; height: 2.6em; display: block; }
+.ctile.big .cv .mono .sysic { width: 3.6em; height: 3.6em; }
+.ctile.csys .cv { flex-direction: row; align-items: center; justify-content: flex-start; gap: .9em; }
+.ctile.csys .cv .mono.sysbig .sysic { width: 4.2em; height: 4.2em; }
+.ctile.csys .nm { font-size: 1.15em; }
+.cshelf h3 i .sysic { width: 2.4em; height: 2.4em; display: block; }

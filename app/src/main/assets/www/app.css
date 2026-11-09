@@ -620,3 +620,7 @@ html.lite .spinner { animation: spin 1s linear infinite !important; }
 /* Las filas que no están en pantalla no se dibujan hasta acercarse (el navegador las salta) */
 html.tv .view-in > .row, html.tv #results > .row { content-visibility: auto; contain-intrinsic-size: auto 380px; }
 html.lite .card .shine { display: none; }
+
+/* Íconos de consolas */
+.sysb i .sysic { width: 70%; height: 70%; color: #fff; }
+.card .th .mono .sysic { width: 2.2em; height: 2.2em; display: block; }
