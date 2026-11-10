@@ -26,6 +26,20 @@ object RetroArch {
             .put("bios", Storage.retroArchSystem().absolutePath).toString()
     }
 
+    /**
+     * Dónde quedó el núcleo. La versión de RetroArch de la web los guarda en {datos}/cores;
+     * la de Play Store los instala como parte de la app (carpeta de librerías nativas, con prefijo "lib").
+     */
+    fun corePath(ai: android.content.pm.ApplicationInfo, core: String): String {
+        val name = "${core}_libretro_android.so"
+        val candidates = listOfNotNull(
+            ai.nativeLibraryDir?.let { File(it, "lib$name") },
+            ai.nativeLibraryDir?.let { File(it, name) },
+        )
+        candidates.firstOrNull { it.exists() }?.let { return it.absolutePath }
+        return ai.dataDir + "/cores/" + name
+    }
+
     fun launch(c: Context, rom: String, core: String) {
         val p = pkg(c) ?: throw IllegalStateException("Instala RetroArch desde Play Store")
         require(core.matches(Regex("[a-z0-9_]+"))) { "Núcleo no válido" }
@@ -35,7 +49,7 @@ object RetroArch {
         val i = Intent(Intent.ACTION_MAIN)
             .setComponent(ComponentName(p, ACTIVITY))
             .putExtra("ROM", rom)
-            .putExtra("LIBRETRO", ai.dataDir + "/cores/" + core + "_libretro_android.so")
+            .putExtra("LIBRETRO", corePath(ai, core))
             .putExtra("CONFIGFILE", "$ext/retroarch.cfg")
             .putExtra("IME", "com.android.inputmethod.latin/.LatinIME")
             .putExtra("DATADIR", ai.dataDir)
