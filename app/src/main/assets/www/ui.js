@@ -2104,7 +2104,7 @@
   MV.pspEngine = function () { return A && A.ppssppInstalled && A.ppssppInstalled() && P.pspEngine !== 'retroarch' ? 'ppsspp' : 'retroarch'; };
   MV.setPspEngine = function (e) { P.pspEngine = e === 'retroarch' ? 'retroarch' : ''; MV.savePrefs(); };
   MV.setGameEngine = function (sysId, eng) { P.gameEngine = P.gameEngine || {}; P.gameEngine[sysId] = eng; MV.savePrefs(); };
-  function rememberGame(r) { var rec = (MV.load('recentGames', []) || []).filter(function (x) { return x.path !== r.path; }); rec.unshift(r); MV.save('recentGames', rec.slice(0, 30)); }
+  function rememberGame(r) { if (r && r.orig) { r = Object.assign({}, r, { path: r.orig }); delete r.orig; } var rec = (MV.load('recentGames', []) || []).filter(function (x) { return x.path !== r.path; }); rec.unshift(r); MV.save('recentGames', rec.slice(0, 30)); }
   function playPpsspp(r, s) {
     if (!MV.load('pspFrameTip', 0)) { MV.save('pspFrameTip', 1); MV.toast('PSP se abre con la app PPSSPP, que no lleva marco. Para jugar con marco: Juegos › Opciones › Emuladores › PSP › Usar RetroArch.', 9000); }
     unzipBox(r, 0);
@@ -2134,6 +2134,7 @@
     b.innerHTML = 'Preparando “' + esc(String(r.name || '').replace(/\.[^.]+$/, '')) + '”… ' + (pct || 0) + '%<div style="margin-top:.8vw;height:.5vw;border-radius:1vw;background:rgba(255,255,255,.15);overflow:hidden"><i style="display:block;height:100%;width:' + (pct || 0) + '%;background:var(--accent,#FF6900)"></i></div>';
   }
   function playRom(r) {
+    if (/^gdrive:/.test(r.path || '') && MV.drivePlay) { MV.drivePlay(r); return; }
     if (/^(tar|gz)$/i.test(r.ext || '')) { MV.toast('El formato .' + r.ext + ' no se puede abrir. Envíalo en .zip, .7z, .rar o sin comprimir.'); return; }
     var s = romSystem(r);
     if (!s) { chooseSystem(r); return; }
@@ -2198,6 +2199,7 @@
       if (b && pct >= 0) b.style.width = pct + '%'; if (t) t.textContent = pct >= 0 ? pct + '%' : 'Descargando…';
     }).then(function () { MV.closeModal(true); start(); }).catch(function (e) { MV.closeModal(true); MV.toast(e.message, 5000); });
   }
+  MV.unzipBox = unzipBox;
   MV.playRom = playRom; MV.romSystem = romSystem; MV.chooseSystem = function (r) { chooseSystem(r); };
   function chooseSystem(r) {
     MV._romPending = r;

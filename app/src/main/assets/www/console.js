@@ -55,6 +55,7 @@
   }
   var PAD = '<svg viewBox="0 0 24 24" width="1.3em" height="1.3em" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 8h10a4 4 0 0 1 4 4v2.5a2.5 2.5 0 0 1-4.6 1.4L15 14H9l-1.4 1.9A2.5 2.5 0 0 1 3 14.5V12a4 4 0 0 1 4-4z"/><path d="M8 11v3M6.5 12.5h3"/></svg>';
   var IC = {
+    cloud: '<path d="M7 18a5 5 0 1 1 .9-9.92A6 6 0 0 1 19 10a4 4 0 0 1-1 7.87V18H7z"/>',
     lib: '<path d="M4 4h4v16H4zM10 4h4v16h-4zM16 5l3.5-1 3 15-3.5 1z"/>',
     usb: '<path d="M12 2v14M8 6l4-4 4 4M7 11v3l5 3 5-3v-3"/><circle cx="12" cy="20" r="2"/>',
     bios: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9zM9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/>',
@@ -78,6 +79,7 @@
   function optsHtml() {
     var rows = [
       [opt('scan', 'usb', 'Buscar juegos', 'En tu USB, memoria o carpetas'), opt('send', 'send', 'Enviar desde el celular', 'Pasa juegos por WiFi'), opt('scrape', 'info', 'Buscar información', 'Carátulas, año y descripción'), opt('bios', 'bios', 'Importar BIOS', 'Para PlayStation y otras')],
+      [opt('drive', 'cloud', 'Google Drive', MV.driveStatus ? MV.driveStatus() : 'Tus juegos y partidas en la nube')],
       [opt('edit', 'edit', 'Editar juegos', 'Nombre, carátula y consola'), opt('del', 'trash', 'Borrar juegos', 'Quita los que ya no quieras'), opt('engine', 'engine', 'Emuladores', 'Motor y marco de cada consola'), opt('phone', 'phone', 'Celular como mando', 'Juega con el teléfono')],
       [opt('classic', 'list', 'Vista clásica', 'La lista sencilla de antes'), opt('exit', 'exit', 'Salir de Juegos', 'Volver a MiVibra TV')]
     ];
@@ -249,6 +251,7 @@
       case 'sys': tab = 'lib'; render('.cshelf[data-sys="' + el.getAttribute('data-arg') + '"] .cf'); break;
       case 'scan': (MV.ACT.scanChooser || MV.ACT.scanRoms)(); break;
       case 'bios': MV.ACT.importBios(); break;
+      case 'drive': MV.ACT.driveMenu(); break;
       case 'engine': engines(); break;
       case 'phone': MV.ACT.remoteQR(); break;
       case 'send': MV.ACT.romsFromPhone(); break;
@@ -354,6 +357,7 @@
     document.body.appendChild(box);
     document.documentElement.classList.add('console-open');
     render();
+    if (MV.driveAuto) setTimeout(MV.driveAuto, 1500);
     if (MV.syncOwnRoms) MV.syncOwnRoms();
     // Carátulas y nombres automáticos de lo nuevo, en segundo plano
     setTimeout(autoCovers, 1500);
@@ -385,7 +389,7 @@
     if (el) focus(el);
     MV.toast('🎤 ' + title(hit.r));
   }
-  MV.console = { open: open, close: close, isOpen: function () { return !!box; }, search: voiceFind };
+  MV.console = { open: open, close: close, isOpen: function () { return !!box; }, search: voiceFind, refresh: function () { if (box && !MV.modalOpen()) render(); } };
 
   // Atrás: Biblioteca → Inicio → salir de Juegos
   var origBack = MV.onBack;

@@ -664,6 +664,28 @@ class Bridge(private val a: MainActivity) {
         }
     }
 
+    // ---------------- Google Drive (juegos y partidas) ----------------
+    /** Ejecuta con un token de Drive; si venció, lo pide otra vez (sin molestar si ya se dio permiso). */
+    private fun withDrive(id: String, interactive: Boolean, work: (String) -> Any?) {
+        a.runOnUiThread {
+            Drive.token(a, interactive) { tok, err ->
+                if (tok == null) { reply(id, false, if (err == "NO_AUTH") "Conecta tu Google Drive" else err); return@token }
+                io.execute {
+                    try { reply(id, true, work(tok)) }
+                    catch (e: Exception) { reply(id, false, if (e.message == "AUTH") "Google pidió volver a conectar Drive" else (e.message ?: "Error con Drive")) }
+                }
+            }
+        }
+    }
+    @JavascriptInterface fun driveConnected(): Boolean = Drive.connected(a)
+    @JavascriptInterface fun driveConnect(id: String) = withDrive(id, true) { true }
+    @JavascriptInterface fun driveDisconnect() { Drive.disconnect(a) }
+    @JavascriptInterface fun driveFolders(id: String, parent: String?, search: String?) = withDrive(id, false) { Drive.folders(it, parent?.ifBlank { null }, search) }
+    @JavascriptInterface fun driveGames(id: String, folder: String) = withDrive(id, false) { Drive.games(it, folder) }
+    @JavascriptInterface fun driveFetch(id: String, fileId: String, name: String) = withDrive(id, false) { Drive.download(a, it, fileId, name) { p -> progress(id, p) } }
+    @JavascriptInterface fun driveSync(id: String) = withDrive(id, false) { Drive.syncSaves(a, it) }
+    @JavascriptInterface fun driveClear() { io.execute { try { Drive.clearCache(a) } catch (_: Exception) {} } }
+
     /** Ajuste del juego dentro del marco en RetroArch (tamaño y posición). */
     @JavascriptInterface
     fun raFrameAdjust(what: String): String = RetroArch.adjust(a, what)
@@ -687,9 +709,9 @@ class Bridge(private val a: MainActivity) {
                     if (e.message == "PERMISO") { requestStorageAccess(); throw IllegalStateException("Para jugar con RetroArch, permite a MiVibra guardar en la memoria (se abrió el ajuste) y vuelve a intentar.") }
                     throw e
                 }
-                val cfg = RetroArch.overlayConfig(a, o.optString("sys"))
+                val cfg = RetroArch.launchConfig(a, o.optString("sys"))
                 val why = RetroArch.lastWhy
-                val msg = if (cfg != null) "Abriendo RetroArch con marco" else "Abriendo RetroArch sin marco: ${why.ifEmpty { "motivo desconocido" }}"
+                val msg = if (cfg != null && why.isEmpty()) "Abriendo RetroArch con marco" else "Abriendo RetroArch sin marco: ${why.ifEmpty { "motivo desconocido" }}"
                 a.runOnUiThread { android.widget.Toast.makeText(a, msg, android.widget.Toast.LENGTH_LONG).show() }
                 a.runOnUiThread {
                     try { RetroArch.launch(a, rom.absolutePath, o.getString("core"), cfg); reply(id, true, rom.absolutePath) }

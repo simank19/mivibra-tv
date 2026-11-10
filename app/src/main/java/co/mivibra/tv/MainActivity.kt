@@ -178,6 +178,13 @@ class MainActivity : ComponentActivity() {
     }
 
     @Suppress("DEPRECATION")
+    fun startSenderForResult(sender: android.content.IntentSender, cb: (Int, Intent?) -> Unit) {
+        val rc = reqSeq++
+        pending[rc] = cb
+        try { startIntentSenderForResult(sender, rc, null, 0, 0, 0) } catch (e: Exception) { pending.remove(rc); throw e }
+    }
+
+    @Suppress("DEPRECATION")
     fun startForResult(i: Intent, cb: (Int, Intent?) -> Unit) {
         val rc = reqSeq++
         pending[rc] = cb

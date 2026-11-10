@@ -105,7 +105,7 @@ object RetroArch {
             val sd = Environment.getExternalStorageDirectory().absolutePath
             val cfg = File(dir, "retroarch-$sys.cfg")
             // RetroArch se queda con el PRIMER valor de cada ajuste: los del marco van primero y la configuración del usuario al final
-            cfg.writeText(listOf(
+            cfg.writeText((listOf(
                 "config_save_on_exit = \"false\"",
                 "video_aspect_ratio_auto = \"false\"",
                 "input_overlay_enable = \"true\"",
@@ -126,10 +126,30 @@ object RetroArch {
                 "video_scale_integer = \"false\"",
                 "custom_viewport_x = \"$x\"", "custom_viewport_y = \"$y\"",
                 "custom_viewport_width = \"$w\"", "custom_viewport_height = \"$h\"",
-                "#include \"$sd/Android/data/$p/files/retroarch.cfg\""
-            ).joinToString("\n") + "\n")
+            ) + savesLines(c) + listOf("#include \"$sd/Android/data/$p/files/retroarch.cfg\"")).joinToString("\n") + "\n")
             return cfg.absolutePath
         } catch (e: Throwable) { lastWhy = e.message ?: "error"; return null }
+    }
+
+    /** Con Google Drive conectado, las partidas de RetroArch van a /MiVibra/RetroArch (así se pueden subir a Drive). */
+    private fun savesLines(c: Context): List<String> {
+        if (!Drive.connected(c)) return emptyList()
+        val ra = File(Environment.getExternalStorageDirectory(), "MiVibra/RetroArch")
+        val sv = File(ra, "saves").apply { mkdirs() }; val st = File(ra, "states").apply { mkdirs() }
+        return listOf("savefile_directory = \"${sv.absolutePath}\"", "savestate_directory = \"${st.absolutePath}\"",
+            "savefiles_in_content_dir = \"false\"", "savestates_in_content_dir = \"false\"")
+    }
+    /** Configuración para abrir el juego: marco (si hay) y carpetas de partidas (si Drive está conectado). */
+    fun launchConfig(c: Context, sys: String): String? {
+        overlayConfig(c, sys)?.let { return it }
+        val extra = savesLines(c); if (extra.isEmpty()) return null
+        val p = pkg(c) ?: return null
+        val dir = File(Environment.getExternalStorageDirectory(), "MiVibra/RetroArch/marcos").apply { mkdirs() }
+        if (!dir.canWrite()) return null
+        val sd = Environment.getExternalStorageDirectory().absolutePath
+        val cfg = File(dir, "retroarch-partidas.cfg")
+        cfg.writeText((listOf("config_save_on_exit = \"false\"") + extra + listOf("#include \"$sd/Android/data/$p/files/retroarch.cfg\"")).joinToString("\n") + "\n")
+        return cfg.absolutePath
     }
 
     fun launch(c: Context, rom: String, core: String, config: String? = null) {
