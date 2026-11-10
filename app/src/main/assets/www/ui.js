@@ -3839,14 +3839,17 @@
       ['.view-in .chips', 'Secciones de ajustes', 'Listas, apariencia, reproducción, control parental, perfiles, cuenta y más.']
     ],
     settings_lists: [
-      ['[data-act="addList"]', 'Agregar lista', 'Enlace M3U, cuenta Xtream Codes, Portal y MAC, tu servidor Jellyfin/Emby o Plex, un archivo, o varias a la vez desde un .txt.', 2],
-      ['[data-act="lselStart"]', 'Seleccionar varias', 'Marca varias listas (todas, las que fallan, las de Portal MAC…) y bórralas juntas.', 2],
+      ['.view-in .panel h2', 'Incluidas y Mis listas', 'Arriba están las listas incluidas en tu servicio (se actualizan solas). Abajo, en "Mis listas", agregas las tuyas: se suman a las incluidas y solo las ves tú.', 4],
+      ['[data-act="addList"]', 'Agregar lista', 'Enlace M3U, cuenta Xtream Codes, Portal y MAC, Jellyfin/Emby o Plex, un archivo, o varias a la vez: sube un .txt, pega el texto copiado o usa "Desde imagen" con una foto o captura de la lista.', 4],
+      ['[data-act="listsWelcome"]', 'Desde el celular o la web', 'Escanea el código con el celular para pegar tu lista o enviar una foto de ella, o entra al panel web desde cualquier lugar y escribe el código de esta TV. La lista llega sola.', 4],
+      ['[data-act="lselStart"]', 'Seleccionar varias', 'Marca varias listas (todas, las que fallan, las desactivadas, las de 0 elementos, las de Portal MAC…) y bórralas juntas.', 2],
       ['[data-act="listToggle"]', 'Activar o desactivar', 'Apaga una lista sin borrarla: su contenido deja de aparecer hasta que la vuelvas a encender.', 2],
       ['[data-act="latToggle"]', 'Solo español latino', 'Deja únicamente contenido en español latino. En K-Drama y Anime también el subtitulado con idioma original.', 3],
       ['[data-act="dedupeToggle"]', 'Ocultar repetidos', 'Muestra cada título una sola vez con la mejor calidad (4K solo en pantallas 4K). Apágalo si quieres ver todas las versiones.', 2],
       ['[data-act="checkDupes"]', 'Canales repetidos', 'Prueba las señales de los canales que están en varias listas y deja la que funciona mejor.', 2]
     ],
     settings_look: [
+      ['[data-act="introMode"]', 'Intro de bienvenida', 'Elige si la intro con música sale siempre, una vez al día o nunca. El botón "Ver la intro ahora" la muestra de nuevo.', 4],
       ['[data-act="tourAgain"]', 'Tutorial', 'Desde aquí puedes volver a ver estas explicaciones en cada sección.', 2]
     ],
     profiles: [
@@ -3856,6 +3859,32 @@
     kids: [
       ['.view-in .row', 'Para niños', 'Solo contenido infantil animado y seguro.']
     ]
+  };
+  // Juegos estilo consola (pantalla propia sobre la sección Juegos)
+  TOUR.console = [
+    ['#console .cgames', 'Tus juegos', 'Los últimos que jugaste, con su carátula. OK juega; deja presionado OK para renombrar, cambiar la carátula y más opciones.', 4],
+    ['#console .cconsoles', 'Consolas', 'Tus juegos agrupados por consola. Entra a una para ver todos sus juegos.', 4],
+    ['#console [data-act="lib"]', 'Biblioteca', 'Todos tus juegos en estantes por consola. También cambias entre Inicio y Biblioteca con los botones de lado del mando.', 4],
+    ['#console [data-act="scan"]', 'Buscar juegos', 'Busca ROMs en la memoria de la TV, en una USB o en cualquier carpeta. Abre zip, 7z y rar (incluso rar en partes).', 4],
+    ['#console [data-act="bios"]', 'Importar BIOS', 'Instala las BIOS (PlayStation, Neo Geo…) para el emulador de MiVibra y para RetroArch.', 4],
+    ['#console [data-act="send"]', 'Enviar desde el celular', 'Escanea el código y manda ROMs o BIOS desde el celular por Wi-Fi. Aparecen solas aquí.', 4],
+    ['#console [data-act="scrape"]', 'Buscar información', 'Busca carátulas, nombres correctos y la ficha de cada juego (descripción, año, imágenes).', 4],
+    ['#console [data-act="engine"]', 'Emuladores', 'Elige con qué se juega cada consola: el emulador de MiVibra, RetroArch o PPSSPP para PSP. Aquí también eliges el marco de pantalla.', 4],
+    ['#console [data-act="phone"]', 'Celular como mando', 'Usa uno o dos celulares como control (jugador 1 y 2). Los mandos físicos se configuran dentro del juego.', 4],
+    ['#console [data-act="edit"]', 'Editar juegos', 'Tócalo y luego OK sobre un juego para renombrarlo, buscar otra carátula, ver su ficha o cambiar su sistema.', 4],
+    ['#console [data-act="del"]', 'Borrar juegos', 'Tócalo y luego OK sobre el juego que quieres quitar. Atrás termina.', 4],
+    ['#console [data-act="classic"]', 'Vista clásica', 'Vuelve a la lista sencilla de juegos.', 4]
+  ];
+  /** Tutorial de una pantalla que no es una sección (por ejemplo, los juegos estilo consola). */
+  MV.tourRun = function (key) {
+    if (tour || !TOUR[key]) return;
+    var seen = tourSeen(); if (seen._off) return;
+    var prev = +seen[key] || 0, steps = [];
+    TOUR[key].forEach(function (st) { if ((st[3] || 1) > prev && document.querySelector(st[0])) steps.push({ s: st, nw: prev > 0 }); });
+    seen[key] = tourVer(TOUR[key]); MV.save('tour:' + (S.pid || 'default'), seen);
+    if (!steps.length) return;
+    tour = { view: view.name, steps: steps, i: 0, back: document.activeElement };
+    tourShow();
   };
   ['movies', 'series', 'anime', 'kdrama', 'infantil', 'docs', 'platforms'].forEach(function (k) { TOUR[k] = TOUR.catalog; });
   var TOUR_KEY = { movies: 'catalog', series: 'catalog', anime: 'catalog', kdrama: 'catalog', infantil: 'catalog', docs: 'catalog', platforms: 'catalog' };
@@ -3878,7 +3907,7 @@
     keys = keys.filter(function (k) { return (+seen[k] || 0) < tourVer(TOUR[k]); });
     if (!keys.length) return;
     tourT = setTimeout(function () {
-      if (view.name !== name || MV.modalOpen() || (MV.streamOpen && MV.streamOpen()) || (MV.ytPlayer && MV.ytPlayer.isOpen())) return;
+      if (view.name !== name || MV.modalOpen() || document.getElementById('console') || (MV.streamOpen && MV.streamOpen()) || (MV.ytPlayer && MV.ytPlayer.isOpen())) return;
       var steps = [], s2 = tourSeen(), veteran = Object.keys(s2).some(function (x) { return x !== '_off' && x !== 'player'; }) || !!s2.player;
       keys.forEach(function (kk) {
         var prev = +s2[kk] || 0;

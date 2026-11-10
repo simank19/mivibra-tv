@@ -333,9 +333,11 @@
     if (MV.syncOwnRoms) MV.syncOwnRoms();
     // Carátulas y nombres automáticos de lo nuevo, en segundo plano
     setTimeout(autoCovers, 1500);
+    // Tutorial de esta pantalla (una vez por perfil; los botones nuevos salen como "Novedad")
+    setTimeout(function () { if (box && !MV.modalOpen() && MV.tourRun) MV.tourRun('console'); }, 1200);
     clockT = setInterval(tick, 15000);
     // Buscar juegos, BIOS o cambio de sistema: se actualiza solo cuando cambia la lista
-    watchT = setInterval(function () { if (!MV.modalOpen() && roms().length !== lastCount) render(); }, 1200);
+    watchT = setInterval(function () { if (!MV.modalOpen() && !(MV.tourOpen && MV.tourOpen()) && roms().length !== lastCount) render(); }, 1200);
   }
   function autoCovers() {
     if (!box || !MV.scrapeCoversAll) return;
