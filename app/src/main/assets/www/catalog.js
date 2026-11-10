@@ -852,6 +852,124 @@
       return out;
     });
   };
+  // ---------- Tu página hecha con Firebase: el catálogo de libros se lee directo de tu base de datos ----------
+  /** Lee el firebaseConfig pegado (el objeto, el <script> completo o solo apiKey/projectId). */
+  MV.parseFbConfig = function (t) {
+    t = String(t || ''); var o = {};
+    ['apiKey', 'projectId', 'storageBucket', 'databaseURL', 'authDomain'].forEach(function (k) { var m = t.match(new RegExp('["\']?' + k + '["\']?\\s*[:=]\\s*["\'`]([^"\'`]+)["\'`]')); if (m) o[k] = m[1].trim(); });
+    if (!o.projectId && o.authDomain) o.projectId = o.authDomain.split('.')[0];
+    if (!o.storageBucket && o.projectId) o.storageBucket = o.projectId + '.appspot.com';
+    return o;
+  };
+  function fsVal(v) {
+    if (!v || typeof v !== 'object') return null;
+    if ('stringValue' in v) return v.stringValue;
+    if ('integerValue' in v) return +v.integerValue;
+    if ('doubleValue' in v) return v.doubleValue;
+    if ('booleanValue' in v) return v.booleanValue;
+    if ('timestampValue' in v) return v.timestampValue;
+    if ('referenceValue' in v) return v.referenceValue;
+    if ('mapValue' in v) { var o = {}, f = v.mapValue.fields || {}; Object.keys(f).forEach(function (k) { o[k] = fsVal(f[k]); }); return o; }
+    if ('arrayValue' in v) return (v.arrayValue.values || []).map(fsVal);
+    return null;
+  }
+  function flat(o, pre, out) {
+    out = out || {};
+    Object.keys(o || {}).forEach(function (k) {
+      var v = o[k], key = pre ? pre + '.' + k : k;
+      if (v && typeof v === 'object' && !Array.isArray(v) && (pre || '').split('.').length < 2) flat(v, key, out);
+      else out[key] = v;
+    });
+    return out;
+  }
+  var FB_COLLS = ['libros', 'books', 'ebooks', 'epubs', 'catalogo', 'catalog', 'biblioteca', 'library', 'items', 'contenido', 'contenidos', 'publicaciones', 'recursos', 'materiales', 'productos'];
+  function fbFirestore(cfg, coll) {
+    var base = 'https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(cfg.projectId) + '/databases/(default)/documents/' + coll.split('/').map(encodeURIComponent).join('/');
+    var docs = [];
+    function page(tok, n) {
+      return MV.getText(base + '?pageSize=300&key=' + encodeURIComponent(cfg.apiKey) + (tok ? '&pageToken=' + encodeURIComponent(tok) : '')).then(function (t) {
+        var j = JSON.parse(t || '{}'); if (j.error) { var e = new Error(j.error.message || j.error.status); e.code = j.error.code; throw e; }
+        (j.documents || []).forEach(function (d) { var o = {}, f = d.fields || {}; Object.keys(f).forEach(function (k) { o[k] = fsVal(f[k]); }); o.__id = d.name.split('/').pop(); docs.push(o); });
+        return j.nextPageToken && n < 40 ? page(j.nextPageToken, n + 1) : docs;
+      });
+    }
+    return page('', 0);
+  }
+  function fbRtdb(cfg, path) {
+    return MV.getText(cfg.databaseURL.replace(/\/$/, '') + '/' + path + '.json').then(function (t) {
+      var j = JSON.parse(t || 'null'); if (j && j.error) throw new Error(j.error);
+      if (!j || typeof j !== 'object') return [];
+      return (Array.isArray(j) ? j : Object.keys(j).map(function (k) { var o = j[k]; if (o && typeof o === 'object') o.__id = k; return o; })).filter(function (o) { return o && typeof o === 'object'; });
+    });
+  }
+  var IMG_EXT = /\.(jpe?g|png|webp|gif|avif|svg)(\?|#|$)/i;
+  function fbFileUrl(v, cfg) {
+    if (typeof v !== 'string' || !v || v.length > 2000) return '';
+    v = v.trim();
+    if (/^data:/i.test(v)) return '';
+    if (/^https?:\/\//i.test(v)) return v;
+    var m = v.match(/^gs:\/\/([^\/]+)\/(.+)$/), bucket = m ? m[1] : cfg.storageBucket, path = m ? m[2] : v.replace(/^\//, '');
+    if (!bucket || !/[\w-]\/?[\w.-]/.test(path) || /\s{2,}/.test(path)) return '';
+    return 'https://firebasestorage.googleapis.com/v0/b/' + bucket + '/o/' + encodeURIComponent(path) + '?alt=media';
+  }
+  /** Reconoce en cada documento el título, el archivo del libro, la portada, la categoría, el autor y la descripción. */
+  function fbBook(doc, cfg) {
+    var f = flat(doc), keys = Object.keys(f);
+    var pick = function (re, ok) { var k = keys.filter(function (k) { return re.test(k.split('.').pop()) && f[k] != null && f[k] !== '' && (!ok || ok(f[k])); }); return k.length ? f[k[0]] : undefined; };
+    var str = function (v) { return typeof v === 'string' ? v : Array.isArray(v) ? v.filter(function (x) { return typeof x === 'string'; }).join(', ') : v != null && typeof v !== 'object' ? String(v) : ''; };
+    var file = '';
+    // 1) Cualquier valor que sea un EPUB/PDF/CBZ (por su extensión)
+    keys.forEach(function (k) { var v = f[k]; if (!file && typeof v === 'string' && /\.(epub|pdf|cbz|cbr|cb7)(\?|#|$|%3F)/i.test(v.split('?')[0] + (v.indexOf('alt=media') > 0 ? '?' : ''))) file = fbFileUrl(v, cfg); });
+    // 2) Campos que por su nombre son el archivo
+    if (!file) { var fv = pick(/^(epub|archivo|archivoepub|file|fileurl|fileURL|epuburl|epubUrl|url|downloadurl|downloadURL|link|enlace|libro|book|ruta|path|storagepath|storagePath|pdf|documento)$/i, function (v) { return typeof v === 'string' && !IMG_EXT.test(v) && !/^data:image/i.test(v); }); file = fbFileUrl(fv, cfg); }
+    if (!file) { keys.forEach(function (k) { var v = f[k]; if (!file && /epub|archivo|file|download/i.test(k) && typeof v === 'string' && !IMG_EXT.test(v)) file = fbFileUrl(v, cfg); }); }
+    var img = pick(/^(portada|cover|coverurl|coverUrl|imagen|image|imageurl|imageUrl|img|thumb|thumbnail|caratula|carátula|foto|miniatura|poster)$/i) || pick(/portada|cover|imag|thumb|car[aá]tula|foto|poster/i, function (v) { return typeof v === 'string'; }) || '';
+    if (img && !/^(https?:|data:image)/i.test(img)) img = fbFileUrl(img, cfg);
+    var title = str(pick(/^(titulo|título|title|nombre|name)$/i) || pick(/titul|title|nombre/i, function (v) { return typeof v === 'string'; })) || doc.__id || '';
+    return {
+      url: file, title: title, img: typeof img === 'string' ? img : '',
+      cat: str(pick(/^(categoria|categoría|category|categorias|categories|materia|asignatura|area|área|genero|género|genre|tema|grado|nivel|coleccion|colección|serie|subject)$/i) || pick(/categor|materia|asignatura|g[eé]nero|grado|nivel/i)).split(',')[0].trim().slice(0, 40),
+      author: str(pick(/^(autor|autora|author|autores|authors)$/i) || pick(/autor|author/i)),
+      desc: str(pick(/^(descripcion|descripción|description|sinopsis|resumen|summary|detalle)$/i) || pick(/descrip|sinopsis|resumen|summary/i)).slice(0, 400),
+      fmt: ((file.split('?')[0].match(/\.(epub|pdf|cbz|cbr|cb7)$/i) || decodeURIComponent(file.split('?')[0]).match(/\.(epub|pdf|cbz|cbr|cb7)$/i) || [])[1] || 'epub').toLowerCase(),
+      fields: keys
+    };
+  }
+  function buildFromFirebase(list) {
+    var cfg = list.fb || {};
+    if (!cfg.apiKey || !cfg.projectId) return Promise.reject(new Error('Falta la configuración de Firebase (apiKey y projectId)'));
+    var colls = list.coll ? [list.coll.trim().replace(/^\/|\/$/g, '')] : FB_COLLS, denied = [], found = null;
+    S.loadMsg = (list.name || 'Firebase') + ': buscando tus libros…'; MV.emit('catalog');
+    function tryNext(i) {
+      if (i >= colls.length) return Promise.resolve(null);
+      return fbFirestore(cfg, colls[i]).then(function (docs) { return docs.length ? { coll: colls[i], docs: docs } : tryNext(i + 1); }, function (e) {
+        if (e.code === 403 || /permission|PERMISSION/.test(e.message)) denied.push(colls[i]);
+        return tryNext(i + 1);
+      });
+    }
+    function tryRtdb(i) {
+      if (!cfg.databaseURL || i >= colls.length) return Promise.resolve(null);
+      return fbRtdb(cfg, colls[i]).then(function (docs) { return docs.length ? { coll: colls[i], docs: docs, rtdb: 1 } : tryRtdb(i + 1); }, function () { return tryRtdb(i + 1); });
+    }
+    return tryNext(0).then(function (r) { return r || tryRtdb(0); }).then(function (r) {
+      if (!r) {
+        if (denied.length) throw new Error('Firebase no deja leer "' + denied[0] + '": en las reglas de Firestore permite leer esa colección sin iniciar sesión (allow read: if true)');
+        throw new Error(list.coll ? 'La colección "' + list.coll + '" está vacía o no existe' : 'No encontré tus libros. Escribe el nombre de la colección donde los guardas');
+      }
+      found = r;
+      var out = [], seen = {}, noFile = 0, sample = null;
+      r.docs.forEach(function (d) {
+        var b = fbBook(d, cfg);
+        if (!b.url) { noFile++; sample = sample || b.fields; return; }
+        if (seen[b.url]) return; seen[b.url] = 1;
+        out.push(bookItem(b, list, (list.name || 'Mi biblioteca') + (b.cat ? ' · ' + b.cat : ''), ''));
+      });
+      list.coll = list.coll || r.coll;
+      if (!out.length) throw new Error('Encontré ' + r.docs.length + ' documentos en "' + r.coll + '" pero ninguno trae el archivo del libro (campos: ' + (sample || []).slice(0, 12).join(', ') + ')');
+      S.loadMsg = (list.name || 'Firebase') + ': ' + out.length + ' libros'; MV.emit('catalog');
+      return out;
+    });
+  }
   /** Enlaces del mismo sitio que valen la pena revisar (no imágenes, archivos ni cuentas). */
   function siteLinks(doc, url, origin) {
     var out = [];
@@ -959,7 +1077,7 @@
     var ck = 'list:' + list.id;
     return MV.idbGet(ck).then(function (cached) {
       // Las páginas web se actualizan cada hora (tus series nuevas aparecen solas); lo demás cada 12 horas
-      var fresh = cached && cached.ts > Date.now() - (list.type === 'web' ? 3600e3 : 12 * 3600e3) && cached.v === 7;
+      var fresh = cached && cached.ts > Date.now() - (list.type === 'web' || list.type === 'fb' ? 3600e3 : 12 * 3600e3) && cached.v === 7;
       // Lo guardado se vuelve a clasificar con las reglas actuales (+18, infantil, géneros, sin emojis)
       if (cached && !force && fresh) return cached.items.map(retag);
       var job;
@@ -968,6 +1086,7 @@
       else if (list.type === 'jellyfin') job = buildFromJellyfin(list);
       else if (list.type === 'plex') job = buildFromPlex(list);
       else if (list.type === 'web') job = buildFromWeb(list);
+      else if (list.type === 'fb') job = buildFromFirebase(list);
       else if (list.type === 'file') job = MV.idbGet('raw:' + list.id).then(function (txt) { return buildFromM3U(MV.parseM3U(txt || '', list), list); });
       else job = MV.getBig(list.url).then(function (txt) {
         if (!/#EXTINF|#EXTM3U/i.test(txt.slice(0, 5000))) throw new Error('No parece una lista M3U');
@@ -1038,7 +1157,7 @@
       setTimeout(function () { MV.checkDupes(false); }, 6000);
       // Solo las listas viejas o sin guardar se vuelven a pedir, una por una y sin bloquear la pantalla
       var stale = lists.map(function (l, i) {
-        var c = caches[i], age = l.type === 'web' ? 3600e3 : 12 * 3600e3;
+        var c = caches[i], age = l.type === 'web' || l.type === 'fb' ? 3600e3 : 12 * 3600e3;
         return !c || c.ts < Date.now() - age ? i : -1;
       }).filter(function (i) { return i >= 0; });
       if (stale.length) setTimeout(function () { refreshInBackground(lists, stale); }, 5000);
@@ -1269,7 +1388,7 @@
       var extra = [];
       if (dup) extra.push(dup + ' ya estaban en otras listas');
       if (lang) extra.push(lang + ' ocultos por "Solo español latino"');
-      if (list.count != null) MV.toast('“' + list.name + '”: ' + (list.count || 0) + ' elementos' + (parts.length ? ' · nuevos visibles: ' + parts.join(', ') : ' · nada nuevo visible') + (extra.length ? ' (' + extra.join('; ') + ')' : ''), 7000);
+      if (list.count != null && list.type !== 'fb') MV.toast('“' + list.name + '”: ' + (list.count || 0) + ' elementos' + (parts.length ? ' · nuevos visibles: ' + parts.join(', ') : ' · nada nuevo visible') + (extra.length ? ' (' + extra.join('; ') + ')' : ''), 7000);
     });
   };
   /** Lee un .txt (o texto pegado) con varias direcciones: una por línea.
@@ -1322,7 +1441,7 @@
   };
   // Revisión cada hora de las páginas web (sin interrumpir lo que estés viendo)
   setInterval(function () {
-    if (S.loading || !S.lists.some(function (l) { return l.type === 'web' && l.enabled !== false; })) return;
+    if (S.loading || !S.lists.some(function (l) { return (l.type === 'web' || l.type === 'fb') && l.enabled !== false; })) return;
     MV.reloadCatalog(false);
   }, 3600e3 + 30e3);
   MV.removeList = function (id) {
@@ -1509,7 +1628,11 @@
       };
     });
   }
-  MV.poster = function (item) { return (P.covers && P.covers[item.key]) || item.poster || item.logo || ''; };
+  // Carátulas sacadas del propio video (+18): se guardan solo en este equipo
+  var thumbMap = null;
+  MV.thumbs = function () { if (!thumbMap) thumbMap = MV.load('vthumbs', {}) || {}; return thumbMap; };
+  MV.saveThumbs = MV.debounce ? MV.debounce(function () { MV.save('vthumbs', thumbMap || {}); }, 800) : function () { MV.save('vthumbs', thumbMap || {}); };
+  MV.poster = function (item) { var t = item.adult && MV.thumbs()[item.key]; return (P.covers && P.covers[item.key]) || (t && t.u && (t.m || !item.poster || item._posterBad) ? t.u : '') || item.poster || item.logo || ''; };
 
   // ---------- Cine de dominio público (Internet Archive) ----------
   MV.archive = function () {

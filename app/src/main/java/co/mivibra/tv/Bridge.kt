@@ -424,6 +424,15 @@ class Bridge(private val a: MainActivity) {
         }
     }
 
+    /** Carátula sacada del propio video (una imagen del contenido). */
+    @JavascriptInterface
+    fun videoFrame(id: String, url: String, headers: String?, at: Double) {
+        io.execute {
+            try { reply(id, true, Thumbs.frame(a, url, try { JSONObject(headers ?: "{}") } catch (e: Exception) { JSONObject() }, at)) }
+            catch (e: Throwable) { reply(id, false, e.message ?: "No se pudo") }
+        }
+    }
+
     /** Abre un libro, manga o cómic (descarga y prepara las páginas). */
     @JavascriptInterface
     fun openBook(id: String, json: String) {

@@ -205,9 +205,11 @@
   };
   function thumbInner(it, big) {
     var img = MV.poster(it);
-    var isLogo = it.type === 'live' && !big;
-    var mono = '<span class="mono">' + esc(MV.mono(MV.cleanTitle(it.name) || it.name)) + '</span>';
+    var isLogo = it.type === 'live' && !big && img === (it.logo || it.poster);
+    var mono = it.adult ? '<span class="mono ad"><i>' + esc(MV.cleanTitle(it.name) || it.name) + '</i><em>+18</em></span>' : '<span class="mono">' + esc(MV.mono(MV.cleanTitle(it.name) || it.name)) + '</span>';
+    if (it.adult && !big) MV.adultThumbWant(it);
     if (!img) return mono;
+    if (it.adult) return '<img class="' + (isLogo ? 'logo' : '') + '" loading="lazy" decoding="async" src="' + esc(img) + '" alt="" data-k="' + esc(it.key) + '" onerror="MV.adultImgFail(this)">';
     // En tarjetas basta una carátula pequeña de TMDB (carga y decodifica mucho más rápido en TV box)
     if (!big) img = img.replace(/(image\.tmdb\.org\/t\/p\/)(w\d+|original)\//, '$1' + (MV.lite ? 'w154' : 'w185') + '/');
     return '<img class="' + (isLogo ? 'logo' : '') + '" loading="lazy" decoding="async" src="' + esc(img) + '" alt=""" onerror="this.outerHTML=\'' + mono.replace(/'/g, "\\'").replace(/"/g, '&quot;') + '\'">';
@@ -219,7 +221,7 @@
     if (it.type === 'live') { var nn = MV.nowNext(it); sub = nn.now ? nn.now.t : (it.group || ''); }
     else sub = [it.year, it.type === 'series' ? 'Serie' : '', it.type === 'tmdb' ? it.group : catOf(it)].filter(Boolean).join(' · ');
     var prog = MV.progressOf(it.key), tag = it.type === 'tmdb' ? (it.have ? 'EN TUS LISTAS' : '') : it.platform ? D.platformName(it.platform).toUpperCase() : it.kdrama ? 'K-DRAMA' : it.anime ? 'ANIME' : it.ia ? 'CLÁSICO' : '';
-    return '<button class="card ' + kind + ' f" style="--h:' + MV.hue(it.name) + ';animation-delay:' + Math.min(i || 0, 12) * 0.04 + 's" data-act="open" data-key="' + esc(it.key) + '" data-fid="c-' + MV.hash(it.key) + '">' +
+    return '<button class="card ' + kind + (it.adult ? ' adult' : '') + ' f" style="--h:' + MV.hue(it.name) + ';animation-delay:' + Math.min(i || 0, 12) * 0.04 + 's" data-act="open" data-key="' + esc(it.key) + '" data-fid="c-' + MV.hash(it.key) + '">' +
       '<div class="th">' + thumbInner(it) + (it.num ? '<span class="num">' + esc(it.num) + '</span>' : '') + (tag ? '<span class="tag">' + tag + '</span>' : '') + '<div class="shine"></div></div>' +
       '<div class="meta"><b>' + esc(it.name) + '</b><span>' + esc(sub) + '</span>' + (prog ? '<div class="prog"><i style="width:' + Math.round(prog.pos / prog.dur * 100) + '%"></i></div>' : '') + '</div></button>';
   }
@@ -1089,6 +1091,83 @@
     }));
   };
   /** Contenido +18 (solo desde Utilidades, con PIN). */
+  // ---------- Carátulas +18: imagen sacada del propio video cuando la lista no trae carátula ----------
+  var ADQ = [], adBusy = 0, adSeen = {}, ACT_EXTRA = {};
+  function adultThumbCan(it) { return MV.native && it && it.url && it.type !== 'live' && it.type !== 'series' && !/\.m3u8?(\?|$)/i.test(it.url) && !/^yt:/.test(it.url); }
+  MV.adultThumbWant = function (it, force) {
+    if (!adultThumbCan(it)) return;
+    var t = MV.thumbs()[it.key];
+    if (!force && (adSeen[it.key] || (t && (t.u || Date.now() - (t.fail || 0) < 7 * 864e5)) || (it.poster && !it._posterBad) || (P.covers && P.covers[it.key]))) return;
+    adSeen[it.key] = 1; ADQ.push(it); adPump();
+  };
+  MV.adultImgFail = function (el) {
+    var k = el.getAttribute('data-k'), it = S.byKey[k] || MV.reg[k];
+    var t = MV.thumbs()[k];
+    if (t && t.u && el.getAttribute('src') === t.u) { delete MV.thumbs()[k]; MV.saveThumbs(); }
+    if (it) { it._posterBad = 1; MV.adultThumbWant(it); }
+    var sp = document.createElement('span'); sp.className = 'mono ad'; sp.innerHTML = '<i>' + esc(it ? (MV.cleanTitle(it.name) || it.name) : '') + '</i><em>+18</em>';
+    el.replaceWith(sp);
+  };
+  function adPump() {
+    while (adBusy < 2 && ADQ.length) {
+      var it = ADQ.shift();
+      if (!MV.adultOk() || (view.name !== 'adult' && view.name !== 'detail')) { ADQ = []; adSeen = {}; return; }
+      adBusy++;
+      (function (it) {
+        MV.call('videoFrame', [it.url, JSON.stringify({ 'User-Agent': it.ua || '', Referer: it.ref || '' }), 0.15]).then(function (u) {
+          MV.thumbs()[it.key] = { u: u, at: Date.now() }; MV.saveThumbs(); adPaint(it);
+        }).catch(function () {
+          MV.thumbs()[it.key] = { fail: Date.now() }; MV.saveThumbs();
+        }).then(function () { adBusy--; adPump(); });
+      })(it);
+    }
+  }
+  function adPaint(it) {
+    var u = MV.poster(it); if (!u) return;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-key="' + (window.CSS && CSS.escape ? CSS.escape(it.key) : it.key) + '"] .th, #ps'), function (th) {
+      if (th.id === 'ps' && MV._detailKey !== it.key) return;
+      var old = th.querySelector('img, .mono');
+      var im = document.createElement('img'); im.src = u; im.alt = ''; im.setAttribute('data-k', it.key); im.setAttribute('onerror', 'MV.adultImgFail(this)');
+      if (old) old.replaceWith(im); else th.insertBefore(im, th.firstChild);
+    });
+  }
+  /** Cambiar la carátula de un título +18: otra imagen del video, una dirección de imagen o volver a la original. */
+  MV.adultCoverMenu = function (key) {
+    var it = S.byKey[key] || MV.reg[key]; if (!it) return;
+    var t = MV.thumbs()[key], mine = (P.covers && P.covers[key]) || (t && t.m);
+    MV.modal('<h2>Carátula</h2><p class="muted" style="margin-top:-4px">' + esc(MV.cleanTitle(it.name) || it.name) + '</p><div class="btns" style="flex-direction:column;align-items:stretch">' +
+      (adultThumbCan(it) ? '<button class="btn f" data-act="adCoverFrame" data-arg="' + esc(key) + '" data-autofocus>Otra imagen del video</button>' : '') +
+      '<button class="btn ghost f" data-act="adCoverUrl" data-arg="' + esc(key) + '">Usar una imagen de internet (dirección)</button>' +
+      (mine ? '<button class="btn ghost f" data-act="adCoverReset" data-arg="' + esc(key) + '">Volver a la original</button>' : '') +
+      '<button class="btn ghost f" data-act="confirmNo">Cancelar</button></div><p class="muted" style="font-size:13px">Las imágenes del video se guardan solo en este equipo.</p>');
+  };
+  var adFrameN = {};
+  function adRefresh(key) { var it = S.byKey[key] || MV.reg[key]; if (!it) return; if (view.name === 'detail') { var ps = document.getElementById('ps'); if (ps) ps.innerHTML = posterImg([MV.poster(it)], it.name); } adPaint(it); }
+  Object.assign(ACT_EXTRA, {
+    adultCover: function (k) { MV.adultCoverMenu(k); },
+    adCoverFrame: function (k) {
+      var it = S.byKey[k] || MV.reg[k]; if (!it) return;
+      var steps = [0.3, 0.5, 0.7, 0.85, 0.1, 0.4, 0.6], at = steps[(adFrameN[k] = ((adFrameN[k] || 0) + 1)) % steps.length];
+      MV.closeModal(true); MV.toast('Sacando una imagen del video…');
+      MV.call('videoFrame', [it.url, JSON.stringify({ 'User-Agent': it.ua || '', Referer: it.ref || '' }), at]).then(function (u) {
+        if (P.covers) delete P.covers[k];
+        MV.thumbs()[k] = { u: u, m: 1, at: Date.now() }; MV.saveThumbs(); MV.savePrefs(); adRefresh(k); MV.toast('Carátula actualizada · repite para ver otra');
+      }).catch(function (e) { MV.toast((e && e.message) || 'No se pudo sacar una imagen de este video', 5000); });
+    },
+    adCoverUrl: function (k) {
+      MV.closeModal(true);
+      MV.modal('<h2>Imagen de internet</h2><label class="field">Dirección de la imagen<input class="in f" id="adUrl" placeholder="https://…/portada.jpg" autocomplete="off" inputmode="url" data-autofocus></label><div class="btns"><button class="btn f" data-act="adCoverUrlOk" data-arg="' + esc(k) + '">Usar</button><button class="btn ghost f" data-act="confirmNo">Cancelar</button></div>');
+    },
+    adCoverUrlOk: function (k) {
+      var u = ((document.getElementById('adUrl') || {}).value || '').trim();
+      if (!/^https?:\/\/\S+$/i.test(u)) { MV.toast('Escribe una dirección que empiece por http'); return; }
+      P.covers = P.covers || {}; P.covers[k] = u; MV.savePrefs(); MV.closeModal(true); adRefresh(k); MV.toast('Carátula actualizada');
+    },
+    adCoverReset: function (k) {
+      if (P.covers) delete P.covers[k]; var t = MV.thumbs()[k]; if (t && t.m) delete MV.thumbs()[k];
+      MV.saveThumbs(); MV.savePrefs(); MV.closeModal(true); adRefresh(k); var it = S.byKey[k] || MV.reg[k]; if (it) { adSeen[k] = 0; MV.adultThumbWant(it); } MV.toast('Carátula original');
+    }
+  });
   function adultItems() { return MV.adultOk() ? S.items.filter(function (i) { return i.adult; }) : []; }
   VIEWS.adult = function () {
     if (!MV.adultOk()) return top('+18') + '<div class="empty glass"><h2>Contenido bloqueado</h2><p class="muted">Ábrelo desde Utilidades con el PIN.</p><div class="btns" style="justify-content:center"><button class="btn f" data-act="adultOpen" data-autofocus>Ingresar PIN</button></div></div>';
@@ -1106,7 +1185,7 @@
     var it = S.byKey[key] || MV.reg[key];
     if (!it) return top('Ficha') + '<p class="muted">Este contenido ya no está en tus listas.</p>';
     if (MV.isKids() && !MV.kidsOk(it)) return top('No disponible') + '<div class="empty glass"><h2>Esto no es para niños</h2><p class="muted">Pide a un adulto que cambie de perfil.</p><div class="btns" style="justify-content:center"><button class="btn f" data-act="nav" data-arg="kids" data-autofocus>Volver al inicio</button></div></div>';
-    reg(it);
+    reg(it); MV._detailKey = it.key; if (it.adult && !MV.poster(it)) MV.adultThumbWant(it, false);
     var prog = MV.progressOf(it.key), fav = MV.isFav(it.key), img = MV.poster(it);
     var facts = [it.year, it.type === 'series' ? 'Serie' : 'Película', it.group, it.rating ? '★ ' + it.rating : ''].concat((it.genres || []).map(D.genreName)).filter(Boolean);
     return '<div class="detail"><div class="bd" id="bd"></div>' +
@@ -1120,6 +1199,7 @@
           : '<button class="btn f" data-act="play" data-key="' + esc(it.key) + '" data-autofocus>' + IC.play + 'Reproducir</button>')) +
       '<button class="btn ghost f" data-act="fav" data-key="' + esc(it.key) + '">' + (fav ? IC.starFill : IC.star) + (fav ? 'En favoritos' : 'Favorito') + '</button>' +
       '<button class="btn ghost f" data-act="langMenu" data-arg="' + esc(it.key) + '">Audio y subtítulos</button>' +
+      (it.adult ? '<button class="btn ghost f" data-act="adultCover" data-arg="' + esc(it.key) + '">Carátula</button>' : '') +
       '</div>' +
       (it.type === 'series' ? '<div id="eps" class="eps"><div class="spinner"></div></div>' : '') + '</div></div>' +
       '<div id="related">' + relatedHtml(it) + '</div>';
@@ -1683,7 +1763,7 @@
   }
   // Selección de varias listas para borrarlas juntas (null = modo normal)
   var LSEL = null;
-  function listKind(l) { return l.type === 'web' ? 'Página web' + (MV.acct.canEditList(l) ? ' · ' + (l.url || '') : '') : l.type === 'jellyfin' ? 'Jellyfin' : l.type === 'plex' ? 'Plex' : l.type === 'xtream' ? 'Xtream Codes' : l.type === 'stalker' ? 'Portal MAC · ' + (l.mac || '') : l.type === 'file' ? 'Archivo' : 'Lista M3U'; }
+  function listKind(l) { return l.type === 'fb' ? 'Firebase' + (MV.acct.canEditList(l) ? ' · ' + ((l.fb || {}).projectId || '') : '') : l.type === 'web' ? 'Página web' + (MV.acct.canEditList(l) ? ' · ' + (l.url || '') : '') : l.type === 'jellyfin' ? 'Jellyfin' : l.type === 'plex' ? 'Plex' : l.type === 'xtream' ? 'Xtream Codes' : l.type === 'stalker' ? 'Portal MAC · ' + (l.mac || '') : l.type === 'file' ? 'Archivo' : 'Lista M3U'; }
   function selBar() {
     if (edLists().length < 2) return '';
     if (!LSEL) return '<div class="btns" style="margin:4px 0 10px"><button class="btn ghost sm f" data-act="lselStart">' + IC.check + 'Seleccionar varias</button></div>';
@@ -1720,7 +1800,7 @@
           var on = !!LSEL[l.id];
           return '<button class="line selrow f' + (on ? ' on' : '') + '" data-act="lselToggle" data-arg="' + l.id + '" data-fid="ls-' + l.id + '" aria-pressed="' + on + '"><i class="chk"></i><div class="t"><b>' + esc(l.name) + '</b><span>' + esc(listKind(l)) + ' · ' + (l.count || 0) + ' elementos' + (l.enabled === false ? ' · desactivada' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div></button>';
         }
-        return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.type === 'xtream' ? 'Xtream Codes · ' + esc(l.host) : l.type === 'web' ? 'Página web' + (MV.acct.canEditList(l) ? ' · ' + esc(l.url) : '') : l.type === 'jellyfin' ? 'Jellyfin · ' + esc(l.server) : l.type === 'plex' ? 'Plex · ' + esc(l.server) : l.type === 'stalker' ? 'Portal MAC · ' + esc(l.mac) + ((l.macs || []).length > 1 ? ' (+' + (l.macs.length - 1) + ' de respaldo)' : '') : l.type === 'file' ? 'Archivo' : esc(l.url)) + ' · ' + (l.count || 0) + ' elementos' + ((S.hiddenDupes || {})[l.id] ? ' · ' + S.hiddenDupes[l.id] + ' repetidos ocultos' : '') + (l.epg ? ' · con guía' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div>' +
+        return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.type === 'xtream' ? 'Xtream Codes · ' + esc(l.host) : l.type === 'fb' ? 'Firebase' + (MV.acct.canEditList(l) ? ' · ' + esc((l.fb || {}).projectId || '') + (l.coll ? ' / ' + esc(l.coll) : '') : '') : l.type === 'web' ? 'Página web' + (MV.acct.canEditList(l) ? ' · ' + esc(l.url) : '') : l.type === 'jellyfin' ? 'Jellyfin · ' + esc(l.server) : l.type === 'plex' ? 'Plex · ' + esc(l.server) : l.type === 'stalker' ? 'Portal MAC · ' + esc(l.mac) + ((l.macs || []).length > 1 ? ' (+' + (l.macs.length - 1) + ' de respaldo)' : '') : l.type === 'file' ? 'Archivo' : esc(l.url)) + ' · ' + (l.count || 0) + ' elementos' + ((S.hiddenDupes || {})[l.id] ? ' · ' + S.hiddenDupes[l.id] + ' repetidos ocultos' : '') + (l.epg ? ' · con guía' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div>' +
           '<button class="toggle f' + (l.enabled !== false ? ' on' : '') + '" data-act="listToggle" data-arg="' + l.id + '" aria-label="Activar lista"></button>' +
           '<button class="iconbtn f" data-act="listEpg" data-arg="' + l.id + '" aria-label="Guía EPG">' + IC.guide + '</button>' +
           '<button class="iconbtn f" data-act="listDelete" data-arg="' + l.id + '" aria-label="Eliminar">' + IC.trash + '</button></div>';
@@ -2149,13 +2229,18 @@
   }
   function addListDialog(tab) {
     tab = tab || 'url';
-    var tabs = [['url', 'Enlace M3U'], ['multi', 'Varias (.txt)'], ['file', 'Archivo'], ['xtream', 'Xtream Codes'], ['stalker', 'Portal y MAC'], ['jellyfin', 'Jellyfin / Emby'], ['plex', 'Plex'], ['web', 'Página web']];
+    var tabs = [['url', 'Enlace M3U'], ['multi', 'Varias (.txt)'], ['file', 'Archivo'], ['xtream', 'Xtream Codes'], ['stalker', 'Portal y MAC'], ['jellyfin', 'Jellyfin / Emby'], ['plex', 'Plex'], ['web', 'Página web'], ['fb', 'Mi Firebase']];
     var body = tab === 'multi'
       ? '<p>Pega tus direcciones (una por línea) o elige tu archivo .txt. Puedes poner un nombre antes de cada una: <code>Mi lista, https://…</code>. Los enlaces de Xtream (get.php?username=…) se agregan como cuenta Xtream con películas y series. También acepta cuentas de <b>Portal y MAC</b> (la URL del portal y debajo sus MAC).</p>' +
         '<label class="field">Direcciones<textarea class="in f" id="lMulti" rows="6" placeholder="https://…/lista1.m3u&#10;Deportes, https://…/lista2.m3u" data-autofocus></textarea></label><p class="muted" id="lMultiCount" style="font-size:13px;margin:-4px 0 8px"></p>' +
         '<label class="line" id="lMacOpt" hidden style="cursor:pointer"><input type="checkbox" class="f" id="lMacBk" style="width:22px;height:22px;accent-color:var(--accent)"><div class="t"><b>Las MAC de un mismo portal tienen el mismo contenido</b><span>Márcalo solo si son copias de la misma suscripción: se agrega una lista por portal y las otras MAC quedan de respaldo. Si cada MAC trae contenido distinto, déjalo sin marcar.</span></div></label>'
       : tab === 'web'
       ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mis libros educativos" data-autofocus></label><label class="field">Dirección de la página<input class="in f" id="lWeb" placeholder="https://mipagina.com" autocomplete="off" inputmode="url"></label><label class="line" style="cursor:pointer"><input type="checkbox" class="f" id="lDeep" checked style="width:22px;height:22px;accent-color:var(--accent)"><div class="t"><b>Revisar también las páginas enlazadas</b><span>Recorre las páginas del mismo sitio buscando videos y libros. Las secciones del menú de tu página quedan como categorías.</span></div></label><p class="muted" style="font-size:13px;margin:4px 0 8px">Encuentra videos (MP4, M3U8, YouTube, Vimeo…) y libros (EPUB, PDF, CBZ…). Los videos aparecen en Utilidades › Mis páginas y los libros en Utilidades › Lectura. La dirección queda guardada solo en tu cuenta.</p><p id="lErr" style="color:#FF8A80;font-size:14px;margin:0 0 8px"></p>'
+      : tab === 'fb'
+      ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mis libros educativos" data-autofocus></label>' +
+        '<label class="field">Configuración de Firebase de tu página<textarea class="in f" id="lFb" rows="6" style="min-height:130px;font:13px monospace" placeholder="const firebaseConfig = {&#10;  apiKey: &quot;AIza…&quot;,&#10;  projectId: &quot;mi-proyecto&quot;,&#10;  storageBucket: &quot;mi-proyecto.appspot.com&quot;&#10;};"></textarea></label>' +
+        '<label class="field">Colección de los libros (opcional)<input class="in f" id="lColl" placeholder="libros" autocomplete="off"></label>' +
+        '<p class="muted" style="font-size:13px;margin:-4px 0 8px">Copia el <b>firebaseConfig</b> del código de tu página (o de la consola de Firebase › Configuración del proyecto). MiVibra lee tu catálogo directo de Firestore: título, portada, categoría, autor y el archivo EPUB/PDF (de Storage o de una dirección). Si no escribes la colección, prueba con las más comunes (libros, books, catalogo…). Los libros aparecen en Utilidades › Lectura y se actualizan cada hora.</p><p id="lErr" style="color:#FF8A80;font-size:14px;margin:0 0 8px"></p>'
       : tab === 'jellyfin'
       ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi servidor" data-autofocus></label><label class="field">Dirección del servidor<input class="in f" id="lSrv" placeholder="http://192.168.1.10:8096" autocomplete="off" inputmode="url"></label><label class="field">Usuario<input class="in f" id="lUser" autocomplete="off"></label><label class="field">Contraseña<input class="in f" id="lPass" type="password"></label><p class="muted" style="font-size:13px;margin:-4px 0 8px">La misma dirección con la que abres Jellyfin o Emby en el navegador (puerto 8096 por defecto). Tus archivos se ven tal cual: con varios audios y subtítulos eliges latino, original o subtitulado en "Audio y subtítulos".</p><p id="lErr" style="color:#FF8A80;font-size:14px;margin:0 0 8px"></p>'
       : tab === 'plex'
@@ -2168,7 +2253,7 @@
         ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Lista descargada" data-autofocus></label><p>Elige un archivo .m3u del dispositivo, una USB o el administrador de archivos.</p>'
         : '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi lista" data-autofocus></label><label class="field">Enlace de la lista M3U / M3U8<input class="in f" id="lUrl" placeholder="https://…/lista.m3u" autocomplete="off" inputmode="url"></label><label class="field">Guía EPG XMLTV (opcional)<input class="in f" id="lEpg" placeholder="https://…/guia.xml" autocomplete="off" inputmode="url"></label>';
     MV.modal('<h2>Agregar lista</h2><div class="chips">' + tabs.map(function (t) { return '<button class="chip f' + (t[0] === tab ? ' on' : '') + '" data-act="listTab" data-arg="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' + body +
-      '<div class="btns"><button class="btn f" data-act="listSave" data-arg="' + tab + '">' + (tab === 'xtream' || tab === 'stalker' || tab === 'jellyfin' || tab === 'plex' ? 'Conectar' : tab === 'web' ? 'Revisar la página' : tab === 'file' ? 'Elegir archivo' : tab === 'multi' ? 'Importar' : 'Cargar lista') + '</button>' + (tab === 'multi' ? '<button class="btn ghost f" data-act="pasteText">Pegar texto</button><button class="btn ghost f" data-act="multiPick">Subir .txt</button><button class="btn ghost sm f" data-act="multiImage">Desde imagen</button>' : '') + '<button class="btn ghost f" data-act="confirmNo">Cancelar</button></div>',
+      '<div class="btns"><button class="btn f" data-act="listSave" data-arg="' + tab + '">' + (tab === 'xtream' || tab === 'stalker' || tab === 'jellyfin' || tab === 'plex' ? 'Conectar' : tab === 'web' ? 'Revisar la página' : tab === 'fb' ? 'Leer mis libros' : tab === 'file' ? 'Elegir archivo' : tab === 'multi' ? 'Importar' : 'Cargar lista') + '</button>' + (tab === 'multi' ? '<button class="btn ghost f" data-act="pasteText">Pegar texto</button><button class="btn ghost f" data-act="multiPick">Subir .txt</button><button class="btn ghost sm f" data-act="multiImage">Desde imagen</button>' : '') + '<button class="btn ghost f" data-act="confirmNo">Cancelar</button></div>',
       { onOpen: function (root) { var ta = root.querySelector('#lMulti'); if (ta) ta.addEventListener('input', multiCount); var cb = root.querySelector('#lMacBk'); if (cb) cb.addEventListener('change', multiCount); } });
   }
 
@@ -2553,6 +2638,19 @@
     listTab: function (t) { MV.closeModal(true); addListDialog(t); },
     listSave: function (tab) {
       var name = (document.getElementById('lName') || {}).value;
+      if (tab === 'fb') {
+        var cfg = MV.parseFbConfig(document.getElementById('lFb').value), errb = document.getElementById('lErr');
+        if (!cfg.apiKey || !cfg.projectId) { if (errb) errb.textContent = 'No encontré apiKey y projectId en lo que pegaste. Copia el bloque firebaseConfig completo.'; return; }
+        var fl = { type: 'fb', name: name || 'Mi biblioteca', fb: { apiKey: cfg.apiKey, projectId: cfg.projectId, storageBucket: cfg.storageBucket || '', databaseURL: cfg.databaseURL || '' }, coll: (document.getElementById('lColl').value || '').trim() };
+        if (errb) errb.textContent = '';
+        MV.toast('Leyendo tus libros de Firebase…', 4000);
+        MV.addList(fl).then(function () {
+          var l = S.lists.find(function (x) { return x.id === fl.id; }) || {};
+          if (l.error || !l.count) { var em = l.error || 'No encontré libros'; MV.removeList(fl.id); if (errb) errb.textContent = em; MV.toast(em, 9000); return; }
+          MV.closeModal(true); MV.toast((l.count || 0) + ' libros · están en Utilidades › Lectura', 6000); MV.go('books');
+        }).catch(function (e) { if (errb) errb.textContent = e.message; MV.toast(e.message, 8000); });
+        return;
+      }
       if (tab === 'web') {
         var wl = { type: 'web', name: name || 'Mi página', url: document.getElementById('lWeb').value.trim(), deep: !!document.getElementById('lDeep').checked };
         if (!wl.url) { MV.toast('Escribe la dirección de la página'); return; }
@@ -2794,7 +2892,12 @@
     bookMore: function () { BOOKLIM += 120; MV.rerender(); },
     bookGroup: function (g) { BOOKG = g || ''; BOOKLIM = 120; MV.rerender(); },
     bookWebSearch: function () { var i = document.getElementById('bookQ'); if (i) BOOKQ = i.value; bookSearchWeb(BOOKQ); },
-    bookWebAdd: function () { addListDialog('web'); },
+    bookWebAdd: function () {
+      MV.modal('<h2>Agregar tus libros</h2><div class="btns" style="flex-direction:column;align-items:stretch">' +
+        '<button class="btn f" data-act="listTab" data-arg="fb" data-autofocus>Mi página hecha con Firebase</button>' +
+        '<button class="btn ghost f" data-act="listTab" data-arg="web">Otra página web (con enlaces a los EPUB)</button>' +
+        '<button class="btn ghost f" data-act="confirmNo">Cancelar</button></div>');
+    },
     bookFile: function () {
       if (!A || !A.pickFiles) return MV.toast('Disponible en la app instalada');
       MV.call('pickFiles', []).then(function (items) {
@@ -2974,6 +3077,7 @@
     if (view.name === 'games' && !MV.modalOpen()) MV.rerender();
   };
   ACT.consoleOpen = function () { MV.save('gamesClassic', false); if (MV.console) MV.console.open(); };
+  Object.assign(ACT, ACT_EXTRA);
   MV.ACT = ACT;
   // Búsqueda por voz con el botón del control: en Juegos busca juegos, en lo demás busca películas, series y canales
   MV.voiceSearch = function (q) {

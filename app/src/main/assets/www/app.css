@@ -638,3 +638,10 @@ html.lite .card .shine { display: none; }
 .wzc .btn { align-self: flex-start; }
 /* Textos largos (enlaces de listas) no se montan sobre los botones */
 .line .t span { overflow-wrap: anywhere; }
+/* Carátulas +18 sin imagen: diseño propio (sin contenido explícito) */
+.card.adult .th { background: radial-gradient(120% 90% at 80% 10%, color-mix(in srgb, var(--h) 55%, #E0447C) 0%, transparent 55%), linear-gradient(160deg, #2A0F24 0%, #12080F 70%); }
+.card .mono.ad { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; padding: 12px; text-align: left; font: inherit; background: repeating-linear-gradient(135deg, rgba(255,255,255,.035) 0 10px, transparent 10px 20px); }
+.card .mono.ad i { font: 800 17px/1.15 var(--brand); font-style: normal; color: #fff; text-shadow: 0 2px 10px rgba(0,0,0,.6); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.card .mono.ad em { position: absolute; top: 10px; right: 10px; font: 800 12px var(--ui); font-style: normal; color: #fff; background: #E0447C; border-radius: 999px; padding: 3px 9px; box-shadow: 0 4px 14px rgba(224,68,124,.45); }
+.card.ch .mono.ad i { font-size: 15px; }
+.card.adult .th img:not(.logo) { object-fit: cover; }

@@ -264,6 +264,11 @@ const ASYNC = {
     if (r.canceled || !r.filePaths.length) return reply(id, false, 'cancel');
     reply(id, true, r.filePaths.map((f) => { let size = 0; try { size = fs.statSync(f).size; } catch (e) {} const name = path.basename(f); return { name, path: f, size, ext: (name.includes('.') ? name.split('.').pop() : '').toLowerCase() }; }));
   },
+  /** Carátula sacada del propio video (una imagen del contenido), con una ventana invisible. */
+  async videoFrame(id, url, headers, at) {
+    try { reply(id, true, await thumbQueue(() => videoFrame(url, +at || 0.15))); }
+    catch (e) { reply(id, false, errMsg(e) || 'No se pudo sacar una imagen de este video'); }
+  },
   /** Libros y mangas: descarga y deja listas las páginas (PDF, EPUB, CBZ, CBR, CB7). */
   async openBook(id, json) {
     const o = JSON.parse(json), src = o.url || o.path;
@@ -445,6 +450,34 @@ function openBrowser(url) {
   b.loadURL(/^https?:/i.test(url) ? url : 'https://www.google.com/search?q=' + encodeURIComponent(url));
 }
 
+
+// ---------------- Carátulas desde el video ----------------
+const THUMBS = path.join(DATA, 'cache', 'thumbs');
+let thumbWin = null, thumbChain = Promise.resolve();
+function thumbQueue(fn) { const p = thumbChain.then(fn, fn); thumbChain = p.catch(() => {}); return p; }
+async function videoFrame(url, at) {
+  fs.mkdirSync(THUMBS, { recursive: true });
+  const name = crypto.createHash('md5').update(url + '|' + at).digest('hex').slice(0, 20) + '.jpg', f = path.join(THUMBS, name);
+  const served = BASE + '/thumbs/' + name;
+  if (storage.exists(f)) return served;
+  if (!thumbWin || thumbWin.isDestroyed()) {
+    thumbWin = new BrowserWindow({ show: false, width: 480, height: 270, webPreferences: { webSecurity: false, partition: 'persist:thumbs', backgroundThrottling: false, offscreen: true, autoplayPolicy: 'no-user-gesture-required' } });
+    thumbWin.webContents.setAudioMuted(true);
+    await thumbWin.loadURL('about:blank');
+  }
+  const js = `new Promise((res, rej) => {
+    const v = document.createElement('video'); v.muted = true; v.preload = 'auto'; v.crossOrigin = 'anonymous';
+    const t = setTimeout(() => { v.src = ''; rej(new Error('El video no respondió')); }, 20000);
+    v.onerror = () => { clearTimeout(t); rej(new Error('Formato no compatible')); };
+    v.onloadedmetadata = () => { const d = isFinite(v.duration) && v.duration > 0 ? v.duration : 600; v.currentTime = Math.max(1, d * ${Math.min(0.95, Math.max(0.02, at))}); };
+    v.onseeked = () => { setTimeout(() => { try { const w = Math.min(480, v.videoWidth || 480), h = Math.round(w * (v.videoHeight || 270) / (v.videoWidth || 480)); const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(v, 0, 0, w, h); const u = c.toDataURL('image/jpeg', 0.82); clearTimeout(t); v.src = ''; res(u); } catch (e) { clearTimeout(t); rej(e); } }, 250); };
+    v.src = ${JSON.stringify(url)};
+  })`;
+  const data = await thumbWin.webContents.executeJavaScript(js);
+  fs.writeFileSync(f, Buffer.from(String(data).split(',')[1], 'base64'));
+  try { const all = fs.readdirSync(THUMBS).map((n) => ({ n, t: fs.statSync(path.join(THUMBS, n)).mtimeMs })).sort((a, b) => b.t - a.t); all.slice(600).forEach((x) => fs.unlinkSync(path.join(THUMBS, x.n))); } catch (e) {}
+  return served;
+}
 // ---------------- Ventana principal ----------------
 function iconPath() { const f = path.join(__dirname, 'assets', 'icon.png'); return storage.exists(f) ? f : undefined; }
 
@@ -452,6 +485,10 @@ async function startServer() {
   const extra = (req, res, u) => {
     const p = u.pathname;
     if (p === '/pc/intro.ogg') { server.sendFile(req, res, DIRS.intro); return true; }
+    if (p.startsWith('/thumbs/')) {
+      const f = path.join(THUMBS, path.basename(decodeURIComponent(p.slice(8))));
+      server.sendFile(req, res, f); return true;
+    }
     if (p.startsWith('/books/')) {
       // Libros y mangas abiertos (caché de la app)
       const base = path.join(DATA, 'cache', 'books');
