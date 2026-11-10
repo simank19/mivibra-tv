@@ -240,6 +240,23 @@ class MainActivity : ComponentActivity() {
     override fun onSearchRequested(): Boolean { voiceSearch(); return true }
 
     private var okLong = false
+    private var introOn = false
+    private var introSkipping = false
+    fun introShown(on: Boolean) {
+        introOn = on
+        if (!on && introSkipping) {
+            introSkipping = false
+            web.animate().alpha(1f).setDuration(250).start()
+        }
+    }
+    private fun skipIntroNow() {
+        introOn = false; introSkipping = true
+        web.animate().cancel(); web.alpha = 0f
+        try { bridge.introAudio(false) } catch (_: Exception) {}
+        try { web.evaluateJavascript("window.MV&&MV.introSkip&&MV.introSkip()", null) } catch (_: Exception) {}
+        // Por si la página no avisa: se vuelve a mostrar igual
+        web.postDelayed({ if (introSkipping) introShown(false) }, 8000)
+    }
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         // Mandos con los botones al estilo Nintendo (A a la derecha, B abajo): opción para intercambiar A y B en los menús
         if ((event.keyCode == KeyEvent.KEYCODE_BUTTON_A || event.keyCode == KeyEvent.KEYCODE_BUTTON_B) &&
@@ -250,11 +267,14 @@ class MainActivity : ComponentActivity() {
         return realKey(event)
     }
     private fun realKey(event: KeyEvent): Boolean {
-        // La intro se salta con cualquier botón (OK, Enter, flechas, mando; Atrás la salta por su cuenta). Se llama directo, sin esperar a que la página
-        // termine de cargar: mientras sale la intro la página sigue cargando y la orden quedaba en espera hasta el final
-        if ((event.action == KeyEvent.ACTION_UP || (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0)) && event.keyCode != KeyEvent.KEYCODE_VOLUME_UP && event.keyCode != KeyEvent.KEYCODE_VOLUME_DOWN && event.keyCode != KeyEvent.KEYCODE_VOLUME_MUTE &&
-            event.keyCode != KeyEvent.KEYCODE_BACK && event.keyCode != KeyEvent.KEYCODE_BUTTON_B && event.keyCode != KeyEvent.KEYCODE_ESCAPE)
-            try { web.evaluateJavascript("window.MV&&MV.introShowing&&MV.introShowing()&&MV.introSkip()", null) } catch (_: Exception) {}
+        // Intro: cualquier botón (menos volumen) la quita al instante. Mientras la página termina de cargar, el JavaScript
+        // puede ir atrasado, así que Android tapa la página, apaga la música y la vuelve a mostrar cuando la intro ya se quitó
+        if (introOn && event.action == KeyEvent.ACTION_DOWN && event.keyCode != KeyEvent.KEYCODE_VOLUME_UP &&
+            event.keyCode != KeyEvent.KEYCODE_VOLUME_DOWN && event.keyCode != KeyEvent.KEYCODE_VOLUME_MUTE) {
+            skipIntroNow()
+            return true
+        }
+        if (introSkipping) return true
         if (event.keyCode == KeyEvent.KEYCODE_SEARCH || event.keyCode == KeyEvent.KEYCODE_VOICE_ASSIST) {
             if (event.action == KeyEvent.ACTION_UP) voiceSearch()
             return true

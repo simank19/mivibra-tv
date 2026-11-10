@@ -270,6 +270,10 @@ class Bridge(private val a: MainActivity) {
     // Se reproduce con Android (no con Web Audio): algunos televisores no dejan sonar el audio de la página al abrir
     private var introPlayer: android.media.MediaPlayer? = null
 
+    /** La página avisa cuándo empieza y termina la intro (para poder saltarla al instante desde Android). */
+    @JavascriptInterface
+    fun introState(on: Boolean) { a.runOnUiThread { a.introShown(on) } }
+
     @JavascriptInterface
     fun introAudio(play: Boolean) {
         a.runOnUiThread {
