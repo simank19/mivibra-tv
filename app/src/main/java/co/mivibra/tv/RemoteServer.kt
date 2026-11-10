@@ -138,18 +138,17 @@ class RemoteServer(private val ctx: Context, port: Int = PORT) : NanoWSD(port) {
                 }
             }
         }
-        val reset = session.parameters["reset"]?.firstOrNull() == "1"
-        if (reset || !Drive.hasKeys(ctx)) return page("Configurar Google Drive",
-            "<p>Solo la primera vez: pega el <b>ID de cliente</b> y el <b>secreto</b> del cliente web de Google Cloud (proyecto mivibra-tv → Clientes → cliente tipo Aplicación web).</p>" +
-            "<form action='/drive/keys' method=get><input type=hidden name=k value='$k'>" +
-            "<label>ID de cliente</label><input name=id autocomplete=off placeholder='....apps.googleusercontent.com'>" +
+        val form = "<form action='/drive/keys' method=get><input type=hidden name=k value='$k'>" +
+            "<label>ID de cliente</label><input name=id autocomplete=off value='" + esc(Drive.clientId(ctx)) + "' placeholder='....apps.googleusercontent.com'>" +
             "<label>Secreto del cliente</label><input name=sec autocomplete=off placeholder='GOCSPX-...'>" +
-            "<button>Guardar</button></form><p class=m>Debe tener como URI de redireccionamiento autorizado: " + Drive.REDIRECT + "</p>")
+            "<button>Guardar ID y secreto</button></form><p class=m>El cliente web debe tener como URI de redireccionamiento autorizado: " + Drive.REDIRECT + "</p>"
+        if (!Drive.hasKeys(ctx)) return page("Configurar Google Drive",
+            "<p>Solo la primera vez: pega el <b>ID de cliente</b> y el <b>secreto</b> del cliente web de Google Cloud (proyecto mivibra-tv → Clientes → cliente tipo Aplicación web).</p>" + form)
         val url = Drive.authUrl(ctx, "$host~$k")
         return page("Conectar Google Drive",
             "<p>Toca el botón, elige tu cuenta y acepta. Si Google avisa que la app no está verificada, toca <b>Configuración avanzada → Ir a mivibra-tv</b> y marca la casilla <b>Ver y descargar todos tus archivos de Google Drive</b>.</p>" +
             "<a class=b href='" + esc(url) + "'>Conectar con Google</a><p class=m>Tu celular debe estar en el mismo Wi-Fi que la TV hasta terminar.</p>" +
-            "<p class=m>ID de cliente guardado: " + esc(Drive.clientId(ctx)) + "<br>Si Google dice «OAuth client was not found», el ID quedó mal: <a href='/drive?k=$k&reset=1' style='color:#FF9A4D'>cambiar ID y secreto</a>.</p>")
+            "<h1 style='margin-top:36px'>Cambiar ID y secreto</h1><p class=m>Si Google dice «The OAuth client was not found», el ID quedó mal: corrígelo aquí (el secreto hay que pegarlo de nuevo).</p>" + form)
     }
 
     // ---------------- Listas desde el celular ----------------
