@@ -21,7 +21,8 @@
   // ---------- Imágenes de libretro ----------
   function shot(r, s, kind) {
     if (!s || !s.thumbs) return '';
-    var n = String(r.name || '').replace(/\.[^.]+$/, '').replace(/[&*\/:`<>?\\|"]/g, '_');
+    var n = (MV.coverName && MV.coverName(r)) || String(r.name || '').replace(/\.[^.]+$/, '');
+    n = n.replace(/[&*\/:`<>?\\|"]/g, '_');
     return 'https://thumbnails.libretro.com/' + encodeURIComponent(s.thumbs) + '/' + kind + '/' + encodeURIComponent(n) + '.png';
   }
   MV.gameShots = function (r, s) {
@@ -92,6 +93,7 @@
   }
 
   var WIDE = { onOpen: function (d) { d.style.width = '90vw'; d.style.maxWidth = '1100px'; } };
+  MV.gameMetaForget = function (path) { var m = all()[path]; if (m && (m.none || m.unsure)) { delete all()[path]; persist(); } };
   MV.gameMeta = function (r) { return all()[r.path] || null; };
 
   /** Busca y guarda la ficha de un juego. Devuelve la ficha (o {none:true} si no se encontró). */

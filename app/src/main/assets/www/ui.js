@@ -1192,6 +1192,7 @@
     if (t.id && t.id === kb.dataset.v) kb.classList.remove('fold');
     else kb.classList.add('fold');
   });
+  MV.tvKbd = function (t, f) { return tvKbd(t, f); };
   function tvKbd(target, first) {
     var rows = ['1234567890', 'qwertyuiop', 'asdfghjklñ', 'zxcvbnm'];
     var k = function (c, n) { return '<button class="f"' + (first !== false && n === 'q' ? ' data-autofocus' : '') + ' data-act="kb" data-arg="' + esc(c) + '" data-v="' + target + '">' + esc(c.toUpperCase()) + '</button>'; };
@@ -1556,7 +1557,7 @@
     return out;
   }
   MV.arcId = arcId;
-  MV.romTitle = function (r) { var a = arcId(r); return a && a.title ? a.title.replace(/\s*\([^)]*\)\s*$/, '') : null; };
+  MV.romTitle = function (r) { var cn = MV.romCustomName && MV.romCustomName(r); if (cn) return cn; var a = arcId(r); return a && a.title ? a.title.replace(/\s*\([^)]*\)\s*$/, '') : null; };
   var NEOGEO = function () { return D.SYSTEMS.find(function (s) { return s.id === 'neogeo'; }); };
   function romSystem(r) {
     var ov = P.romSystem[r.path];

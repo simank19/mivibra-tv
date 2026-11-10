@@ -27,7 +27,7 @@
   // Portadas de la base pública de libretro (por nombre No-Intro / Redump del archivo)
   function thumb(r, s) {
     if (!s || !s.thumbs) return '';
-    var n = String(r.name || '').replace(/\.[^.]+$/, '').replace(/[&*\/:`<>?\\|"]/g, '_');
+    var n = ((MV.coverName && MV.coverName(r)) || String(r.name || '').replace(/\.[^.]+$/, '')).replace(/[&*\/:`<>?\\|"]/g, '_');
     return 'https://thumbnails.libretro.com/' + encodeURIComponent(s.thumbs) + '/Named_Boxarts/' + encodeURIComponent(n) + '.png';
   }
   function cover(r, s, cls) {
@@ -186,11 +186,15 @@
     if (!MV.scrapeAll) return;
     var list = roms(), job;
     MV.modal('<h2>Buscar información de los juegos</h2><p>Se busca el año, género, estudio y una descripción de cada juego en Wikipedia. Las imágenes vienen de la base de libretro.</p><div class="bar"><i id="scrBar"></i></div><p class="muted" id="scrTxt">Empezando…</p><div class="btns"><button class="btn ghost f" data-act="scrStop">Detener</button></div>');
-    job = MV.scrapeAll(list, MV.romSystem, function (n, t, r) {
+    var x = document.getElementById('scrTxt'); if (x) x.textContent = 'Buscando carátulas y nombres…';
+    var covers = MV.scrapeCoversAll ? MV.scrapeCoversAll(list, MV.romSystem, function (n, t) { var b = document.getElementById('scrBar'); if (b) b.style.width = Math.round(n * 50 / Math.max(t, 1)) + '%'; }, false) : Promise.resolve();
+    var cancelled = false;
+    job = covers.then(function () { if (cancelled) return { total: 0, found: 0 }; return MV.scrapeAll(list, MV.romSystem, function (n, t, r) {
       var b = document.getElementById('scrBar'), x = document.getElementById('scrTxt');
       if (b) b.style.width = Math.round(n * 100 / Math.max(t, 1)) + '%';
       if (x) x.textContent = n + ' de ' + t + ' · ' + (MV.gameTitle ? MV.gameTitle(r) : r.name);
-    });
+    }); });
+    job.cancel = function () { cancelled = true; };
     MV._scrJob = job;
     job.then(function (res) {
       var x = document.getElementById('scrTxt');
@@ -280,6 +284,8 @@
     MV.modal('<h2>' + esc(title(r)) + '</h2><p class="muted">' + esc(s ? s.name : 'Sistema sin elegir') + ' · ' + esc(r.path) + '</p><div class="btns" style="flex-direction:column;align-items:stretch">' +
       '<button class="btn f" data-act="consolePlay">Jugar</button>' +
       '<button class="btn ghost f" data-act="consoleInfo">Ver ficha del juego</button>' +
+      '<button class="btn ghost f" data-act="consoleRename">Renombrar</button>' +
+      '<button class="btn ghost f" data-act="consoleCover">Buscar carátula otra vez</button>' +
       (s && !s.ra ? '<button class="btn ghost f" data-act="consoleSwap">' + (MV.gameEngine(s) === 'retroarch' ? 'Jugar ' + esc(s.name) + ' con el emulador de MiVibra' : 'Jugar ' + esc(s.name) + ' con RetroArch') + '</button>' : '') +
       '<button class="btn ghost f" data-act="consoleSys">Cambiar sistema</button>' +
       '<button class="btn danger f" data-act="consoleDel">Borrar juego</button></div>');
@@ -302,6 +308,11 @@
   if (MV.ACT) {
     MV.ACT.consolePlay = function () { MV.closeModal(true); MV.playRom(MV._consoleRom); };
     MV.ACT.consoleSwap = function () { var s = MV.romSystem(MV._consoleRom); MV.setGameEngine(s.id, MV.gameEngine(s) === 'retroarch' ? 'interno' : 'retroarch'); MV.closeModal(true); render(); };
+    MV.ACT.consoleRename = function () { MV.closeModal(true); MV.renameRom(MV._consoleRom, function () { if (box) render(); }); };
+    MV.ACT.consoleCover = function () {
+      var r = MV._consoleRom; MV.closeModal(true); MV.toast('Buscando carátula…');
+      MV.scrapeCover(r, MV.romSystem(r), true).then(function (c) { MV.toast(c && !c.none ? 'Carátula encontrada' : 'No encontré carátula; prueba renombrándolo'); if (box) render(); });
+    };
     MV.ACT.consoleInfo = function () { MV.closeModal(true); MV.gameInfo(MV._consoleRom, MV.romSystem(MV._consoleRom)); };
     MV.ACT.consoleDel = function () { MV.closeModal(true); askDelete(MV._consoleRom); };
     MV.ACT.consoleSys = function () { MV.closeModal(true); MV.chooseSystem(MV._consoleRom); };
@@ -316,9 +327,15 @@
     document.documentElement.classList.add('console-open');
     render();
     if (MV.syncOwnRoms) MV.syncOwnRoms();
+    // Carátulas y nombres automáticos de lo nuevo, en segundo plano
+    setTimeout(autoCovers, 1500);
     clockT = setInterval(tick, 15000);
     // Buscar juegos, BIOS o cambio de sistema: se actualiza solo cuando cambia la lista
     watchT = setInterval(function () { if (!MV.modalOpen() && roms().length !== lastCount) render(); }, 1200);
+  }
+  function autoCovers() {
+    if (!box || !MV.scrapeCoversAll) return;
+    MV.scrapeCoversAll(roms(), MV.romSystem).then(function (found) { if (found && box && !MV.modalOpen()) render(document.activeElement && document.activeElement.getAttribute('data-rom') ? null : null); });
   }
   function close(back) {
     if (!box) return;
