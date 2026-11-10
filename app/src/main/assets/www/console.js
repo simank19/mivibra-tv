@@ -23,7 +23,7 @@
     });
   }
   function title(r) { var nt = MV.romTitle && MV.romTitle(r); if (nt) return nt;
-    return String(r.name || '').replace(/\.[^.]+$/, '').replace(/\s*[\(\[][^\)\]]*[\)\]]/g, '').replace(/_/g, ' ').trim() || r.name; }
+    return (MV.cleanRomName && MV.cleanRomName(r.name)) || String(r.name || '').replace(/\.[^.]+$/, '').replace(/\s*[\(\[][^\)\]]*[\)\]]/g, '').replace(/_/g, ' ').trim() || r.name; }
   // Portadas de la base pública de libretro (por nombre No-Intro / Redump del archivo)
   function thumb(r, s) {
     if (!s || !s.thumbs) return '';
@@ -401,7 +401,7 @@
       if (!e.repeat) {
         okAt = Date.now(); okEl = a; okHeld = false; clearTimeout(okT);
         // Algunos controles no repiten la tecla al dejarla presionada: se mide con un temporizador
-        if (a && a.getAttribute('data-rom')) okT = setTimeout(function () { if (okEl === a && !okHeld && document.activeElement === a && !MV.modalOpen()) { okHeld = true; blip(660); options(a); } }, 600);
+        if (a && a.getAttribute('data-rom')) okT = setTimeout(function () { if (okEl === a && !okHeld && document.activeElement === a && !MV.modalOpen()) { okHeld = true; blip(660); options(a); } }, 480);
       }
       else if (!okHeld && okEl === a && Date.now() - okAt > 600 && a && a.getAttribute('data-rom')) { okHeld = true; clearTimeout(okT); options(a); }
     }
@@ -410,6 +410,10 @@
     e.preventDefault(); e.stopImmediatePropagation();
   }, true);
   var okAt = 0, okEl = null, okHeld = false, okT = null;
+  // La app avisa cuando OK lleva presionado medio segundo (hay controles de TV con los que el navegador no se entera)
+  MV.okLong = function () { var a = document.activeElement; if (!box || MV.modalOpen() || okHeld || !a || !a.getAttribute('data-rom')) return; okHeld = true; okEl = a; clearTimeout(okT); blip(660); options(a); };
+  // Si al soltar ya pasó el tiempo, también cuenta como mantener presionado
+  function heldLong() { return okAt && Date.now() - okAt > 480; }
   window.addEventListener('keyup', function (e) {
     if (!box || (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'NumpadEnter')) return;
     clearTimeout(okT);
@@ -417,7 +421,7 @@
     if (MV.modalOpen()) { if (okHeld) { e.preventDefault(); e.stopImmediatePropagation(); } okEl = null; okHeld = false; return; }
     e.preventDefault(); e.stopImmediatePropagation();
     var a = document.activeElement;
-    if (!okHeld && okEl && a === okEl && box.contains(a)) activate(a);
+    if (!okHeld && okEl && a === okEl && box.contains(a)) { if (heldLong() && a.getAttribute('data-rom')) { okAt = 0; options(a); } else activate(a); }
     okEl = null; okHeld = false;
   }, true);
   document.addEventListener('click', function (e) {

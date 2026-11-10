@@ -230,6 +230,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onSearchRequested(): Boolean { voiceSearch(); return true }
 
+    private var okLong = false
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.keyCode == KeyEvent.KEYCODE_SEARCH || event.keyCode == KeyEvent.KEYCODE_VOICE_ASSIST) {
             if (event.action == KeyEvent.ACTION_UP) voiceSearch()
@@ -249,7 +250,13 @@ class MainActivity : ComponentActivity() {
                 return true
             }
             KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_BUTTON_START, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                return web.dispatchKeyEvent(KeyEvent(event.downTime, event.eventTime, event.action, KeyEvent.KEYCODE_ENTER, event.repeatCount))
+                // Mantener OK: al medio segundo se avisa a la app (opciones del juego) y las repeticiones no pasan al navegador
+                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount > 0) {
+                    if (!okLong && event.eventTime - event.downTime >= 480) { okLong = true; js("window.MV&&MV.okLong&&MV.okLong()") }
+                    return true
+                }
+                if (event.action == KeyEvent.ACTION_DOWN) okLong = false
+                return web.dispatchKeyEvent(KeyEvent(event.downTime, event.eventTime, event.action, KeyEvent.KEYCODE_ENTER, 0))
             }
             KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_BUTTON_Y, KeyEvent.KEYCODE_BUTTON_X -> {
                 if (event.action == KeyEvent.ACTION_UP) js("window.MV&&MV.onKey&&MV.onKey('menu')")

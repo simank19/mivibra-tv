@@ -61,6 +61,14 @@
     if (/\(Beta|\(Proto|\(Demo|\(Kiosk/.test(cand)) s -= 0.05;
     return s;
   }
+  /** Nombre para mostrar a partir del archivo: "Toy_Story_3_USA_PSP-BAHAMUT.cso" → "Toy Story 3" */
+  MV.cleanRomName = function (name) {
+    var n = String(name || '').replace(/\.[a-z0-9]{2,4}$/i, '').replace(/-[A-Za-z0-9]*[A-Z]{2}[A-Za-z0-9]*$/, function (g) { return /\s/.test(name) && !/[_.]/.test(name.replace(/\.[a-z0-9]{2,4}$/i, '')) && !/^-[A-Z0-9]{4,}$/.test(g) ? g : ' '; }).replace(/[\[(][^\])]*[\])]/g, ' ');
+    n = (/\s/.test(n.trim()) ? n.replace(/_+/g, ' ') : n.replace(/[_.]+/g, ' ')).replace(/\s+/g, ' ').trim();
+    var m = /\s(USA|EUR|EUROPE|Europe|JPN|JAP|JAPAN|Japan|PAL|NTSC|MULTI\d*|Multi\d+|PSP|PSX|PS1|PS2|NDS|GBA|UMD|ISO|CSO|RIP|PROPER|READNFO|REPACK|iNTERNAL)(\s|$)/.exec(n);
+    if (m && m.index > 2) n = n.slice(0, m.index);
+    return n.trim();
+  };
   /** Mejor carátula para el juego, o null */
   MV.findCover = function (r, s, title) {
     return thumbList(s).then(function (list) {
@@ -84,7 +92,8 @@
   /** Busca carátula (y nombre si hace falta) de un juego. Usa también el nombre de la ficha de Wikipedia si existe. */
   MV.scrapeCover = function (r, s, force) {
     var have = M()[r.path];
-    if (have && !force) return Promise.resolve(have);
+    // Si antes no se encontró, se vuelve a intentar pasado un día (pudo ser un fallo de internet)
+    if (have && !force && !(have.none && Date.now() - (have.at || 0) > 864e5)) return Promise.resolve(have);
     var meta = MV.gameMeta ? MV.gameMeta(r) : null;
     var tryTitle = MV.romCustomName(r) || (meta && meta.name) || (MV.gameTitle ? MV.gameTitle(r) : r.name);
     // Nombres de escena (b-ts3u): la carpeta suele tener el nombre bueno ("Toy_Story_3_USA_PSP-BAHAMUT")
@@ -94,13 +103,18 @@
       if (i >= titles.length) return Promise.resolve(null);
       return MV.findCover(r, s, titles[i]).then(function (c) { return c || next(i + 1); });
     }
-    return next(0).then(function (c) {
+    return thumbList(s).then(function (tl) {
+      // Sin la lista de carátulas (sin internet) no se guarda "no encontrada": se intenta otra vez después
+      if (s && s.thumbs && !tl.length) return { none: true, temp: true };
+      return next(0).then(done);
+    });
+    function done(c) {
       var rec = c ? { n: c.n, at: Date.now() } : { none: true, at: Date.now() };
       M()[r.path] = rec;
       if (c && !MV.romCustomName(r) && (ugly(r) || c.s >= 0.9)) { N()[r.path] = niceName(c.n); if (MV.gameMetaForget) MV.gameMetaForget(r.path); }
       persist();
       return rec;
-    });
+    }
   };
 
   /** Toda la biblioteca, en segundo plano. onProgress(n, total) */

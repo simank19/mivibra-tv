@@ -14,7 +14,7 @@
 
   function title(r) {
     var nt = MV.romTitle && MV.romTitle(r); if (nt) return nt;
-    return String(r.name || '').replace(/\.[^.]+$/, '').replace(/\s*[\(\[][^\)\]]*[\)\]]/g, '').replace(/_/g, ' ').trim() || r.name;
+    return (MV.cleanRomName && MV.cleanRomName(r.name)) || String(r.name || '').replace(/\.[^.]+$/, '').replace(/\s*[\(\[][^\)\]]*[\)\]]/g, '').replace(/_/g, ' ').trim() || r.name;
   }
   MV.gameTitle = title;
 
