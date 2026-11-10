@@ -257,6 +257,13 @@ const ASYNC = {
     reply(id, true, { text: await ocr(r.filePaths[0]) });
   },
   async readLocalFile(id, p) { const buf = net.maybeGunzip(fs.readFileSync(p)); const f = netFile('local:' + p); fs.writeFileSync(f, buf); reply(id, true, { path: served(f), text: buf.length < 200000 ? buf.toString('utf8') : undefined }); },
+  /** Elegir uno o varios juegos (se usan donde están, sin copiarlos). */
+  async pickFiles(id) {
+    const r = await dialog.showOpenDialog(win, { title: 'Elegir juegos', properties: ['openFile', 'multiSelections'],
+      filters: [{ name: 'Juegos', extensions: ['nes', 'fds', 'sfc', 'smc', 'gb', 'gbc', 'gba', 'n64', 'z64', 'v64', 'nds', 'md', 'gen', 'smd', 'bin', 'sms', 'gg', 'cue', 'chd', 'iso', 'cso', 'pbp', 'img', 'a26', 'a78', 'lnx', 'pce', 'ngp', 'ngc', 'ws', 'wsc', 'neo', 'wad', 'zip', '7z', 'rar'] }, { name: 'Todos los archivos', extensions: ['*'] }] });
+    if (r.canceled || !r.filePaths.length) return reply(id, false, 'cancel');
+    reply(id, true, r.filePaths.map((f) => { let size = 0; try { size = fs.statSync(f).size; } catch (e) {} const name = path.basename(f); return { name, path: f, size, ext: (name.includes('.') ? name.split('.').pop() : '').toLowerCase() }; }));
+  },
   async pickFolder(id) {
     const r = await dialog.showOpenDialog(win, { title: 'Elegir carpeta', properties: ['openDirectory'] });
     if (r.canceled || !r.filePaths[0]) return reply(id, false, 'cancel');

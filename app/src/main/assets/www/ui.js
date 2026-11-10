@@ -1515,9 +1515,12 @@
   var ROM_DIR = /\/(roms?|juegos|games|emuladore?s?|emulators?|emulation|retro\w*|arcade|mame|fbneo|fba|neogeo|cps\d?|snes|nes|sfc|genesis|megadrive|mega drive|gba|gbc|gb|n64|nds|psx|ps1|playstation|psp|gamecube|gcn|ngc|dreamcast|dc|sega|nintendo|atari|pce|ports?|doom|quake)\//i;
   function isGame(r) {
     if ((MV.load('romsHidden', []) || []).indexOf(r.path) >= 0) return false;
-    var name = String(r.name || ''), low = name.toLowerCase(), path = String(r.path || '').toLowerCase(), size = +r.size || 0, ext = r.ext;
-    // La carpeta propia de MiVibra (ROMs enviadas desde el celular o descargadas) vive en Android/data: esa sí cuenta
-    var own = path.indexOf('/android/data/co.mivibra.tv/') >= 0;
+    // En Windows las rutas usan "\\": se igualan a "/" para reconocer las carpetas de juegos
+    var name = String(r.name || ''), low = name.toLowerCase(), path = String(r.path || '').toLowerCase().replace(/\\/g, '/'), size = +r.size || 0, ext = r.ext;
+    // Juegos que el usuario eligió uno por uno: siempre cuentan
+    if (r.pick) return !/\.(apk|xapk|apks)$/i.test(low);
+    // La carpeta propia de MiVibra (ROMs enviadas desde el celular o descargadas) vive en Android/data (o en la de la app en el PC): esa sí cuenta
+    var own = path.indexOf('/android/data/co.mivibra.tv/') >= 0 || path.indexOf('/mivibra tv/roms/') >= 0;
     if (/\.apk|\.xapk|\.apks/i.test(low) || (!own && /\/android\/(data|obb)\//.test(path))) return false;
     if (/^(readme|license|licence|changelog|copying|authors|contributing|notice|history|install)\b/i.test(low)) return false;
     if (own && /\/_bios\//.test(path)) return false;
@@ -1572,7 +1575,7 @@
       }
     }
     if (ov) return D.SYSTEMS.find(function (s) { return s.id === ov; });
-    var name = (r.name || '').toLowerCase(), path = (r.path || '').toLowerCase();
+    var name = (r.name || '').toLowerCase(), path = (r.path || '').toLowerCase().replace(/\\/g, '/');
     if (r.ext === 'zip' || r.ext === '7z' || r.ext === 'rar') {
       // ROM de consola comprimida (Super Mario World.zip con el .sfc adentro): se mira qué trae, aunque esté en una carpeta de Arcade
       var inner = zipInner(r);
@@ -2772,41 +2775,84 @@
       MV.call('pickFolder', []).then(function (uri) { if (P.romRoots.indexOf(uri) < 0) P.romRoots.push(uri); MV.savePrefs(); MV.closeModal(true); ACT.romRoots(); })
         .catch(function (e) { if (e.message !== 'cancel') MV.toast(e.message === 'nopicker' ? 'Este equipo no tiene selector de carpetas: usa la lista de unidades y permite el acceso.' : e.message, 4500); });
     },
+    /** Elegir uno o varios juegos con el selector de archivos (celular y PC; no necesita permisos especiales). */
+    pickGames: function () {
+      if (!A || !A.pickFiles) return MV.toast('Disponible en la app instalada');
+      MV.closeModal(true);
+      var pctEl = null;
+      MV.call('pickFiles', [], function (p) {
+        if (!pctEl) { MV.modal('<h2>Copiando juegos…</h2><div class="spinner" style="margin:20px auto"></div><p class="muted" id="pgPct">0%</p>'); pctEl = document.getElementById('pgPct'); }
+        if (pctEl) pctEl.textContent = p + '%';
+      }).then(function (items) {
+        if (pctEl) MV.closeModal(true);
+        var games = (items || []).map(function (g) { g.pick = 1; return g; }).filter(isGame);
+        if (!games.length) return MV.toast((items || []).length ? 'Ese archivo no es un juego compatible (usa ROMs .nes, .sfc, .gba, .iso, .zip, .7z, .rar…)' : 'No elegiste ningún juego', 5000);
+        var list = MV.load('roms', []) || [];
+        games.forEach(function (g) { if (!list.some(function (r) { return r.path === g.path; })) list.push(g); });
+        MV.save('roms', list);
+        MV.toast(games.length === 1 ? 'Juego agregado: ' + ((MV.romTitle && MV.romTitle(games[0])) || String(games[0].name).replace(/\.[^.]+$/, '')) : games.length + ' juegos agregados', 4500);
+        MV.rerender(); if (MV.console && MV.console.refresh) MV.console.refresh();
+      }).catch(function (e) {
+        if (pctEl) MV.closeModal(true);
+        if (e.message !== 'cancel') MV.toast(e.message === 'nopicker' ? 'Este equipo no tiene selector de archivos: usa “Explorar carpetas”.' : e.message, 5000);
+      });
+    },
     // Elegir en qué unidad buscar: memoria, USB, disco o una carpeta
     scanChooser: function () {
       if (!A) return;
+      var PC = !!MV.device.desktop, PHONE = !MV.device.tv && !PC;
       var roots = JSON.parse(A.storageRoots()).filter(function (r) { return !/Descargas de MiVibra/.test(r.name); });
+      // En el celular, las carpetas donde suelen quedar los juegos descargados
+      if (PHONE && roots.some(function (r) { return r.path === '/storage/emulated/0'; })) {
+        [['Documentos', '/storage/emulated/0/Documents'], ['Descargas del celular', '/storage/emulated/0/Download']].forEach(function (x) {
+          if (!roots.some(function (r) { return r.path === x[1]; })) roots.unshift({ name: x[0], path: x[1], removable: false, readable: true });
+        });
+      }
       var anyLocked = roots.some(function (r) { return !r.readable; });
       var rp = roots.map(function (r) { return r.path; }), picked = P.romRoots.filter(function (p) { return rp.indexOf(p) < 0 && p !== A.downloadsDir(); });
       MV._scanRoots = roots.map(function (r) { return r.path; }).concat(picked);
-      MV.modal('<h2>¿Dónde busco los juegos?</h2><p class="muted">Conecta la USB o el disco antes de elegir. Si no aparece, usa “Elegir carpeta”.</p>' +
+      var noAccess = A.hasStorageAccess && !A.hasStorageAccess();
+      MV.modal('<h2>¿Dónde están tus juegos?</h2><p class="muted">' + (PC ? 'Elige los archivos, una carpeta o un disco del computador.' : PHONE ? 'Elige los juegos que tienes en el celular o la carpeta donde están.' : 'Conecta la USB o el disco antes de elegir. Si no aparece, usa “Elegir carpeta”.') + '</p>' +
         '<div class="btns" style="flex-direction:column;align-items:stretch">' +
+        (PC || PHONE ? '<button class="btn f" data-act="pickGames">📄 Elegir juegos (archivos)…</button>' +
+          '<button class="btn ghost f" data-act="scanPick">📁 Elegir una carpeta…</button>' : '') +
+        (PHONE && noAccess ? '<button class="btn ghost f" data-act="storageAccess">🔓 Permitir ver todos mis archivos</button><p class="muted" style="margin:0 4px 6px;font-size:13px">Android no deja que las apps vean los .zip y ROMs de tus carpetas sin este permiso. Con “Elegir juegos” no hace falta.</p>' : '') +
         roots.map(function (r, i) {
           var usb = r.removable || /usb|disco|sd/i.test(r.name);
-          return '<button class="btn ' + (i ? 'ghost ' : '') + 'f" data-act="scanIn" data-arg="' + i + '"' + (r.readable ? '' : ' disabled') + '>' + (usb ? '💾 ' : '📱 ') + esc(r.name) + (r.readable ? '' : ' (sin permiso)') + '</button>';
+          return '<button class="btn ' + (i || PC || PHONE ? 'ghost ' : '') + 'f" data-act="scanIn" data-arg="' + i + '"' + (r.readable ? '' : ' disabled') + '>' + (usb ? '💾 ' : '📱 ') + esc(r.name) + (r.readable ? '' : ' (sin permiso)') + '</button>';
         }).join('') +
         picked.map(function (p, j) { return '<button class="btn ghost f" data-act="scanIn" data-arg="' + (roots.length + j) + '">📁 ' + esc(decodeURIComponent(p.split('/tree/')[1] || p)) + '</button>'; }).join('') +
         '<button class="btn ghost f" data-act="scanIn" data-arg="all">🔎 Buscar en todas</button>' +
         '<button class="btn ghost f" data-act="scanBrowse" data-arg="/">📂 Explorar carpetas…</button>' +
-        '<button class="btn ghost f" data-act="scanPick">🗂️ Selector de Android…</button>' +
-        (anyLocked || (A.hasStorageAccess && !A.hasStorageAccess()) ? '<button class="btn ghost f" data-act="storageAccess">🔓 Dar permiso para leer USB y discos</button>' : '') +
+        (PC || PHONE ? '' : '<button class="btn ghost f" data-act="scanPick">🗂️ Selector de Android…</button>') +
+        (!PHONE && !PC && (anyLocked || noAccess) ? '<button class="btn ghost f" data-act="storageAccess">🔓 Dar permiso para leer USB y discos</button>' : '') +
         '<button class="btn ghost f" data-act="scanChooser">🔄 Actualizar (después de conectar la USB)</button>' +
-        '</div>' + (roots.length <= 1 ? '<p class="muted" style="margin-top:10px">No veo ninguna USB ni disco. Revisa que esté bien conectada, toca “Dar permiso” si aparece, o entra a “Explorar carpetas” y busca en /storage o /mnt.</p>' : ''));
+        '</div>' + (roots.length <= 1 && !PC && !PHONE ? '<p class="muted" style="margin-top:10px">No veo ninguna USB ni disco. Revisa que esté bien conectada, toca “Dar permiso” si aparece, o entra a “Explorar carpetas” y busca en /storage o /mnt.</p>' : ''));
     },
     // Explorador propio (no depende del selector de Android, que muchas TV no traen)
     scanBrowse: function (path) {
       path = path || '/';
+      if (MV.device.desktop && path === '/') {
+        // En el PC la raíz son las unidades (C:, D:, USB…) y las carpetas personales
+        var rs = JSON.parse(A.storageRoots());
+        MV._browse = { path: '/', dirs: rs.map(function (r) { return r.path; }), up: null };
+        MV.closeModal(true);
+        MV.modal('<h2>📂 Este equipo</h2><div class="btns" style="flex-direction:column;align-items:stretch;max-height:52vh;overflow:auto">' +
+          rs.map(function (r, i) { return '<button class="btn ghost f" data-act="scanBrowseIdx" data-arg="' + i + '">' + (r.removable ? '💾 ' : '📁 ') + esc(r.name) + '</button>'; }).join('') + '</div>');
+        return;
+      }
       MV.call('listDir', [path]).then(function (items) {
         var dirs = (items || []).filter(function (f) { return f.dir; });
         var games = (items || []).filter(function (f) { return !f.dir && D.ROM_EXTS.indexOf(String(f.name).split('.').pop().toLowerCase()) >= 0; }).length;
-        var up = path === '/' ? null : path.replace(/\/[^\/]+\/?$/, '') || '/';
+        var up = path === '/' ? null : MV.device.desktop ? (/^[A-Za-z]:\\?$/.test(path) ? '/' : path.replace(/[\\\/][^\\\/]+[\\\/]?$/, '') || '/') : path.replace(/\/[^\/]+\/?$/, '') || '/';
+        if (MV.device.desktop && /^[A-Za-z]:$/.test(up)) up += '\\';
         MV._browse = { path: path, dirs: dirs.map(function (d) { return d.path; }), up: up };
         MV.closeModal(true);
         MV.modal('<h2>📂 ' + esc(path) + '</h2><p class="muted">' + dirs.length + ' carpetas' + (games ? ' · ' + games + ' archivos de juegos aquí' : '') + '</p>' +
           '<div class="btns" style="flex-direction:column;align-items:stretch;max-height:52vh;overflow:auto">' +
           '<button class="btn f" data-act="scanHere">🔎 Buscar juegos en esta carpeta</button>' +
           (up ? '<button class="btn ghost f" data-act="scanBrowseIdx" data-arg="up">⬆ Subir</button>' : '') +
-          (path === '/' ? ['/storage', '/mnt', '/sdcard'].map(function (q) { return '<button class="btn ghost f" data-act="scanBrowse" data-arg="' + q + '">📁 ' + q + '</button>'; }).join('') : '') +
+          (path === '/' && !MV.device.desktop ? ['/storage', '/mnt', '/sdcard'].map(function (q) { return '<button class="btn ghost f" data-act="scanBrowse" data-arg="' + q + '">📁 ' + q + '</button>'; }).join('') : '') +
           dirs.slice(0, 200).map(function (d, i) { return '<button class="btn ghost f" data-act="scanBrowseIdx" data-arg="' + i + '">📁 ' + esc(d.name) + '</button>'; }).join('') +
           '</div>');
       }).catch(function () {

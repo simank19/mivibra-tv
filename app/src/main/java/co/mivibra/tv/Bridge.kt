@@ -375,6 +375,55 @@ class Bridge(private val a: MainActivity) {
         }
     }
 
+    /**
+     * Elegir uno o varios juegos con el selector de archivos del celular. Funciona sin el permiso de
+     * "todos los archivos": se copian a la carpeta de juegos de la app (Descargas de MiVibra).
+     */
+    @JavascriptInterface
+    fun pickFiles(id: String) {
+        a.runOnUiThread {
+            val i = Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
+                .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+            try {
+                a.startForResult(i) { res, data ->
+                    if (res != android.app.Activity.RESULT_OK || data == null) { reply(id, false, "cancel"); return@startForResult }
+                    val uris = mutableListOf<Uri>()
+                    data.clipData?.let { c -> for (k in 0 until c.itemCount) uris.add(c.getItemAt(k).uri) }
+                    if (uris.isEmpty()) data.data?.let { uris.add(it) }
+                    io.execute {
+                        try {
+                            val dir = File(downloadsDir()); dir.mkdirs()
+                            val out = JSONArray()
+                            var total = 0L; val sizes = uris.map { androidx.documentfile.provider.DocumentFile.fromSingleUri(a, it)?.length() ?: 0L }
+                            val all = sizes.sum().coerceAtLeast(1L)
+                            uris.forEachIndexed { k, u ->
+                                val doc = androidx.documentfile.provider.DocumentFile.fromSingleUri(a, u)
+                                val name = (doc?.name ?: "juego.bin").replace(Regex("[\\\\/:*?\"<>|]"), "_")
+                                val target = File(dir, name)
+                                if (!(target.exists() && target.length() == sizes[k] && sizes[k] > 0)) {
+                                    val tmp = File(dir, "$name.part")
+                                    a.contentResolver.openInputStream(u)?.use { ins ->
+                                        tmp.outputStream().use { os ->
+                                            val buf = ByteArray(256 * 1024); var n: Int; var last = -1
+                                            while (ins.read(buf).also { n = it } > 0) {
+                                                os.write(buf, 0, n); total += n
+                                                val pct = (total * 100 / all).toInt(); if (pct != last) { last = pct; progress(id, pct) }
+                                            }
+                                        }
+                                    } ?: throw IllegalStateException("No se pudo abrir " + name)
+                                    target.delete(); tmp.renameTo(target)
+                                } else total += sizes[k]
+                                out.put(JSONObject().put("name", name).put("path", target.absolutePath).put("size", target.length())
+                                    .put("ext", name.substringAfterLast('.', "").lowercase()))
+                            }
+                            reply(id, true, out)
+                        } catch (e: Exception) { reply(id, false, "No se pudo copiar el juego: " + (e.message ?: "")) }
+                    }
+                }
+            } catch (_: ActivityNotFoundException) { reply(id, false, "nopicker") }
+        }
+    }
+
     @JavascriptInterface
     fun hasStorageAccess(): Boolean = Storage.hasAllFilesAccess(a)
 

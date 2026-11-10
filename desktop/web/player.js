@@ -49,14 +49,18 @@
     if (ts) { try { ts.pause(); ts.unload(); ts.detachMediaElement(); ts.destroy(); } catch (e) {} ts = null; }
     try { v.removeAttribute('src'); v.load(); } catch (e) {}
   }
+  var zapAt = 0;
   function next(reason) {
     if (closing) return;
     att++;
-    if (att < attempts.length) { tryAttempt(); return; }
+    // En vivo no se insiste más de ~40 s (los canales de eventos solo transmiten a su hora)
+    var tooLong = live && Date.now() - zapAt > 40000;
+    if (att < attempts.length && !tooLong) { if (live) osd('Probando otra forma (' + (att + 1) + ' de ' + attempts.length + ')…'); tryAttempt(); return; }
     stopEngines();
-    err(reason || 'La señal no responde.', live ? 'Prueba otro canal con ▲ ▼ o la lista de canales.' : 'Puede que el enlace haya vencido. Cierra e intenta de nuevo.');
+    if (live) err('Este canal no está transmitiendo ahora.', 'Los canales de eventos (los que empiezan con una hora) solo funcionan cuando el evento está en vivo. Prueba otro con ▲ ▼ o la lista.');
+    else err(reason || 'La señal no responde.', 'Puede que el enlace haya vencido. Cierra e intenta de nuevo.');
   }
-  function arm() { clearTimeout(watchdog); watchdog = setTimeout(function () { if (!started) next('La señal tardó demasiado en arrancar.'); }, att < 3 ? 12000 : 20000); }
+  function arm() { clearTimeout(watchdog); watchdog = setTimeout(function () { if (!started) next('La señal tardó demasiado en arrancar.'); }, live ? (att < 3 ? 9000 : 12000) : (att < 3 ? 12000 : 20000)); }
 
   function tryAttempt() {
     stopEngines(); started = false; $('err').hidden = true; spin(true);
@@ -95,7 +99,7 @@
       return;
     }
     if (item.stk) item.stkReady = false;   // la próxima vez se pide un enlace fresco
-    attempts = build(item); att = 0; tryAttempt();
+    attempts = build(item).slice(0, live ? 8 : 24); att = 0; zapAt = Date.now(); tryAttempt();
   }
 
   // ---------- Eventos del video ----------

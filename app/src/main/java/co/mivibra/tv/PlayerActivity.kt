@@ -462,6 +462,8 @@ class PlayerActivity : ComponentActivity() {
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_READY) {
                     cancelWatchdog()
+                    hideLoading()
+                    view.setKeepContentOnPlayerReset(true)
                     retries = 0
                     errorView.visibility = View.GONE
                     // Ya abrió: se recuerda qué enlace funcionó (la app lo usará primero la próxima vez)
@@ -527,14 +529,17 @@ class PlayerActivity : ComponentActivity() {
             ui.postDelayed({ p.prepare(); p.play(); armWatchdog() }, 1500)
             return
         }
-        if (attemptIndex < attempts.size - 1) {
+        // En vivo no se insiste más de ~40 s: los canales de eventos solo transmiten a su hora
+        val tooLong = live && android.os.SystemClock.uptimeMillis() - zapStarted > 40_000
+        if (attemptIndex < attempts.size - 1 && !tooLong) {
             attemptIndex++
             retries = 0
-            // Se prueba la siguiente forma en silencio (sin aviso en pantalla)
+            if (live) showLoading(current(), attemptIndex)
             startAttempt()
             return
         }
-        errorView.text = "No se pudo reproducir este contenido.\n\n" + explain(error) +
+        hideLoading()
+        errorView.text = (if (live) "Este canal no está transmitiendo ahora.\n\nLos canales de eventos (los que empiezan con una hora) solo funcionan cuando el evento está en vivo.\n\n" + explain(error) else "No se pudo reproducir este contenido.\n\n" + explain(error)) +
             (if (live) "\n\nPrueba otro canal con ▲ ▼." else "\n\nVuelve atrás e intenta de nuevo.")
         errorView.visibility = View.VISIBLE
     }
@@ -574,7 +579,7 @@ class PlayerActivity : ComponentActivity() {
             if (!live) out.add(Attempt(u, isHls, "IPTVSmartersPro"))
             if (!live && u == url) out.add(Attempt(u, isHls, "okhttp/4.12.0"))
         }
-        return out.distinctBy { it.url + "|" + it.forceHls + "|" + it.ua }.take(24)
+        return out.distinctBy { it.url + "|" + it.forceHls + "|" + it.ua }.take(if (live) 8 else 24)
     }
 
     private fun startAttempt() {
@@ -623,7 +628,7 @@ class PlayerActivity : ComponentActivity() {
         }
     }
     // Los primeros intentos esperan menos (si no arranca rápido, mejor probar la versión de respaldo); los últimos, más
-    private fun armWatchdog() { ui.removeCallbacks(watchdog); ui.postDelayed(watchdog, if (attemptIndex < 3) 12000L else 20000L) }
+    private fun armWatchdog() { ui.removeCallbacks(watchdog); ui.postDelayed(watchdog, if (live) (if (attemptIndex < 3) 9000L else 12000L) else if (attemptIndex < 3) 12000L else 20000L) }
     private fun cancelWatchdog() { ui.removeCallbacks(watchdog) }
 
     /** announce: muestra el nombre arriba (solo al cambiar de canal con ▲▼, no al abrir). */
@@ -653,6 +658,13 @@ class PlayerActivity : ComponentActivity() {
             return
         }
         if (stk != null) item.put("stkReady", false)   // la próxima vez se vuelve a pedir un enlace fresco
+        // Al cambiar de canal se quita la imagen del anterior y se avisa que está cargando (antes parecía congelado)
+        zapStarted = android.os.SystemClock.uptimeMillis()
+        if (live) {
+            view.setKeepContentOnPlayerReset(false)
+            player?.stop()
+            showLoading(item, 0)
+        }
         val ref = item.optString("ref")
         http.setDefaultRequestProperties(if (ref.isNotBlank()) mapOf("Referer" to ref) else emptyMap())
         extSub = null; extSubName = ""; extOffset = 0L
@@ -679,6 +691,27 @@ class PlayerActivity : ComponentActivity() {
         info.animate().alpha(1f).setDuration(250).start()
         ui.removeCallbacksAndMessages("info")
         ui.postAtTime({ info.animate().alpha(0f).setDuration(400).withEndAction { info.visibility = View.GONE }.start() }, "info", android.os.SystemClock.uptimeMillis() + 4000)
+    }
+
+    // ---------- Cargando canal ----------
+    private var zapStarted = 0L
+    private var loadingShown = false
+    private fun showLoading(item: JSONObject, attempt: Int) {
+        val num = item.optString("num")
+        info.text = buildString {
+            append(if (attempt == 0) "Cargando canal…" else "Probando otra forma de abrirlo (" + (attempt + 1) + " de " + attempts.size.coerceAtLeast(attempt + 1) + ")…")
+            append("\n")
+            if (num.isNotBlank()) append(num).append("  ·  ")
+            append(item.optString("title"))
+        }
+        ui.removeCallbacksAndMessages("info")
+        info.animate().cancel(); info.alpha = 1f; info.visibility = View.VISIBLE
+        loadingShown = true
+    }
+    private fun hideLoading() {
+        if (!loadingShown) return
+        loadingShown = false
+        info.animate().alpha(0f).setDuration(300).withEndAction { info.visibility = View.GONE }.start()
     }
 
     private fun zap(delta: Int) {
