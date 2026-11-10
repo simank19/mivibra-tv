@@ -77,10 +77,11 @@ class TouchPadView(
         val cx = w - u * 0.27f
         val cy = h - u * 0.30f
         val gap = br * 1.45f
-        place("A", cx + gap, cy, br)
-        place("B", cx, cy + gap, br)
-        place("X", cx, cy - gap, br)
-        place("Y", cx - gap, cy, br)
+        // Como un mando de Xbox (igual que los mandos físicos en Android): A abajo, B derecha, X izquierda, Y arriba
+        place("A", cx, cy + gap, br)
+        place("B", cx + gap, cy, br)
+        place("X", cx - gap, cy, br)
+        place("Y", cx, cy - gap, br)
         // Gatillos arriba
         val sw = u * 0.20f
         val sh = u * 0.085f
