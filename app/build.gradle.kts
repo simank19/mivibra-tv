@@ -92,6 +92,9 @@ dependencies {
     implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
 
+    // Leer listas desde una foto o captura (reconocimiento de texto en el equipo, sin internet)
+    implementation("com.google.mlkit:text-recognition:16.0.1")
+
     // Servidor local para usar el celular como mando
     implementation("org.nanohttpd:nanohttpd-websocket:2.3.1")
 

@@ -53,6 +53,13 @@
       MV.toast('Llegó un portal' + (from ? ' desde ' + from : '') + ': conectando…', 4000);
       return MV.stkLogin(sl).then(function () { return MV.addList(sl); }).then(function () { done('Portal agregado: ' + sl.name); }, fail);
     }
+    if (type === 'text') {
+      // Varias listas pegadas (o leídas de una foto): se abren en "Varias" para revisarlas y confirmar en la TV
+      var t = String(o.text || '').slice(0, 200000);
+      if (!t.trim()) return Promise.reject(new Error('El texto llegó vacío'));
+      MV.toast('Llegaron listas' + (from ? ' desde ' + from : '') + ': revisa y toca Importar', 6000);
+      MV.multiWith(t); return Promise.resolve();
+    }
     return Promise.reject(new Error('Tipo de lista no reconocido'));
   };
   // Desde la página del celular (servidor de la TV)

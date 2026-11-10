@@ -293,6 +293,24 @@ class Bridge(private val a: MainActivity) {
         }
     }
 
+    /** Elige una imagen (foto o captura de una lista) y devuelve el texto que se lee en ella. */
+    @JavascriptInterface
+    fun ocrImage(id: String) {
+        a.runOnUiThread {
+            val i = Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*")
+            try {
+                a.startForResult(i) { res, data ->
+                    val uri = data?.data
+                    if (res != android.app.Activity.RESULT_OK || uri == null) reply(id, false, "cancel")
+                    else io.execute {
+                        try { reply(id, true, JSONObject().put("text", Ocr.fromUri(a, uri))) }
+                        catch (e: Exception) { reply(id, false, "No se pudo leer la imagen: " + (e.message ?: "")) }
+                    }
+                }
+            } catch (_: ActivityNotFoundException) { reply(id, false, "nopicker") }
+        }
+    }
+
     @JavascriptInterface
     fun readLocalFile(id: String, path: String) {
         io.execute {

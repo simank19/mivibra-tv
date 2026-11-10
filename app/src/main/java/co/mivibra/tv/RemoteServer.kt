@@ -56,6 +56,7 @@ class RemoteServer(private val ctx: Context, port: Int = PORT) : NanoWSD(port) {
         if (path == "/roms/upload" && session.method == NanoHTTPD.Method.POST) return romUpload(session)
         // Agregar una lista de TV desde el celular
         if (path == "/listas/add" && session.method == NanoHTTPD.Method.POST) return listAdd(session)
+        if (path == "/listas/image" && session.method == NanoHTTPD.Method.POST) return listImage(session)
         val asset = when {
             path == "/" || path == "/index.html" -> "www/pad.html"
             path == "/roms" || path == "/roms/" -> "www/roms.html"
@@ -82,16 +83,36 @@ class RemoteServer(private val ctx: Context, port: Int = PORT) : NanoWSD(port) {
             JSONObject().put("ok", ok).apply { if (msg.isNotEmpty()) put("error", msg) }.toString())
         return try {
             val len = (session.headers["content-length"]?.toIntOrNull() ?: 0)
-            if (len <= 0 || len > 16 * 1024) return reply(false, "Datos no válidos")
+            if (len <= 0 || len > 512 * 1024) return reply(false, "Datos no válidos")
             val buf = ByteArray(len); var off = 0
             while (off < len) { val r = session.inputStream.read(buf, off, len - off); if (r <= 0) break; off += r }
             val o = JSONObject(String(buf, 0, off, Charsets.UTF_8))
             val clean = JSONObject()
             for (k in listOf("type", "name", "url", "epg", "host", "user", "pass", "portal", "mac")) if (o.has(k)) clean.put(k, o.optString(k).take(2000))
-            if (clean.optString("type") !in listOf("url", "xtream", "stalker")) return reply(false, "Tipo de lista no válido")
+            if (o.has("text")) clean.put("text", o.optString("text").take(200000))
+            if (clean.optString("type") !in listOf("url", "xtream", "stalker", "text")) return reply(false, "Tipo de lista no válido")
             RemoteHub.listReceived(clean.toString())
             reply(true)
         } catch (e: Exception) { reply(false, e.message ?: "Error") }
+    }
+
+    /** Foto o captura de una lista enviada desde el celular: se lee el texto y se abre en "Varias" en la TV. */
+    private fun listImage(session: IHTTPSession): Response {
+        fun reply(ok: Boolean, msg: String = "", n: Int = 0) = NanoHTTPD.newFixedLengthResponse(if (ok) Response.Status.OK else Response.Status.BAD_REQUEST, "application/json",
+            JSONObject().put("ok", ok).put("chars", n).apply { if (msg.isNotEmpty()) put("error", msg) }.toString())
+        val len = session.headers["content-length"]?.toLongOrNull() ?: return reply(false, "Falta el tamaño")
+        if (len <= 0 || len > 25L * 1024 * 1024) return reply(false, "La imagen es muy grande")
+        val f = java.io.File(ctx.cacheDir, "lista-foto")
+        return try {
+            f.outputStream().use { out ->
+                val buf = ByteArray(64 * 1024); var left = len
+                while (left > 0) { val r = session.inputStream.read(buf, 0, minOf(buf.size.toLong(), left).toInt()); if (r <= 0) break; out.write(buf, 0, r); left -= r }
+            }
+            val text = Ocr.fromFile(f)
+            if (text.isBlank()) return reply(false, "No encontré texto en la imagen")
+            RemoteHub.listReceived(JSONObject().put("type", "text").put("text", text).toString())
+            reply(true, n = text.length)
+        } catch (e: Exception) { reply(false, e.message ?: "No se pudo leer la imagen") } finally { f.delete() }
     }
 
     // ---------------- ROMs desde el celular ----------------

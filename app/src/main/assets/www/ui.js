@@ -1674,32 +1674,27 @@
   var LSEL = null;
   function listKind(l) { return l.type === 'web' ? 'Página web · ' + (l.url || '') : l.type === 'jellyfin' ? 'Jellyfin' : l.type === 'plex' ? 'Plex' : l.type === 'xtream' ? 'Xtream Codes' : l.type === 'stalker' ? 'Portal MAC · ' + (l.mac || '') : l.type === 'file' ? 'Archivo' : 'Lista M3U'; }
   function selBar() {
-    if (S.lists.length < 2) return '';
+    if (edLists().length < 2) return '';
     if (!LSEL) return '<div class="btns" style="margin:4px 0 10px"><button class="btn ghost sm f" data-act="lselStart">' + IC.check + 'Seleccionar varias</button></div>';
-    var n = Object.keys(LSEL).length, hasErr = S.lists.some(function (l) { return l.error; }), hasMac = S.lists.some(function (l) { return l.type === 'stalker'; }), hasOff = S.lists.some(function (l) { return l.enabled === false; });
+    var n = Object.keys(LSEL).length, hasErr = edLists().some(function (l) { return l.error; }), hasMac = edLists().some(function (l) { return l.type === 'stalker'; }), hasOff = edLists().some(function (l) { return l.enabled === false; });
     return '<div class="selbar glass"><b>' + (n ? n + (n === 1 ? ' seleccionada' : ' seleccionadas') : 'Toca las listas que quieres borrar') + '</b><div class="chips">' +
       '<button class="chip f" data-act="lselPick" data-arg="all">Todas</button><button class="chip f" data-act="lselPick" data-arg="none">Ninguna</button>' +
       (hasErr ? '<button class="chip f" data-act="lselPick" data-arg="err">Las que fallan</button>' : '') +
       (hasOff ? '<button class="chip f" data-act="lselPick" data-arg="off">Desactivadas</button>' : '') +
-      (S.lists.some(function (l) { return !l.count; }) ? '<button class="chip f" data-act="lselPick" data-arg="empty">Con 0 elementos</button>' : '') +
+      (edLists().some(function (l) { return !l.count; }) ? '<button class="chip f" data-act="lselPick" data-arg="empty">Con 0 elementos</button>' : '') +
       (hasMac ? '<button class="chip f" data-act="lselPick" data-arg="mac">Portal MAC</button>' : '') + '</div>' +
       '<div class="btns"><button class="btn danger f" data-act="lselDelete"' + (n ? '' : ' disabled') + '>' + IC.trash + 'Eliminar' + (n ? ' (' + n + ')' : '') + '</button><button class="btn ghost f" data-act="lselCancel">Cancelar</button></div></div>';
   }
+  /** Listas que este equipo puede cambiar: todas (sin cuenta o superadministrador) o solo las propias del cliente. */
+  function edLists() { return MV.acct.canEdit() ? S.lists : S.lists.filter(function (l) { return MV.acct.isOwn(l); }); }
   SETTINGS.lists = function () {
+    var provBlock = '';
     if (!MV.acct.canEdit()) {
-      var kindOf = function (l) { return l.type === 'xtream' ? 'Xtream Codes' : l.type === 'stalker' ? 'Portal MAC' : l.type === 'jellyfin' ? 'Jellyfin' : l.type === 'plex' ? 'Plex' : l.type === 'file' ? 'Archivo' : 'Lista M3U'; };
-      var prov = S.lists.filter(function (l) { return !MV.acct.isOwn(l); }), own = S.lists.filter(function (l) { return MV.acct.isOwn(l); });
-      return '<div class="panel glass"><h2>Incluidas en tu servicio</h2><p>Estas listas las envía ' + esc((window.MV_CONFIG || {}).admin ? 'el superadministrador' : 'el administrador') + ' y se actualizan solas.</p>' +
-        (prov.length ? prov.map(function (l) { return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + kindOf(l) + ' · ' + (l.count || 0) + ' elementos</span></div></div>'; }).join('') : '<p class="muted">Aún no hay listas incluidas.</p>') + '</div>' +
-        '<div class="panel glass"><h2>Mis listas</h2><p>Agrega también tus propias listas (enlace M3U, Xtream o Portal MAC). Se suman a las incluidas y solo las ves tú.</p>' +
-        (own.length ? own.map(function (l) {
-          return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + kindOf(l) + ' · ' + (l.count || 0) + ' elementos' + (l.error ? ' · ' + esc(l.error) : '') + '</span></div>' +
-            '<button class="toggle f' + (l.enabled !== false ? ' on' : '') + '" data-act="listToggle" data-arg="' + l.id + '" aria-label="Activar lista"></button>' +
-            '<button class="iconbtn f" data-act="listEpg" data-arg="' + l.id + '" aria-label="Guía EPG">' + IC.guide + '</button>' +
-            '<button class="iconbtn f" data-act="listDelete" data-arg="' + l.id + '" aria-label="Eliminar">' + IC.trash + '</button></div>';
-        }).join('') : '<p class="muted">Aún no has agregado listas propias.</p>') +
-        '<div class="btns" style="margin-top:14px"><button class="btn f" data-act="addList">' + IC.plus + 'Agregar mi lista</button>' + (MV.listsWelcome ? '<button class="btn ghost f" data-act="listsWelcome">Desde el celular o la web</button>' : '') + '<button class="btn ghost f" data-act="reloadAll">' + IC.refresh + 'Actualizar todo</button></div></div>' + dupesPanel();
+      var prov = S.lists.filter(function (l) { return !MV.acct.isOwn(l); });
+      provBlock = '<div class="panel glass"><h2>Incluidas en tu servicio</h2><p>Estas listas las envía ' + esc((window.MV_CONFIG || {}).admin ? 'el superadministrador' : 'el administrador') + ' y se actualizan solas.</p>' +
+        (prov.length ? prov.map(function (l) { return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + esc(listKind(l)) + ' · ' + (l.count || 0) + ' elementos</span></div></div>'; }).join('') : '<p class="muted">Aún no hay listas incluidas.</p>') + '</div>';
     }
+    var ED = edLists();
     var share = '';
     if (MV.acct.isAdmin()) {
       var cl = ((MV.acct.config || {}).lists || []).length, mineN = S.lists.filter(function (l) { return l.type !== 'file'; }).length;
@@ -1707,9 +1702,9 @@
         '<div class="line"><div class="t"><b>' + (MV.acct.pushing ? 'Enviando…' : MV.acct.pushError ? 'No se pudo enviar' : cl === mineN ? '✓ ' + cl + (cl === 1 ? ' lista en la nube' : ' listas en la nube') : 'En la nube hay ' + cl + ' de ' + mineN + ' listas') + '</b><span>' + esc(MV.acct.pushError || (MV.acct.pushedAt ? 'Último envío: ' + MV.fmtTime(MV.acct.pushedAt) : 'Tus usuarios reciben estas listas, las claves y el orden del menú')) + '</span></div>' +
         '<button class="btn sm f" data-act="pushNow">' + IC.refresh + 'Enviar a todos ahora</button></div></div>';
     }
-    return share + '<div class="panel glass"><h2>Tus listas</h2><p>Todo el contenido de tus listas se combina: los canales repetidos aparecen una sola vez y se queda la señal que funciona.' + (MV.acct.isAdmin() ? ' <b>Eres superadministrador:</b> lo que cambies aquí llega a todos los usuarios (las listas en archivo solo quedan en este equipo; usa enlaces para compartirlas).' : '') + '</p>' +
+    return provBlock + share + '<div class="panel glass"><h2>' + (provBlock ? 'Mis listas' : 'Tus listas') + '</h2><p>' + (provBlock ? 'Agrega también tus propias listas: se suman a las incluidas y solo las ves tú. ' : '') + 'Todo el contenido de tus listas se combina: los canales repetidos aparecen una sola vez y se queda la señal que funciona.' + (MV.acct.isAdmin() ? ' <b>Eres superadministrador:</b> lo que cambies aquí llega a todos los usuarios (las listas en archivo solo quedan en este equipo; usa enlaces para compartirlas).' : '') + '</p>' +
       selBar() +
-      (S.lists.length ? S.lists.map(function (l) {
+      (ED.length ? ED.map(function (l) {
         if (LSEL) {
           var on = !!LSEL[l.id];
           return '<button class="line selrow f' + (on ? ' on' : '') + '" data-act="lselToggle" data-arg="' + l.id + '" data-fid="ls-' + l.id + '" aria-pressed="' + on + '"><i class="chk"></i><div class="t"><b>' + esc(l.name) + '</b><span>' + esc(listKind(l)) + ' · ' + (l.count || 0) + ' elementos' + (l.enabled === false ? ' · desactivada' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div></button>';
@@ -1718,7 +1713,7 @@
           '<button class="toggle f' + (l.enabled !== false ? ' on' : '') + '" data-act="listToggle" data-arg="' + l.id + '" aria-label="Activar lista"></button>' +
           '<button class="iconbtn f" data-act="listEpg" data-arg="' + l.id + '" aria-label="Guía EPG">' + IC.guide + '</button>' +
           '<button class="iconbtn f" data-act="listDelete" data-arg="' + l.id + '" aria-label="Eliminar">' + IC.trash + '</button></div>';
-      }).join('') : '<p class="muted">No has agregado listas.</p>') +
+      }).join('') : '<p class="muted">' + (provBlock ? 'Aún no has agregado listas propias.' : 'No has agregado listas.') + '</p>') +
       '<div class="line"><div class="t"><b>Solo español latino</b><span>Muestra únicamente contenido en español latino (o sin idioma indicado). En K-Drama y Anime también deja el subtitulado con idioma original. Oculta castellano, inglés y otros idiomas; en TV en vivo deja canales de Latinoamérica e hispanos de EE. UU.</span></div><button class="toggle f' + (P.latOnly ? ' on' : '') + '" data-act="latToggle" aria-label="Solo español latino"></button></div>' +
       '<div class="line"><div class="t"><b>Eliminar listas vacías</b><span>Si una lista carga con 0 elementos (vencida, MAC rechazada o enlace caído) se borra sola. Si antes funcionaba, espera a que llegue vacía dos veces seguidas para no borrarla por una falla pasajera.</span></div><button class="toggle f' + (P.pruneEmpty !== false ? ' on' : '') + '" data-act="pruneToggle" aria-label="Eliminar listas vacías"></button></div>' +
       '<div class="line"><div class="t"><b>Ocultar contenido repetido</b><span>Si una película, serie o canal está en varias listas (aunque se llame distinto, como "Animales" y "Animals"), se muestra una sola vez con la versión de mejor calidad: 4K, luego Full HD, HD y SD; latino primero. Las otras quedan de respaldo por si la principal falla.</span></div><button class="toggle f' + (P.dedupe !== false ? ' on' : '') + '" data-act="dedupeToggle" aria-label="Ocultar repetidos"></button></div>' +
@@ -2151,18 +2146,19 @@
       : tab === 'plex'
       ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi Plex" data-autofocus></label><label class="field">Dirección del servidor<input class="in f" id="lSrv" placeholder="http://192.168.1.10:32400" autocomplete="off" inputmode="url"></label><label class="field">Token de Plex (X-Plex-Token)<input class="in f" id="lTok" autocomplete="off"></label><p class="muted" style="font-size:13px;margin:-4px 0 8px">Puerto 32400 por defecto. El token lo ves en Plex Web: abre cualquier película › ⋯ › Obtener información › Ver XML; en la dirección que se abre aparece <code>X-Plex-Token=…</code>.</p><p id="lErr" style="color:#FF8A80;font-size:14px;margin:0 0 8px"></p>'
       : tab === 'stalker'
-      ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi proveedor" data-autofocus></label><label class="field">URL del portal<input class="in f" id="lPortal" placeholder="http://servidor:puerto/c/" autocomplete="off" inputmode="url"></label><label class="field">Dirección MAC<input class="in f" id="lMac" placeholder="00:1A:79:XX:XX:XX" autocomplete="off" style="text-transform:uppercase"></label><p class="muted" style="font-size:13px;margin:-4px 0 8px">Copia la URL y la MAC tal como te las envió tu proveedor (tipo MAG / Stalker). Cargar películas y series del portal puede tardar uno o dos minutos la primera vez.</p><div class="pastebox"><b>¿Tienes varias MAC o te las mandaron en un texto?</b><span>Pega el texto copiado (WhatsApp, correo…) o sube el archivo .txt: la app encuentra el portal y todas las MAC.</span><div class="btns"><button class="btn sm f" data-act="pasteText">Pegar texto</button><button class="btn ghost sm f" data-act="multiPick">Subir .txt</button></div></div><p id="lErr" style="color:#FF8A80;font-size:14px;margin:0 0 8px"></p>'
+      ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi proveedor" data-autofocus></label><label class="field">URL del portal<input class="in f" id="lPortal" placeholder="http://servidor:puerto/c/" autocomplete="off" inputmode="url"></label><label class="field">Dirección MAC<input class="in f" id="lMac" placeholder="00:1A:79:XX:XX:XX" autocomplete="off" style="text-transform:uppercase"></label><p class="muted" style="font-size:13px;margin:-4px 0 8px">Copia la URL y la MAC tal como te las envió tu proveedor (tipo MAG / Stalker). Cargar películas y series del portal puede tardar uno o dos minutos la primera vez.</p><div class="pastebox"><b>¿Tienes varias MAC o te las mandaron en un texto?</b><span>Pega el texto copiado (WhatsApp, correo…) o sube el archivo .txt: la app encuentra el portal y todas las MAC.</span><div class="btns"><button class="btn sm f" data-act="pasteText">Pegar texto</button><button class="btn ghost sm f" data-act="multiPick">Subir .txt</button><button class="btn ghost sm f" data-act="multiImage">Desde imagen</button></div></div><p id="lErr" style="color:#FF8A80;font-size:14px;margin:0 0 8px"></p>'
       : tab === 'xtream'
       ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi proveedor" data-autofocus></label><label class="field">Servidor<input class="in f" id="lHost" placeholder="http://servidor:puerto" autocomplete="off"></label><label class="field">Usuario<input class="in f" id="lUser" autocomplete="off"></label><label class="field">Contraseña<input class="in f" id="lPass" type="password"></label><p class="muted" style="font-size:13px;margin:-4px 0 8px">Servidor: solo la dirección y el puerto, por ejemplo http://servidor.com:8080</p><p id="lErr" style="color:#FF8A80;font-size:14px;margin:0 0 8px"></p>'
       : tab === 'file'
         ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Lista descargada" data-autofocus></label><p>Elige un archivo .m3u del dispositivo, una USB o el administrador de archivos.</p>'
         : '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi lista" data-autofocus></label><label class="field">Enlace de la lista M3U / M3U8<input class="in f" id="lUrl" placeholder="https://…/lista.m3u" autocomplete="off" inputmode="url"></label><label class="field">Guía EPG XMLTV (opcional)<input class="in f" id="lEpg" placeholder="https://…/guia.xml" autocomplete="off" inputmode="url"></label>';
     MV.modal('<h2>Agregar lista</h2><div class="chips">' + tabs.map(function (t) { return '<button class="chip f' + (t[0] === tab ? ' on' : '') + '" data-act="listTab" data-arg="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' + body +
-      '<div class="btns"><button class="btn f" data-act="listSave" data-arg="' + tab + '">' + (tab === 'xtream' || tab === 'stalker' || tab === 'jellyfin' || tab === 'plex' ? 'Conectar' : tab === 'web' ? 'Buscar videos' : tab === 'file' ? 'Elegir archivo' : tab === 'multi' ? 'Importar' : 'Cargar lista') + '</button>' + (tab === 'multi' ? '<button class="btn ghost f" data-act="pasteText">Pegar texto</button><button class="btn ghost f" data-act="multiPick">Subir .txt</button>' : '') + '<button class="btn ghost f" data-act="confirmNo">Cancelar</button></div>',
+      '<div class="btns"><button class="btn f" data-act="listSave" data-arg="' + tab + '">' + (tab === 'xtream' || tab === 'stalker' || tab === 'jellyfin' || tab === 'plex' ? 'Conectar' : tab === 'web' ? 'Buscar videos' : tab === 'file' ? 'Elegir archivo' : tab === 'multi' ? 'Importar' : 'Cargar lista') + '</button>' + (tab === 'multi' ? '<button class="btn ghost f" data-act="pasteText">Pegar texto</button><button class="btn ghost f" data-act="multiPick">Subir .txt</button><button class="btn ghost sm f" data-act="multiImage">Desde imagen</button>' : '') + '<button class="btn ghost f" data-act="confirmNo">Cancelar</button></div>',
       { onOpen: function (root) { var ta = root.querySelector('#lMulti'); if (ta) ta.addEventListener('input', multiCount); var cb = root.querySelector('#lMacBk'); if (cb) cb.addEventListener('change', multiCount); } });
   }
 
   /** Muestra la pestaña "Varias" con el texto del archivo elegido (si al volver del selector la ventana se cerró, se vuelve a abrir). */
+  MV.multiWith = function (txt) { if (view.name !== 'settings') MV.go('settings'); setTimeout(function () { multiWith(txt); }, 300); };
   function multiWith(txt) {
     var ta = document.getElementById('lMulti');
     if (!ta) { while (MV.modalOpen()) MV.closeModal(true); addListDialog('multi'); ta = document.getElementById('lMulti'); }
@@ -2220,6 +2216,14 @@
       };
       if (t) return done(t);
       if (navigator.clipboard && navigator.clipboard.readText) navigator.clipboard.readText().then(done, function () { done(''); }); else done('');
+    },
+    /** Foto o captura de pantalla de una lista: se leen las direcciones, usuarios y MAC del texto de la imagen. */
+    multiImage: function () {
+      if (!MV.native) return MV.toast('Disponible en la app instalada');
+      MV.call('ocrImage', []).then(function (d) {
+        if (!String(d.text || '').trim()) return MV.toast('No encontré texto en la imagen. Prueba con una foto más nítida.', 5000);
+        multiWith(d.text); MV.toast('Texto leído de la imagen: revisa y toca Importar', 5000);
+      }).catch(function (e) { if (e.message !== 'cancel') MV.toast(e.message === 'nopicker' ? 'Este equipo no tiene selector de archivos.' : e.message, 5000); });
     },
     multiPick: function () {
       MV.call('pickFile', []).then(function (d) { return fetch(d.path).then(function (r) { return r.text(); }); }).then(function (txt) {
@@ -2633,7 +2637,7 @@
     lselPick: function (k) {
       if (!LSEL) return;
       LSEL = {};
-      S.lists.forEach(function (l) { if (k === 'all' || (k === 'err' && l.error) || (k === 'off' && l.enabled === false) || (k === 'empty' && !l.count) || (k === 'mac' && l.type === 'stalker')) LSEL[l.id] = 1; });
+      edLists().forEach(function (l) { if (k === 'all' || (k === 'err' && l.error) || (k === 'off' && l.enabled === false) || (k === 'empty' && !l.count) || (k === 'mac' && l.type === 'stalker')) LSEL[l.id] = 1; });
       MV.rerender();
     },
     lselDelete: function () {

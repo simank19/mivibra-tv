@@ -27,6 +27,9 @@
   .msg.err { display: block; background: rgba(255,122,107,.15); color: #FFB4A9; }
   .tip { font-size: 13px; color: #8E877F; margin-top: 22px; }
   .hide { display: none; }
+  textarea { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,.2); background: #1A1715; color: #F3EFEA; font: inherit; font-size: 14px; resize: vertical; }
+  label.pick2 { display: block; text-align: center; margin: 14px 0 0; padding: 13px; border-radius: 12px; background: rgba(255,255,255,.08); color: #F3EFEA; font-weight: 700; font-size: 15px; }
+  .st { font-size: 13px; color: #8E877F; margin-top: 8px; }
   /* Marca */
   body { background: radial-gradient(120% 60% at 50% -10%, rgba(255,105,0,.22), transparent 60%), #0D0C0B; }
   header { justify-content: space-between; }
@@ -63,10 +66,13 @@
   <button data-t="url" class="on">Enlace M3U</button>
   <button data-t="xtream">Xtream</button>
   <button data-t="stalker">Portal + MAC</button>
+  <button data-t="text">Varias / foto</button>
 </div>
 
+<div id="nameBox">
 <label for="name">Nombre para reconocerla (opcional)</label>
 <input id="name" placeholder="Mi lista" maxlength="60">
+</div>
 
 <div class="pane on" data-p="url">
   <label for="url">Enlace de la lista (http://…)</label>
@@ -81,6 +87,16 @@
   <input id="user" autocomplete="off" autocapitalize="off">
   <label for="pass">Contraseña</label>
   <input id="pass" autocomplete="off" autocapitalize="off">
+</div>
+<div class="pane" data-p="text">
+  <label for="txt">Pega aquí lo que te mandaron (WhatsApp, correo…): varios enlaces, cuentas Xtream o un portal con muchas MAC</label>
+  <textarea id="txt" rows="7" placeholder="Deportes, http://servidor.com/lista.m3u&#10;http://servidor.com:8080/get.php?username=…&#10;Portal: http://servidor.com/c/&#10;00:1A:79:AB:CD:EF"></textarea>
+  <div id="photoBox">
+    <label class="pick2" for="img">📷 O envía una foto / captura de la lista</label>
+    <input id="img" type="file" accept="image/*" style="display:none">
+    <div class="st" id="imgSt"></div>
+  </div>
+  <div class="st">En la TV se abre todo para que revises y confirmes.</div>
 </div>
 <div class="pane" data-p="stalker">
   <label for="portal">URL del portal</label>
@@ -120,6 +136,16 @@
   }
   window.addEventListener('load', contact);
   if (local) { $('apk').remove(); document.querySelector('.steps').remove(); }
+  else $('photoBox').remove();   // la foto se lee en la TV: solo desde la misma red
+  if ($('img')) $('img').onchange = function () {
+    var f = this.files && this.files[0]; if (!f) return;
+    $('imgSt').textContent = 'Enviando la foto y leyendo el texto…';
+    fetch('/listas/image', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: f })
+      .then(function (r) { return r.json(); })
+      .then(function (r) { if (!r.ok) throw new Error(r.error || 'No se pudo leer'); $('imgSt').textContent = ''; show(true, '¡Listo! Mira la TV: se abrió el texto leído de la foto para que confirmes.'); })
+      .catch(function (e) { $('imgSt').textContent = ''; show(false, e.message || 'No se pudo enviar la foto'); });
+    this.value = '';
+  };
   if (!local) { $('codeBox').classList.remove('hide'); $('intro').textContent = 'Desde cualquier lugar: escribe el código de tu TV y pega los datos que te dio tu proveedor. La TV la recibe sola por internet.'; }
   var saved = ''; try { saved = localStorage.getItem('mvCode') || ''; } catch (e) {}
   if (!local && saved) $('code').value = saved;
@@ -130,12 +156,14 @@
       type = b.dataset.t;
       Array.prototype.forEach.call(document.querySelectorAll('.tabs button'), function (x) { x.classList.toggle('on', x === b); });
       Array.prototype.forEach.call(document.querySelectorAll('.pane'), function (p) { p.classList.toggle('on', p.dataset.p === type); });
+      $('nameBox').classList.toggle('hide', type === 'text');
     };
   });
   function show(ok, text) { var m = $('msg'); m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = text; }
   function val(id) { return $(id).value.trim(); }
   function data() {
     var o = { type: type, name: val('name') };
+    if (type === 'text') { o = { type: 'text', text: $('txt').value }; if (!o.text.trim()) throw new Error('Pega el texto con tus listas o envía una foto'); return o; }
     if (type === 'url') { o.url = val('url'); o.epg = val('epg'); if (!/^https?:\/\//i.test(o.url)) throw new Error('El enlace debe empezar con http:// o https://'); }
     if (type === 'xtream') { o.host = val('host'); o.user = val('user'); o.pass = $('pass').value; if (!/^https?:\/\//i.test(o.host) || !o.user) throw new Error('Escribe el servidor (con http://) y el usuario'); }
     if (type === 'stalker') {
