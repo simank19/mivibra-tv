@@ -74,8 +74,8 @@ object RetroArch {
             val bmp = Overlays.decode(src) ?: return null
             val hole = Overlays.hole(bmp); val bw = bmp.width; val bh = bmp.height; bmp.recycle()
             if (hole == null) { lastWhy = "el marco no tiene hueco para la pantalla"; return null }
-            val dm = android.util.DisplayMetrics()
-            @Suppress("DEPRECATION") (c.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager).defaultDisplay.getRealMetrics(dm)
+            // Tamaño de la ventana de las apps (en muchos TV 4K las apps dibujan a 1920x1080, no a 3840x2160)
+            val dm = c.resources.displayMetrics
             val sw = maxOf(dm.widthPixels, dm.heightPixels); val sh = minOf(dm.widthPixels, dm.heightPixels)
             val x = hole.left * sw / bw; val y = hole.top * sh / bh
             val w = hole.width() * sw / bw; val h = hole.height() * sh / bh
@@ -95,6 +95,12 @@ object RetroArch {
                 "input_overlay_hide_when_gamepad_connected = \"false\"",
                 "input_overlay_auto_scale = \"false\"",
                 "input_overlay_auto_rotate = \"false\"",
+                // Sin esto RetroArch pone su mando táctil de la consola encima del marco
+                "input_overlay_enable_autopreferred = \"false\"",
+                "input_overlay_show_inputs = \"0\"",
+                "input_overlay_aspect_adjust_landscape = \"0.000000\"",
+                "input_overlay_x_separation_landscape = \"0.000000\"", "input_overlay_y_separation_landscape = \"0.000000\"",
+                "input_overlay_x_offset_landscape = \"0.000000\"", "input_overlay_y_offset_landscape = \"0.000000\"",
                 "aspect_ratio_index = \"23\"",
                 "video_scale_integer = \"false\"",
                 "custom_viewport_x = \"$x\"", "custom_viewport_y = \"$y\"",
