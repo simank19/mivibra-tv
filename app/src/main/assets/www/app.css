@@ -673,8 +673,6 @@ html.lite .card .shine { display: none; }
 .card.f:focus-visible .th img:not(.logo), .card.f.kf .th img:not(.logo) { transform: scale(1.05); }
 /* Rendimiento: lo que no está en pantalla no se dibuja, y cada tarjeta se pinta aparte */
 .view-in > .row, #results > .row { content-visibility: auto; contain-intrinsic-size: auto 300px; }
-.card, .vcard, .bcard, .utile { contain: layout paint; }
-.card.f:focus-visible, .card.f.kf, .bcard:focus { contain: layout; }
 .strip { overscroll-behavior-x: contain; }
 /* TV: animaciones cortas y baratas (antes iban apagadas); el modo ligero las sigue quitando */
 html.tv .view-in { animation: fade .18s ease both !important; }
@@ -695,3 +693,7 @@ html.tv .card, html.tv .vcard, html.tv .bcard, html.tv .utile { contain: none; }
 html.tv .f { transition: none; }
 html.tv .f:active { transform: none; }
 html.tv .view-in > .row, html.tv #results > .row { contain-intrinsic-size: auto 380px; }
+
+/* TV: el foco siempre visible y sin efectos que cuesten */
+html.tv .f:focus-visible, html.tv .f.kf { box-shadow: 0 0 0 3px var(--accent) !important; }
+html.tv #modal { animation: none !important; }

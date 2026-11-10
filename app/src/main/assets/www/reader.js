@@ -97,7 +97,7 @@
     if (m.type === 'ready') { if (st) st.item = null; close(true); document.documentElement.classList.add('reader-open'); MV._mbOpen && MV._mbOpen(); }
     else if (m.type === 'closed') closeMb();
     else if (m.type === 'progress' && mbItem && m.id === mbItem.key) rememberRecent(mbItem, m.pct);
-    else if (m.type === 'cover' && m.id && /^data:image\//.test(m.data || '')) { var all = MV.load('bookCovers', {}) || {}, ks = Object.keys(all); if (ks.length > 80) delete all[ks[0]]; all[m.id] = m.data; MV.save('bookCovers', all); }
+    else if (m.type === 'cover' && m.id && /^data:image\//.test(m.data || '')) { var all = MV.load('bookCovers', {}) || {}, ks = Object.keys(all); if (ks.length > 80) delete all[ks[0]]; all[m.id] = m.data; MV.save('bookCovers', all); coverMem = null; }
   });
   MV.mbOpen = function () { return !!mb; };
 
@@ -290,12 +290,15 @@
         var w = 260, h = Math.round(im.naturalHeight * w / (im.naturalWidth || 1)) || 390, c = document.createElement('canvas');
         c.width = w; c.height = Math.min(h, 520); c.getContext('2d').drawImage(im, 0, 0, w, h);
         var keys = Object.keys(all); if (keys.length > 80) delete all[keys[0]];
-        all[key] = c.toDataURL('image/jpeg', 0.78); MV.save('bookCovers', all);
+        all[key] = c.toDataURL('image/jpeg', 0.78); MV.save('bookCovers', all); coverMem = null;
       } catch (e) {}
     };
     im.src = url;
   }
-  MV.bookCover = function (key) { var all = MV.load('bookCovers', {}) || {}; return all[key] || ''; };
+  // Se lee una sola vez (no en cada tarjeta) y se refresca al guardar una portada nueva
+  var coverMem = null;
+  MV.bookCover = function (key) { if (!coverMem) coverMem = MV.load('bookCovers', {}) || {}; return coverMem[key] || ''; };
+  MV.bookCoverReset = function () { coverMem = null; };
 
   var THEMES = { dark: ['#141210', '#E9E3DB'], sepia: ['#F4ECD8', '#3B3024'], light: ['#FFFFFF', '#1A1A1A'] };
   function chapterHtml(i) {
