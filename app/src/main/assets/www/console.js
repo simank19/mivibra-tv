@@ -12,17 +12,26 @@
   function systems() { return (window.MVD || {}).SYSTEMS || []; }
 
   // ---------------- Datos ----------------
+  // Con miles de juegos (Google Drive) leer y ordenar la lista es pesado: se guarda el resultado mientras la lista no cambie
+  var romsCache = { raw: null, list: [] };
   function roms() {
+    var raw = null; try { raw = localStorage.getItem('mv:roms'); } catch (e) {}
+    if (raw !== null && raw === romsCache.raw) return romsCache.list;
     var list = (MV.load('roms', []) || []).filter(function (r) { return MV.isGame ? MV.isGame(r) : true; });
     list = list.filter(function (r) { return r.ext !== 'exe' || /doukutsu\.exe$/i.test(r.name); }).filter(function (r) { return r.ext !== 'pak' || /^pak0\.pak$/i.test(r.name); });
     // El mismo juego repetido (enviado dos veces, o en .zip y suelto) sale una sola vez
     var seen = {};
-    return list.filter(function (r) {
+    list = list.filter(function (r) {
       var s = MV.romSystem(r), k = title(r).toLowerCase() + '|' + (s ? s.id : '?');
       if (seen[k]) return false; seen[k] = 1; return true;
     });
+    romsCache = { raw: raw, list: list };
+    return list;
   }
-  function title(r) { var nt = MV.romTitle && MV.romTitle(r); if (nt) return nt;
+  function romsRaw() { try { return localStorage.getItem('mv:roms') || ''; } catch (e) { return ''; } }
+  var titles = {};
+  function title(r) { var c = titles[r.path]; if (c) return c; return (titles[r.path] = title0(r)); }
+  function title0(r) { var nt = MV.romTitle && MV.romTitle(r); if (nt) return nt;
     return (MV.cleanRomName && MV.cleanRomName(r.name)) || String(r.name || '').replace(/\.[^.]+$/, '').replace(/\s*[\(\[][^\)\]]*[\)\]]/g, '').replace(/_/g, ' ').trim() || r.name; }
   // Portadas de la base pública de libretro (por nombre No-Intro / Redump del archivo)
   function thumb(r, s) {
@@ -116,18 +125,18 @@
     var all = roms(), by = {};
     all.forEach(function (r) { var s = MV.romSystem(r); var id = s ? s.id : '?'; (by[id] = by[id] || []).push(r); });
     var shelves = systems().filter(function (s) { return by[s.id]; }).map(function (s) {
-      var list = by[s.id].sort(function (a, b) { return title(a).localeCompare(title(b)); });
+      var list = by[s.id].map(function (r) { return [title(r).toLowerCase(), r]; }).sort(function (a, b) { return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0; }).map(function (x) { return x[1]; });
       return '<div class="cshelf" data-sys="' + s.id + '"><h3 style="--c:' + s.color + '"><i>' + (MV.sysIcon ? MV.sysIcon(s.id) : esc(s.mono)) + '</i>' + esc(s.name) + '<small>' + list.length + (MV.gameEngine(s) === 'retroarch' ? ' · RetroArch' : '') + '</small></h3>' +
         '<div class="crow cshelfrow">' + list.slice(0, 150).map(function (r) { return tile(r, false); }).join('') + '</div></div>';
     });
-    if (by['?']) shelves.push('<div class="cshelf" data-sys="?"><h3 style="--c:#6B7280"><i>?</i>Sin sistema<small>' + by['?'].length + ' · OK para elegir</small></h3><div class="crow cshelfrow">' + by['?'].map(function (r) { return tile(r, false); }).join('') + '</div></div>');
+    if (by['?']) shelves.push('<div class="cshelf" data-sys="?"><h3 style="--c:#6B7280"><i>?</i>Sin sistema<small>' + by['?'].length + ' · OK para elegir</small></h3><div class="crow cshelfrow">' + by['?'].slice(0, 150).map(function (r) { return tile(r, false); }).join('') + '</div></div>');
     return topBar() + '<section class="clib">' + (shelves.length ? shelves.join('') : '<div class="cnone"><h2>Aún no hay juegos</h2><p>Conecta tu USB y usa “Buscar juegos”, o usa “Enviar desde el celular” en el Inicio.</p></div>') + '</section>' + '<div class="csel cinfo"><div class="cshot"><img id="cshot" alt=""></div><div class="ctxt"><b id="ctitle"></b><span id="csys"></span><p id="cdesc"></p></div></div>' + hints('Inicio');
   }
 
   function render(focusSel) {
-    reg = {};
+    reg = {}; titles = {};
     box.innerHTML = tab === 'home' ? homeHtml() : tab === 'lib' ? libHtml() : optsHtml();
-    lastCount = roms().length;
+    lastCount = romsRaw().length;
     tick();
     var f = (focusSel && $(focusSel, box)) || $('.cgames .cf, .cshelfrow .cf, .coptrow .cf', box) || $('.ctab.on', box);
     if (f) focus(f, true);
@@ -367,7 +376,7 @@
     setTimeout(function () { if (box && !MV.modalOpen() && MV.tourRun) MV.tourRun('console'); }, 1200);
     clockT = setInterval(tick, 15000);
     // Buscar juegos, BIOS o cambio de sistema: se actualiza solo cuando cambia la lista
-    watchT = setInterval(function () { if (!MV.modalOpen() && !(MV.tourOpen && MV.tourOpen()) && roms().length !== lastCount) render(); }, 1200);
+    watchT = setInterval(function () { if (!MV.modalOpen() && !(MV.tourOpen && MV.tourOpen()) && romsRaw().length !== lastCount) render(); }, 1500);
   }
   function autoCovers() {
     if (!box || !MV.scrapeCoversAll) return;

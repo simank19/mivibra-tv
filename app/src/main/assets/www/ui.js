@@ -1628,6 +1628,8 @@
   var ZIPX = MV.load('zipExts', {}) || {}, zipSaveT = null;
   function zipInner(r) {
     if (ZIPX[r.path] && ZIPX[r.path].length) return ZIPX[r.path];
+    // Juegos de Google Drive: no están en el equipo hasta jugarlos (no se puede mirar adentro)
+    if (/^gdrive:/.test(r.path || '')) return [];
     var out = [];
     if (A && A.zipExts && !/^content:/.test(r.path)) { try { out = JSON.parse(A.zipExts(r.path)) || []; } catch (e) {} }
     ZIPX[r.path] = out;
@@ -1639,6 +1641,7 @@
   function arcId(r) {
     if (!r || !/^(zip|7z|rar)$/.test(r.ext || '')) return null;
     if (ARCX[r.path]) return ARCX[r.path];
+    if (/^gdrive:/.test(r.path || '')) return null;
     if (r.path in ARCX && ARCX[r.path] === null && arcTried[r.path]) return null;
     arcTried[r.path] = 1;
     var out = null;
