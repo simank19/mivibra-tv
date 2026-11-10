@@ -27,7 +27,7 @@
 #intro.play .s2{animation:i-show 4.35s 2.1s both}
 #intro.play .s2 h2{animation:i-up 0.9s 2.25s both}
 #intro.play .sec{animation:i-card 0.83s calc(2.47s + var(--i)*0.2s) cubic-bezier(.16,1,.3,1) both, i-glow 0.75s calc(4.35s + var(--i)*0.14s) both}
-@keyframes i-up{from{opacity:0;transform:translateY(.9em);clip-path:inset(0 0 100% 0);letter-spacing:.12em}to{opacity:1;transform:none;clip-path:inset(-20% -20% -20% -20%);letter-spacing:inherit}}
+@keyframes i-up{from{opacity:0;transform:translateY(1em)}to{opacity:1;transform:none}}
 @keyframes i-card{from{opacity:0;transform:perspective(40em) translateY(2.6em) rotateX(-55deg) scale(.86)}to{opacity:1;transform:perspective(40em) rotateX(0)}}
 @keyframes i-glow{50%{transform:scale(1.08);box-shadow:0 0 2.5em color-mix(in srgb,var(--c) 70%,transparent)}}
 /* 3. Consolas */
@@ -84,3 +84,15 @@
 #intro.out{transition:opacity .5s,transform .5s;transform:scale(1.04)}
 html.lite #intro::after{animation:none!important}
 html.lite #intro *{filter:none!important}
+
+/* TV: versión liviana (sin desenfoques, sin fondo animado ni giros 3D) para que no se trabe */
+html.tv #intro::after{display:none}
+html.tv #intro .logo::after,html.tv #intro .s1::before{display:none}
+@keyframes i-pop-tv{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes i-card-tv{from{opacity:0;transform:translateY(2em)}to{opacity:1;transform:none}}
+html.tv #intro.play .s1 .logo{animation:i-pop-tv 1.2s .22s ease-out both}
+html.tv #intro.play .s4 .logo{animation:i-pop-tv 1s 9.07s ease-out both}
+html.tv #intro.play .s3 .center{animation:i-pop-tv 1s 6.45s ease-out both}
+html.tv #intro.play .sec{animation:i-card-tv .6s calc(2.47s + var(--i)*0.2s) ease-out both}
+html.tv #intro .logo,html.tv #intro .cons{filter:none!important}
+html.tv #intro.out{transform:none}

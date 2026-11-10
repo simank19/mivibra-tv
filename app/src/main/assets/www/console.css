@@ -193,3 +193,6 @@ html.lite #console *, html.no-anim #console * { animation: none !important; }
 .cshot { display: none !important; }
 #console { image-rendering: auto; transition: none; }
 .csel.cinfo { height: auto; min-height: 7.6em; background: rgba(14,13,12,.88); }
+
+/* TV: sin animaciones de entrada ni transiciones en la consola */
+html.tv #console, html.tv #console * { animation: none !important; transition: none !important; }

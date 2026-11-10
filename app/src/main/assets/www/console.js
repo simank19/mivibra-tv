@@ -32,8 +32,10 @@
   }
   function cover(r, s, cls) {
     var c = s ? s.color : '#6B7280', t = thumb(r, s);
+    // Si la base de carátulas no tiene el juego, se usa la imagen de su ficha (Wikipedia)
+    var gm = MV.gameMeta ? MV.gameMeta(r) : null, alt = gm && gm.img && !gm.unsure ? gm.img : '';
     return '<span class="cv ' + (cls || '') + '" style="--c:' + c + '"><i class="mono">' + (MV.sysIcon ? MV.sysIcon(s ? s.id : '?') : esc(s ? s.mono : '?')) + '</i><b class="nm">' + esc(title(r)) + '</b>' +
-      (t ? '<img loading="lazy" src="' + esc(t) + '" alt="" onload="this.parentNode.classList.add(\'art\')" onerror="this.remove()">' : '') + '</span>';
+      (t || alt ? '<img loading="lazy" src="' + esc(t || alt) + '"' + (t && alt ? ' data-alt="' + esc(alt) + '"' : '') + ' alt="" onload="this.parentNode.classList.add(\'art\')" onerror="var a=this.getAttribute(\'data-alt\');if(a){this.removeAttribute(\'data-alt\');this.src=a}else this.remove()">' : '') + '</span>';
   }
   var reg = {};
   var delMode = false, editMode = false;
