@@ -66,6 +66,9 @@ object RetroArch {
             .putExtra("EXTERNAL", ext)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
         if (!File(rom).exists()) throw IllegalStateException("No se encuentra la ROM")
-        c.startActivity(i)
+        // Si RetroArch quedó abierto de la vez anterior (se salió con Inicio), queda trabado al recibir otro juego:
+        // se cierra primero (solo funciona porque está en segundo plano mientras MiVibra está en pantalla)
+        try { (c.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager).killBackgroundProcesses(p) } catch (_: Exception) {}
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ try { c.startActivity(i) } catch (_: Exception) {} }, 400)
     }
 }
