@@ -1,0 +1,48 @@
+/* Lector de libros, mangas y cómics */
+#reader { position: fixed; inset: 0; z-index: 60; background: #0A0908; color: #F3EFEA; display: flex; flex-direction: column; font-family: var(--ui); }
+#reader.rd-sepia { background: #F4ECD8; } #reader.rd-light { background: #fff; }
+html.reader-open #app, html.reader-open .navbar, html.reader-open nav { visibility: hidden; }
+#reader .rdbar { position: absolute; left: 0; right: 0; top: 0; z-index: 3; display: flex; align-items: center; gap: 12px; padding: 14px 18px 26px;
+  background: linear-gradient(rgba(10,9,8,.95), rgba(10,9,8,.0)); transform: translateY(-110%); transition: transform .25s var(--ease, ease); }
+#reader.rdshow .rdbar, #reader .rdbar:focus-within { transform: none; }
+#reader .rdt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+#reader .rdt b { font: 700 18px var(--ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#reader .rdt span { font-size: 13px; color: #B9B1A8; }
+#reader .rdtools { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+#reader .rdb { height: 40px; min-width: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,.18); background: rgba(30,27,24,.85); color: #F3EFEA; font: 600 14px var(--ui); cursor: pointer; }
+#reader .rdb:focus, #reader .rdb:hover { background: var(--accent, #FF6900); color: #0D0C0B; border-color: var(--accent, #FF6900); outline: none; }
+#reader .rdbody { flex: 1; overflow: auto; position: relative; scrollbar-width: thin; }
+#reader .rdload { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; gap: 10px; padding: 30px; }
+#reader .rdload .btn { justify-self: center; }
+/* Página por página */
+#reader .rdpage { position: absolute; inset: 0; overflow: auto; display: flex; justify-content: center; align-items: flex-start; }
+#reader .rdpage.fit-height { align-items: center; }
+#reader .rdpage.fit-height img { max-height: 100%; max-width: 100%; object-fit: contain; }
+#reader .rdpage.fit-width img { width: 100%; max-width: 1400px; height: auto; }
+#reader .rdpage canvas { display: block; margin: 0 auto; box-shadow: 0 0 40px rgba(0,0,0,.5); background: #fff; }
+/* Tira vertical (webtoon) */
+#reader .rdstrip { display: flex; flex-direction: column; align-items: center; }
+#reader .rdstrip img { display: block; width: 100%; max-width: 900px; height: auto; min-height: 200px; background: #151311; }
+#reader .rdstrip .rdpdfp { width: 100%; max-width: 1000px; margin-bottom: 8px; background: #151311; }
+#reader .rdepub { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: transparent; }
+#reader .rdhint { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); background: rgba(14,13,12,.9); color: #F3EFEA; padding: 10px 18px; border-radius: 999px; font-weight: 700; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 4; }
+#reader .rdhint.on { opacity: 1; }
+@media (max-width: 760px) { #reader .rdbar { flex-wrap: wrap; } #reader .rdtools { width: 100%; justify-content: flex-start; } #reader .rdb { height: 36px; font-size: 13px; padding: 0 11px; } }
+
+/* Sección Lectura */
+.bookgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; }
+html.tv .bookgrid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+.bcard { text-align: left; background: none; border: 0; color: var(--text); padding: 0; cursor: pointer; border-radius: 14px; }
+.bcard .bc { aspect-ratio: 2/3; border-radius: 12px; overflow: hidden; position: relative; background: linear-gradient(160deg, color-mix(in srgb, var(--h) 70%, #000), color-mix(in srgb, var(--h) 25%, #0A0908)); background-color: #2A2420; display: grid; place-items: end start; box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+.bcard .bc img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.bcard .bc i { position: relative; font-style: normal; font: 800 17px var(--brand, var(--ui)); padding: 12px; line-height: 1.1; text-shadow: 0 2px 8px rgba(0,0,0,.6); }
+.bcard .bc em { position: absolute; top: 8px; left: 8px; font-style: normal; font: 800 11px var(--ui); letter-spacing: .5px; padding: 3px 8px; border-radius: 999px; background: rgba(0,0,0,.6); color: #fff; z-index: 1; }
+.bcard .bp { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(255,255,255,.2); z-index: 1; } .bcard .bp b { display: block; height: 100%; background: var(--accent); }
+.bcard > b { display: block; margin-top: 8px; font: 700 14px var(--ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bcard > span { font-size: 12px; color: var(--muted); }
+
+.strip .bcard { flex: 0 0 150px; width: 150px; } html.tv .strip .bcard { flex-basis: 170px; width: 170px; }
+.bcard .bc::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 75% 25%, rgba(255,255,255,.18), transparent 45%), repeating-linear-gradient(0deg, transparent 0 18px, rgba(255,255,255,.04) 18px 19px); }
+.bcard .bc img + i, .bcard .bc img ~ i { display: none; }
+.bcard:focus { outline: none; } .bcard:focus .bc { box-shadow: 0 0 0 3px var(--accent), 0 12px 30px rgba(0,0,0,.5); transform: scale(1.03); }
+.bcard .bc { transition: transform .2s, box-shadow .2s; }

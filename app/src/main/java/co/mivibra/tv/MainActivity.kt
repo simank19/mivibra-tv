@@ -52,6 +52,7 @@ class MainActivity : ComponentActivity() {
             .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
             .addPathHandler("/net/", WebViewAssetLoader.InternalStoragePathHandler(this, File(cacheDir, "net").apply { mkdirs() }))
             .addPathHandler("/media/", MediaFiles(this))
+            .addPathHandler("/books/", WebViewAssetLoader.InternalStoragePathHandler(this, File(cacheDir, "books").apply { mkdirs() }))
             .build()
 
         web = WebView(this)

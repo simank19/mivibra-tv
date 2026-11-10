@@ -171,8 +171,20 @@
 
   // Pistas de que una entrada es un canal en vivo aunque su enlace termine en .mp4/.flv
   var LIVE_HINT = /\b(live|en vivo|tv|television|televisi[oó]n|channel|canal|news|noticias|radio|web|24\/7|24h|fm)\b|\(\d{3,4}[pi]\)|\[(geo|not 24\/7)/i;
+  // Libros, mangas, cómics y revistas que traen algunas listas (PDF, EPUB, CBZ/CBR/CB7)
+  var BOOK_EXT = /\.(pdf|epub|cbz|cbr|cb7)(\?|#|$)/i;
+  var BOOK_GROUP = /\b(libros?|books?|e-?books?|mangas?|manhwas?|manhuas?|webtoons?|c[oó]mics?|comix|historietas?|novelas? gr[aá]ficas?|revistas?|magazines?|lectura)\b/i;
+  function bookKind(e) {
+    var g = (e.group || '') + ' ' + (e.name || '');
+    if (/manga|manhwa|manhua|webtoon/i.test(g)) return 'manga';
+    if (/c[oó]mic|comix|historieta|novela gr[aá]fica/i.test(g) || /\.(cbz|cbr|cb7)(\?|#|$)/i.test(e.url || '')) return 'comic';
+    if (/revista|magazine/i.test(g)) return 'revista';
+    return 'libro';
+  }
+  MV.BOOK_EXT = BOOK_EXT;
   function classify(e, liveList) {
     var u = e.url || '', g = (e.group || '') + ' ' + e.name;
+    if (BOOK_EXT.test(u) || (BOOK_GROUP.test(e.group || '') && /\.(zip|rar|7z)(\?|#|$)/i.test(u))) return 'book';
     if (/\/movie\//i.test(u)) return 'movie';
     if (/\/series\//i.test(u)) return 'episode';
     var isFile = VIDEO_EXT.test(u);
@@ -241,6 +253,9 @@
         if (!s) { s = seriesMap[sk] = tags({ key: sk, type: 'series', name: sn, poster: e.logo, group: e.group, list: list.id, episodes: [] }); res.push(s); }
         var m = e.name.match(RX.episode) || [];
         s.episodes.push({ season: +(m[1] || m[3] || 1), ep: +(m[2] || m[4] || s.episodes.length + 1), title: MV.noEmoji(e.name), url: e.url, ua: e.ua, ref: e.ref });
+      } else if (t === 'book') {
+        var fx = (String(e.url).split(/[?#]/)[0].match(/\.(\w{2,4})$/) || ['', ''])[1].toLowerCase();
+        res.push({ key: 'book:' + MV.norm(e.name) + ':' + MV.hash(e.url), type: 'book', name: MV.noEmoji(e.name) || e.name, poster: e.logo, group: MV.noEmoji(e.group || ''), url: e.url, ua: e.ua, ref: e.ref, list: list.id, fmt: fx, kind: bookKind(e) });
       } else if (t === 'movie') {
         var y = (e.name.match(/\((19|20)\d{2}\)/) || [''])[0].replace(/[()]/g, '');
         res.push(tags({ key: 'movie:' + MV.norm(e.name), type: 'movie', name: e.name, poster: e.logo, group: e.group, url: e.url, ua: e.ua, ref: e.ref, year: y, list: list.id }));
@@ -836,12 +851,12 @@
   };
 
   // ---------- Carga y combinación de todas las listas ----------
-  function retag(o) { try { return tags(o); } catch (e) { return o; } }
+  function retag(o) { if (o.type === 'book') return o; try { return tags(o); } catch (e) { return o; } }
   function loadList(list, force) {
     var ck = 'list:' + list.id;
     return MV.idbGet(ck).then(function (cached) {
       // Las páginas web se actualizan cada hora (tus series nuevas aparecen solas); lo demás cada 12 horas
-      var fresh = cached && cached.ts > Date.now() - (list.type === 'web' ? 3600e3 : 12 * 3600e3) && cached.v === 6;
+      var fresh = cached && cached.ts > Date.now() - (list.type === 'web' ? 3600e3 : 12 * 3600e3) && cached.v === 7;
       // Lo guardado se vuelve a clasificar con las reglas actuales (+18, infantil, géneros, sin emojis)
       if (cached && !force && fresh) return cached.items.map(retag);
       var job;
@@ -859,7 +874,7 @@
         list.count = items.length; list.updated = Date.now(); list.error = '';
         // Para borrar listas vacías sin equivocarse: se recuerda si alguna vez trajo contenido y cuántas veces seguidas llegó vacía
         if (items.length) { list.hadItems = true; list.zeroLoads = 0; } else list.zeroLoads = (list.zeroLoads || 0) + 1;
-        MV.idbSet(ck, { ts: Date.now(), v: 6, items: items });
+        MV.idbSet(ck, { ts: Date.now(), v: 7, items: items });
         return items;
       }).catch(function (e) {
         list.error = e.message || 'Error';
@@ -1030,6 +1045,10 @@
     }, 8000);
   };
   function combine(all) {
+    // Libros y mangas van aparte (sección Lectura); no se mezclan con películas ni canales
+    var books = [], seenBook = {};
+    all = all.map(function (arr) { return arr.filter(function (it) { if (it.type !== 'book') return true; if (!seenBook[it.url]) { seenBook[it.url] = 1; books.push(it); } return false; }); });
+    S.books = books; S.bookByKey = {}; books.forEach(function (b) { S.bookByKey[b.key] = b; });
     var byKey = {}, byName = {}, byId = {}, byTid = {}, items = [], dedupe = P.dedupe !== false, hidden = {}, pairs = [];
     // Carátulas que se repiten mucho (genéricas del proveedor) no sirven para reconocer duplicados
     var posterUse = {};

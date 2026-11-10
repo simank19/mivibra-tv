@@ -424,6 +424,15 @@ class Bridge(private val a: MainActivity) {
         }
     }
 
+    /** Abre un libro, manga o cómic (descarga y prepara las páginas). */
+    @JavascriptInterface
+    fun openBook(id: String, json: String) {
+        io.execute {
+            try { reply(id, true, Books.open(a, JSONObject(json)) { progress(id, it) }) }
+            catch (e: Exception) { reply(id, false, e.message ?: "No se pudo abrir") }
+        }
+    }
+
     @JavascriptInterface
     fun hasStorageAccess(): Boolean = Storage.hasAllFilesAccess(a)
 

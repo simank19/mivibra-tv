@@ -98,7 +98,7 @@
   };
 
   /** Qué botón del menú se ilumina: la Guía es parte de En vivo y YouTube, Música, Radio, Navegador y Juegos de Utilidades. */
-  var UTILS = [['youtube', 'YouTube', 'yt', 'Videos, tendencias y búsqueda'], ['music', 'Música', 'music', 'Tu música y música libre'], ['radio', 'Radio', 'radio', 'Emisoras de Colombia y el mundo'], ['browser', 'Navegador', 'globe', 'Con bloqueador de anuncios'], ['games', 'Juegos', 'games', 'Consolas clásicas y ports']];
+  var UTILS = [['youtube', 'YouTube', 'yt', 'Videos, tendencias y búsqueda'], ['music', 'Música', 'music', 'Tu música y música libre'], ['radio', 'Radio', 'radio', 'Emisoras de Colombia y el mundo'], ['browser', 'Navegador', 'globe', 'Con bloqueador de anuncios'], ['games', 'Juegos', 'games', 'Consolas clásicas y ports'], ['books', 'Lectura', 'book', 'Mangas, cómics, libros y revistas']];
   function navOwner(name) {
     if (name === 'guide') return 'live';
     if (name === 'adult' || name === 'streams' || name === 'webvids' || name === 'webseries') return 'utils';
@@ -563,6 +563,14 @@
     html += row('K-Drama', kd.slice(0, 30), 'poster', '', 'kdrama');
     var docs = MV.visible(S.items.filter(function (i) { return i.doc && i.type !== 'live'; }));
     html += row('Documentales', docs.slice(0, 30), 'poster', '', 'docs');
+    var bks = visibleBooks();
+    if (bks.length) {
+      var rr = MV.readRecent ? MV.readRecent() : [];
+      var firstB = rr.map(function (r) { return S.bookByKey && S.bookByKey[r.key]; }).filter(Boolean);
+      html += '<section class="row"><h3>Mangas y libros <small>' + bks.length + ' para leer</small></h3><div class="strip">' +
+        firstB.concat(bks.filter(function (b) { return firstB.indexOf(b) < 0; })).slice(0, 24).map(bookCard).join('') +
+        '<button class="btn ghost sm f" style="align-self:center;flex:0 0 auto" data-act="nav" data-arg="books">Ver todo</button></div></section>';
+    }
     html += '<div id="archiveRow"></div>';
     return html;
   };
@@ -1525,7 +1533,7 @@
     if (/^(readme|license|licence|changelog|copying|authors|contributing|notice|history|install)\b/i.test(low)) return false;
     if (own && /\/_bios\//.test(path)) return false;
     // Lo que enviaste desde el celular siempre aparece (si no se sabe la consola, en "Sin sistema")
-    if (own) return !/\.(part|tmp|txt|nfo|jpg|png|srm|state)$/i.test(low);
+    if (own) return !/\.(part|tmp|txt|nfo|jpg|png|srm|state|pdf|epub|cbz|cbr|cb7)$/i.test(low);
     var mine = own || path.indexOf('/co.mivibra.tv/') >= 0 || ROM_DIR.test(path + '/');
     if (ext === 'zip' || ext === '7z' || ext === 'rar') return mine;                                 // .zip solo en carpetas de juegos (roms, arcade…)
     if (ext === 'm3u') return /psx|ps1|playstation/.test(path);      // .m3u también son listas de TV
@@ -2776,6 +2784,22 @@
         .catch(function (e) { if (e.message !== 'cancel') MV.toast(e.message === 'nopicker' ? 'Este equipo no tiene selector de carpetas: usa la lista de unidades y permite el acceso.' : e.message, 4500); });
     },
     /** Elegir uno o varios juegos con el selector de archivos (celular y PC; no necesita permisos especiales). */
+    openBook: function (key) {
+      var b = (S.bookByKey && S.bookByKey[key]) || MV.reg[key];
+      if (!b) { var r = (MV.readRecent ? MV.readRecent() : []).filter(function (x) { return x.key === key; })[0]; if (r) b = r; }
+      if (b) MV.openBook(b);
+    },
+    bookTab: function (k) { BOOKF = k; BOOKLIM = 120; MV.rerender(); },
+    bookMore: function () { BOOKLIM += 120; MV.rerender(); },
+    bookFile: function () {
+      if (!A || !A.pickFiles) return MV.toast('Disponible en la app instalada');
+      MV.call('pickFiles', []).then(function (items) {
+        var f = (items || []).filter(function (x) { return /^(pdf|epub|cbz|cbr|cb7|zip|rar|7z)$/i.test(x.ext || ''); })[0];
+        if (!f) return MV.toast('Elige un PDF, EPUB, CBZ, CBR o CB7', 4500);
+        var name = String(f.name).replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ');
+        MV.openBook({ key: 'file:' + f.path, name: name, path: f.path, type: 'book', fmt: f.ext, kind: /^cb|zip|rar|7z/i.test(f.ext) ? 'comic' : 'libro' });
+      }).catch(function (e) { if (e.message !== 'cancel') MV.toast(e.message, 4500); });
+    },
     pickGames: function () {
       if (!A || !A.pickFiles) return MV.toast('Disponible en la app instalada');
       MV.closeModal(true);
@@ -3385,6 +3409,47 @@
   }
   // ---------- Utilidades ----------
   MV.remoteTab = function () { setTab = 'remote'; };
+  // ---------- Lectura: libros, mangas, cómics y revistas de tus listas ----------
+  var BOOKF = 'all', BOOKLIM = 120, BOOKQ = '';
+  var BOOK_ADULT = /\+18|adult|xxx|hentai|ecchi|erotic|er[oó]tic/i;
+  function visibleBooks() {
+    var kids = MV.isKids && MV.isKids();
+    return (S.books || []).filter(function (b) { var a = BOOK_ADULT.test((b.group || '') + ' ' + b.name); return !a && (!kids || b.kind === 'comic' || b.kind === 'manga'); });
+  }
+  var BOOK_KINDS = { manga: 'Manga', comic: 'Cómic', libro: 'Libro', revista: 'Revista' };
+  function bookCard(b) {
+    var prog = MV.readProgress ? MV.readProgress(b.key) : null, pct = prog && prog.total ? Math.round(((b.fmt === 'epub' ? prog.chap : prog.page) + 1) / prog.total * 100) : 0;
+    MV.reg[b.key] = b;
+    return '<button class="bcard f" style="--h:' + MV.hue(b.name) + '" data-act="openBook" data-arg="' + esc(b.key) + '">' +
+      '<div class="bc">' + (b.poster ? '<img src="' + esc(b.poster) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '<i>' + esc(b.name) + '</i><em>' + (BOOK_KINDS[b.kind] || 'Libro') + (b.fmt ? ' · ' + esc(String(b.fmt).toUpperCase()) : '') + '</em>' +
+      (pct ? '<div class="bp"><b style="width:' + pct + '%"></b></div>' : '') + '</div><b>' + esc(b.name) + '</b><span>' + esc(b.group || '') + '</span></button>';
+  }
+  VIEWS.books = function () {
+    var all = visibleBooks(), counts = {};
+    all.forEach(function (b) { counts[b.kind] = (counts[b.kind] || 0) + 1; });
+    var q = MV.norm ? MV.norm(BOOKQ) : BOOKQ.toLowerCase();
+    var list = all.filter(function (b) { return (BOOKF === 'all' || b.kind === BOOKF) && (!q || (MV.norm ? MV.norm(b.name + ' ' + (b.group || '')) : (b.name + ' ' + b.group).toLowerCase()).indexOf(q) >= 0); });
+    var rr = (MV.readRecent ? MV.readRecent() : []).map(function (r) { return (S.bookByKey && S.bookByKey[r.key]) || (r.path ? { key: r.key, name: r.name, path: r.path, kind: r.kind, type: 'book', group: 'De tu equipo' } : null); }).filter(Boolean);
+    var tabs = [['all', 'Todo', all.length], ['manga', 'Mangas', counts.manga], ['comic', 'Cómics', counts.comic], ['libro', 'Libros', counts.libro], ['revista', 'Revistas', counts.revista]].filter(function (t) { return t[0] === 'all' || t[2]; });
+    var html = top('Lectura', '<button class="pill f" data-act="bookFile">' + IC.book.replace('<svg', '<svg width="18" height="18"') + 'Abrir un archivo</button>') +
+      (all.length ? '<div class="chips">' + tabs.map(function (t) { return '<button class="chip f' + (BOOKF === t[0] ? ' on' : '') + '" data-act="bookTab" data-arg="' + t[0] + '">' + t[1] + ' <small>' + (t[2] || 0) + '</small></button>'; }).join('') +
+        '<input class="in f" id="bookQ" placeholder="Buscar título…" value="' + esc(BOOKQ) + '" style="max-width:260px;margin-left:auto" autocomplete="off"></div>' : '');
+    if (rr.length) html += '<section class="row"><h3>Seguir leyendo</h3><div class="strip">' + rr.slice(0, 20).map(bookCard).join('') + '</div></section>';
+    if (!all.length) {
+      html += '<div class="panel glass" style="text-align:center;padding:40px 24px"><h2>Tu biblioteca de lectura</h2><p class="muted">Ninguna de tus listas trae libros, mangas o cómics todavía. Cuando una lista los incluya (PDF, EPUB, CBZ, CBR o CB7) aparecen aquí solos.</p>' +
+        '<div class="btns" style="justify-content:center"><button class="btn f" data-act="bookFile">Abrir un archivo de tu equipo</button></div></div>';
+      return html;
+    }
+    html += '<div class="bookgrid">' + list.slice(0, BOOKLIM).map(bookCard).join('') + '</div>';
+    if (list.length > BOOKLIM) html += '<button class="btn ghost more f" data-act="bookMore">Ver más (' + (list.length - BOOKLIM) + ')</button>';
+    if (!list.length) html += '<p class="muted">Nada coincide con tu búsqueda.</p>';
+    return html;
+  };
+  VIEWS.books.after = function () {
+    var q = document.getElementById('bookQ');
+    if (q) q.addEventListener('input', function () { clearTimeout(q.t); q.t = setTimeout(function () { BOOKQ = q.value; BOOKLIM = 120; MV.rerender(); var n = document.getElementById('bookQ'); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } }, 350); });
+  };
+
   VIEWS.utils = function () {
     return top('Utilidades') + '<div class="utilgrid">' + UTILS.map(function (u, i) {
       return '<button class="utile glass f" data-act="nav" data-arg="' + u[0] + '" data-fid="u-' + u[0] + '" style="animation-delay:' + i * 0.05 + 's"><span class="uic">' + IC[u[2]] + '</span><b>' + u[1] + '</b><span>' + u[3] + '</span></button>';

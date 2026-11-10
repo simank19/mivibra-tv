@@ -264,6 +264,48 @@ const ASYNC = {
     if (r.canceled || !r.filePaths.length) return reply(id, false, 'cancel');
     reply(id, true, r.filePaths.map((f) => { let size = 0; try { size = fs.statSync(f).size; } catch (e) {} const name = path.basename(f); return { name, path: f, size, ext: (name.includes('.') ? name.split('.').pop() : '').toLowerCase() }; }));
   },
+  /** Libros y mangas: descarga y deja listas las páginas (PDF, EPUB, CBZ, CBR, CB7). */
+  async openBook(id, json) {
+    const o = JSON.parse(json), src = o.url || o.path;
+    if (!src) return reply(id, false, 'Falta el archivo');
+    const BOOKS = path.join(DATA, 'cache', 'books'); fs.mkdirSync(BOOKS, { recursive: true });
+    const key = crypto.createHash('md5').update(src).digest('hex').slice(0, 16);
+    const served = (f) => BASE + '/books/' + path.relative(BOOKS, f).split(path.sep).map(encodeURIComponent).join('/');
+    let file = ['pdf', 'epub', 'zip', 'rar', '7z'].map((e) => path.join(BOOKS, key + '.' + e)).find((f) => storage.exists(f));
+    if (!file) {
+      if (/^https?:/i.test(src)) {
+        file = path.join(BOOKS, key + '.bin');
+        const h = {}; if (o.ua) h['User-Agent'] = o.ua; if (o.ref) h.Referer = o.ref;
+        const code = await net.download(src, file, h, (p) => progress(id, p), false);
+        if (code >= 400) return reply(id, false, 'El servidor respondió con error ' + code);
+      } else file = src;
+      const head = Buffer.alloc(8); const fd = fs.openSync(file, 'r'); fs.readSync(fd, head, 0, 8, 0); fs.closeSync(fd);
+      let kind = head.toString('latin1', 0, 4) === '%PDF' ? 'pdf' : head.toString('latin1', 0, 3) === 'Rar' ? 'rar' : head.toString('latin1', 0, 2) === '7z' ? '7z' : head.toString('latin1', 0, 2) === 'PK' ? 'zip' : '';
+      if (kind === 'zip') { try { const names = (await archives.list(file)).map((x) => x.name); if (names.includes('mimetype') && names.some((n) => /\.opf$/i.test(n))) kind = 'epub'; } catch (e) {} }
+      if (!kind) return reply(id, false, 'Formato no compatible (usa PDF, EPUB, CBZ, CBR o CB7)');
+      const target = path.join(BOOKS, key + '.' + kind);
+      if (path.dirname(file) === BOOKS) fs.renameSync(file, target); else fs.copyFileSync(file, target);
+      file = target;
+    }
+    // Solo los últimos 6 libros en la caché
+    try {
+      const groups = {}; for (const f of fs.readdirSync(BOOKS)) { const k = f.split('.')[0]; (groups[k] = groups[k] || []).push(path.join(BOOKS, f)); }
+      Object.keys(groups).filter((k) => k !== key).sort((a, b) => Math.max(...groups[b].map((f) => fs.statSync(f).mtimeMs)) - Math.max(...groups[a].map((f) => fs.statSync(f).mtimeMs)))
+        .slice(5).forEach((k) => groups[k].forEach((f) => fs.rmSync(f, { recursive: true, force: true })));
+    } catch (e) {}
+    const kind = path.extname(file).slice(1);
+    if (kind === 'pdf') return reply(id, true, { fmt: 'pdf', url: served(file) });
+    const out = path.join(BOOKS, key);
+    if (!storage.exists(path.join(out, '.ok'))) { fs.rmSync(out, { recursive: true, force: true }); await archives.extractAll(file, out, (p) => progress(id, p)); fs.writeFileSync(path.join(out, '.ok'), '1'); }
+    if (kind === 'epub') return reply(id, true, { fmt: 'epub', base: served(out) + '/' });
+    const imgs = [];
+    const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const f = path.join(d, e.name); if (e.isDirectory()) { if (e.name !== '__MACOSX') walk(f); } else if (/\.(jpe?g|png|webp|gif|bmp|avif)$/i.test(e.name)) imgs.push(f); } };
+    walk(out);
+    const coll = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+    imgs.sort((a, b) => coll.compare(path.relative(out, a), path.relative(out, b)));
+    if (!imgs.length) return reply(id, false, 'El archivo no trae páginas (imágenes)');
+    reply(id, true, { fmt: 'comic', pages: imgs.map(served) });
+  },
   async pickFolder(id) {
     const r = await dialog.showOpenDialog(win, { title: 'Elegir carpeta', properties: ['openDirectory'] });
     if (r.canceled || !r.filePaths[0]) return reply(id, false, 'cancel');
@@ -410,6 +452,13 @@ async function startServer() {
   const extra = (req, res, u) => {
     const p = u.pathname;
     if (p === '/pc/intro.ogg') { server.sendFile(req, res, DIRS.intro); return true; }
+    if (p.startsWith('/books/')) {
+      // Libros y mangas abiertos (caché de la app)
+      const base = path.join(DATA, 'cache', 'books');
+      const f = path.normalize(path.join(base, decodeURIComponent(p.slice(7))));
+      if (!f.startsWith(path.normalize(base))) { res.writeHead(403); res.end(); return true; }
+      server.sendFile(req, res, f); return true;
+    }
     if (p.startsWith('/pc/ejs/')) {
       // EmulatorJS y sus núcleos (vienen dentro del instalador)
       const f = path.normalize(path.join(DIRS.ejs, decodeURIComponent(p.slice(8))));

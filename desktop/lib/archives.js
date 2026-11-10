@@ -63,4 +63,17 @@ function extract(file, names, outDir, onPct) {
   });
 }
 
-module.exports = { bin, supported, list, extract };
+/** Descomprime todo conservando las carpetas (libros EPUB y cómics). */
+function extractAll(file, outDir, onPct) {
+  fs.mkdirSync(outDir, { recursive: true });
+  return new Promise((resolve, reject) => {
+    const p = spawn(bin(), ['x', '-y', '-bsp1', '-bb0', '-sccUTF-8', '-o' + outDir, file], { windowsHide: true });
+    let err = '';
+    p.stdout.on('data', (d) => { const m = String(d).match(/(\d{1,3})%/g); if (m && onPct) onPct(parseInt(m[m.length - 1], 10)); });
+    p.stderr.on('data', (d) => { err += d; });
+    p.on('error', reject);
+    p.on('close', (code) => (code > 1 ? reject(new Error(err.split(/\r?\n/).filter(Boolean).pop() || 'No se pudo abrir')) : resolve()));
+  });
+}
+
+module.exports = { bin, supported, list, extract, extractAll };
