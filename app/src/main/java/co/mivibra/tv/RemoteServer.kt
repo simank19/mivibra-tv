@@ -119,9 +119,11 @@ class RemoteServer(private val ctx: Context, port: Int = PORT) : NanoWSD(port) {
         when (path) {
             "/drive/keys" -> {
                 val id = session.parameters["id"]?.firstOrNull() ?: ""; val sec = session.parameters["sec"]?.firstOrNull() ?: ""
-                if (!id.trim().endsWith(".apps.googleusercontent.com") || sec.isBlank()) return page("Datos incompletos", "<p>Revisa el ID de cliente (termina en .apps.googleusercontent.com) y el secreto.</p><a class=b href='/drive?k=$k'>Volver</a>")
-                Drive.setKeys(ctx, id, sec)
-                RemoteHub.driveLinked(JSONObject().put("keys", JSONObject().put("id", id.trim()).put("secret", sec.trim())).toString())
+                val idOk = Regex("^[0-9]+-[a-z0-9]+\\.apps\\.googleusercontent\\.com$").matches(id.replace(Regex("\\s"), ""))
+                if (!idOk || sec.isBlank()) return page("Datos incompletos", "<p>Revisa el ID de cliente (termina en .apps.googleusercontent.com) y el secreto.</p><a class=b href='/drive?k=$k'>Volver</a>")
+                val cid = id.replace(Regex("\\s"), ""); val csec = sec.replace(Regex("\\s"), "")
+                Drive.setKeys(ctx, cid, csec)
+                RemoteHub.driveLinked(JSONObject().put("keys", JSONObject().put("id", cid).put("secret", csec)).toString())
             }
             "/drive/code" -> {
                 val err = session.parameters["error"]?.firstOrNull()
@@ -136,7 +138,8 @@ class RemoteServer(private val ctx: Context, port: Int = PORT) : NanoWSD(port) {
                 }
             }
         }
-        if (!Drive.hasKeys(ctx)) return page("Configurar Google Drive",
+        val reset = session.parameters["reset"]?.firstOrNull() == "1"
+        if (reset || !Drive.hasKeys(ctx)) return page("Configurar Google Drive",
             "<p>Solo la primera vez: pega el <b>ID de cliente</b> y el <b>secreto</b> del cliente web de Google Cloud (proyecto mivibra-tv → Clientes → cliente tipo Aplicación web).</p>" +
             "<form action='/drive/keys' method=get><input type=hidden name=k value='$k'>" +
             "<label>ID de cliente</label><input name=id autocomplete=off placeholder='....apps.googleusercontent.com'>" +
@@ -145,7 +148,8 @@ class RemoteServer(private val ctx: Context, port: Int = PORT) : NanoWSD(port) {
         val url = Drive.authUrl(ctx, "$host~$k")
         return page("Conectar Google Drive",
             "<p>Toca el botón, elige tu cuenta y acepta. Si Google avisa que la app no está verificada, toca <b>Configuración avanzada → Ir a mivibra-tv</b> y marca la casilla <b>Ver y descargar todos tus archivos de Google Drive</b>.</p>" +
-            "<a class=b href='" + esc(url) + "'>Conectar con Google</a><p class=m>Tu celular debe estar en el mismo Wi-Fi que la TV hasta terminar.</p>")
+            "<a class=b href='" + esc(url) + "'>Conectar con Google</a><p class=m>Tu celular debe estar en el mismo Wi-Fi que la TV hasta terminar.</p>" +
+            "<p class=m>ID de cliente guardado: " + esc(Drive.clientId(ctx)) + "<br>Si Google dice «OAuth client was not found», el ID quedó mal: <a href='/drive?k=$k&reset=1' style='color:#FF9A4D'>cambiar ID y secreto</a>.</p>")
     }
 
     // ---------------- Listas desde el celular ----------------

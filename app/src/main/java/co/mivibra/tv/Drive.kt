@@ -128,6 +128,7 @@ object Drive {
         if (id.isBlank() || secret.isBlank()) return
         prefs(c).edit().putString("cid", id.trim()).putString("csec", secret.trim()).apply()
     }
+    fun clientId(c: Context) = prefs(c).getString("cid", "") ?: ""
     fun hasKeys(c: Context) = !prefs(c).getString("cid", null).isNullOrBlank() && !prefs(c).getString("csec", null).isNullOrBlank()
     fun authUrl(c: Context, state: String): String {
         val p = prefs(c)
