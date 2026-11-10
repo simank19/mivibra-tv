@@ -8,6 +8,7 @@ on:
     paths:
       - "app/src/main/assets/www/listas.html"
       - ".github/workflows/panel.yml"
+      - "docs/drive.html"
   workflow_dispatch:
 
 permissions:
@@ -48,6 +49,8 @@ jobs:
           open('site/panel/config.js', 'w').write('window.MV_CONFIG = ' + json.dumps({'firebase': cfg, 'whatsapp': os.environ.get('MV_WHATSAPP', '').strip()}) + ';\n')
           PY
           printf '<!doctype html><meta http-equiv="refresh" content="0;url=panel/">' > site/index.html
+          # Página de regreso de Google al conectar Drive desde el celular
+          cp docs/drive.html site/drive.html
       - uses: actions/configure-pages@v5
         with:
           enablement: true
