@@ -149,7 +149,7 @@ object Storage {
         val dir = File(base, Integer.toHexString((src.absolutePath + src.length() + src.lastModified()).hashCode()))
         val all = entries(path).filter { !it.name.contains("__MACOSX") }
         val main = all.filter { it.name.substringAfterLast('.', "").lowercase() in exts }.maxByOrNull { it.size }
-            ?: throw IllegalStateException("El comprimido no trae un juego de esta consola")
+            ?: return nested(ctx, path, all, exts, onPct, base, keep)
         val target = File(dir, File(main.name).name)
         if (target.exists() && target.length() == main.size) { dir.setLastModified(System.currentTimeMillis()); return target.absolutePath }
         dir.deleteRecursively(); dir.mkdirs()
@@ -167,6 +167,33 @@ object Storage {
         // Limpieza: deja solo los 6 más recientes
         base.listFiles()?.filter { it.isDirectory && it != dir }?.sortedByDescending { it.lastModified() }?.drop(keep - 1)?.forEach { it.deleteRecursively() }
         return target.absolutePath
+    }
+
+    /**
+     * Comprimido que trae otro comprimido adentro (por ejemplo una carpeta .zip con un .rar partido en
+     * b-ts3u.rar, .r00, .r01…): se sacan todas las partes y se abre el de adentro.
+     */
+    private fun nested(ctx: Context, path: String, all: List<Entry>, exts: List<String>, onPct: (Int) -> Unit, base: File, keep: Int): String {
+        val low = { e: Entry -> e.name.lowercase() }
+        val firstPart = Regex("(\\.part0*1\\.rar|(?<!\\.part\\d{1,3})\\.rar|\\.zip|\\.7z)$")
+        val inner = all.filter { firstPart.containsMatchIn(low(it)) }.minByOrNull { it.name.length }
+            ?: throw IllegalStateException(
+                if (all.any { Regex("\\.r\\d\\d$").containsMatchIn(low(it)) }) "Falta la primera parte (.rar) del juego"
+                else "El comprimido no trae un juego de esta consola")
+        val src = File(path)
+        val tmp = File(base, "partes_" + Integer.toHexString((src.absolutePath + src.length()).hashCode()))
+        val dirOf = { n: String -> File(n).parent ?: "" }
+        // Todas las partes (las que están junto al de adentro)
+        val parts = all.filter { dirOf(it.name) == dirOf(inner.name) && Regex("\\.(rar|r\\d\\d|zip|7z|z\\d\\d|\\d{3})$").containsMatchIn(low(it)) }.map { it.name }.toSet()
+        val innerFile = File(tmp, File(inner.name).name)
+        if (!innerFile.exists()) {
+            tmp.deleteRecursively(); tmp.mkdirs()
+            val total = all.filter { it.name in parts }.sumOf { it.size.coerceAtLeast(0) }.coerceAtLeast(1)
+            if (total > base.usableSpace - 100L * 1024 * 1024) throw IllegalStateException("No hay espacio para descomprimir el juego")
+            var done = 0L
+            Archives.extract(path, parts, tmp) { n -> done += n; onPct((done * 50 / total).toInt()) }   // primera mitad de la barra
+        }
+        return unzipRom(ctx, innerFile.absolutePath, exts, { onPct(50 + it / 2) }, base, keep)
     }
 
     /**
