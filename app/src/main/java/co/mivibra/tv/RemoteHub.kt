@@ -59,6 +59,10 @@ object RemoteHub {
         ui.post { main?.js("window.MV&&MV.onListReceived&&MV.onListReceived(" + json + ")") }
     }
 
+    fun driveLinked(json: String) {
+        ui.post { main?.js("window.MV&&MV.onDriveLinked&&MV.onDriveLinked(" + json + ")") }
+    }
+
     fun romReceived(json: String) {
         ui.post { main?.js("window.MV&&MV.onRomReceived&&MV.onRomReceived(" + json + ")") }
     }

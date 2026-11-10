@@ -83,11 +83,30 @@
         : '<button class="btn f" data-act="driveConnect" data-autofocus>Conectar mi Google Drive</button>') +
       '<button class="btn ghost f" data-act="confirmNo">Cerrar</button></div>');
   };
+  // Claves del cliente web de Google (las guarda el administrador una vez y llegan a todos los equipos)
+  function pushKeys() { try { var k = (MV.load('prefs', {}) || {}).driveKeys; if (k && k.id && k.secret && A.driveKeys) A.driveKeys(k.id, k.secret); } catch (e) {} }
+  pushKeys(); setTimeout(pushKeys, 4000);
   MV.ACT.driveConnect = function () {
     MV.closeModal(true);
-    MV.toast('Abriendo tu cuenta de Google…', 3000);
+    pushKeys();
     MV.call('driveConnect', []).then(function () { browse('', 'Mi unidad', []); })
-      .catch(function (e) { if (e.message !== 'cancelado') MV.toast(e.message, 8000); });
+      .catch(function (e) { if (e.message === 'PHONE') phoneConnect(); else if (e.message !== 'cancelado') MV.toast(e.message, 8000); });
+  };
+  /** En la TV Google no deja dar el permiso de ver archivos: se conecta desde el celular con un código QR. */
+  function phoneConnect() {
+    var r = {}; try { r = JSON.parse(A.remoteStart()); } catch (e) {}
+    if (!r.ok || !r.url) { MV.toast('Conecta la TV al Wi-Fi para enlazar tu Google Drive desde el celular', 7000); return; }
+    var link = MV.remoteLink(r, 'drive');
+    MV.modal('<h2>Conecta tu Google Drive con el celular</h2><p>Con el celular en el mismo Wi-Fi, escanea el código y toca <b>Conectar con Google</b>. Elige tu cuenta y acepta los permisos; esta pantalla avanza sola.</p>' +
+      '<div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap"><div class="qr" id="drvQr" style="background:#fff;padding:10px;border-radius:12px;width:220px"></div><p class="muted" style="flex:1;min-width:200px">O abre en el celular:<br><b>' + esc(link) + '</b></p></div>' +
+      '<div class="btns"><button class="btn ghost f" data-act="confirmNo" data-autofocus>Cancelar</button></div>', {
+      onOpen: function () { var b = document.getElementById('drvQr'); if (b && window.qrcode) { var q = qrcode(0, 'M'); q.addData(link); q.make(); b.innerHTML = q.createSvgTag({ cellSize: 5, margin: 1, scalable: true }); } }
+    });
+    MV._drvWaiting = true;
+  }
+  MV.onDriveLinked = function (o) {
+    if (o && o.keys) { if (MV.setPref) MV.setPref('driveKeys', o.keys); MV.toast('Claves de Google Drive guardadas', 4000); return; }
+    if (o && o.ok) { MV._drvWaiting = false; MV.closeModal(true); MV.toast('Google Drive conectado ✔', 4000); browse('', 'Mi unidad', []); }
   };
   /** Explorador de carpetas de Drive: entrar en una, subir, buscar por nombre o elegirla. */
   function browse(parent, name, trail, search) {

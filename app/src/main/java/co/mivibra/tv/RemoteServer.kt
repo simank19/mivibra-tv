@@ -82,6 +82,8 @@ class RemoteServer(private val ctx: Context, port: Int = PORT) : NanoWSD(port) {
         // Agregar una lista de TV desde el celular
         if (path == "/listas/add" && session.method == NanoHTTPD.Method.POST) return listAdd(session)
         if (path == "/listas/image" && session.method == NanoHTTPD.Method.POST) return listImage(session)
+        // Google Drive: conectar desde el celular
+        if (path == "/drive" || path.startsWith("/drive/")) return drive(session, path)
         val asset = when {
             path == "/" || path == "/index.html" -> "www/pad.html"
             path == "/roms" || path == "/roms/" -> "www/roms.html"
@@ -99,6 +101,51 @@ class RemoteServer(private val ctx: Context, port: Int = PORT) : NanoWSD(port) {
         } catch (e: IOException) {
             NanoHTTPD.newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", e.message ?: "error")
         }
+    }
+
+    // ---------------- Google Drive desde el celular ----------------
+    private fun page(title: String, body: String): Response {
+        val html = "<!doctype html><html lang=es><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'><title>MiVibra TV · Google Drive</title>" +
+            "<style>body{font:16px system-ui,sans-serif;background:#141210;color:#F3EFEA;margin:0;padding:24px;max-width:560px}h1{font-size:22px}a.b,button{display:block;width:100%;box-sizing:border-box;text-align:center;padding:14px;border-radius:12px;border:0;background:#FF6900;color:#fff;font-weight:700;font-size:17px;text-decoration:none;margin:14px 0}" +
+            "input{width:100%;box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid #444;background:#221f1c;color:#fff;font-size:15px;margin:6px 0 12px}p{color:#cfc7bd;line-height:1.5}.m{font-size:13px;color:#9a928a}</style>" +
+            "<h1>" + title + "</h1>" + body
+        return NanoHTTPD.newFixedLengthResponse(Response.Status.OK, "text/html; charset=utf-8", html).apply { addHeader("Cache-Control", "no-store") }
+    }
+    private fun esc(s: String) = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;")
+    private fun drive(session: IHTTPSession, path: String): Response {
+        if (!authed(session)) return page("Clave incorrecta", "<p>Vuelve a escanear el código que aparece en la TV.</p>")
+        val k = key(ctx)
+        val host = (session.headers["host"] ?: "").takeIf { it.matches(Regex("[0-9.]+:[0-9]+")) } ?: ((localIp(ctx) ?: "") + ":" + PORT)
+        when (path) {
+            "/drive/keys" -> {
+                val id = session.parameters["id"]?.firstOrNull() ?: ""; val sec = session.parameters["sec"]?.firstOrNull() ?: ""
+                if (!id.trim().endsWith(".apps.googleusercontent.com") || sec.isBlank()) return page("Datos incompletos", "<p>Revisa el ID de cliente (termina en .apps.googleusercontent.com) y el secreto.</p><a class=b href='/drive?k=$k'>Volver</a>")
+                Drive.setKeys(ctx, id, sec)
+                RemoteHub.driveLinked(JSONObject().put("keys", JSONObject().put("id", id.trim()).put("secret", sec.trim())).toString())
+            }
+            "/drive/code" -> {
+                val err = session.parameters["error"]?.firstOrNull()
+                if (err != null) return page("No se conectó", "<p>Google respondió: " + esc(err) + "</p><a class=b href='/drive?k=$k'>Intentar de nuevo</a>")
+                val code = session.parameters["code"]?.firstOrNull() ?: return page("Falta el código", "<a class=b href='/drive?k=$k'>Intentar de nuevo</a>")
+                return try {
+                    Drive.exchange(ctx, code)
+                    RemoteHub.driveLinked(JSONObject().put("ok", true).toString())
+                    page("¡Listo! ✔", "<p>Tu Google Drive quedó conectado en la TV. Ya puedes cerrar esta página; en la TV elige la carpeta de tus juegos.</p>")
+                } catch (e: Exception) {
+                    page("No se conectó", "<p>" + esc(e.message ?: "Error") + "</p><a class=b href='/drive?k=$k'>Intentar de nuevo</a>")
+                }
+            }
+        }
+        if (!Drive.hasKeys(ctx)) return page("Configurar Google Drive",
+            "<p>Solo la primera vez: pega el <b>ID de cliente</b> y el <b>secreto</b> del cliente web de Google Cloud (proyecto mivibra-tv → Clientes → cliente tipo Aplicación web).</p>" +
+            "<form action='/drive/keys' method=get><input type=hidden name=k value='$k'>" +
+            "<label>ID de cliente</label><input name=id autocomplete=off placeholder='....apps.googleusercontent.com'>" +
+            "<label>Secreto del cliente</label><input name=sec autocomplete=off placeholder='GOCSPX-...'>" +
+            "<button>Guardar</button></form><p class=m>Debe tener como URI de redireccionamiento autorizado: " + Drive.REDIRECT + "</p>")
+        val url = Drive.authUrl(ctx, "$host~$k")
+        return page("Conectar Google Drive",
+            "<p>Toca el botón, elige tu cuenta y acepta. Si Google avisa que la app no está verificada, toca <b>Configuración avanzada → Ir a mivibra-tv</b> y marca la casilla <b>Ver y descargar todos tus archivos de Google Drive</b>.</p>" +
+            "<a class=b href='" + esc(url) + "'>Conectar con Google</a><p class=m>Tu celular debe estar en el mismo Wi-Fi que la TV hasta terminar.</p>")
     }
 
     // ---------------- Listas desde el celular ----------------

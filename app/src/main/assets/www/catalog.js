@@ -22,6 +22,7 @@
   Object.keys(defaults).forEach(function (k) { if (P[k] === undefined) P[k] = defaults[k]; });
   if (!P.deviceName) P.deviceName = MV.device.tv ? 'TV' : (MV.device.model || 'Celular');
 
+  MV.setPref = function (k, v) { P[k] = v; MV.savePrefs(); };
   MV.savePrefs = function (silent) { P.updatedAt = Date.now(); MV.save('prefs', P); if (!silent) MV.sync.later(); if (MV.acct) MV.acct.changed(); };
   MV.saveLists = function () { MV.save('lists', S.lists); MV.sync.later(); if (MV.acct) MV.acct.changed(); };
   MV.saveProfiles = function () { MV.save('profiles', S.profiles); MV.sync.later(); };

@@ -693,6 +693,7 @@ class Bridge(private val a: MainActivity) {
         return p.getBoolean("swapAB", false)
     }
     @JavascriptInterface fun driveConnected(): Boolean = Drive.connected(a)
+    @JavascriptInterface fun driveKeys(id: String, secret: String) { Drive.setKeys(a, id, secret) }
     @JavascriptInterface fun driveConnect(id: String) = withDrive(id, true) { true }
     @JavascriptInterface fun driveDisconnect() { Drive.disconnect(a) }
     @JavascriptInterface fun driveFolders(id: String, parent: String?, search: String?) = withDrive(id, false) { Drive.folders(it, parent?.ifBlank { null }, search) }

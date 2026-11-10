@@ -24,6 +24,15 @@ object Drive {
     // ---------- Permiso (cuenta de Google del equipo) ----------
     /** Pide el token. Si hace falta que el usuario acepte, muestra la pantalla de Google (solo si interactive). */
     fun token(a: MainActivity, interactive: Boolean, done: (String?, String?) -> Unit) {
+        // Conectado desde el celular (código QR): se usa el permiso guardado, sin ventanas en la TV
+        if (prefs(a).getString("rt", null) != null) {
+            Thread {
+                try { val t = webAccess(a); a.runOnUiThread { done(t, null) } }
+                catch (e: Exception) { a.runOnUiThread { done(null, e.message ?: "Error con Google") } }
+            }.start()
+            return
+        }
+        if (interactive) { done(null, "PHONE"); return }
         val acct = prefs(a).getString("acct", null)
         if (acct != null) { legacyToken(a, acct, interactive, true, done); return }
         val req = AuthorizationRequest.builder().setRequestedScopes(SCOPES).build()
@@ -110,7 +119,60 @@ object Drive {
     }
     /** Al usar el token y recibir 401 (venció): se borra de la caché para pedir uno nuevo. */
     @Suppress("DEPRECATION")
-    fun dropToken(c: Context, token: String) { try { if (prefs(c).getString("acct", null) != null) com.google.android.gms.auth.GoogleAuthUtil.clearToken(c, token) } catch (_: Exception) {} }
+    fun dropToken(c: Context, token: String) { prefs(c).edit().remove("at").apply(); try { if (prefs(c).getString("acct", null) != null) com.google.android.gms.auth.GoogleAuthUtil.clearToken(c, token) } catch (_: Exception) {} }
+
+    // ---------- Conexión desde el celular (en la TV Google no deja dar el permiso de ver archivos) ----------
+    const val REDIRECT = "https://simank19.github.io/mivibra-tv/drive.html"
+    private const val WEB_SCOPES = "https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file"
+    fun setKeys(c: Context, id: String, secret: String) {
+        if (id.isBlank() || secret.isBlank()) return
+        prefs(c).edit().putString("cid", id.trim()).putString("csec", secret.trim()).apply()
+    }
+    fun hasKeys(c: Context) = !prefs(c).getString("cid", null).isNullOrBlank() && !prefs(c).getString("csec", null).isNullOrBlank()
+    fun authUrl(c: Context, state: String): String {
+        val p = prefs(c)
+        return "https://accounts.google.com/o/oauth2/v2/auth?client_id=${q(p.getString("cid", "")!!)}&redirect_uri=${q(REDIRECT)}" +
+            "&response_type=code&access_type=offline&prompt=consent&include_granted_scopes=true&scope=${q(WEB_SCOPES)}&state=${q(state)}"
+    }
+    private fun tokenCall(form: String): JSONObject {
+        val c = URL("https://oauth2.googleapis.com/token").openConnection() as HttpURLConnection
+        c.requestMethod = "POST"; c.doOutput = true; c.connectTimeout = 20000; c.readTimeout = 30000
+        c.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+        c.outputStream.use { it.write(form.toByteArray()) }
+        val code = c.responseCode
+        val body = (if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
+        val o = try { JSONObject(body) } catch (_: Exception) { JSONObject() }
+        if (code !in 200..299) throw IllegalStateException("Google: " + (o.optString("error_description").ifBlank { o.optString("error").ifBlank { "error $code" } }))
+        return o
+    }
+    /** Cambia el código que llegó del celular por el permiso permanente (refresh token). */
+    fun exchange(c: Context, code: String) {
+        val p = prefs(c)
+        val o = tokenCall("code=${q(code)}&client_id=${q(p.getString("cid", "")!!)}&client_secret=${q(p.getString("csec", "")!!)}&redirect_uri=${q(REDIRECT)}&grant_type=authorization_code")
+        val rt = o.optString("refresh_token")
+        if (rt.isBlank()) throw IllegalStateException("Google no entregó el permiso permanente; vuelve a intentar")
+        if (!o.optString("scope").contains("drive.readonly")) throw IllegalStateException("Falta marcar la casilla «Ver y descargar todos tus archivos de Google Drive»")
+        p.edit().putString("rt", rt).putString("at", o.optString("access_token"))
+            .putLong("atExp", System.currentTimeMillis() + o.optLong("expires_in", 3000) * 1000 - 60000)
+            .putBoolean("on", true).remove("acct").remove("savesId").apply()
+    }
+    private fun webAccess(c: Context): String {
+        val p = prefs(c)
+        val at = p.getString("at", null)
+        if (at != null && System.currentTimeMillis() < p.getLong("atExp", 0)) return at
+        val o = try {
+            tokenCall("refresh_token=${q(p.getString("rt", "")!!)}&client_id=${q(p.getString("cid", "")!!)}&client_secret=${q(p.getString("csec", "")!!)}&grant_type=refresh_token")
+        } catch (e: IllegalStateException) {
+            if (e.message?.contains("invalid_grant") == true || e.message?.contains("expired", true) == true || e.message?.contains("revoked", true) == true) {
+                p.edit().remove("rt").remove("at").putBoolean("on", false).apply()
+                throw IllegalStateException("El permiso de Google Drive venció: vuelve a conectar con el celular")
+            }
+            throw e
+        }
+        val t = o.getString("access_token")
+        p.edit().putString("at", t).putLong("atExp", System.currentTimeMillis() + o.optLong("expires_in", 3000) * 1000 - 60000).apply()
+        return t
+    }
 
     private const val READ = "https://www.googleapis.com/auth/drive.readonly"
     /**
@@ -132,7 +194,12 @@ object Drive {
         done(token, null)
     }
     fun connected(c: Context) = prefs(c).getBoolean("on", false)
-    fun disconnect(c: Context) { prefs(c).edit().clear().apply() }
+    fun disconnect(c: Context) {
+        // Se olvida la cuenta pero no las claves de la app (Client ID / secreto)
+        val p = prefs(c); val id = p.getString("cid", null); val sec = p.getString("csec", null)
+        p.edit().clear().apply()
+        if (id != null && sec != null) setKeys(c, id, sec)
+    }
 
     // ---------- Llamadas a Drive ----------
     private fun open(url: String, token: String, method: String = "GET"): HttpURLConnection {
