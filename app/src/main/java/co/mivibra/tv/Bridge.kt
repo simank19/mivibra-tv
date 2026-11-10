@@ -664,6 +664,10 @@ class Bridge(private val a: MainActivity) {
         }
     }
 
+    /** Ajuste del juego dentro del marco en RetroArch (tamaño y posición). */
+    @JavascriptInterface
+    fun raFrameAdjust(what: String): String = RetroArch.adjust(a, what)
+
     /** {installed, pkg, bios} de la app RetroArch. */
     @JavascriptInterface
     fun retroArch(): String = RetroArch.info(a)

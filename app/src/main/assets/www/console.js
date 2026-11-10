@@ -274,6 +274,7 @@
         if (ov >= 0 && A.overlayStyles) { try { ovs = JSON.parse(A.overlayStyles(s.id)); } catch (e) {} }
         var ovName = ovs ? (ovs.cur >= ovs.n ? 'sin marco' : 'Marco ' + (ovs.cur + 1) + ' de ' + ovs.n) : (ov ? 'puesto' : 'quitado');
         return '<div class="line"><div class="t"><b>' + esc(s.name) + '</b><span>' + (e === 'ppsspp' ? 'App PPSSPP · sin marco (para usar marco, cambia a RetroArch)' : e === 'retroarch' ? 'RetroArch · núcleo ' + esc(s.raCore || s.core) : 'Emulador de MiVibra') + (s.ra && !psp ? ' (solo RetroArch)' : '') + (ov >= 0 && e !== 'ppsspp' ? ' · ' + ovName : '') + '</span></div>' +
+          (ov === 1 && e === 'retroarch' && A.raFrameAdjust ? '<button class="btn ghost sm f" data-act="raFit" data-arg="' + s.id + '">Ajustar al marco</button>' : '') +
           (ov >= 0 && e !== 'ppsspp' ? '<button class="btn ghost sm f" data-act="consoleFrame" data-arg="' + s.id + '">Cambiar marco</button>' : '') +
           (psp && A && A.ppssppInstalled && A.ppssppInstalled() ? '<button class="btn ghost sm f" data-act="consolePsp">' + (pe === 'ppsspp' ? 'Usar RetroArch (con marco)' : 'Usar la app PPSSPP') + '</button>' : '') +
           (s.ra ? '' : '<button class="btn ghost sm f" data-act="consoleEngine" data-arg="' + s.id + '">' + (e === 'retroarch' ? 'Usar MiVibra' : 'Usar RetroArch') + '</button>') + '</div>';
@@ -285,6 +286,15 @@
       MV.setGameEngine(id, MV.gameEngine(s) === 'retroarch' ? 'interno' : 'retroarch');
       MV.closeModal(true); engines();
     };
+    MV.ACT.raFit = function () {
+      var st = JSON.parse(A.raFrameAdjust('get'));
+      var b = function (w, l) { return '<button class="btn ghost f" data-act="raFitDo" data-arg="' + w + '">' + l + '</button>'; };
+      MV.modal('<h2>Ajustar el juego al marco</h2><p class="muted">Para juegos con RetroArch. Cada toque cambia un poco; abre el juego para ver cómo quedó. Tamaño actual: ' + Math.round(st.k * 100) + '%</p>' +
+        '<div class="btns" style="flex-wrap:wrap">' + b('bigger', '＋ Más grande') + b('smaller', '－ Más pequeño') + '</div>' +
+        '<div class="btns" style="flex-wrap:wrap">' + b('left', '◀ Izquierda') + b('right', 'Derecha ▶') + b('up', '▲ Arriba') + b('down', 'Abajo ▼') + '</div>' +
+        '<div class="btns">' + b('reset', 'Volver al ajuste automático') + '<button class="btn f" data-act="confirmNo" data-autofocus>Listo</button></div>');
+    };
+    MV.ACT.raFitDo = function (w) { var st = JSON.parse(A.raFrameAdjust(w)); MV.toast(w === 'reset' ? 'Ajuste automático' : 'Tamaño ' + Math.round(st.k * 100) + '% · posición ' + Math.round(st.x * 100) + ', ' + Math.round(st.y * 100)); };
     MV.ACT.consolePsp = function () { MV.setPspEngine(MV.pspEngine() === 'ppsspp' ? 'retroarch' : 'ppsspp'); MV.closeModal(true); engines(); setTimeout(function () { var b = document.querySelector('[data-act="consolePsp"]'); if (b) b.focus(); }, 60); };
     MV.ACT.consoleFrame = function (id) {
       if (A && A.nextOverlay) A.nextOverlay(id); else if (A && A.setOverlay) A.setOverlay(id, A.overlay(id) !== 1);
