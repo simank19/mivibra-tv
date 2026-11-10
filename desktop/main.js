@@ -389,7 +389,7 @@ function openBrowser(url) {
 }
 
 // ---------------- Ventana principal ----------------
-function iconPath() { const f = path.join(__dirname, 'build', 'icon.png'); return storage.exists(f) ? f : undefined; }
+function iconPath() { const f = path.join(__dirname, 'assets', 'icon.png'); return storage.exists(f) ? f : undefined; }
 
 async function startServer() {
   const extra = (req, res, u) => {

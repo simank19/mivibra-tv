@@ -29,7 +29,7 @@
     "copyright": "MiVibra Grupo Empresarial",
     "directories": {
       "output": "dist",
-      "buildResources": "build"
+      "buildResources": "assets"
     },
     "files": [
       "main.js",
@@ -38,7 +38,7 @@
       "game-preload.js",
       "lib/**",
       "web/**",
-      "build/icon.png",
+      "assets/icon.png",
       "package.json"
     ],
     "asarUnpack": [
@@ -77,7 +77,7 @@
           ]
         }
       ],
-      "icon": "build/icon.ico",
+      "icon": "assets/icon.ico",
       "artifactName": "MiVibraTV-PC-${env.MV_BUILD}.exe"
     },
     "nsis": {
@@ -89,8 +89,8 @@
       "shortcutName": "MiVibra TV",
       "runAfterFinish": true,
       "deleteAppDataOnUninstall": false,
-      "installerIcon": "build/icon.ico",
-      "uninstallerIcon": "build/icon.ico"
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico"
     }
   },
   "overrides": {
