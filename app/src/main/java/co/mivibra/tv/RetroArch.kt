@@ -48,7 +48,58 @@ object RetroArch {
         return ai.dataDir + "/cores/" + name
     }
 
-    fun launch(c: Context, rom: String, core: String) {
+    private fun fromPlay(c: Context, p: String) = try {
+        @Suppress("DEPRECATION") c.packageManager.getInstallerPackageName(p) == "com.android.vending"
+    } catch (_: Exception) { false }
+
+    /**
+     * Marco (bezel) también en RetroArch: se arma una configuración que incluye la del usuario y le suma el marco
+     * de la consola como "overlay", con la imagen del juego encajada en el hueco del marco.
+     * Devuelve la ruta de esa configuración, o null si no aplica (marco apagado, sin descargar o RetroArch de Play Store).
+     * Llamar fuera del hilo principal (puede descargar el marco).
+     */
+    fun overlayConfig(c: Context, sys: String): String? {
+        try {
+            val p = pkg(c) ?: return null
+            if (sys.isBlank() || !Overlays.enabled(c, sys) || fromPlay(c, p)) return null
+            val src = Overlays.fetch(c, sys) ?: return null
+            val dir = File(Environment.getExternalStorageDirectory(), "MiVibra/RetroArch/marcos").apply { mkdirs() }
+            if (!dir.canWrite()) return null
+            val png = File(dir, src.name)
+            if (!png.exists() || png.length() != src.length()) src.copyTo(png, true)
+            val bmp = Overlays.decode(src) ?: return null
+            val hole = Overlays.hole(bmp); val bw = bmp.width; val bh = bmp.height; bmp.recycle()
+            if (hole == null) return null
+            val dm = android.util.DisplayMetrics()
+            @Suppress("DEPRECATION") (c.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager).defaultDisplay.getRealMetrics(dm)
+            val sw = maxOf(dm.widthPixels, dm.heightPixels); val sh = minOf(dm.widthPixels, dm.heightPixels)
+            val x = hole.left * sw / bw; val y = hole.top * sh / bh
+            val w = hole.width() * sw / bw; val h = hole.height() * sh / bh
+            val ov = File(dir, "$sys.cfg")
+            ov.writeText("overlays = 1\noverlay0_overlay = \"${png.name}\"\noverlay0_full_screen = true\noverlay0_descs = 0\n")
+            val sd = Environment.getExternalStorageDirectory().absolutePath
+            val cfg = File(dir, "retroarch-$sys.cfg")
+            cfg.writeText(listOf(
+                "#include \"$sd/Android/data/$p/files/retroarch.cfg\"",
+                "config_save_on_exit = \"false\"",
+                "input_overlay_enable = \"true\"",
+                "input_overlay = \"${ov.absolutePath}\"",
+                "input_overlay_opacity = \"1.000000\"",
+                "input_overlay_scale_landscape = \"1.000000\"",
+                "input_overlay_hide_in_menu = \"true\"",
+                "input_overlay_hide_when_gamepad_connected = \"false\"",
+                "input_overlay_auto_scale = \"false\"",
+                "input_overlay_auto_rotate = \"false\"",
+                "aspect_ratio_index = \"23\"",
+                "video_scale_integer = \"false\"",
+                "custom_viewport_x = \"$x\"", "custom_viewport_y = \"$y\"",
+                "custom_viewport_width = \"$w\"", "custom_viewport_height = \"$h\""
+            ).joinToString("\n") + "\n")
+            return cfg.absolutePath
+        } catch (_: Throwable) { return null }
+    }
+
+    fun launch(c: Context, rom: String, core: String, config: String? = null) {
         val p = pkg(c) ?: throw IllegalStateException("Instala RetroArch desde Play Store")
         require(core.matches(Regex("[a-z0-9_]+"))) { "Núcleo no válido" }
         val ai = c.packageManager.getApplicationInfo(p, 0)
@@ -58,7 +109,7 @@ object RetroArch {
             .setComponent(ComponentName(p, ACTIVITY))
             .putExtra("ROM", rom)
             .putExtra("LIBRETRO", corePath(ai, core))
-            .putExtra("CONFIGFILE", "$ext/retroarch.cfg")
+            .putExtra("CONFIGFILE", config ?: "$ext/retroarch.cfg")
             .putExtra("IME", "com.android.inputmethod.latin/.LatinIME")
             .putExtra("DATADIR", ai.dataDir)
             .putExtra("APK", ai.sourceDir)

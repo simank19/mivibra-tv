@@ -683,8 +683,9 @@ class Bridge(private val a: MainActivity) {
                     if (e.message == "PERMISO") { requestStorageAccess(); throw IllegalStateException("Para jugar con RetroArch, permite a MiVibra guardar en la memoria (se abrió el ajuste) y vuelve a intentar.") }
                     throw e
                 }
+                val cfg = RetroArch.overlayConfig(a, o.optString("sys"))
                 a.runOnUiThread {
-                    try { RetroArch.launch(a, rom.absolutePath, o.getString("core")); reply(id, true, rom.absolutePath) }
+                    try { RetroArch.launch(a, rom.absolutePath, o.getString("core"), cfg); reply(id, true, rom.absolutePath) }
                     catch (e: Exception) { reply(id, false, e.message ?: "No se pudo abrir RetroArch") }
                 }
             } catch (e: Exception) {

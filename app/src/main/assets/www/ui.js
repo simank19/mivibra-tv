@@ -2118,7 +2118,7 @@
     // PSP y otras: exts de la consola + discos, para sacarlos del comprimido
     var ex = (s.exts || []).concat(['iso', 'cso', 'chd', 'cue', 'pbp', 'gdi', 'cdi', 'rvz', 'gcm']);
     unzipBox(r, 0);
-    MV.call('playRetroArch', [JSON.stringify({ rom: r.path, core: s.raCore || s.core, exts: ex })], function (p) { unzipBox(r, p); })
+    MV.call('playRetroArch', [JSON.stringify({ rom: r.path, core: s.raCore || s.core, exts: ex, sys: s.id })], function (p) { unzipBox(r, p); })
       .then(function () { unzipBox(null); rememberGame(r); })
       .catch(function (e) { unzipBox(null); MV.toast(e.message, 6000); });
   }
