@@ -3533,7 +3533,7 @@
   }
   var BOOK_KINDS = { manga: 'Manga', comic: 'Cómic', libro: 'Libro', revista: 'Revista' };
   function bookCard(b) {
-    var prog = MV.readProgress ? MV.readProgress(b.key) : null, pct = prog && prog.total ? Math.round(((b.fmt === 'epub' ? prog.chap : prog.page) + 1) / prog.total * 100) : 0;
+    var prog = MV.readProgress ? MV.readProgress(b.key) : null, pct = prog && prog.pct != null ? Math.round(prog.pct * 100) : prog && prog.total ? Math.round(((b.fmt === 'epub' ? prog.chap : prog.page) + 1) / prog.total * 100) : 0;
     MV.reg[b.key] = b;
     return '<button class="bcard f" style="--h:' + MV.hue(b.name) + '" data-act="openBook" data-arg="' + esc(b.key) + '">' +
       (b.poster || (b.poster = MV.bookCover && MV.bookCover(b.key)), '') + '<div class="bc">' + (b.poster ? '<img src="' + esc(b.poster) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '<i>' + esc(b.name) + '</i><em>' + (BOOK_KINDS[b.kind] || 'Libro') + (b.fmt ? ' · ' + esc(String(b.fmt).toUpperCase()) : '') + '</em>' +

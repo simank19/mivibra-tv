@@ -26,7 +26,7 @@
   MV.openBook = function (item) {
     if (!item || (!item.url && !item.path)) return;
     if (!MV.native) return MV.toast('El lector está disponible en la app instalada');
-    close(true);
+    closeMb(); close(true);
     var saved = positions()[item.key] || {};
     var manga = item.kind === 'manga';
     st = { item: item, fmt: '', page: saved.page || 0, chap: saved.chap || 0, yRatio: saved.y || 0, total: 0,
@@ -48,13 +48,46 @@
       st.fmt = d.fmt;
       if (d.fmt === 'comic') { st.pages = d.pages; st.total = d.pages.length; renderComic(); if (d.pages[0]) saveCover(d.pages[0]); }
       else if (d.fmt === 'pdf') loadPdf(d.url);
-      else if (d.fmt === 'epub') loadEpub(d.base);
+      else if (d.fmt === 'epub') { if (d.file) openMb(item, d.file); else loadEpub(d.base); }
     }).catch(function (e) {
       if (!box) return;
       $('.rdbody').innerHTML = '<div class="rdload"><b style="color:var(--accent)">No se pudo abrir</b><p>' + esc(e.message || '') + '</p><button class="btn f" data-r="close">Volver</button></div>';
       var b = $('.rdload .btn'); if (b) b.focus();
     });
   };
+
+  // ---------- EPUB con el lector de MiBiblioteca (hoja que se dobla, papel, separadores, notas y voz) ----------
+  var mb = null, mbItem = null;
+  function openMb(item, file) {
+    mbItem = item;
+    var fr = document.createElement('iframe');
+    fr.id = 'mbr'; fr.src = 'mbreader/index.html'; fr.setAttribute('allow', 'autoplay; fullscreen');
+    fr.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:0;z-index:61;background:#0A0908';
+    document.body.appendChild(fr); mb = fr;
+    var book = { id: item.key, t: item.name, a: item.author || '', cover: item.poster || (MV.bookCover ? MV.bookCover(item.key) : '') || '', file: file, src: 'r' };
+    MV._mbOpen = function () { try { fr.contentWindow.postMessage({ mbr: 1, type: 'open', book: book }, '*'); fr.focus(); fr.contentWindow.focus(); } catch (e) {} };
+    rememberRecent(item, null);
+  }
+  function rememberRecent(it, pct) {
+    var rec = (MV.load('readRecent', []) || []).filter(function (r) { return r.key !== it.key; });
+    var old = (MV.load('readRecent', []) || []).filter(function (r) { return r.key === it.key; })[0];
+    rec.unshift({ key: it.key, name: it.name, poster: it.poster || '', url: it.url || '', path: it.path || '', ua: it.ua || '', ref: it.ref || '', kind: it.kind || '', pct: pct != null ? Math.round(pct * 100) : (old && old.pct) || 0, at: Date.now() });
+    MV.save('readRecent', rec.slice(0, 30));
+    if (pct != null) { var all = positions(); all[it.key] = Object.assign({}, all[it.key] || {}, { pct: pct, at: Date.now() }); MV.save('readPos', all); }
+  }
+  function closeMb() {
+    if (!mb) return;
+    mb.remove(); mb = null; mbItem = null;
+    document.documentElement.classList.remove('reader-open');
+    if (MV.rerender) MV.rerender();
+  }
+  window.addEventListener('message', function (e) {
+    var m = e.data || {}; if (!m.mbr || !mb || e.source !== mb.contentWindow) return;
+    if (m.type === 'ready') { if (st) st.item = null; close(true); document.documentElement.classList.add('reader-open'); MV._mbOpen && MV._mbOpen(); }
+    else if (m.type === 'closed') closeMb();
+    else if (m.type === 'progress' && mbItem && m.id === mbItem.key) rememberRecent(mbItem, m.pct);
+  });
+  MV.mbOpen = function () { return !!mb; };
 
   function close(silent) {
     if (!box) return;
@@ -65,7 +98,7 @@
     if (!silent && MV.rerender) MV.rerender();
   }
   MV.closeBook = function () { close(); };
-  MV.readerOpen = function () { return !!box; };
+  MV.readerOpen = function () { return !!box || !!mb; };
 
   // ---------- Barra ----------
   function tools() {
@@ -438,6 +471,7 @@
   // Atrás: cierra el lector (y antes, el menú de la barra)
   var origBack = MV.onBack;
   MV.onBack = function () {
+    if (mb) { try { mb.contentWindow.postMessage({ mbr: 1, type: 'back' }, '*'); } catch (e) { closeMb(); } return true; }
     if (box && !MV.modalOpen()) {
       var inBar = document.activeElement && document.activeElement.closest && document.activeElement.closest('.rdbar');
       if (inBar) { document.activeElement.blur(); box.classList.remove('rdshow'); return true; }

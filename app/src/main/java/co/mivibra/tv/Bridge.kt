@@ -424,6 +424,21 @@ class Bridge(private val a: MainActivity) {
         }
     }
 
+    /** Lectura en voz alta (lector de libros). */
+    @JavascriptInterface
+    fun ttsSpeak(id: String, text: String, lang: String?, rate: Double, voice: String?) {
+        io.execute {
+            try { Tts.speak(a, id, text, lang ?: "es-ES", rate, voice ?: "") { ok, err -> reply(id, ok, if (ok) null else err) } }
+            catch (e: Throwable) { reply(id, false, e.message ?: "Sin voz") }
+        }
+    }
+    @JavascriptInterface
+    fun ttsStop() { Tts.stop() }
+    @JavascriptInterface
+    fun ttsVoices(id: String) {
+        io.execute { try { reply(id, true, Tts.voices(a)) } catch (e: Throwable) { reply(id, false, e.message ?: "Sin voz") } }
+    }
+
     /** Carátula sacada del propio video (una imagen del contenido). */
     @JavascriptInterface
     fun videoFrame(id: String, url: String, headers: String?, at: Double) {

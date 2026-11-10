@@ -89,7 +89,8 @@ object Books {
                     }
                     File(out, ".ok").writeText("1")
                 }
-                JSONObject().put("fmt", "epub").put("base", served(ctx, out) + "/")
+                val ef = if (file2.parentFile?.canonicalPath == base.canonicalPath) file2 else File(base, "$key.epub").also { if (!it.exists()) file2.copyTo(it) }
+                JSONObject().put("fmt", "epub").put("base", served(ctx, out) + "/").put("file", served(ctx, ef))
             }
             "zip", "rar", "7z" -> {
                 val out = File(base, key)

@@ -302,7 +302,7 @@ const ASYNC = {
     if (kind === 'pdf') return reply(id, true, { fmt: 'pdf', url: served(file) });
     const out = path.join(BOOKS, key);
     if (!storage.exists(path.join(out, '.ok'))) { fs.rmSync(out, { recursive: true, force: true }); await archives.extractAll(file, out, (p) => progress(id, p)); fs.writeFileSync(path.join(out, '.ok'), '1'); }
-    if (kind === 'epub') return reply(id, true, { fmt: 'epub', base: served(out) + '/' });
+    if (kind === 'epub') return reply(id, true, { fmt: 'epub', base: served(out) + '/', file: served(file) });
     const imgs = [];
     const walk = (d) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const f = path.join(d, e.name); if (e.isDirectory()) { if (e.name !== '__MACOSX') walk(f); } else if (/\.(jpe?g|png|webp|gif|bmp|avif)$/i.test(e.name)) imgs.push(f); } };
     walk(out);
