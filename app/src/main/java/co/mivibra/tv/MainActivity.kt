@@ -239,6 +239,11 @@ class MainActivity : ComponentActivity() {
 
     private var okLong = false
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // La intro se salta con cualquier botón (OK, Enter, flechas, mando; Atrás la salta por su cuenta). Se llama directo, sin esperar a que la página
+        // termine de cargar: mientras sale la intro la página sigue cargando y la orden quedaba en espera hasta el final
+        if (event.action == KeyEvent.ACTION_UP && event.keyCode != KeyEvent.KEYCODE_VOLUME_UP && event.keyCode != KeyEvent.KEYCODE_VOLUME_DOWN && event.keyCode != KeyEvent.KEYCODE_VOLUME_MUTE &&
+            event.keyCode != KeyEvent.KEYCODE_BACK && event.keyCode != KeyEvent.KEYCODE_BUTTON_B && event.keyCode != KeyEvent.KEYCODE_ESCAPE)
+            try { web.evaluateJavascript("window.MV&&MV.introShowing&&MV.introShowing()&&MV.introSkip()", null) } catch (_: Exception) {}
         if (event.keyCode == KeyEvent.KEYCODE_SEARCH || event.keyCode == KeyEvent.KEYCODE_VOICE_ASSIST) {
             if (event.action == KeyEvent.ACTION_UP) voiceSearch()
             return true
@@ -263,8 +268,6 @@ class MainActivity : ComponentActivity() {
                     return true
                 }
                 if (event.action == KeyEvent.ACTION_DOWN) okLong = false
-                // La intro se salta con OK aunque la página todavía no tenga el foco del teclado
-                if (event.action == KeyEvent.ACTION_UP) js("window.MV&&MV.introShowing&&MV.introShowing()&&MV.introSkip()")
                 return web.dispatchKeyEvent(KeyEvent(event.downTime, event.eventTime, event.action, KeyEvent.KEYCODE_ENTER, 0))
             }
             KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_BUTTON_Y, KeyEvent.KEYCODE_BUTTON_X -> {

@@ -1652,6 +1652,8 @@
   var NEOGEO = function () { return D.SYSTEMS.find(function (s) { return s.id === 'neogeo'; }); };
   function romSystem(r) {
     var ov = P.romSystem[r.path];
+    // Juegos de Google Drive: la consola sale del nombre de su carpeta
+    if (!ov && r.drive && r.sys) ov = r.sys;
     // Lo que se marcó como Arcade y en realidad es Neo Geo va a su propia consola
     if ((ov === 'arcade' || !ov) && /^(zip|7z|rar)$/.test(r.ext || '') && arcId(r)) return NEOGEO();
     // Un .zip marcado como Arcade que en realidad trae una ROM de consola (enviado con la versión anterior) se corrige solo

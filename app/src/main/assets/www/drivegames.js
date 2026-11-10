@@ -9,6 +9,21 @@
   MV.driveOn = function () { try { return A.driveConnected() && !!cfg().folder; } catch (e) { return false; } };
   MV.driveStatus = function () { var c = cfg(); return MV.driveOn() ? 'Conectado · ' + (c.count || 0) + ' juegos en “' + (c.folderName || 'tu carpeta') + '”' : 'Tus juegos y partidas en la nube'; };
 
+  // La consola sale del nombre de la carpeta (Nintendo 64 Games, Gameboy Advanced, Sega Genesis…); se mira de la más interna a la de afuera
+  var DIRS = [
+    ['gbc', /game ?boy colou?r|\bgbc\b/], ['gba', /game ?boy adv|\bgba\b/], ['gb', /game ?boy|\bgb\b/],
+    ['nds', /nintendo ds|\bnds\b|^ds$/], ['n64', /nintendo 64|\bn64\b/], ['snes', /super nintendo|\bsnes\b|super famicom|\bsfc\b/],
+    ['nes', /nintendo entertainment|\bnes\b|famicom/], ['gc', /gamecube|game cube|\bngc\b/],
+    ['psp', /\bpsp\b|playstation portable/], ['psx', /playstation|\bpsx\b|\bps1\b/],
+    ['md', /genesis|mega ?drive/], ['sms', /master system/], ['gg', /game ?gear/], ['dc', /dreamcast/],
+    ['a26', /atari 2600|\b2600\b/], ['a78', /atari 7800|\b7800\b/], ['lynx', /lynx/], ['pce', /pc ?engine|turbografx/],
+    ['ngp', /neo ?geo pocket/], ['neogeo', /neo ?geo/], ['ws', /wonderswan/], ['arcade', /arcade|mame|fbneo|final burn/]
+  ];
+  function dirSys(sub) {
+    var parts = (sub || '').toLowerCase().split('/').filter(Boolean).reverse();
+    for (var i = 0; i < parts.length; i++) for (var j = 0; j < DIRS.length; j++) if (DIRS[j][1].test(parts[i])) return DIRS[j][0];
+    return '';
+  }
   function ext(n) { var m = /\.([a-z0-9]{1,5})$/i.exec(n || ''); return m ? m[1].toLowerCase() : ''; }
   /** Lee la carpeta y deja sus juegos en la biblioteca (reemplaza los de Drive anteriores). */
   function scan(quiet) {
@@ -16,7 +31,7 @@
     if (!quiet) MV.toast('Leyendo tus juegos de Google Drive…', 4000);
     return MV.call('driveGames', [c.folder]).then(function (files) {
       var found = (files || []).map(function (f) {
-        return { path: 'gdrive:' + f.id, name: f.name, ext: ext(f.name), size: +f.size || 0, drive: 1, pick: 1, sub: f.sub || '' };
+        return { path: 'gdrive:' + f.id, name: f.name, ext: ext(f.name), size: +f.size || 0, drive: 1, pick: 1, sub: f.sub || '', sys: dirSys(f.sub) };
       }).filter(function (r) { return r.ext && !/^(txt|nfo|jpg|jpeg|png|gif|pdf|srm|state|sav|xml|dat|ini|cfg|db|url|html?)$/.test(r.ext); });
       var list = (MV.load('roms', []) || []).filter(function (r) { return !/^gdrive:/.test(r.path || ''); });
       MV.save('roms', list.concat(found));
@@ -82,7 +97,7 @@
       MV.closeModal(true);
       MV.modal('<h2>' + esc(search ? 'Resultados de “' + search + '”' : name) + '</h2><p class="muted">Entra a la carpeta donde guardas tus juegos y toca “Usar esta carpeta”.</p>' +
         '<div class="btns" style="flex-direction:column;align-items:stretch">' +
-        (parent && !search ? '<button class="btn f" data-act="drvUse" data-autofocus>✔ Usar esta carpeta (' + esc(name) + ')</button>' : '') +
+        (!search ? '<button class="btn f" data-act="drvUse"' + (parent ? ' data-autofocus' : '') + '>✔ Usar esta carpeta (' + esc(name) + ')</button>' : '') +
         '<div style="display:flex;gap:8px"><input class="in f" id="drvQ" placeholder="Buscar carpeta por nombre" autocomplete="off" style="flex:1"><button class="btn ghost f" data-act="drvFind">Buscar</button></div>' +
         '<div style="max-height:44vh;overflow:auto;display:flex;flex-direction:column;gap:8px">' +
         (MV._drv.fs.length ? MV._drv.fs.map(function (f, i) { return '<button class="btn ghost f" data-act="drvOpen" data-arg="' + i + '"' + (!parent && !search && !i ? ' data-autofocus' : '') + '>📁 ' + esc(f.name) + '</button>'; }).join('') : '<p class="muted">No hay carpetas aquí.</p>') +
@@ -95,7 +110,7 @@
   MV.ACT.drvFind = function () { var q = ((document.getElementById('drvQ') || {}).value || '').trim(); if (!q) return; var d = MV._drv; MV.closeModal(true); browse('', d.name, d.trail.concat([{ id: d.parent, name: d.name }]), q); };
   MV.ACT.drvUse = function () {
     var d = MV._drv; MV.closeModal(true);
-    var c = cfg(); c.folder = d.parent; c.folderName = d.name; setCfg(c);
+    var c = cfg(); c.folder = d.parent || 'root'; c.folderName = d.name || 'Mi unidad'; setCfg(c);
     scan(false).then(function () { MV.call('driveSync', []).catch(function () {}); });
   };
   MV.ACT.driveRescan = function () { MV.closeModal(true); scan(false); };

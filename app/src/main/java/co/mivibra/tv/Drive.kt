@@ -79,22 +79,59 @@ object Drive {
         return out
     }
 
-    /** Carpetas para elegir: las de un nivel (parent) o las que coinciden con un nombre. */
+    private const val FOLDER = "application/vnd.google-apps.folder"
+    private const val SHORTCUT = "application/vnd.google-apps.shortcut"
+
+    /**
+     * Carpetas para elegir: las de un nivel (parent) o las que coinciden con un nombre.
+     * También los "accesos directos" a carpetas (así se ven en Mi unidad las carpetas que otros compartieron);
+     * se devuelve la carpeta real a la que apuntan. Sin parent, al final va "Compartidos conmigo".
+     */
     fun folders(token: String, parent: String?, search: String?): JSONArray {
-        val base = "mimeType='application/vnd.google-apps.folder' and trashed=false"
-        val query = if (!search.isNullOrBlank()) "$base and name contains '${search.replace("'", "\\'")}'" else "$base and '${parent ?: "root"}' in parents"
-        return listAll(token, query, "id,name")
+        val kinds = "(mimeType='$FOLDER' or mimeType='$SHORTCUT') and trashed=false"
+        val query = when {
+            !search.isNullOrBlank() -> "$kinds and name contains '${search.replace("\\", "").replace("'", "\\'")}'"
+            parent == "shared" -> "mimeType='$FOLDER' and sharedWithMe=true and trashed=false"
+            else -> "$kinds and '${parent ?: "root"}' in parents"
+        }
+        val fs = listAll(token, query, "id,name,mimeType,shortcutDetails")
+        val out = JSONArray(); val seen = HashSet<String>()
+        for (i in 0 until fs.length()) {
+            val f = fs.getJSONObject(i)
+            val id = if (f.optString("mimeType") == SHORTCUT) {
+                val d = f.optJSONObject("shortcutDetails") ?: continue
+                if (d.optString("targetMimeType") != FOLDER) continue
+                d.optString("targetId")
+            } else f.getString("id")
+            if (id.isBlank() || !seen.add(id)) continue
+            out.put(JSONObject().put("id", id).put("name", f.optString("name")))
+        }
+        val sorted = (0 until out.length()).map { out.getJSONObject(it) }.sortedBy { it.optString("name").lowercase() }
+        val res = JSONArray(); sorted.forEach { res.put(it) }
+        if (parent.isNullOrBlank() && search.isNullOrBlank()) res.put(JSONObject().put("id", "shared").put("name", "Compartidos conmigo"))
+        return res
     }
 
-    /** Archivos de la carpeta de juegos (también los de sus subcarpetas, hasta 3 niveles). */
+    /** Archivos de la carpeta de juegos (también los de sus subcarpetas y accesos directos, hasta 4 niveles). */
     fun games(token: String, folder: String): JSONArray {
-        val out = JSONArray()
+        val out = JSONArray(); val seen = HashSet<String>()
         fun walk(id: String, sub: String, depth: Int) {
-            val fs = listAll(token, "'$id' in parents and trashed=false", "id,name,size,mimeType,modifiedTime")
+            if (!seen.add(id)) return
+            val q = if (id == "shared") "sharedWithMe=true and trashed=false" else "'$id' in parents and trashed=false"
+            val fs = listAll(token, q, "id,name,size,mimeType,modifiedTime,shortcutDetails")
             for (i in 0 until fs.length()) {
-                val f = fs.getJSONObject(i)
-                if (f.optString("mimeType") == "application/vnd.google-apps.folder") { if (depth < 3) walk(f.getString("id"), sub + f.getString("name") + "/", depth + 1) }
-                else if (!f.optString("mimeType").startsWith("application/vnd.google-apps")) out.put(f.put("sub", sub))
+                val f = fs.getJSONObject(i); val mt = f.optString("mimeType")
+                when {
+                    mt == FOLDER -> if (depth < 4) walk(f.getString("id"), sub + f.getString("name") + "/", depth + 1)
+                    mt == SHORTCUT -> {
+                        val d = f.optJSONObject("shortcutDetails") ?: continue
+                        val tid = d.optString("targetId"); if (tid.isBlank()) continue
+                        if (d.optString("targetMimeType") == FOLDER) { if (depth < 4) walk(tid, sub + f.getString("name") + "/", depth + 1) }
+                        else if (!d.optString("targetMimeType").startsWith("application/vnd.google-apps") && seen.add(tid))
+                            out.put(JSONObject().put("id", tid).put("name", f.optString("name")).put("size", "0").put("sub", sub))
+                    }
+                    !mt.startsWith("application/vnd.google-apps") -> if (seen.add(f.getString("id"))) out.put(f.put("sub", sub))
+                }
             }
         }
         walk(folder, "", 0)
