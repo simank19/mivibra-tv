@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <cache-path name="updates" path="updates/" />
+    <!-- Juegos que se le pasan a otra app (PPSSPP): descomprimidos, enviados desde el celular, USB o memoria -->
+    <cache-path name="unzip" path="unzip/" />
+    <external-files-path name="roms" path="." />
+    <external-path name="shared" path="." />
+    <root-path name="root" path="/" />
 </paths>

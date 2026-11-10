@@ -500,6 +500,39 @@ class Bridge(private val a: MainActivity) {
         }
     }
 
+    // ---------------- PSP con la app PPSSPP ----------------
+    private val PPSSPP = listOf("org.ppsspp.ppssppgold", "org.ppsspp.ppsspp")
+    private fun ppssppPkg(): String? = PPSSPP.firstOrNull { try { a.packageManager.getPackageInfo(it, 0); true } catch (_: Exception) { false } }
+
+    @JavascriptInterface
+    fun ppssppInstalled(): Boolean = ppssppPkg() != null
+
+    /** Abre el juego en PPSSPP entregándoselo directamente (sin depender de permisos de carpetas). {rom, exts} */
+    @JavascriptInterface
+    fun playPpsspp(id: String, json: String) {
+        io.execute {
+            try {
+                val o = JSONObject(json)
+                val pkg = ppssppPkg() ?: throw IllegalStateException("Instala PPSSPP desde Play Store")
+                var rom = Storage.toLocalFile(a, o.getString("rom"))
+                if (Archives.supported(rom.absolutePath)) {
+                    val ex = o.optJSONArray("exts"); val exts = if (ex == null) listOf("iso", "cso", "pbp", "chd") else (0 until ex.length()).map { ex.getString(it).lowercase() }
+                    rom = File(Storage.unzipRom(a, rom.absolutePath, exts, onPct = { progress(id, it) }, keep = 3))
+                }
+                val uri = androidx.core.content.FileProvider.getUriForFile(a, a.packageName + ".files", rom)
+                a.runOnUiThread {
+                    try {
+                        val i = Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/octet-stream").setPackage(pkg)
+                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                        a.grantUriPermission(pkg, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        a.startActivity(i)
+                        reply(id, true, rom.absolutePath)
+                    } catch (e: Exception) { reply(id, false, e.message ?: "No se pudo abrir PPSSPP") }
+                }
+            } catch (e: Throwable) { reply(id, false, e.message ?: "No se pudo abrir PPSSPP") }
+        }
+    }
+
     /** {installed, pkg, bios} de la app RetroArch. */
     @JavascriptInterface
     fun retroArch(): String = RetroArch.info(a)

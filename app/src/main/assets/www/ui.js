@@ -1997,6 +1997,12 @@
   MV.gameEngine = gameEngine;
   MV.setGameEngine = function (sysId, eng) { P.gameEngine = P.gameEngine || {}; P.gameEngine[sysId] = eng; MV.savePrefs(); };
   function rememberGame(r) { var rec = (MV.load('recentGames', []) || []).filter(function (x) { return x.path !== r.path; }); rec.unshift(r); MV.save('recentGames', rec.slice(0, 30)); }
+  function playPpsspp(r, s) {
+    unzipBox(r, 0);
+    MV.call('playPpsspp', [JSON.stringify({ rom: r.path, exts: ['iso', 'cso', 'pbp', 'chd'] })], function (p) { unzipBox(r, p); })
+      .then(function () { unzipBox(null); rememberGame(r); })
+      .catch(function (e) { unzipBox(null); MV.toast(e.message, 6000); });
+  }
   function playRetroArch(r, s) {
     var info = {}; try { info = JSON.parse(A.retroArch()); } catch (e) {}
     if (!info.installed) {
@@ -2025,6 +2031,16 @@
     // Neo Geo en formato .neo (NeoSD/TerraOnion, un solo archivo): lo abre el emulador Geolith, no FBNeo
     if (s.id === 'neogeo' && (r.ext === 'neo' || (/^(zip|7z|rar)$/.test(r.ext || '') && zipInner(r).indexOf('neo') >= 0)))
       s = Object.assign({}, s, { core: 'geolith', src: 'bb', exts: ['neo'], geolith: true });
+    // PSP: con la app PPSSPP (recomendado: recibe el juego directo, sin permisos de carpetas)
+    if (A && s.id === 'psp' && A.ppssppInstalled && P.pspEngine !== 'retroarch') {
+      if (A.ppssppInstalled()) { playPpsspp(r, s); return; }
+      if (!P.pspEngine) {
+        MV._pspRom = r;
+        MV.modal('<h2>¿Con qué juego PSP?</h2><p>Recomendado: la app <b>PPSSPP</b> (gratis en Play Store). MiVibra le entrega el juego directo y suele ir más fluido que RetroArch.</p>' +
+          '<div class="btns"><button class="btn f" data-act="pspGet" data-autofocus>Instalar PPSSPP</button><button class="btn ghost f" data-act="pspUseRA">Usar RetroArch</button></div>');
+        return;
+      }
+    }
     if (A && gameEngine(s) === 'retroarch') { playRetroArch(r, s); return; }
     var start = function () {
       // Geolith busca neogeo.zip en la carpeta de BIOS: si la enviaste como juego, se copia ahí primero
@@ -2386,6 +2402,8 @@
     webGo: function () { var v = ((document.getElementById('webIn') || {}).value || '').trim(); openBrowser(v); },
     webOpen: function (u) { openBrowser(u); },
     stype: function (t) { searchType = t; showResults(); var el = document.querySelector('[data-act="stype"][data-arg="' + t + '"]'); if (el) el.focus(); },
+    pspGet: function () { MV.closeModal(true); P.pspEngine = ''; MV.savePrefs(); A.openExternal('market://details?id=org.ppsspp.ppsspp'); },
+    pspUseRA: function () { MV.closeModal(true); P.pspEngine = 'retroarch'; MV.savePrefs(); playRom(MV._pspRom); },
     neoForce: function () { MV.closeModal(true); MV._neoForce = true; playRom(MV._neoRom); },
     voiceGo: function (q) { MV.go('search'); setTimeout(function () { ACT.searchFor(q); }, 80); },
     searchFor: function (q) { query = q; var i = document.getElementById('searchIn'); if (i) i.value = q; saveRecent(q); showResults(); },
