@@ -257,7 +257,7 @@
   function emptyLists() {
     if (!MV.acct.canEdit()) return '<div class="empty glass"><img src="img/isotipo.svg" alt="" style="width:64px;height:64px"><h2>Preparando tu contenido</h2>' +
       '<p class="muted">El administrador aún no ha enviado listas a tu cuenta' + (MV.acct.user() ? ' (' + esc(MV.acct.user().email) + ')' : '') + '. Cuando lo haga, todo aparecerá aquí automáticamente.</p>' +
-      '<div class="btns" style="justify-content:center"><button class="btn f" data-act="recheck" data-autofocus>' + IC.refresh + 'Revisar de nuevo</button></div></div>';
+      '<div class="btns" style="justify-content:center"><button class="btn f" data-act="recheck" data-autofocus>' + IC.refresh + 'Revisar de nuevo</button><button class="btn ghost f" data-act="addList">' + IC.plus + 'Agregar mi propia lista</button></div></div>';
     return '<div class="empty glass"><img src="img/isotipo.svg" alt="" style="width:64px;height:64px"><h2>Agrega tu primera lista</h2>' +
       '<p class="muted">Pega el enlace de tu lista M3U, inicia sesión con Xtream Codes o empieza con canales gratuitos.</p>' +
       '<div class="btns" style="justify-content:center"><button class="btn f" data-act="addList" data-autofocus>' + IC.plus + 'Agregar lista</button><button class="btn ghost f" data-act="presets">Canales gratis</button></div></div>';
@@ -1687,9 +1687,18 @@
   }
   SETTINGS.lists = function () {
     if (!MV.acct.canEdit()) {
-      return '<div class="panel glass"><h2>Listas</h2><p>Las listas y claves las administra ' + esc((window.MV_CONFIG || {}).admin ? 'el superadministrador' : 'el administrador') + '. Se cargan solas en este equipo.</p>' +
-        (S.lists.length ? S.lists.map(function (l) { return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.type === 'xtream' ? 'Xtream Codes' : l.type === 'stalker' ? 'Portal MAC' : l.type === 'jellyfin' ? 'Jellyfin' : l.type === 'plex' ? 'Plex' : 'Lista M3U') + ' · ' + (l.count || 0) + ' elementos</span></div></div>'; }).join('') : '<p class="muted">Aún no hay listas.</p>') +
-        '<div class="btns" style="margin-top:14px"><button class="btn ghost f" data-act="reloadAll">' + IC.refresh + 'Actualizar todo</button></div></div>' + dupesPanel();
+      var kindOf = function (l) { return l.type === 'xtream' ? 'Xtream Codes' : l.type === 'stalker' ? 'Portal MAC' : l.type === 'jellyfin' ? 'Jellyfin' : l.type === 'plex' ? 'Plex' : l.type === 'file' ? 'Archivo' : 'Lista M3U'; };
+      var prov = S.lists.filter(function (l) { return !MV.acct.isOwn(l); }), own = S.lists.filter(function (l) { return MV.acct.isOwn(l); });
+      return '<div class="panel glass"><h2>Incluidas en tu servicio</h2><p>Estas listas las envía ' + esc((window.MV_CONFIG || {}).admin ? 'el superadministrador' : 'el administrador') + ' y se actualizan solas.</p>' +
+        (prov.length ? prov.map(function (l) { return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + kindOf(l) + ' · ' + (l.count || 0) + ' elementos</span></div></div>'; }).join('') : '<p class="muted">Aún no hay listas incluidas.</p>') + '</div>' +
+        '<div class="panel glass"><h2>Mis listas</h2><p>Agrega también tus propias listas (enlace M3U, Xtream o Portal MAC). Se suman a las incluidas y solo las ves tú.</p>' +
+        (own.length ? own.map(function (l) {
+          return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + kindOf(l) + ' · ' + (l.count || 0) + ' elementos' + (l.error ? ' · ' + esc(l.error) : '') + '</span></div>' +
+            '<button class="toggle f' + (l.enabled !== false ? ' on' : '') + '" data-act="listToggle" data-arg="' + l.id + '" aria-label="Activar lista"></button>' +
+            '<button class="iconbtn f" data-act="listEpg" data-arg="' + l.id + '" aria-label="Guía EPG">' + IC.guide + '</button>' +
+            '<button class="iconbtn f" data-act="listDelete" data-arg="' + l.id + '" aria-label="Eliminar">' + IC.trash + '</button></div>';
+        }).join('') : '<p class="muted">Aún no has agregado listas propias.</p>') +
+        '<div class="btns" style="margin-top:14px"><button class="btn f" data-act="addList">' + IC.plus + 'Agregar mi lista</button>' + (MV.listsWelcome ? '<button class="btn ghost f" data-act="listsWelcome">Desde el celular o la web</button>' : '') + '<button class="btn ghost f" data-act="reloadAll">' + IC.refresh + 'Actualizar todo</button></div></div>' + dupesPanel();
     }
     var share = '';
     if (MV.acct.isAdmin()) {
@@ -1713,7 +1722,7 @@
       '<div class="line"><div class="t"><b>Solo español latino</b><span>Muestra únicamente contenido en español latino (o sin idioma indicado). En K-Drama y Anime también deja el subtitulado con idioma original. Oculta castellano, inglés y otros idiomas; en TV en vivo deja canales de Latinoamérica e hispanos de EE. UU.</span></div><button class="toggle f' + (P.latOnly ? ' on' : '') + '" data-act="latToggle" aria-label="Solo español latino"></button></div>' +
       '<div class="line"><div class="t"><b>Eliminar listas vacías</b><span>Si una lista carga con 0 elementos (vencida, MAC rechazada o enlace caído) se borra sola. Si antes funcionaba, espera a que llegue vacía dos veces seguidas para no borrarla por una falla pasajera.</span></div><button class="toggle f' + (P.pruneEmpty !== false ? ' on' : '') + '" data-act="pruneToggle" aria-label="Eliminar listas vacías"></button></div>' +
       '<div class="line"><div class="t"><b>Ocultar contenido repetido</b><span>Si una película, serie o canal está en varias listas (aunque se llame distinto, como "Animales" y "Animals"), se muestra una sola vez con la versión de mejor calidad: 4K, luego Full HD, HD y SD; latino primero. Las otras quedan de respaldo por si la principal falla.</span></div><button class="toggle f' + (P.dedupe !== false ? ' on' : '') + '" data-act="dedupeToggle" aria-label="Ocultar repetidos"></button></div>' +
-      '<div class="btns" style="margin-top:14px"><button class="btn f" data-act="addList">' + IC.plus + 'Agregar lista</button><button class="btn ghost f" data-act="presets">Canales gratis</button><button class="btn ghost f" data-act="reloadAll">' + IC.refresh + 'Actualizar todo</button></div></div>' + dupesPanel();
+      '<div class="btns" style="margin-top:14px"><button class="btn f" data-act="addList">' + IC.plus + 'Agregar lista</button>' + (MV.listsWelcome ? '<button class="btn ghost f" data-act="listsWelcome">Desde el celular o la web</button>' : '') + '<button class="btn ghost f" data-act="presets">Canales gratis</button><button class="btn ghost f" data-act="reloadAll">' + IC.refresh + 'Actualizar todo</button></div></div>' + dupesPanel();
   };
   SETTINGS.menu = function () {
     var all = allNavItems().filter(function (n) { return n[0] !== 'home' && n[0] !== 'settings'; });
@@ -2379,7 +2388,7 @@
     },
     pin: function (d) { MV._pin && MV._pin(d); },
     // Listas
-    addList: function () { if (!MV.acct.canEdit()) return MV.toast('Solo el administrador puede agregar listas'); addListDialog('url'); },
+    addList: function () { addListDialog('url'); },
     closeModal: function () { MV.closeModal(); },
     pick: function (kind, el) {
       var v = el.dataset.v, d = (MV._pick || {})[v]; if (!d) return;
@@ -2601,7 +2610,6 @@
       }
     },
     presets: function () {
-      if (!MV.acct.canEdit()) return MV.toast('Solo el administrador puede agregar listas');
       MV.modal('<h2>Canales gratis</h2><p>Listas públicas de canales que se emiten gratis de forma legal.</p>' + D.PRESETS.map(function (p, i) {
         var has = S.lists.some(function (l) { return l.url === p.url; });
         return '<div class="line"><div class="t"><b>' + esc(p.name) + '</b><span>' + esc(p.note) + '</span></div><button class="btn sm f" data-act="presetAdd" data-arg="' + i + '"' + (has ? ' disabled' : '') + '>' + (has ? 'Agregada' : 'Agregar') + '</button></div>';
@@ -2612,7 +2620,7 @@
       MV.addList({ type: 'url', name: p.name, url: p.url, preset: true }).then(function () { MV.rerender(); MV.toast('Lista agregada'); }).catch(function (e) { MV.toast(e.message); });
     },
     listToggle: function (id) {
-      if (!MV.acct.canEdit()) return; var l = S.lists.find(function (x) { return x.id === id; }); l.enabled = l.enabled === false; l.updatedAt = Date.now(); MV.saveLists(); MV.reloadCatalog(false).then(MV.rerender); MV.rerender(); },
+      var l = S.lists.find(function (x) { return x.id === id; }); if (!MV.acct.canEditList(l)) return; l.enabled = l.enabled === false; l.updatedAt = Date.now(); MV.saveLists(); MV.reloadCatalog(false).then(MV.rerender); MV.rerender(); },
     lselStart: function () { LSEL = {}; MV.rerender(); var r = document.querySelector('.selrow'); if (r) r.focus(); },
     lselCancel: function () { LSEL = null; MV.rerender(); },
     lselToggle: function (id, el) {
@@ -2629,7 +2637,7 @@
       MV.rerender();
     },
     lselDelete: function () {
-      var ids = Object.keys(LSEL || {}); if (!ids.length || !MV.acct.canEdit()) return;
+      var ids = Object.keys(LSEL || {}).filter(function (id) { return MV.acct.canEditList(S.lists.find(function (x) { return x.id === id; })); }); if (!ids.length) return;
       MV.confirm('¿Eliminar ' + ids.length + (ids.length === 1 ? ' lista?' : ' listas?'), 'Se quitan de este equipo' + (MV.acct.isAdmin() ? ' y de todos tus usuarios' : '') + '. No se puede deshacer.', 'Eliminar').then(function (y) {
         if (!y) return;
         LSEL = null;
@@ -2639,7 +2647,7 @@
       });
     },
     listDelete: function (id, btn) {
-      if (!MV.acct.canEdit()) return;
+      if (!MV.acct.canEditList(S.lists.find(function (x) { return x.id === id; }))) return;
       var row = btn && btn.closest ? btn.closest('.line') : null;
       MV.confirm('¿Eliminar esta lista?', '', 'Eliminar').then(function (y) {
         if (!y) return;
@@ -3712,7 +3720,6 @@
   MV.onStorageChanged = function () { if (view.name === 'games') { MV.toast('Unidad conectada: buscando juegos…'); ACT.scanRoms(); } };
   MV.onResume = function () { if (view.name === 'games') MV.rerender(); };
   MV.onOpenFile = function (d) {
-    if (!MV.acct.canEdit()) { MV.toast('Solo el administrador puede agregar listas'); return; }
     fetch(d.path).then(function (r) { return r.text(); }).then(function (txt) {
       if (!/#EXTINF/i.test(txt.slice(0, 20000)) && (MV.parseMacList(txt).length || (MV.parseUrlList(txt) || []).length)) { MV.go('settings'); setTimeout(function () { multiWith(txt); }, 300); return 'multi'; }
       var l = { id: 'l' + Date.now().toString(36), type: 'file', name: 'Lista abierta', enabled: true, added: Date.now(), updatedAt: Date.now() };

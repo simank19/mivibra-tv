@@ -19,6 +19,11 @@
     isAdmin: function () { var u = MV.sync.user; return !!(u && acct.managed() && lower(u.email) === lower(C.admin)); },
     /** ¿Puede este dispositivo cambiar listas y claves? (sin cuenta administrada: sí) */
     canEdit: function () { return !acct.managed() || acct.isAdmin(); },
+    /** Todos pueden agregar listas propias; las tuyas (del superadministrador) solo las cambias tú. */
+    canAdd: function () { return true; },
+    canEditList: function (l) { return acct.canEdit() || !!(l && (l.own || l.type === 'file')); },
+    /** ¿Esta lista es del cliente (no viene del superadministrador)? */
+    isOwn: function (l) { return !!(l && (l.own || l.type === 'file')) && acct.managed() && !acct.isAdmin(); },
     hasGoogleButton: function () { return !!(C.webClientId && MV.native); },
     hasCode: function () { return !!(C.tvClientId && C.tvClientSecret); }
   };
@@ -33,7 +38,7 @@
 
   function doc() { return firebase.firestore().collection('app').doc('config'); }
   function sharedLists() {
-    return S.lists.filter(function (l) { return l.type !== 'file'; }).map(function (l) {
+    return S.lists.filter(function (l) { return l.type !== 'file' && !l.own; }).map(function (l) {
       var c = Object.assign({}, l); delete c.error; delete c.count; delete c.epgAuto; return c;
     });
   }
@@ -74,14 +79,15 @@
       var navSig = JSON.stringify([cfg.navOrder || [], cfg.navHidden || []]);
       if (navSig !== JSON.stringify([P.navOrder || [], P.navHidden || []])) { P.navOrder = cfg.navOrder || []; P.navHidden = cfg.navHidden || []; MV.save('prefs', P); if (MV.rerender) setTimeout(MV.rerender, 0); }
       var admin = acct.isAdmin();
-      var mine = admin ? S.lists.filter(function (l) { return l.type === 'file'; }) : [];
+      // Se conservan siempre las listas propias del cliente (y los archivos de este equipo) junto a las tuyas
+      var mine = S.lists.filter(function (l) { return l.type === 'file' || (!admin && l.own); });
       var remote = (cfg.lists || []).map(function (rl) {
         var ll = S.lists.find(function (l) { return l.id === rl.id; });
         return ll ? Object.assign({}, ll, rl) : rl;
       });
       // Superadministrador: las listas de este equipo que aún no están en la nube se conservan y se suben
       var missing = admin ? S.lists.filter(function (l) {
-        return l.type !== 'file' && !remote.some(function (r) { return r.id === l.id || (l.url && r.url === l.url) || (l.type === 'xtream' && r.type === 'xtream' && r.host === l.host && r.user === l.user); });
+        return l.type !== 'file' && !l.own && !remote.some(function (r) { return r.id === l.id || (l.url && r.url === l.url) || (l.type === 'xtream' && r.type === 'xtream' && r.host === l.host && r.user === l.user); });
       }) : [];
       var next = remote.concat(missing, mine);
       var sig = function (arr) { return JSON.stringify(arr.map(function (l) { return [l.id, l.url, l.host, l.user, l.pass, l.enabled, l.epg]; })); };

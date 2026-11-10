@@ -1,0 +1,57 @@
+name: Panel web de listas
+
+# Publica en GitHub Pages la página donde cada cliente agrega su lista con el código de su TV.
+# Solo lleva la configuración pública de Firebase (nada de claves secretas).
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/src/main/assets/www/listas.html"
+      - ".github/workflows/panel.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.dep.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Armar el panel
+        env:
+          MV_FIREBASE: ${{ secrets.MV_FIREBASE }}
+        run: |
+          mkdir -p site/panel
+          cp app/src/main/assets/www/listas.html site/panel/index.html
+          cp app/src/main/assets/www/img/isotipo.svg site/panel/isotipo.svg
+          python3 - <<'PY'
+          import json, os, re
+          fb = os.environ.get('MV_FIREBASE', '').strip()
+          cfg = {}
+          if fb:
+              body = fb[fb.find('{'):fb.rfind('}') + 1]
+              body = re.sub(r'//[^\n]*', '', body)
+              body = re.sub(r'([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:', r'\1"\2":', body)
+              body = re.sub(r',\s*}', '}', body).replace("'", '"')
+              cfg = json.loads(body)
+          open('site/panel/config.js', 'w').write('window.MV_CONFIG = ' + json.dumps({'firebase': cfg}) + ';\n')
+          PY
+          printf '<!doctype html><meta http-equiv="refresh" content="0;url=panel/">' > site/index.html
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: dep
+        uses: actions/deploy-pages@v4

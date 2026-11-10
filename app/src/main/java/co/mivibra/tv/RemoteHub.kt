@@ -55,6 +55,10 @@ object RemoteHub {
     )
 
     /** Llegó una ROM o BIOS desde el celular: la app la agrega a Juegos sin tener que buscar. */
+    fun listReceived(json: String) {
+        ui.post { main?.js("window.MV&&MV.onListReceived&&MV.onListReceived(" + json + ")") }
+    }
+
     fun romReceived(json: String) {
         ui.post { main?.js("window.MV&&MV.onRomReceived&&MV.onRomReceived(" + json + ")") }
     }

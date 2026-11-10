@@ -54,10 +54,13 @@ class RemoteServer(private val ctx: Context, port: Int = PORT) : NanoWSD(port) {
         // Enviar ROMs y BIOS desde el celular
         if (path == "/roms/info") return romInfo()
         if (path == "/roms/upload" && session.method == NanoHTTPD.Method.POST) return romUpload(session)
+        // Agregar una lista de TV desde el celular
+        if (path == "/listas/add" && session.method == NanoHTTPD.Method.POST) return listAdd(session)
         val asset = when {
             path == "/" || path == "/index.html" -> "www/pad.html"
             path == "/roms" || path == "/roms/" -> "www/roms.html"
-            path == "/isotipo.svg" -> "www/img/isotipo.svg"
+            path == "/listas" || path == "/listas/" -> "www/listas.html"
+            path == "/isotipo.svg" || path == "/listas/isotipo.svg" -> "www/img/isotipo.svg"
             else -> null
         } ?: return NanoHTTPD.newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "No encontrado")
         return try {
@@ -70,6 +73,25 @@ class RemoteServer(private val ctx: Context, port: Int = PORT) : NanoWSD(port) {
         } catch (e: IOException) {
             NanoHTTPD.newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", e.message ?: "error")
         }
+    }
+
+    // ---------------- Listas desde el celular ----------------
+
+    private fun listAdd(session: IHTTPSession): Response {
+        fun reply(ok: Boolean, msg: String = "") = NanoHTTPD.newFixedLengthResponse(if (ok) Response.Status.OK else Response.Status.BAD_REQUEST, "application/json",
+            JSONObject().put("ok", ok).apply { if (msg.isNotEmpty()) put("error", msg) }.toString())
+        return try {
+            val len = (session.headers["content-length"]?.toIntOrNull() ?: 0)
+            if (len <= 0 || len > 16 * 1024) return reply(false, "Datos no válidos")
+            val buf = ByteArray(len); var off = 0
+            while (off < len) { val r = session.inputStream.read(buf, off, len - off); if (r <= 0) break; off += r }
+            val o = JSONObject(String(buf, 0, off, Charsets.UTF_8))
+            val clean = JSONObject()
+            for (k in listOf("type", "name", "url", "epg", "host", "user", "pass", "portal", "mac")) if (o.has(k)) clean.put(k, o.optString(k).take(2000))
+            if (clean.optString("type") !in listOf("url", "xtream", "stalker")) return reply(false, "Tipo de lista no válido")
+            RemoteHub.listReceived(clean.toString())
+            reply(true)
+        } catch (e: Exception) { reply(false, e.message ?: "Error") }
     }
 
     // ---------------- ROMs desde el celular ----------------

@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0D0C0B">
+<title>Agregar mi lista · MiVibra TV</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: #0D0C0B; color: #F3EFEA; font: 16px/1.5 system-ui, -apple-system, Roboto, sans-serif; padding: 24px 18px 48px; }
+  main { max-width: 520px; margin: 0 auto; }
+  header { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 20px; }
+  header img { width: 30px; height: 30px; }
+  h1 { font-size: 25px; line-height: 1.15; margin: 22px 0 6px; }
+  p { color: #B9B1A8; margin: 0 0 16px; }
+  .tabs { display: flex; gap: 8px; margin: 18px 0 12px; flex-wrap: wrap; }
+  .tabs button { flex: 1; min-width: 100px; padding: 11px 8px; border-radius: 12px; border: 1px solid rgba(255,255,255,.15); background: rgba(255,255,255,.06); color: #F3EFEA; font: inherit; font-weight: 700; font-size: 14px; }
+  .tabs button.on { background: #FF6900; color: #0D0C0B; border-color: #FF6900; }
+  label { display: block; font-size: 14px; color: #B9B1A8; margin: 12px 0 4px; }
+  input { width: 100%; padding: 13px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,.2); background: #1A1715; color: #F3EFEA; font: inherit; }
+  input.code { font-size: 26px; font-weight: 800; letter-spacing: 5px; text-transform: uppercase; text-align: center; }
+  .pane { display: none; } .pane.on { display: block; }
+  button.go { width: 100%; margin-top: 20px; padding: 16px; border: 0; border-radius: 16px; background: #FF6900; color: #0D0C0B; font: inherit; font-weight: 800; font-size: 17px; }
+  button.go:disabled { opacity: .45; }
+  .msg { margin-top: 14px; padding: 12px 14px; border-radius: 12px; display: none; font-size: 15px; }
+  .msg.ok { display: block; background: rgba(34,197,94,.15); color: #86EFAC; }
+  .msg.err { display: block; background: rgba(255,122,107,.15); color: #FFB4A9; }
+  .tip { font-size: 13px; color: #8E877F; margin-top: 22px; }
+  .hide { display: none; }
+</style>
+</head>
+<body>
+<main>
+<header><img src="isotipo.svg" alt="" onerror="this.remove()">MiVibra TV</header>
+<h1>Agregar mi lista</h1>
+<p id="intro">Pega los datos que te dio tu proveedor. La lista aparece sola en tu TV en unos segundos.</p>
+
+<div id="codeBox" class="hide">
+  <label for="code">Código de tu TV (en la TV: Ajustes › Listas › Desde el celular o la web)</label>
+  <input id="code" class="code" maxlength="9" placeholder="ABCD-1234" autocomplete="off" autocapitalize="characters">
+</div>
+
+<div class="tabs">
+  <button data-t="url" class="on">Enlace M3U</button>
+  <button data-t="xtream">Xtream</button>
+  <button data-t="stalker">Portal + MAC</button>
+</div>
+
+<label for="name">Nombre para reconocerla (opcional)</label>
+<input id="name" placeholder="Mi lista" maxlength="60">
+
+<div class="pane on" data-p="url">
+  <label for="url">Enlace de la lista (http://…)</label>
+  <input id="url" type="url" placeholder="http://servidor.com/lista.m3u" autocomplete="off">
+  <label for="epg">Guía EPG (opcional)</label>
+  <input id="epg" type="url" placeholder="http://servidor.com/epg.xml" autocomplete="off">
+</div>
+<div class="pane" data-p="xtream">
+  <label for="host">Servidor (http://…:puerto)</label>
+  <input id="host" type="url" placeholder="http://servidor.com:8080" autocomplete="off">
+  <label for="user">Usuario</label>
+  <input id="user" autocomplete="off" autocapitalize="off">
+  <label for="pass">Contraseña</label>
+  <input id="pass" autocomplete="off" autocapitalize="off">
+</div>
+<div class="pane" data-p="stalker">
+  <label for="portal">URL del portal</label>
+  <input id="portal" type="url" placeholder="http://servidor.com/c/" autocomplete="off">
+  <label for="mac">MAC</label>
+  <input id="mac" placeholder="00:1A:79:AB:CD:EF" autocomplete="off" autocapitalize="characters">
+</div>
+
+<button class="go" id="go">Enviar a mi TV</button>
+<div class="msg" id="msg"></div>
+<p class="tip">MiVibra TV es solo un reproductor: no vende ni incluye canales. Usa listas que tengas derecho a ver.</p>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  // En la red de la casa la página la sirve la TV (puerto 8765); si no, es el panel web y se usa el código
+  var local = location.port === '8765';
+  var type = 'url', fb = null;
+  if (!local) { $('codeBox').classList.remove('hide'); $('intro').textContent = 'Desde cualquier lugar: escribe el código de tu TV y pega los datos que te dio tu proveedor. La TV la recibe sola por internet.'; }
+  var saved = ''; try { saved = localStorage.getItem('mvCode') || ''; } catch (e) {}
+  if (!local && saved) $('code').value = saved;
+  var q = new URLSearchParams(location.search); if (q.get('c')) $('code').value = q.get('c');
+
+  Array.prototype.forEach.call(document.querySelectorAll('.tabs button'), function (b) {
+    b.onclick = function () {
+      type = b.dataset.t;
+      Array.prototype.forEach.call(document.querySelectorAll('.tabs button'), function (x) { x.classList.toggle('on', x === b); });
+      Array.prototype.forEach.call(document.querySelectorAll('.pane'), function (p) { p.classList.toggle('on', p.dataset.p === type); });
+    };
+  });
+  function show(ok, text) { var m = $('msg'); m.className = 'msg ' + (ok ? 'ok' : 'err'); m.textContent = text; }
+  function val(id) { return $(id).value.trim(); }
+  function data() {
+    var o = { type: type, name: val('name') };
+    if (type === 'url') { o.url = val('url'); o.epg = val('epg'); if (!/^https?:\/\//i.test(o.url)) throw new Error('El enlace debe empezar con http:// o https://'); }
+    if (type === 'xtream') { o.host = val('host'); o.user = val('user'); o.pass = $('pass').value; if (!/^https?:\/\//i.test(o.host) || !o.user) throw new Error('Escribe el servidor (con http://) y el usuario'); }
+    if (type === 'stalker') {
+      o.portal = val('portal');
+      var m = val('mac').toUpperCase().replace(/[^0-9A-F]/g, '');
+      if (m.length !== 12) throw new Error('La MAC debe tener 12 caracteres, como 00:1A:79:AB:CD:EF');
+      o.mac = m.match(/../g).join(':');
+      if (!/^https?:\/\//i.test(o.portal)) throw new Error('La URL del portal debe empezar con http://');
+    }
+    return o;
+  }
+  function loadFb() {
+    if (fb) return Promise.resolve(fb);
+    var C = window.MV_CONFIG || {}, t = typeof C.firebase === 'string' ? C.firebase : JSON.stringify(C.firebase || '');
+    var cfg; try { cfg = (new Function('return (' + t.slice(t.indexOf('{'), t.lastIndexOf('}') + 1) + ');'))(); } catch (e) {}
+    if (!cfg || !cfg.projectId) return Promise.reject(new Error('El panel aún no está configurado'));
+    var base = 'https://www.gstatic.com/firebasejs/10.12.2/';
+    function load(src) { return new Promise(function (res, rej) { var s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = function () { rej(new Error('Sin conexión')); }; document.head.appendChild(s); }); }
+    return load(base + 'firebase-app-compat.js').then(function () { return load(base + 'firebase-firestore-compat.js'); }).then(function () {
+      if (!firebase.apps.length) firebase.initializeApp(cfg); fb = firebase; return fb;
+    });
+  }
+  $('go').onclick = function () {
+    var o; try { o = data(); } catch (e) { return show(false, e.message); }
+    var btn = $('go'); btn.disabled = true; btn.textContent = 'Enviando…';
+    var done = function () { btn.disabled = false; btn.textContent = 'Enviar a mi TV'; };
+    if (local) {
+      fetch('/listas/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(o) })
+        .then(function (r) { return r.json(); })
+        .then(function (r) { if (!r.ok) throw new Error(r.error || 'La TV no la recibió'); show(true, '¡Listo! Mira la TV: la lista se está cargando.'); })
+        .catch(function (e) { show(false, e.message || 'No se pudo conectar con la TV'); }).then(done);
+      return;
+    }
+    var code = val('code').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (code.length !== 8) { done(); return show(false, 'El código de la TV tiene 8 caracteres, como ABCD-1234'); }
+    try { localStorage.setItem('mvCode', code); } catch (e) {}
+    o.at = Date.now();
+    loadFb().then(function (f) { return f.firestore().collection('inbox').doc(code).collection('lists').add(o); })
+      .then(function () { show(true, '¡Enviada! Si la TV está encendida y con internet, la lista aparece en unos segundos. Si está apagada, llega al encenderla (hasta 7 días).'); })
+      .catch(function (e) { show(false, /permission/i.test(e.code || e.message) ? 'El servicio no aceptó el envío. Revisa el código e inténtalo de nuevo.' : (e.message || 'No se pudo enviar')); })
+      .then(done);
+  };
+})();
+</script>
+<script src="config.js" onerror="0"></script>
+</body>
+</html>

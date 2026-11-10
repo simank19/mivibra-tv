@@ -626,3 +626,10 @@ html.lite .card .shine { display: none; }
 .card .th .mono .sysic { width: 2.2em; height: 2.2em; display: block; }
 .sysb i .sysimg { width: 92%; height: 92%; }
 .sysb i:has(.sysimg) { background: #1B1916 !important; }
+/* Agregar mi lista: tres caminos */
+.wz{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:14px 0}
+.wzc{display:flex;flex-direction:column;gap:8px;padding:16px;border-radius:16px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1)}
+.wzc span{font-size:14px;opacity:.85}.wzc small{opacity:.7;word-break:break-all}.wzc small.big{font-size:16px;font-weight:700;opacity:1}
+.wzc .qr{width:150px;background:#fff;border-radius:10px;padding:6px}.wzc .qr svg{width:100%;height:auto;display:block}
+.wzcode{font:800 30px/1 var(--brand,inherit);letter-spacing:4px;padding:10px 0}
+@media (max-width:760px){.wz{grid-template-columns:1fr}}

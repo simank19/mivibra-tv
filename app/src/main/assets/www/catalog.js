@@ -877,8 +877,8 @@
       return loadList(l, force).catch(function (e) { failed.push(l.name + ': ' + e.message); if (!l.count) l.zeroLoads = (l.zeroLoads || 0) + 1; return []; });
     })).then(function (all) {
       // Listas con 0 elementos: se eliminan solas (si nunca trajeron nada, de una; si antes funcionaban, tras 2 cargas vacías seguidas)
-      if (P.pruneEmpty !== false && MV.acct && MV.acct.canEdit && MV.acct.canEdit()) {
-        var gone = lists.filter(function (l, i) { return !(all[i] || []).length && !l.count && l.zeroLoads >= (l.hadItems ? 2 : 1); });
+      if (P.pruneEmpty !== false && MV.acct && MV.acct.canEditList) {
+        var gone = lists.filter(function (l, i) { return MV.acct.canEditList(l) && !(all[i] || []).length && !l.count && l.zeroLoads >= (l.hadItems ? 2 : 1); });
         if (gone.length) {
           var ids = gone.map(function (l) { return l.id; });
           all = all.filter(function (_, i) { return ids.indexOf(lists[i].id) < 0; });
@@ -1133,6 +1133,8 @@
   MV.addList = function (list) {
     list.id = 'l' + Date.now().toString(36);
     list.enabled = true; list.added = Date.now(); list.updatedAt = Date.now();
+    // Lista del cliente: se queda junto a las del superadministrador y viaja con su cuenta
+    if (MV.acct && MV.acct.managed() && !MV.acct.isAdmin()) list.own = true;
     S.lists.push(list); MV.saveLists();
     return loadList(list, true).then(function () { MV.saveLists(); return MV.reloadCatalog(false); }).then(function () {
       // Resumen de lo que aportó la lista (y por qué parte no se ve: repetidos o idioma)
@@ -1178,7 +1180,7 @@
       return !S.lists.some(function (x) { return (l.url && x.url === l.url) || (l.type === 'stalker' && x.type === 'stalker' && (x.portal || '').toLowerCase().replace(/\/+$/, '') === (l.portal || '').toLowerCase().replace(/\/+$/, '') && (x.macs || [x.mac]).indexOf(l.mac) >= 0) || (l.type === 'xtream' && x.type === 'xtream' && x.host === l.host && x.user === l.user); });
     });
     var base = Date.now();
-    fresh.forEach(function (l, i) { l.id = 'l' + (base + i).toString(36); l.enabled = true; l.added = base; l.updatedAt = base; S.lists.push(l); });
+    fresh.forEach(function (l, i) { l.id = 'l' + (base + i).toString(36); l.enabled = true; l.added = base; l.updatedAt = base; if (MV.acct && MV.acct.managed() && !MV.acct.isAdmin()) l.own = true; S.lists.push(l); });
     MV.saveLists();
     var done = 0, failed = [];
     return fresh.reduce(function (p, l) {
@@ -1526,7 +1528,7 @@
       S.profiles.forEach(function (p) { pdata[p.id] = MV.pdata(p.id); });
       var managed = MV.acct && MV.acct.managed();
       var prefs = { theme: P.theme, autoTheme: P.autoTheme, glass: P.glass, anim: P.anim, bgAnim: P.bgAnim, tmdbKey: managed ? '' : P.tmdbKey, ytKey: managed ? '' : P.ytKey, subKey: managed ? '' : P.subKey, streamKeys: managed ? {} : P.streamKeys, covers: P.covers, kidsLimit: P.kidsLimit, parentPin: P.parentPin, adult: P.adult, audioLang: P.audioLang, subLang: P.subLang, updatedAt: P.updatedAt };
-      return { v: 1, updatedAt: Date.now(), device: P.deviceName, profiles: S.profiles, pdata: pdata, prefs: prefs, lists: P.syncLists && !managed ? S.lists.map(function (l) { var c = Object.assign({}, l); delete c.error; return c; }) : null };
+      return { v: 1, updatedAt: Date.now(), device: P.deviceName, profiles: S.profiles, pdata: pdata, prefs: prefs, lists: managed ? S.lists.filter(function (l) { return l.own; }).map(function (l) { var c = Object.assign({}, l); delete c.error; return c; }) : P.syncLists ? S.lists.map(function (l) { var c = Object.assign({}, l); delete c.error; return c; }) : null };
     },
     push: function () {
       if (!fb || !MV.sync.user || applying) return Promise.resolve();
@@ -1561,7 +1563,7 @@
         MV.save('pdata:' + pid, ld);
       });
       var managed = MV.acct && MV.acct.managed();
-      if (managed) { if (r.prefs) { delete r.prefs.tmdbKey; delete r.prefs.ytKey; delete r.prefs.subKey; delete r.prefs.streamKeys; } r.lists = null; }
+      if (managed) { if (r.prefs) { delete r.prefs.tmdbKey; delete r.prefs.ytKey; delete r.prefs.subKey; delete r.prefs.streamKeys; } r.lists = MV.acct.isAdmin() ? null : (r.lists || []).filter(function (l) { return l.own; }); }
       if (r.prefs && (r.prefs.updatedAt || 0) > (P.updatedAt || 0)) { Object.assign(P, r.prefs); MV.save('prefs', P); MV.applyLook && MV.applyLook(); }
       var listsChanged = false;
       (r.lists || []).forEach(function (rl) {
