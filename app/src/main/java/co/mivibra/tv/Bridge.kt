@@ -448,7 +448,7 @@ class Bridge(private val a: MainActivity) {
                 val src = Storage.toLocalFile(a, o.getString("path"))
                 val arr = o.optJSONArray("exts") ?: JSONArray()
                 val exts = (0 until arr.length()).map { arr.getString(it).lowercase() }
-                val out = Storage.unzipRom(a, src.absolutePath, exts) { progress(id, it) }
+                val out = Storage.unzipRom(a, src.absolutePath, exts, onPct = { progress(id, it) })
                 reply(id, true, out)
             } catch (e: OutOfMemoryError) {
                 reply(id, false, "El TV no tiene memoria suficiente para abrir este .7z. Envíalo en .zip o sin comprimir.")
