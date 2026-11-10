@@ -167,7 +167,44 @@ class GameActivity : ComponentActivity() {
     fun remoteMenu() { showMenu() }
 
     fun remoteKey(slot: Int, keyCode: Int, down: Boolean) {
-        retroView.sendKeyEvent(if (down) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, pspSwap(keyCode), portFor(slot))
+        // Configurando: el celular también se puede configurar (sus botones quedan guardados para todos los celulares)
+        if (configStep >= 0) {
+            if (!down || keyCode in DPAD_KEYS || configDevice != null) return
+            configPhone = true
+            if (configMap.containsKey(keyCode)) return
+            configMap[keyCode] = CONFIG_STEPS[configStep].second
+            configStep++; showConfigStep()
+            return
+        }
+        val k = phoneMap()[keyCode] ?: keyCode
+        retroView.sendKeyEvent(if (down) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, pspSwap(k), portFor(slot))
+    }
+    private var configPhone = false
+    private fun phoneMap(): Map<Int, Int> = mapCache.getOrPut(PHONE_KEY) {
+        (prefs.getString(PHONE_KEY, "") ?: "").split(',').mapNotNull {
+            val p = it.split(':'); if (p.size == 2) (p[0].toIntOrNull() ?: return@mapNotNull null) to (p[1].toIntOrNull() ?: return@mapNotNull null) else null
+        }.toMap()
+    }
+
+    /** Celular como mando desde el menú del juego: código QR para escanear sin salir del juego. */
+    private fun phoneQr() {
+        val ip = RemoteServer.localIp(this)
+        try { if (RemoteHub.server == null) { val s = RemoteServer(applicationContext); s.start(0, true); RemoteHub.server = s } } catch (_: Exception) {}
+        if (ip == null) { Toast.makeText(this, "Conecta la TV al Wi-Fi para usar el celular como mando", Toast.LENGTH_LONG).show(); return }
+        val url = "http://$ip:${RemoteServer.PORT}/?k=${RemoteServer.key(this)}"
+        val wv = android.webkit.WebView(this)
+        wv.settings.javaScriptEnabled = true
+        wv.setBackgroundColor(Color.WHITE)
+        val html = "<html><body style='margin:0;background:#fff;display:flex;flex-direction:column;align-items:center;font:16px sans-serif;color:#222'>" +
+            "<div id=q style='width:260px;height:260px;margin:12px'></div><div style='padding:0 12px 12px;text-align:center'>Escanea con el celular (mismo Wi-Fi) y elige <b>Mando de juego</b><br><small>$url</small></div>" +
+            "<script src='qrcode.js'></script><script>var q=qrcode(0,'M');q.addData('$url');q.make();document.getElementById('q').innerHTML=q.createSvgTag({cellSize:6,margin:2,scalable:true});</script></body></html>"
+        wv.loadDataWithBaseURL("file:///android_asset/www/", html, "text/html", "utf-8", null)
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
+            .setTitle("Celular como mando")
+            .setView(wv)
+            .setPositiveButton("Listo") { d, _ -> d.dismiss(); retroView.requestFocus() }
+            .setOnDismissListener { retroView.requestFocus() }
+            .show()
     }
 
     fun remoteAxis(slot: Int, stick: String, x: Float, y: Float) = sendAxis(portFor(slot), stick, x, y)
@@ -260,6 +297,7 @@ class GameActivity : ComponentActivity() {
 
     // ---- Asignación personalizada de botones (menú › Configurar mando) ----
     private val prefs by lazy { getSharedPreferences("mandos", MODE_PRIVATE) }
+    private val PHONE_KEY = "map2_celular"
     private val mapCache = HashMap<String, Map<Int, Int>>()
     private fun devKey(d: InputDevice?) = "map2_" + (d?.descriptor ?: d?.name ?: "x")
     private fun customMap(d: InputDevice?): Map<Int, Int> = mapCache.getOrPut(devKey(d)) {
@@ -280,7 +318,7 @@ class GameActivity : ComponentActivity() {
 
     private fun startConfig() {
         releaseEverything(); configHeld = -1
-        configStep = 0; configDevice = null; configMap.clear()
+        configStep = 0; configDevice = null; configMap.clear(); configPhone = false
         val root = window.decorView.findViewById<FrameLayout>(android.R.id.content)
         configView = TextView(this).apply {
             setTextColor(Color.WHITE); textSize = 26f; gravity = Gravity.CENTER
@@ -292,13 +330,17 @@ class GameActivity : ComponentActivity() {
 
     private fun showConfigStep() {
         if (configStep >= CONFIG_STEPS.size) { finishConfig(); return }
-        configView?.text = "Configurar mando  (${configStep + 1}/${CONFIG_STEPS.size})\n\nPresiona en el mando:\n\n${CONFIG_STEPS[configStep].first}\n\n" +
+        configView?.text = "Configurar mando  (${configStep + 1}/${CONFIG_STEPS.size})\n\nPresiona en el mando " + (if (configPhone) "(celular)" else "o en el celular") + ":\n\n${CONFIG_STEPS[configStep].first}\n\n" +
             "Si tu mando no tiene ese botón, presiona Atrás en el control de la TV para saltarlo."
     }
 
     private fun finishConfig() {
         val d = configDevice
-        if (d != null && configMap.isNotEmpty()) {
+        if (configPhone && configMap.isNotEmpty()) {
+            prefs.edit().putString(PHONE_KEY, configMap.entries.joinToString(",") { "${it.key}:${it.value}" }).apply()
+            mapCache.remove(PHONE_KEY)
+            Toast.makeText(this, "Celular como mando configurado", Toast.LENGTH_LONG).show()
+        } else if (d != null && configMap.isNotEmpty()) {
             prefs.edit().putString(devKey(d), configMap.entries.joinToString(",") { "${it.key}:${it.value}" }).apply()
             mapCache.remove(devKey(d))
             Toast.makeText(this, "Mando \"${d.name}\" configurado", Toast.LENGTH_LONG).show()
@@ -318,6 +360,7 @@ class GameActivity : ComponentActivity() {
         val fromPad = event.device != null && !event.device.isVirtual &&
             (code != KeyEvent.KEYCODE_BACK || samePad || fromGamepad(event.source))
         if (!fromPad) { configStep++; showConfigStep(); return true }   // Atrás del control de la TV = saltar
+        if (configPhone) return true                                    // se está configurando el celular
         if (configDevice == null) configDevice = event.device
         if (event.deviceId != configDevice?.id) return true
         if (configMap.containsKey(code)) return true                    // ese botón ya quedó asignado
@@ -577,7 +620,7 @@ class GameActivity : ComponentActivity() {
         pad?.releaseAll()
         val padItem = if (pad == null) null else if (pad?.visibility == View.VISIBLE) "Ocultar controles en pantalla" else "Mostrar controles en pantalla"
         val frameItem = if (!Overlays.available(sys)) null else "Marco: " + (if (Overlays.enabled(this, sys)) Overlays.styleName(Overlays.style(this, sys)) else "sin marco")
-        val items = listOfNotNull("Continuar", "Guardar partida", "Cargar partida", "Reiniciar juego", frameItem, "Configurar mando", "Probar mando", "Salir del juego", padItem).toTypedArray()
+        val items = listOfNotNull("Continuar", "Guardar partida", "Cargar partida", "Reiniciar juego", frameItem, "Celular como mando", "Configurar mando", "Probar mando", "Salir del juego", padItem).toTypedArray()
         AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
             .setTitle(intent.getStringExtra("title") ?: "Juego")
             .setItems(items) { d, which ->
@@ -587,6 +630,7 @@ class GameActivity : ComponentActivity() {
                     "Guardar partida" -> saveState()
                     "Cargar partida" -> loadState()
                     "Reiniciar juego" -> retroView.reset()
+                    "Celular como mando" -> phoneQr()
                     "Configurar mando" -> startConfig()
                     "Probar mando" -> startTest()
                     frameItem -> chooseFrame()
