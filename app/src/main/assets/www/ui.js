@@ -1754,7 +1754,12 @@
   };
   SETTINGS.look = function () {
     var ss = D.seasonFor(new Date());
-    return '<div class="panel glass"><h2>Tutorial</h2><div class="line"><div class="t"><b>Volver a ver el tutorial</b><span>Explica de nuevo cada botón la próxima vez que entres a cada sección</span></div><button class="btn sm f" data-act="tourAgain">Ver de nuevo</button></div></div>' +
+    var im = P.introMode || 'daily';
+    return '<div class="panel glass"><h2>Intro de bienvenida</h2><p class="muted">La animación con el logo, las secciones y las consolas al abrir la app. Se salta con OK.</p>' +
+      '<div class="chips">' + [['always', 'Siempre'], ['daily', 'Una vez al día'], ['never', 'Nunca']].map(function (o) { return '<button class="chip f' + (im === o[0] ? ' on' : '') + '" data-act="introMode" data-arg="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>' +
+      '<div class="line"><div class="t"><b>Sonido de la intro</b><span>Banda sonora sintetizada</span></div><button class="toggle f' + (P.introSound !== false ? ' on' : '') + '" data-act="introSound"></button></div>' +
+      '<div class="btns"><button class="btn sm f" data-act="introNow">Ver la intro ahora</button></div></div>' +
+      '<div class="panel glass"><h2>Tutorial</h2><div class="line"><div class="t"><b>Volver a ver el tutorial</b><span>Explica de nuevo cada botón la próxima vez que entres a cada sección</span></div><button class="btn sm f" data-act="tourAgain">Ver de nuevo</button></div></div>' +
       '<div class="panel glass"><h2>Temas por celebración</h2>' +
       '<div class="line"><div class="t"><b>Cambiar el tema solo en fechas especiales</b><span>Halloween, Navidad, Amor y Amistad, Día de la Madre, del Padre, del Niño, 20 de julio, Año Nuevo…' + (ss ? ' Hoy: ' + esc(ss.name) + ' ' + ss.deco[0] : '') + '</span></div><button class="toggle f' + (P.autoTheme !== false ? ' on' : '') + '" data-act="prefToggle" data-arg="autoTheme"></button></div></div>' +
       '<div class="panel glass"><h2>Tema</h2>' + (ss && P.autoTheme !== false ? '<p class="muted">Ahora se ve el tema de ' + esc(ss.name) + '; el que elijas aquí vuelve cuando termine la celebración.</p>' : '') + '<div class="themes">' + D.THEMES.map(function (t) {
@@ -2658,6 +2663,9 @@
     setTab: function (t) { setTab = t; MV.rerender(); var s = SETTINGS[t]; if (s && s.after) s.after(); },
     theme: function (t) { P.theme = t; MV.savePrefs(); MV.rerender(); },
     glass: function (g) { P.glass = g; MV.savePrefs(); MV.rerender(); },
+    introMode: function (m) { P.introMode = m; MV.savePrefs(); MV.rerender(); },
+    introSound: function (_, el) { P.introSound = P.introSound === false; MV.savePrefs(); if (el) el.classList.toggle('on', P.introSound !== false); },
+    introNow: function () { if (MV.playIntro) MV.playIntro(true); },
     prefToggle: function (k, el) {
       P[k] = P[k] === false ? true : !P[k]; MV.savePrefs();
       if (el) el.classList.toggle('on', P[k] !== false);
