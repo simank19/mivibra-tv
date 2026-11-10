@@ -161,7 +161,10 @@ class GameActivity : ComponentActivity() {
     }
 
     /** Los celulares van después de los mandos físicos: si hay 1 mando, el primer celular es el jugador 2. */
-    private fun portFor(slot: Int): Int = (ports.size + slot).coerceIn(0, 3)
+    /** Celular 1 = jugador 1, Celular 2 = jugador 2… (los mandos físicos van después de los celulares) */
+    private fun portFor(slot: Int): Int = slot.coerceIn(0, 3)
+
+    fun remoteMenu() { showMenu() }
 
     fun remoteKey(slot: Int, keyCode: Int, down: Boolean) {
         retroView.sendKeyEvent(if (down) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, keyCode, portFor(slot))
@@ -211,8 +214,8 @@ class GameActivity : ComponentActivity() {
     private fun physicalPort(deviceId: Int, isButton: Boolean = false): Int {
         val k = padKey(deviceId)
         ports[k]?.let { return it }
-        if (!isButton) return 0
-        val port = ports.size.coerceAtMost(3)
+        if (!isButton) return RemoteHub.phoneSlots().coerceAtMost(3)
+        val port = (RemoteHub.phoneSlots() + ports.size).coerceAtMost(3)
         ports[k] = port
         return port
     }

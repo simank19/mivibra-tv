@@ -86,6 +86,9 @@ object RemoteHub {
         ui.post { game?.remoteKey(slot, code, down) }
     }
 
+    fun gameMenu() { ui.post { game?.remoteMenu() } }
+    fun phoneSlots(): Int = server?.phoneSlots() ?: 0
+
     fun gameAxis(slot: Int, stick: String, x: Float, y: Float) {
         ui.post { game?.remoteAxis(slot, stick, x, y) }
     }

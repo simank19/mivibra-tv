@@ -133,6 +133,9 @@ class RemoteServer(private val ctx: Context, port: Int = PORT) : NanoWSD(port) {
         }
     }
 
+    /** Cuántos puestos de jugador ocupan los celulares (Celular 1 y 2 conectados → 2) */
+    fun phoneSlots(): Int = (pads.filter { it.isOpen }.maxOfOrNull { it.slot } ?: -1) + 1
+
     private fun freeSlot(): Int {
         val used = pads.filter { it.isOpen }.map { it.slot }.toSet()
         var s = 0
@@ -181,7 +184,9 @@ class RemoteServer(private val ctx: Context, port: Int = PORT) : NanoWSD(port) {
                 "k" -> {
                     val key = m.optString("c")
                     val down = m.optInt("d", 1) == 1
-                    if (RemoteHub.game != null) RemoteHub.gameKey(slot, key, down)
+                    // El botón de menú/atrás del celular abre el menú del juego (guardar, cargar, salir…)
+                    if (RemoteHub.game != null && (key == "BACK" || key == "MENU")) { if (down) RemoteHub.gameMenu() }
+                    else if (RemoteHub.game != null) RemoteHub.gameKey(slot, key, down)
                     else if (down) RemoteHub.navKey(key, null)
                 }
                 "a" -> RemoteHub.gameAxis(slot, m.optString("s", "l"), m.optDouble("x", 0.0).toFloat(), m.optDouble("y", 0.0).toFloat())
