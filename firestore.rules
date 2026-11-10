@@ -17,5 +17,12 @@ service cloud.firestore {
     match /mivibra/{uid} {
       allow read, write: if signedIn() && request.auth.uid == uid && allowed();
     }
+    // Panel web: buzón donde llegan las listas para cada TV (la TV las borra apenas llegan)
+    match /inbox/{code}/lists/{id} {
+      allow create: if code.size() == 8
+        && request.resource.data.at is number
+        && request.resource.data.size() <= 10;
+      allow read, delete: if true;
+    }
   }
 }
