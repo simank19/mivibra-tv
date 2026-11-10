@@ -684,6 +684,8 @@ class Bridge(private val a: MainActivity) {
                     throw e
                 }
                 val cfg = RetroArch.overlayConfig(a, o.optString("sys"))
+                val why = RetroArch.lastWhy
+                if (cfg == null && why.isNotEmpty()) a.runOnUiThread { android.widget.Toast.makeText(a, "Sin marco: $why", android.widget.Toast.LENGTH_LONG).show() }
                 a.runOnUiThread {
                     try { RetroArch.launch(a, rom.absolutePath, o.getString("core"), cfg); reply(id, true, rom.absolutePath) }
                     catch (e: Exception) { reply(id, false, e.message ?: "No se pudo abrir RetroArch") }

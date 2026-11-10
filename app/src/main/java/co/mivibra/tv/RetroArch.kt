@@ -58,18 +58,20 @@ object RetroArch {
      * Devuelve la ruta de esa configuración, o null si no aplica (marco apagado, sin descargar o RetroArch de Play Store).
      * Llamar fuera del hilo principal (puede descargar el marco).
      */
+    @Volatile var lastWhy = ""
     fun overlayConfig(c: Context, sys: String): String? {
+        lastWhy = ""
         try {
             val p = pkg(c) ?: return null
-            if (sys.isBlank() || !Overlays.enabled(c, sys) || fromPlay(c, p)) return null
-            val src = Overlays.fetch(c, sys) ?: return null
+            if (sys.isBlank() || !Overlays.enabled(c, sys)) return null
+            val src = Overlays.fetch(c, sys) ?: run { lastWhy = "no se pudo descargar el marco"; return null }
             val dir = File(Environment.getExternalStorageDirectory(), "MiVibra/RetroArch/marcos").apply { mkdirs() }
-            if (!dir.canWrite()) return null
+            if (!dir.canWrite()) { lastWhy = "sin permiso para guardar en la memoria"; return null }
             val png = File(dir, src.name)
             if (!png.exists() || png.length() != src.length()) src.copyTo(png, true)
             val bmp = Overlays.decode(src) ?: return null
             val hole = Overlays.hole(bmp); val bw = bmp.width; val bh = bmp.height; bmp.recycle()
-            if (hole == null) return null
+            if (hole == null) { lastWhy = "el marco no tiene hueco para la pantalla"; return null }
             val dm = android.util.DisplayMetrics()
             @Suppress("DEPRECATION") (c.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager).defaultDisplay.getRealMetrics(dm)
             val sw = maxOf(dm.widthPixels, dm.heightPixels); val sh = minOf(dm.widthPixels, dm.heightPixels)
@@ -79,9 +81,10 @@ object RetroArch {
             ov.writeText("overlays = 1\noverlay0_overlay = \"${png.name}\"\noverlay0_full_screen = true\noverlay0_descs = 0\n")
             val sd = Environment.getExternalStorageDirectory().absolutePath
             val cfg = File(dir, "retroarch-$sys.cfg")
+            // RetroArch se queda con el PRIMER valor de cada ajuste: los del marco van primero y la configuración del usuario al final
             cfg.writeText(listOf(
-                "#include \"$sd/Android/data/$p/files/retroarch.cfg\"",
                 "config_save_on_exit = \"false\"",
+                "video_aspect_ratio_auto = \"false\"",
                 "input_overlay_enable = \"true\"",
                 "input_overlay = \"${ov.absolutePath}\"",
                 "input_overlay_opacity = \"1.000000\"",
@@ -93,10 +96,11 @@ object RetroArch {
                 "aspect_ratio_index = \"23\"",
                 "video_scale_integer = \"false\"",
                 "custom_viewport_x = \"$x\"", "custom_viewport_y = \"$y\"",
-                "custom_viewport_width = \"$w\"", "custom_viewport_height = \"$h\""
+                "custom_viewport_width = \"$w\"", "custom_viewport_height = \"$h\"",
+                "#include \"$sd/Android/data/$p/files/retroarch.cfg\""
             ).joinToString("\n") + "\n")
             return cfg.absolutePath
-        } catch (_: Throwable) { return null }
+        } catch (e: Throwable) { lastWhy = e.message ?: "error"; return null }
     }
 
     fun launch(c: Context, rom: String, core: String, config: String? = null) {

@@ -2106,6 +2106,7 @@
   MV.setGameEngine = function (sysId, eng) { P.gameEngine = P.gameEngine || {}; P.gameEngine[sysId] = eng; MV.savePrefs(); };
   function rememberGame(r) { var rec = (MV.load('recentGames', []) || []).filter(function (x) { return x.path !== r.path; }); rec.unshift(r); MV.save('recentGames', rec.slice(0, 30)); }
   function playPpsspp(r, s) {
+    if (!MV.load('pspFrameTip', 0)) { MV.save('pspFrameTip', 1); MV.toast('PSP se abre con la app PPSSPP, que no lleva marco. Para jugar con marco: Juegos › Opciones › Emuladores › PSP › Usar RetroArch.', 9000); }
     unzipBox(r, 0);
     MV.call('playPpsspp', [JSON.stringify({ rom: r.path, exts: ['iso', 'cso', 'pbp', 'chd'] })], function (p) { unzipBox(r, p); })
       .then(function () { unzipBox(null); rememberGame(r); })
