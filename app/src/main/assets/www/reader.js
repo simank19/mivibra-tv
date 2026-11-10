@@ -68,6 +68,17 @@
     MV._mbOpen = function () { try { fr.contentWindow.postMessage({ mbr: 1, type: 'open', book: book }, '*'); fr.focus(); fr.contentWindow.focus(); } catch (e) {} };
     rememberRecent(item, null);
   }
+  /** Mi biblioteca (MiBiblioteca completa): sección privada, solo para el administrador. */
+  MV.openLibrary = function () {
+    if (!MV.acct || !MV.acct.isAdmin || !MV.acct.isAdmin()) { MV.toast('Esta sección es privada'); return; }
+    closeMb(); close(true);
+    var fr = document.createElement('iframe');
+    fr.id = 'mbr'; fr.src = 'mibiblioteca/index.html'; fr.setAttribute('allow', 'autoplay; fullscreen; clipboard-write');
+    fr.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:0;z-index:61;background:#f6f4ef';
+    fr.onload = function () { try { fr.focus(); fr.contentWindow.focus(); } catch (e) {} };
+    document.body.appendChild(fr); mb = fr; mbItem = null;
+    document.documentElement.classList.add('reader-open');
+  };
   function rememberRecent(it, pct) {
     var rec = (MV.load('readRecent', []) || []).filter(function (r) { return r.key !== it.key; });
     var old = (MV.load('readRecent', []) || []).filter(function (r) { return r.key === it.key; })[0];

@@ -2890,6 +2890,7 @@
     },
     bookTab: function (k) { BOOKF = k; BOOKLIM = 120; MV.rerender(); },
     bookMore: function () { BOOKLIM += 120; MV.rerender(); },
+    myLibrary: function () { MV.openLibrary(); },
     bookGroup: function (g) { BOOKG = g || ''; BOOKLIM = 120; MV.rerender(); },
     bookWebSearch: function () { var i = document.getElementById('bookQ'); if (i) BOOKQ = i.value; bookSearchWeb(BOOKQ); },
     bookWebAdd: function () {
@@ -3550,7 +3551,7 @@
     var rr = (MV.readRecent ? MV.readRecent() : []).map(function (r) { return (S.bookByKey && S.bookByKey[r.key]) || (r.path ? { key: r.key, name: r.name, path: r.path, kind: r.kind, type: 'book', group: 'De tu equipo' } : null); }).filter(Boolean);
     var tabs = [['all', 'Todo', all.length], ['manga', 'Mangas', counts.manga], ['comic', 'Cómics', counts.comic], ['libro', 'Libros', counts.libro], ['revista', 'Revistas', counts.revista]].filter(function (t) { return t[0] === 'all' || t[2]; });
     var webs = webBookLists(), canWeb = MV.acct.canAdd ? MV.acct.canAdd() : MV.acct.canEdit();
-    var html = top('Lectura', (canWeb ? '<button class="pill f" data-act="bookWebAdd">' + IC.plus + 'Agregar página</button>' : '') + '<button class="pill f" data-act="bookFile">' + IC.book.replace('<svg', '<svg width="18" height="18"') + 'Abrir un archivo</button>') +
+    var html = top('Lectura', (MV.acct.isAdmin() ? '<button class="pill f" data-act="myLibrary">' + IC.lock.replace('<svg', '<svg width="18" height="18"') + 'Mi biblioteca</button>' : '') + (canWeb ? '<button class="pill f" data-act="bookWebAdd">' + IC.plus + 'Agregar página</button>' : '') + '<button class="pill f" data-act="bookFile">' + IC.book.replace('<svg', '<svg width="18" height="18"') + 'Abrir un archivo</button>') +
       (all.length ? '<div class="chips">' + tabs.map(function (t) { return '<button class="chip f' + (BOOKF === t[0] ? ' on' : '') + '" data-act="bookTab" data-arg="' + t[0] + '">' + t[1] + ' <small>' + (t[2] || 0) + '</small></button>'; }).join('') +
         '<input class="in f" id="bookQ" placeholder="' + (webs.length ? 'Buscar libro (también en tus páginas)…' : 'Buscar título…') + '" value="' + esc(BOOKQ) + '" style="max-width:320px;margin-left:auto" autocomplete="off" enterkeyhint="search"></div>' +
         (gnames.length > 1 && gnames.length <= 40 ? '<div class="chips"><button class="chip f' + (!BOOKG ? ' on' : '') + '" data-act="bookGroup" data-arg="">Todas las categorías</button>' + gnames.map(function (g) { return '<button class="chip f' + (BOOKG === g ? ' on' : '') + '" data-act="bookGroup" data-arg="' + esc(g) + '">' + esc(g.replace(/^[^·]+·\s*/, '') || g) + ' <small>' + groups[g] + '</small></button>'; }).join('') + '</div>' : '') : '');
