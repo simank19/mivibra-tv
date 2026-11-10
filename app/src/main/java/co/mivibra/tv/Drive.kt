@@ -303,8 +303,11 @@ object Drive {
         val code = conn.responseCode
         if (code == 401) throw IllegalStateException("AUTH")
         if (code !in 200..299) throw IllegalStateException("Drive no entregó el juego ($code)")
-        val total = conn.contentLengthLong.coerceAtLeast(1)
-        if (out.exists() && out.length() == total) { conn.disconnect(); return out.absolutePath }
+        // Drive a veces no manda el tamaño (descarga por partes): se pregunta aparte
+        var total = conn.contentLengthLong
+        if (total <= 0) total = try { json(open("$API/files/$id?fields=size&supportsAllDrives=true", token)).optString("size").toLongOrNull() ?: 0L } catch (_: Exception) { 0L }
+        if (total <= 0) total = Long.MAX_VALUE
+        if (out.exists() && (out.length() == total || (total == Long.MAX_VALUE && out.length() > 0))) { conn.disconnect(); return out.absolutePath }
         // Solo un juego a la vez en el equipo
         cacheDir(c).listFiles()?.forEach { if (it != dir) it.deleteRecursively() }
         val tmp = File(dir, "$safe.part")
@@ -312,7 +315,7 @@ object Drive {
         conn.inputStream.use { i -> tmp.outputStream().use { o ->
             val buf = ByteArray(256 * 1024)
             while (true) { val n = i.read(buf); if (n < 0) break; o.write(buf, 0, n); done += n
-                val p = (done * 100 / total).toInt(); if (p != last) { last = p; onPct(p) } }
+                val p = if (total == Long.MAX_VALUE) -1 else (done.toDouble() * 100 / total).toInt().coerceIn(0, 100); if (p != last) { last = p; onPct(p) } }
         } }
         if (!tmp.renameTo(out)) throw IllegalStateException("No se pudo guardar el juego")
         prefs(c).edit().putString("last", safe).apply()

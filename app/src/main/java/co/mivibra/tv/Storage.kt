@@ -159,7 +159,7 @@ object Storage {
         val total = all.filter { it.name in need }.sumOf { it.size.coerceAtLeast(0) }
         if (total > base.usableSpace - 100L * 1024 * 1024) throw IllegalStateException("No hay espacio para descomprimir el juego")
         var done = 0L; var lastPct = -1
-        val tick: (Int) -> Unit = { n -> done += n; val p = if (total > 0) (done * 100 / total).toInt() else 0; if (p != lastPct) { lastPct = p; onPct(p) } }
+        val tick: (Int) -> Unit = { n -> done += n; val p = if (total > 0) (done.toDouble() * 100 / total).toInt().coerceIn(0, 99) else -1; if (p != lastPct) { lastPct = p; onPct(p) } }
         try {
             Archives.extract(path, need, dir, tick)
         } catch (t: Throwable) { dir.deleteRecursively(); throw t }
@@ -217,7 +217,7 @@ object Storage {
             val t = File(dir, f.name)
             if (!t.exists() || t.length() != f.length()) f.inputStream().use { i -> t.outputStream().use { o ->
                 val buf = ByteArray(256 * 1024)
-                while (true) { val n = i.read(buf); if (n < 0) break; o.write(buf, 0, n); done += n; onPct((done * 100 / total).toInt()) }
+                while (true) { val n = i.read(buf); if (n < 0) break; o.write(buf, 0, n); done += n; onPct((done.toDouble() * 100 / total).toInt().coerceIn(0, 100)) }
             } } else done += f.length()
         }
         return File(dir, src.name).absolutePath

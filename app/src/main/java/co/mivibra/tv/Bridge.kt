@@ -407,7 +407,7 @@ class Bridge(private val a: MainActivity) {
                                             val buf = ByteArray(256 * 1024); var n: Int; var last = -1
                                             while (ins.read(buf).also { n = it } > 0) {
                                                 os.write(buf, 0, n); total += n
-                                                val pct = (total * 100 / all).toInt(); if (pct != last) { last = pct; progress(id, pct) }
+                                                val pct = (total.toDouble() * 100 / all).toInt().coerceIn(0, 100); if (pct != last) { last = pct; progress(id, pct) }
                                             }
                                         }
                                     } ?: throw IllegalStateException("No se pudo abrir " + name)

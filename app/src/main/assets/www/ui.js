@@ -2133,7 +2133,8 @@
     var b = document.getElementById('unzipBox');
     if (!r) { if (b) b.remove(); return; }
     if (!b) { b = document.createElement('div'); b.id = 'unzipBox'; b.style.cssText = 'position:fixed;left:50%;bottom:8vh;transform:translateX(-50%);z-index:99;background:rgba(14,13,12,.92);color:#F3EFEA;padding:1.2vw 2.4vw;border-radius:1vw;font:600 1.4vw var(--ui);box-shadow:0 1vw 3vw rgba(0,0,0,.6);min-width:30vw;text-align:center'; document.body.appendChild(b); }
-    b.innerHTML = 'Preparando “' + esc(String(r.name || '').replace(/\.[^.]+$/, '')) + '”… ' + (pct || 0) + '%<div style="margin-top:.8vw;height:.5vw;border-radius:1vw;background:rgba(255,255,255,.15);overflow:hidden"><i style="display:block;height:100%;width:' + (pct || 0) + '%;background:var(--accent,#FF6900)"></i></div>';
+    var known = typeof pct === 'number' && pct >= 0 && pct <= 100; pct = known ? pct : 0;
+    b.innerHTML = 'Preparando “' + esc(String(r.name || '').replace(/\.[^.]+$/, '')) + '”… ' + (known ? pct + '%' : '') + '<div style="margin-top:.8vw;height:.5vw;border-radius:1vw;background:rgba(255,255,255,.15);overflow:hidden"><i style="display:block;height:100%;width:' + (known ? pct : 100) + '%;background:var(--accent,#FF6900)' + (known ? '' : ';opacity:.5') + '"></i></div>';
   }
   function playRom(r) {
     if (/^gdrive:/.test(r.path || '') && MV.drivePlay) { MV.drivePlay(r); return; }
