@@ -30,6 +30,7 @@ jobs:
       - name: Armar el panel
         env:
           MV_FIREBASE: ${{ secrets.MV_FIREBASE }}
+          MV_WHATSAPP: ${{ secrets.MV_WHATSAPP }}
         run: |
           mkdir -p site/panel
           cp app/src/main/assets/www/listas.html site/panel/index.html
@@ -44,7 +45,7 @@ jobs:
               body = re.sub(r'([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:', r'\1"\2":', body)
               body = re.sub(r',\s*}', '}', body).replace("'", '"')
               cfg = json.loads(body)
-          open('site/panel/config.js', 'w').write('window.MV_CONFIG = ' + json.dumps({'firebase': cfg}) + ';\n')
+          open('site/panel/config.js', 'w').write('window.MV_CONFIG = ' + json.dumps({'firebase': cfg, 'whatsapp': os.environ.get('MV_WHATSAPP', '').strip()}) + ';\n')
           PY
           printf '<!doctype html><meta http-equiv="refresh" content="0;url=panel/">' > site/index.html
       - uses: actions/configure-pages@v5
