@@ -633,3 +633,6 @@ html.lite .card .shine { display: none; }
 .wzc .qr{width:150px;background:#fff;border-radius:10px;padding:6px}.wzc .qr svg{width:100%;height:auto;display:block}
 .wzcode{font:800 30px/1 var(--brand,inherit);letter-spacing:4px;padding:10px 0}
 @media (max-width:760px){.wz{grid-template-columns:1fr}}
+.dialog:has(.wz) { width: min(1100px, 94vw); max-width: min(1100px, 94vw); }
+.wzc .qr { height: auto; aspect-ratio: 1; align-self: flex-start; }
+.wzc .btn { align-self: flex-start; }

@@ -39,12 +39,29 @@ MiVibra TV junta en un solo lugar las listas que ya tienes (M3U, Xtream Codes, P
 | **En vivo:** secciones, países, categorías y guía | **Buscar:** teclado QWERTY para el control remoto, actores y cartelera |
 | <img src="docs/capturas/tv-perfiles.jpg" alt="Perfiles con avatares 3D"> | <img src="docs/capturas/tv-infantil.jpg" alt="Perfil infantil"> |
 | **Perfiles** con avatares 3D y PIN | **Perfil infantil** con tiempo límite y YouTube para niños |
+| <img src="docs/capturas/tv-utilidades.jpg" alt="Panel de utilidades"> | <img src="docs/capturas/tv-navegador.jpg" alt="Navegador"> |
+| **Utilidades:** YouTube, música, radio, navegador, juegos, Twitch y Kick, Mis páginas, diagnóstico, +18 y celular como control | **Navegador** con bloqueador de anuncios, cursor con el control y accesos rápidos |
+| <img src="docs/capturas/tv-ajustes-listas.jpg" alt="Ajustes de listas"> | <img src="docs/capturas/tv-ajustes-temas.jpg" alt="Ajustes de temas e intro"> |
+| **Ajustes › Listas:** activar, guía EPG, borrar, sin repetidos, solo latino y agregar desde el celular o la web | **Ajustes › Temas:** intro de bienvenida, tutorial, temas por celebración y colores |
+| <img src="docs/capturas/tv-agregar-lista.jpg" alt="Agregar tu lista"> | <img src="docs/capturas/tv-celular-mando.jpg" alt="Celular como mando"> |
+| **Agrega tu lista:** con el QR desde el celular, desde el panel web con el código de la TV o con el control | **Celular como mando:** escanea el código y úsalo como control remoto o mando de juego (jugador 1 y 2) |
+
+**Juegos estilo consola**
+
+| | |
+|---|---|
+| <img src="docs/capturas/tv-juegos.jpg" alt="Juegos: inicio de la consola"> | <img src="docs/capturas/tv-juegos-biblioteca.jpg" alt="Juegos: biblioteca por consola"> |
+| **Inicio:** jugados recientemente con carátula, consolas con su ícono y botones de buscar, BIOS, enviar, información, emuladores, editar y borrar | **Biblioteca:** todos tus juegos en estantes por consola |
+| <img src="docs/capturas/tv-juegos-opciones.jpg" alt="Opciones de un juego"> | <img src="docs/capturas/tv-intro-consolas.jpg" alt="Intro de bienvenida"> |
+| **Opciones de cada juego** (dejar presionado OK o el lápiz): ficha, renombrar, carátula, emulador y sistema | **Intro de bienvenida** con las secciones de la app y las consolas |
 
 | Celular | | |
 |---|---|---|
 | <img src="docs/capturas/cel-inicio.jpg" width="260" alt="Inicio en celular"> | <img src="docs/capturas/cel-peliculas.jpg" width="260" alt="Películas en celular"> | <img src="docs/capturas/cel-ficha.jpg" width="260" alt="Ficha en celular"> |
+| <img src="docs/capturas/cel-mando.jpg" width="260" alt="Celular como mando"> | <img src="docs/capturas/cel-enviar-juegos.jpg" width="260" alt="Enviar juegos desde el celular"> | <img src="docs/capturas/cel-panel-listas.jpg" width="260" alt="Panel web para agregar listas"> |
+| **Control remoto y mando** | **Enviar juegos y BIOS** a la TV | **Panel web:** agrega tu lista con el código de la TV |
 
-<sub>Las carátulas y títulos de las capturas son de ejemplo (clásicos de dominio público y títulos inventados).</sub>
+<sub>Las carátulas y títulos de las capturas son de ejemplo: clásicos de dominio público, canales y juegos inventados.</sub>
 
 ## Tu lista, tu TV
 
