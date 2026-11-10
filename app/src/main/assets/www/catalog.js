@@ -924,7 +924,8 @@
     if (!file) { var fv = pick(/^(epub|archivo|archivoepub|file|fileurl|fileURL|epuburl|epubUrl|url|downloadurl|downloadURL|link|enlace|libro|book|ruta|path|storagepath|storagePath|pdf|documento)$/i, function (v) { return typeof v === 'string' && !IMG_EXT.test(v) && !/^data:image/i.test(v); }); file = fbFileUrl(fv, cfg); }
     if (!file) { keys.forEach(function (k) { var v = f[k]; if (!file && /epub|archivo|file|download/i.test(k) && typeof v === 'string' && !IMG_EXT.test(v)) file = fbFileUrl(v, cfg); }); }
     var img = pick(/^(portada|cover|coverurl|coverUrl|imagen|image|imageurl|imageUrl|img|thumb|thumbnail|caratula|carátula|foto|miniatura|poster)$/i) || pick(/portada|cover|imag|thumb|car[aá]tula|foto|poster/i, function (v) { return typeof v === 'string'; }) || '';
-    if (img && !/^(https?:|data:image)/i.test(img)) img = fbFileUrl(img, cfg);
+    if (typeof img === 'string' && img.length > 200 && /^[A-Za-z0-9+\/=\s]+$/.test(img.slice(0, 200))) img = 'data:image/' + (img.charAt(0) === 'i' ? 'png' : 'jpeg') + ';base64,' + img.replace(/\s+/g, '');
+    else if (img && !/^(https?:|data:image)/i.test(img)) img = fbFileUrl(img, cfg);
     var title = str(pick(/^(titulo|título|title|nombre|name)$/i) || pick(/titul|title|nombre/i, function (v) { return typeof v === 'string'; })) || doc.__id || '';
     return {
       url: file, title: title, img: typeof img === 'string' ? img : '',
