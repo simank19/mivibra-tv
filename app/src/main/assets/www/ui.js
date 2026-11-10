@@ -2944,7 +2944,7 @@
       var rp = roots.map(function (r) { return r.path; }), picked = P.romRoots.filter(function (p) { return rp.indexOf(p) < 0 && p !== A.downloadsDir(); });
       MV._scanRoots = roots.map(function (r) { return r.path; }).concat(picked);
       var noAccess = A.hasStorageAccess && !A.hasStorageAccess();
-      MV.modal('<h2>¿Dónde están tus juegos?</h2><p class="muted">' + (PC ? 'Elige los archivos, una carpeta o un disco del computador.' : PHONE ? 'Elige los juegos que tienes en el celular o la carpeta donde están.' : 'Conecta la USB o el disco antes de elegir. Si no aparece, usa “Elegir carpeta”.') + '</p>' +
+      MV.modal('<h2>¿Dónde están tus juegos?</h2><p class="muted">' + (PC ? 'Elige los archivos, una carpeta o un disco del computador.' : PHONE ? 'Elige los juegos que tienes en el celular o la carpeta donde están.' : 'Elige la memoria o la USB donde están. Si conectaste la USB después de abrir esto, toca “Actualizar”.') + '</p>' +
         '<div class="btns" style="flex-direction:column;align-items:stretch">' +
         (PC || PHONE ? '<button class="btn f" data-act="pickGames">📄 Elegir juegos (archivos)…</button>' +
           '<button class="btn ghost f" data-act="scanPick">📁 Elegir una carpeta…</button>' : '') +
@@ -2953,13 +2953,11 @@
           var usb = r.removable || /usb|disco|sd/i.test(r.name);
           return '<button class="btn ' + (i || PC || PHONE ? 'ghost ' : '') + 'f" data-act="scanIn" data-arg="' + i + '"' + (r.readable ? '' : ' disabled') + '>' + (usb ? '💾 ' : '📱 ') + esc(r.name) + (r.readable ? '' : ' (sin permiso)') + '</button>';
         }).join('') +
-        picked.map(function (p, j) { return '<button class="btn ghost f" data-act="scanIn" data-arg="' + (roots.length + j) + '">📁 ' + esc(decodeURIComponent(p.split('/tree/')[1] || p)) + '</button>'; }).join('') +
-        '<button class="btn ghost f" data-act="scanIn" data-arg="all">🔎 Buscar en todas</button>' +
-        '<button class="btn ghost f" data-act="scanBrowse" data-arg="/">📂 Explorar carpetas…</button>' +
-        (PC || PHONE ? '' : '<button class="btn ghost f" data-act="scanPick">🗂️ Selector de Android…</button>') +
+        '<button class="btn ghost f" data-act="scanIn" data-arg="all">🔎 Buscar en todo</button>' +
+        '<button class="btn ghost f" data-act="scanBrowse" data-arg="/">📂 Elegir otra carpeta…</button>' +
         (!PHONE && !PC && (anyLocked || noAccess) ? '<button class="btn ghost f" data-act="storageAccess">🔓 Dar permiso para leer USB y discos</button>' : '') +
-        '<button class="btn ghost f" data-act="scanChooser">🔄 Actualizar (después de conectar la USB)</button>' +
-        '</div>' + (roots.length <= 1 && !PC && !PHONE ? '<p class="muted" style="margin-top:10px">No veo ninguna USB ni disco. Revisa que esté bien conectada, toca “Dar permiso” si aparece, o entra a “Explorar carpetas” y busca en /storage o /mnt.</p>' : ''));
+        '<button class="btn ghost f" data-act="scanChooser">🔄 Actualizar</button>' +
+        '</div>' + (roots.length <= 1 && !PC && !PHONE ? '<p class="muted" style="margin-top:10px">No veo ninguna USB ni disco. Revisa que esté bien conectada, toca “Dar permiso” si aparece, o usa “Elegir otra carpeta”.</p>' : ''));
     },
     // Explorador propio (no depende del selector de Android, que muchas TV no traen)
     scanBrowse: function (path) {

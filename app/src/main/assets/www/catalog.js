@@ -1148,7 +1148,7 @@
     var lists = S.lists.filter(function (l) { return l.enabled !== false; });
     if (!lists.length) return Promise.resolve();
     return Promise.all(lists.map(function (l) {
-      return MV.idbGet('list:' + l.id).then(function (c) { return c && c.v === 6 && c.items ? c : null; }).catch(function () { return null; });
+      return MV.idbGet('list:' + l.id).then(function (c) { return c && c.v === 7 && c.items ? c : null; }).catch(function () { return null; });
     })).then(function (caches) {
       if (!caches.some(function (c) { return c && c.items.length; })) return MV.reloadCatalog(false);
       var all = caches.map(function (c) { return c ? c.items.map(retag) : []; });
