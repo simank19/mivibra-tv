@@ -11,6 +11,8 @@
 
 <p align="center">
   <a href="https://github.com/simank19/mivibra-tv/releases/latest"><b>⬇ Descargar la última versión (APK)</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://simank19.github.io/mivibra-tv/panel/"><b>📺 Agregar mi lista a la TV (panel web)</b></a>
 </p>
 
 <p align="center">
@@ -42,10 +44,23 @@ MiVibra TV junta en un solo lugar las listas que ya tienes (M3U, Xtream Codes, P
 
 <sub>Las carátulas y títulos de las capturas son de ejemplo (clásicos de dominio público y títulos inventados).</sub>
 
+## Tu lista, tu TV
+
+Cada usuario monta **su propia lista** y, si tiene un servicio con MiVibra, la suma a las **listas incluidas** que le envía el administrador. Hay tres formas de agregarla:
+
+| Desde la TV | Desde el celular | Desde el panel web |
+|---|---|---|
+| Ajustes › Listas › **Agregar lista**, con el control remoto. | Escanea el **código QR** de la TV (mismo Wi-Fi), pega la lista o **envía una foto** de ella. | Desde cualquier lugar: entra a **[simank19.github.io/mivibra-tv/panel](https://simank19.github.io/mivibra-tv/panel/)**, escribe el **código de 8 letras** de tu TV y pega la lista. Llega sola por internet. |
+
+- Acepta **enlace M3U**, **Xtream Codes**, **Portal y MAC**, Jellyfin/Emby, Plex, archivo, **varias a la vez** (`.txt` o texto copiado de WhatsApp/correo) y **desde imagen**: la app lee los enlaces, usuarios y MAC de una foto o captura (sin internet).
+- **Mis listas:** seleccionar varias, activar/desactivar, guía EPG por lista y borrar. Las listas incluidas no se pueden borrar desde la TV del cliente.
+- Las listas propias viajan con la cuenta de Google del usuario a sus otras TV.
+- El panel no guarda nada: la TV recibe la lista y la borra del buzón al instante.
+
 ## Funciones
 
 ### Fuentes de contenido
-- **Listas M3U/M3U8** por enlace, archivo o varias a la vez desde un `.txt`.
+- **Listas M3U/M3U8** por enlace, archivo, varias a la vez desde un `.txt`, texto pegado o **una foto de la lista**.
 - **Xtream Codes** (en vivo, películas y series con temporadas).
 - **Portal y MAC** (Stalker/Ministra): una o varias MAC; se pueden pegar desde WhatsApp o subir en `.txt`.
 - **Tu servidor propio:** Jellyfin, Emby o Plex, con el idioma real de cada pista de audio y subtítulos.
@@ -70,13 +85,24 @@ MiVibra TV junta en un solo lugar las listas que ya tienes (M3U, Xtream Codes, P
 
 ### También incluye
 - **YouTube y YouTube Music** dentro de la app, **Twitch y Kick** con canales en vivo, radio, música y **Rakuten Viki**.
-- **Juegos clásicos** con emulación (NES, SNES, Game Boy, N64, PlayStation y más) y ports como Doom; el **celular sirve como control** por QR.
+- **Navegador** con teclado propio para el control remoto y **búsqueda por voz** (también con el botón de micrófono del control).
 - **Perfiles** con avatares 3D de Fluent Emoji, PIN y temas por celebración (Halloween, Navidad, Amor y Amistad…).
 - **Perfil infantil:** solo contenido para niños según TMDB, tiempo límite diario y **YouTube para niños** (búsqueda estricta y solo videos "hechos para niños").
 - **+18** oculto en Utilidades, con PIN, fuera del inicio y del historial.
 - **Superadministrador:** listas, claves y orden del menú se comparten con todos los usuarios de la cuenta.
+- **Intro de bienvenida** con las secciones de la app y banda sonora (siempre, una vez al día o nunca).
 - **Tutorial guiado** de una sola vez por sección, con las novedades marcadas.
 - Actualizaciones automáticas con una **campana** en la barra de arriba.
+
+### Juegos estilo consola
+- **Pantalla tipo consola**: jugados recientemente, tus **consolas con su ícono** y una **biblioteca por estantes**.
+- NES, SNES, Game Boy/Color/Advance, N64, Nintendo DS, PlayStation, **PSP**, Dreamcast y GameCube (con RetroArch), Sega Genesis, Master System, Game Gear, Atari, PC Engine, Neo Geo Pocket, WonderSwan, **Neo Geo** (romsets y `.neo`) y arcade; ports como Doom, Quake, Wolfenstein 3D y Cave Story.
+- ROMs desde la memoria, **cualquier USB o carpeta** (explorador propio) o **enviadas desde el celular** por Wi-Fi. Abre **zip, 7z y rar**, incluso rar en partes y archivos dentro de otros.
+- **Carátulas y nombres automáticos** (libretro-thumbnails), **ficha del juego** (Wikipedia/Wikidata) con vista previa al pasar encima, **renombrar** y **buscar otra carátula**.
+- **Marcos de pantalla** (bezels) por consola, con varios estilos.
+- **Mandos**: cualquier control USB/Bluetooth (con asistente para configurarlo y probarlo) y **uno o dos celulares como control** (jugador 1 y 2).
+- Emulador propio de MiVibra, **RetroArch** o **PPSSPP** para PSP, a elección por consola; importación de BIOS para todos.
+- **Editar juegos** (lápiz) y **Borrar juegos** (papelera); dejar presionado OK abre las opciones de un juego.
 
 ## Instalar
 
@@ -92,20 +118,12 @@ MiVibra TV junta en un solo lugar las listas que ya tienes (M3U, Xtream Codes, P
 | YouTube dentro de la app | YouTube Data API v3 en Google Cloud | Ajustes › Sinopsis y carátulas |
 | Subtítulos de internet | Clave en subdl.com | Ajustes › Sinopsis y carátulas |
 | Canales en vivo de Twitch y Kick | dev.twitch.tv y kick.com › Developer | Ajustes › Sinopsis y carátulas |
-| Sincronización y cuentas | Proyecto de Firebase | Ver [docs/CUENTA-GOOGLE.md](docs/CUENTA-GOOGLE.md) |
+| Sincronización, cuentas y panel web | Proyecto de Firebase | Ver [docs/CUENTA-GOOGLE.md](docs/CUENTA-GOOGLE.md) |
+| Botón de WhatsApp en el panel | Tu número (con 57) | Secreto `MV_WHATSAPP` del repositorio |
 
-Reglas sugeridas de Firestore para la sincronización:
+Las reglas de Firestore (superadministrador, usuarios, sincronización y buzón del panel web) están en **[firestore.rules](firestore.rules)**: cambia el correo del superadministrador y pégalas en Firebase › Firestore › Reglas.
 
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /mivibra/{uid} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
-    }
-  }
-}
-```
+El panel web se publica solo en GitHub Pages (`.github/workflows/panel.yml`) cada vez que cambia `listas.html`.
 
 ## Estructura del código
 
@@ -117,11 +135,19 @@ app/src/main/java/co/mivibra/tv/   Código nativo (Kotlin)
   ChannelPanel.kt    Lista de canales dentro del reproductor
   Stalker.kt         Enlaces de Portal y MAC
   WatchNext.kt, HomeChannel.kt   Inicio de Android TV
-  GameActivity.kt, RemoteServer.kt, Epg.kt, Storage.kt, Net.kt
+  GameActivity.kt    Emulador, mandos, marcos de pantalla
+  RemoteServer.kt    Celular como mando, envío de ROMs y listas
+  Archives.kt, NeoGeo.kt, RetroArch.kt, Overlays.kt, Ocr.kt
+  Epg.kt, Storage.kt, Net.kt
 app/src/main/assets/www/           Interfaz (HTML, CSS, JS)
   core.js      Navegación con control remoto, modales, red
   catalog.js   Listas, combinación sin repetidos, fichas TMDB/Jikan
   ui.js        Pantallas, búsqueda, tutorial, utilidades
+  account.js   Superadministrador y listas incluidas
+  mylists.js   Listas de cada usuario: celular, panel web e importar
+  console.js   Juegos estilo consola · covers.js, gameinfo.js, sysicons.js
+  intro.js     Intro de bienvenida
+  listas.html  Página para agregar listas (celular y panel web)
   data.js      Géneros, países, idiomas, íconos, avatares
 ```
 
@@ -131,6 +157,8 @@ Cada cambio que se sube a GitHub se compila solo (GitHub Actions) y se publica e
 
 - Código de MiVibra TV: **GPL-3.0** (requerida por LibretroDroid). Ver `LICENSE`.
 - Reproductor: AndroidX Media3 (Apache 2.0) · Emulación: LibretroDroid y núcleos libretro (algunos solo para uso no comercial).
+- Íconos de consolas: [KyleBing/retro-game-console-icons](https://github.com/KyleBing/retro-game-console-icons) (CC BY 4.0) · Marcos: libretro overlay-borders (MIT) · Carátulas: libretro-thumbnails · Fichas de juegos: Wikipedia y Wikidata.
+- Archivos comprimidos: Apache Commons Compress, XZ for Java y junrar · Lectura de imágenes: Google ML Kit.
 - Avatares: Microsoft Fluent Emoji (MIT) · Fichas: TMDB y MyAnimeList (Jikan) · Canales gratis: Free-TV/IPTV e iptv-org · Cine clásico: Internet Archive.
 - Este producto usa la API de TMDB pero no está respaldado ni certificado por TMDB.
 
