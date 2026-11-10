@@ -58,10 +58,10 @@ object RetroArch {
      * Devuelve la ruta de esa configuración, o null si no aplica (marco apagado, sin descargar o RetroArch de Play Store).
      * Llamar fuera del hilo principal (puede descargar el marco).
      */
-    private fun prefs(c: Context) = c.getSharedPreferences("ra_frame", Context.MODE_PRIVATE)
-    /** En los TV, RetroArch suele dibujar a menor resolución que las apps (en las pruebas, 16:9 veces menos). */
-    private fun defScale(c: Context) = if ((c.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_TYPE_MASK) == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION) 0.5625f else 1f
-    fun raScale(c: Context) = prefs(c).getFloat("k", defScale(c))
+    // v2: las medidas anteriores se calcularon con el centrado de RetroArch encima (por eso el juego quedaba corrido);
+    // ahora el centrado se apaga y RetroArch dibuja a la misma resolución que las apps, así que el ajuste vuelve a cero
+    private fun prefs(c: Context) = c.getSharedPreferences("ra_frame2", Context.MODE_PRIVATE)
+    fun raScale(c: Context) = prefs(c).getFloat("k", 1f)
     fun raOff(c: Context, a: String) = prefs(c).getFloat(a, 0f)
     /** what: bigger, smaller, left, right, up, down, reset */
     fun adjust(c: Context, what: String): String {
@@ -124,6 +124,10 @@ object RetroArch {
                 "input_overlay_x_offset_landscape = \"0.000000\"", "input_overlay_y_offset_landscape = \"0.000000\"",
                 "aspect_ratio_index = \"23\"",
                 "video_scale_integer = \"false\"",
+                // Las versiones nuevas de RetroArch toman la posición como desplazamiento desde el centro según este "sesgo";
+                // en 0 la posición vuelve a ser desde la esquina de arriba a la izquierda (igual en todas las versiones)
+                "video_viewport_bias_x = \"0.000000\"", "video_viewport_bias_y = \"0.000000\"",
+                "video_viewport_bias_portrait_x = \"0.000000\"", "video_viewport_bias_portrait_y = \"0.000000\"",
                 "custom_viewport_x = \"$x\"", "custom_viewport_y = \"$y\"",
                 "custom_viewport_width = \"$w\"", "custom_viewport_height = \"$h\"",
             ) + savesLines(c) + listOf("#include \"$sd/Android/data/$p/files/retroarch.cfg\"")).joinToString("\n") + "\n")
