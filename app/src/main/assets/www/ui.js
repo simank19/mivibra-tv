@@ -2004,8 +2004,12 @@
         .then(function (y) { if (y) A.openExternal('market://details?id=' + (MV.raPkg || 'com.retroarch.ra32')); });
       return;
     }
-    MV.call('playRetroArch', [JSON.stringify({ rom: r.path, core: s.raCore || s.core })]).then(function () { rememberGame(r); })
-      .catch(function (e) { MV.toast(e.message, 5000); });
+    // PSP y otras: exts de la consola + discos, para sacarlos del comprimido
+    var ex = (s.exts || []).concat(['iso', 'cso', 'chd', 'cue', 'pbp', 'gdi', 'cdi', 'rvz', 'gcm']);
+    unzipBox(r, 0);
+    MV.call('playRetroArch', [JSON.stringify({ rom: r.path, core: s.raCore || s.core, exts: ex })], function (p) { unzipBox(r, p); })
+      .then(function () { unzipBox(null); rememberGame(r); })
+      .catch(function (e) { unzipBox(null); MV.toast(e.message, 6000); });
   }
   // Aviso con porcentaje mientras se descomprime un .zip / .7z
   function unzipBox(r, pct) {

@@ -143,8 +143,8 @@ object Storage {
      * Saca la ROM del .zip o .7z a la caché de la app (una sola vez) y devuelve la ruta del archivo a jugar.
      * Para PlayStation saca también los .bin del .cue. Se guardan como mucho 6 juegos descomprimidos.
      */
-    fun unzipRom(ctx: Context, path: String, exts: List<String>, onPct: (Int) -> Unit = {}): String {
-        val base = File(ctx.cacheDir, "unzip").apply { mkdirs() }
+    fun unzipRom(ctx: Context, path: String, exts: List<String>, onPct: (Int) -> Unit = {}, baseDir: File? = null, keep: Int = 6): String {
+        val base = (baseDir ?: File(ctx.cacheDir, "unzip")).apply { mkdirs() }
         val src = File(path)
         val dir = File(base, Integer.toHexString((src.absolutePath + src.length() + src.lastModified()).hashCode()))
         val all = entries(path).filter { !it.name.contains("__MACOSX") }
@@ -165,8 +165,35 @@ object Storage {
         } catch (t: Throwable) { dir.deleteRecursively(); throw t }
         if (!target.exists()) throw IllegalStateException("No se encontró el juego dentro del comprimido")
         // Limpieza: deja solo los 6 más recientes
-        base.listFiles()?.filter { it.isDirectory && it != dir }?.sortedByDescending { it.lastModified() }?.drop(5)?.forEach { it.deleteRecursively() }
+        base.listFiles()?.filter { it.isDirectory && it != dir }?.sortedByDescending { it.lastModified() }?.drop(keep - 1)?.forEach { it.deleteRecursively() }
         return target.absolutePath
+    }
+
+    /**
+     * RetroArch es otra app: no puede leer la carpeta privada de MiVibra ni abrir .rar.
+     * Deja el juego (descomprimido si hace falta) en /MiVibra/RetroArch de la memoria y devuelve esa ruta.
+     */
+    fun forRetroArch(ctx: Context, path: String, exts: List<String>, onPct: (Int) -> Unit): String {
+        val shared = File(Environment.getExternalStorageDirectory(), "MiVibra/RetroArch")
+        shared.mkdirs()
+        if (!shared.canWrite()) throw IllegalStateException("PERMISO")
+        if (Archives.supported(path)) return unzipRom(ctx, path, exts, onPct, shared, 3)
+        val own = ctx.getExternalFilesDir(null)?.absolutePath ?: return path
+        if (!path.startsWith(own) && !path.startsWith(ctx.filesDir.absolutePath)) return path   // USB o memoria: RetroArch ya lo lee
+        val src = File(path)
+        val dir = File(shared, "enviados").apply { mkdirs() }
+        // Con el .cue van también sus .bin
+        val files = if (src.extension.lowercase() == "cue") src.parentFile?.listFiles()?.filter { it.nameWithoutExtension.startsWith(src.nameWithoutExtension) }.orEmpty() + src else listOf(src)
+        val total = files.distinct().sumOf { it.length() }.coerceAtLeast(1)
+        var done = 0L
+        for (f in files.distinct()) {
+            val t = File(dir, f.name)
+            if (!t.exists() || t.length() != f.length()) f.inputStream().use { i -> t.outputStream().use { o ->
+                val buf = ByteArray(256 * 1024)
+                while (true) { val n = i.read(buf); if (n < 0) break; o.write(buf, 0, n); done += n; onPct((done * 100 / total).toInt()) }
+            } } else done += f.length()
+        }
+        return File(dir, src.name).absolutePath
     }
 
     /** BIOS conocidas que algunos núcleos necesitan (PlayStation, Lynx, Sega CD, Dreamcast…). */

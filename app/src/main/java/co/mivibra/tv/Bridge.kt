@@ -344,7 +344,7 @@ class Bridge(private val a: MainActivity) {
                     }
                 }
             } else {
-                a.requestPermissions(arrayOf(android.Manifest.permission.READ_EXTERNAL_STORAGE), 7)
+                a.requestPermissions(arrayOf(android.Manifest.permission.READ_EXTERNAL_STORAGE, android.Manifest.permission.WRITE_EXTERNAL_STORAGE), 7)
             }
         }
     }
@@ -510,7 +510,15 @@ class Bridge(private val a: MainActivity) {
         io.execute {
             try {
                 val o = JSONObject(json)
-                val rom = Storage.toLocalFile(a, o.getString("rom"))
+                var rom = Storage.toLocalFile(a, o.getString("rom"))
+                // Comprimidos (.zip/.7z/.rar) y lo enviado desde el celular: a una carpeta que RetroArch pueda abrir
+                val ex = o.optJSONArray("exts"); val exts = if (ex == null) emptyList() else (0 until ex.length()).map { ex.getString(it).lowercase() }
+                try {
+                    rom = File(Storage.forRetroArch(a, rom.absolutePath, exts) { progress(id, it) })
+                } catch (e: IllegalStateException) {
+                    if (e.message == "PERMISO") { requestStorageAccess(); throw IllegalStateException("Para jugar con RetroArch, permite a MiVibra guardar en la memoria (se abrió el ajuste) y vuelve a intentar.") }
+                    throw e
+                }
                 a.runOnUiThread {
                     try { RetroArch.launch(a, rom.absolutePath, o.getString("core")); reply(id, true, rom.absolutePath) }
                     catch (e: Exception) { reply(id, false, e.message ?: "No se pudo abrir RetroArch") }
