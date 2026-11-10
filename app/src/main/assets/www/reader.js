@@ -97,6 +97,7 @@
     if (m.type === 'ready') { if (st) st.item = null; close(true); document.documentElement.classList.add('reader-open'); MV._mbOpen && MV._mbOpen(); }
     else if (m.type === 'closed') closeMb();
     else if (m.type === 'progress' && mbItem && m.id === mbItem.key) rememberRecent(mbItem, m.pct);
+    else if (m.type === 'cover' && m.id && /^data:image\//.test(m.data || '')) { var all = MV.load('bookCovers', {}) || {}, ks = Object.keys(all); if (ks.length > 80) delete all[ks[0]]; all[m.id] = m.data; MV.save('bookCovers', all); }
   });
   MV.mbOpen = function () { return !!mb; };
 

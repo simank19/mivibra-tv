@@ -685,3 +685,6 @@ html.tv .dialog { animation: dialogIn .22s ease-out both; }
 html.tv #toast div { animation: toastIn .2s ease-out both; }
 html.lite .view-in, html.lite .dialog, html.lite #toast div, html.lite #modal { animation: none !important; }
 @media (prefers-reduced-motion: reduce) { .view-in, .view-in > *, .strip > .card, .dialog, #toast div { animation: none !important; } }
+/* Celular: los botones de arriba bajan a otra fila en vez de salirse de la pantalla */
+@media (max-width: 760px) { .top { flex-wrap: wrap; row-gap: 10px; } .top h1 { flex: 1 0 100%; } .top .sp { display: none; } .top .pill { height: 40px; padding: 0 14px; font-size: 14px; } }
+.qbar .qbtn.on, .qbar .qbtn.on svg { color: var(--accent) !important; } .qbar .qbtn.on { border-color: var(--accent); }

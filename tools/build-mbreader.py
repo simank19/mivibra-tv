@@ -29,11 +29,18 @@ rd = sub(rd, "window.addEventListener('popstate', () => closeReader(true));", ""
 rd = sub(rd, "doc.addEventListener('keydown', onKey);", "doc.addEventListener('keydown', e => { if (mvKey(e)) return; onKey(e); });")
 # El progreso también se avisa a MiVibra (Seguir leyendo)
 rd = sub(rd, "  const d = { cfi, pct: +pct.toFixed(4), at: Date.now() };", "  const d = { cfi, pct: +pct.toFixed(4), at: Date.now() }; mvPost({ type: 'progress', id, pct: d.pct });")
+rd = sub(rd, "    rBook = ePub(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength));", "    rBook = ePub(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength));\n    mvCover(rBook, b.id);")
 rd = rd.replace("<i>MiBiblioteca</i>", "<i>MiVibra TV</i>").replace("'MiBiblioteca'", "'MiVibra TV'").replace("en MiBiblioteca.", "en MiVibra TV.")
 
 shim = r'''
 /* ---------- Puente con MiVibra TV ---------- */
 const MVP = window.parent !== window ? window.parent : null;
+// La portada del libro se manda a MiVibra para mostrarla en Lectura
+function mvCover(book, id) {
+  book.coverUrl().then(u => { if (!u) return; const im = new Image();
+    im.onload = () => { try { const w = 260, h = Math.min(520, Math.round(im.naturalHeight * w / (im.naturalWidth || 1)) || 390), c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(im, 0, 0, w, h); mvPost({ type: 'cover', id, data: c.toDataURL('image/jpeg', .8) }); } catch {} };
+    im.src = u; }).catch(() => {});
+}
 function mvPost(m) { try { MVP && MVP.postMessage(Object.assign({ mbr: 1 }, m), '*'); } catch {} }
 const progMap = new Map(Object.entries(JSON.parse(localStorage.getItem('mbr_prog') || '{}')));
 const metaMap = new Map(), coverCache = new Map();
