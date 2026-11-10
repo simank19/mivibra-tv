@@ -141,7 +141,7 @@ class GameActivity : ComponentActivity() {
 
     private fun addTouchPad(root: FrameLayout) {
         val v = TouchPadView(this,
-            onKey = { code, down -> retroView.sendKeyEvent(if (down) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, code, 0) },
+            onKey = { code, down -> retroView.sendKeyEvent(if (down) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, pspSwap(code), 0) },
             onStick = { x, y ->
                 retroView.sendMotionEvent(GLRetroView.MOTION_SOURCE_ANALOG_LEFT, x, y, 0)
                 // También como cruceta, para consolas sin palanca analógica (NES, SNES, Doom…)
@@ -167,7 +167,7 @@ class GameActivity : ComponentActivity() {
     fun remoteMenu() { showMenu() }
 
     fun remoteKey(slot: Int, keyCode: Int, down: Boolean) {
-        retroView.sendKeyEvent(if (down) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, keyCode, portFor(slot))
+        retroView.sendKeyEvent(if (down) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, pspSwap(keyCode), portFor(slot))
     }
 
     fun remoteAxis(slot: Int, stick: String, x: Float, y: Float) = sendAxis(portFor(slot), stick, x, y)
@@ -243,6 +243,15 @@ class GameActivity : ComponentActivity() {
         KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT)
 
     private fun mapKey(ev: KeyEvent): Int? {
+        return pspSwap(mapKey0(ev) ?: return null)
+    }
+    // PSP (núcleo PPSSPP): sus botones quedaban al revés; se cruzan para que ✕ quede abajo, ○ a la derecha, □ a la izquierda y △ arriba
+    private fun pspSwap(k: Int): Int = if (sys != "psp") k else when (k) {
+        KeyEvent.KEYCODE_BUTTON_A -> KeyEvent.KEYCODE_BUTTON_B; KeyEvent.KEYCODE_BUTTON_B -> KeyEvent.KEYCODE_BUTTON_A
+        KeyEvent.KEYCODE_BUTTON_X -> KeyEvent.KEYCODE_BUTTON_Y; KeyEvent.KEYCODE_BUTTON_Y -> KeyEvent.KEYCODE_BUTTON_X
+        else -> k
+    }
+    private fun mapKey0(ev: KeyEvent): Int? {
         val custom = customMap(ev.device)
         custom[ev.keyCode]?.let { return it }
         if (ev.keyCode in RETRO_KEYS) return ev.keyCode

@@ -93,6 +93,8 @@ class MainActivity : ComponentActivity() {
         web.isFocusable = true
         web.isFocusableInTouchMode = true
         setContentView(web)
+        // Sin el recuadro de foco que Android TV dibuja alrededor de toda la página (se veía naranja sobre la intro)
+        if (android.os.Build.VERSION.SDK_INT >= 26) web.defaultFocusHighlightEnabled = false
         web.requestFocus()
         web.loadUrl("https://appassets.androidplatform.net/assets/www/index.html")
 
@@ -250,7 +252,7 @@ class MainActivity : ComponentActivity() {
     private fun realKey(event: KeyEvent): Boolean {
         // La intro se salta con cualquier botón (OK, Enter, flechas, mando; Atrás la salta por su cuenta). Se llama directo, sin esperar a que la página
         // termine de cargar: mientras sale la intro la página sigue cargando y la orden quedaba en espera hasta el final
-        if (event.action == KeyEvent.ACTION_UP && event.keyCode != KeyEvent.KEYCODE_VOLUME_UP && event.keyCode != KeyEvent.KEYCODE_VOLUME_DOWN && event.keyCode != KeyEvent.KEYCODE_VOLUME_MUTE &&
+        if ((event.action == KeyEvent.ACTION_UP || (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0)) && event.keyCode != KeyEvent.KEYCODE_VOLUME_UP && event.keyCode != KeyEvent.KEYCODE_VOLUME_DOWN && event.keyCode != KeyEvent.KEYCODE_VOLUME_MUTE &&
             event.keyCode != KeyEvent.KEYCODE_BACK && event.keyCode != KeyEvent.KEYCODE_BUTTON_B && event.keyCode != KeyEvent.KEYCODE_ESCAPE)
             try { web.evaluateJavascript("window.MV&&MV.introShowing&&MV.introShowing()&&MV.introSkip()", null) } catch (_: Exception) {}
         if (event.keyCode == KeyEvent.KEYCODE_SEARCH || event.keyCode == KeyEvent.KEYCODE_VOICE_ASSIST) {

@@ -96,3 +96,6 @@ html.tv #intro.play .s3 .center{animation:i-pop-tv 1s 6.45s ease-out both}
 html.tv #intro.play .sec{animation:i-card-tv .6s calc(2.47s + var(--i)*0.2s) ease-out both}
 html.tv #intro .logo,html.tv #intro .cons{filter:none!important}
 html.tv #intro.out{transform:none}
+
+/* Sin recuadro de foco sobre la intro */
+#intro,#intro:focus,#intro:focus-visible{outline:none!important;box-shadow:none!important}
