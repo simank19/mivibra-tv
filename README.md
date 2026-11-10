@@ -10,7 +10,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/simank19/mivibra-tv/releases/latest"><b>⬇ Descargar la última versión (APK)</b></a>
+  <a href="https://github.com/simank19/mivibra-tv/releases/latest"><b>⬇ Android (APK)</b></a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/simank19/mivibra-tv/releases/latest"><b>💻 PC Windows (.exe)</b></a>
   &nbsp;·&nbsp;
   <a href="https://simank19.github.io/mivibra-tv/panel/"><b>📺 Agregar mi lista a la TV (panel web)</b></a>
 </p>
@@ -106,9 +108,17 @@ Cada usuario monta **su propia lista** y, si tiene un servicio con MiVibra, la s
 
 ## Instalar
 
+**Android (TV, celular y tablet)**
 1. Descarga `MiVibraTV-N.apk` desde **[Releases](https://github.com/simank19/mivibra-tv/releases/latest)**.
 2. Ábrela en el celular, la tablet o la TV (en TV puedes usar Downloader o una USB) y acepta "Instalar apps de origen desconocido".
 3. Las versiones nuevas se instalan encima sin perder tus datos; la app avisa sola con la campana.
+
+**PC con Windows 10 u 11**
+1. Descarga `MiVibraTV-PC-N.exe` desde **[Releases](https://github.com/simank19/mivibra-tv/releases/latest)** y ábrelo. Si Windows muestra "Windows protegió su PC", toca **Más información › Ejecutar de todas formas** (el instalador no tiene firma digital de pago).
+2. Se instala solo, sin pedir permisos de administrador, y crea el acceso directo **MiVibra TV** en el escritorio.
+3. Cada versión nueva sale con el mismo número que la de Android: la campana la descarga e instala sola y la app se vuelve a abrir.
+
+En el PC: **Esc** o el botón Atrás del mouse = Atrás, **F11** = pantalla completa, flechas y Enter para moverte como con el control. En el reproductor: Espacio pausa, ← → adelantan o retroceden (en vivo abren la lista de canales), ▲ ▼ cambian de canal y **L** abre la lista. Los juegos usan EmulatorJS (incluido en el instalador, funciona sin internet) con el teclado, cualquier mando USB/Bluetooth o el celular como control; Dreamcast y GameCube se abren con RetroArch para Windows.
 
 ## Configuración opcional
 
@@ -126,6 +136,15 @@ Las reglas de Firestore (superadministrador, usuarios, sincronización y buzón 
 El panel web se publica solo en GitHub Pages (`.github/workflows/panel.yml`) cada vez que cambia `listas.html`.
 
 ## Estructura del código
+
+```
+desktop/                           Versión para PC (Electron)
+  main.js          Ventanas, puente con la interfaz (window.Android), juegos y actualizaciones
+  lib/             Red, servidor local, EPG, Portal MAC, archivos y comprimidos (7-Zip), celular como mando
+  web/player.*     Reproductor (hls.js, mpegts.js) · web/game.html  Juegos (EmulatorJS)
+  scripts/fetch-ejs.js   Descarga EmulatorJS y los núcleos para el instalador
+```
+
 
 ```
 app/src/main/java/co/mivibra/tv/   Código nativo (Kotlin)
@@ -159,6 +178,7 @@ Cada cambio que se sube a GitHub se compila solo (GitHub Actions) y se publica e
 - Reproductor: AndroidX Media3 (Apache 2.0) · Emulación: LibretroDroid y núcleos libretro (algunos solo para uso no comercial).
 - Íconos de consolas: [KyleBing/retro-game-console-icons](https://github.com/KyleBing/retro-game-console-icons) (CC BY 4.0) · Marcos: libretro overlay-borders (MIT) · Carátulas: libretro-thumbnails · Fichas de juegos: Wikipedia y Wikidata.
 - Archivos comprimidos: Apache Commons Compress, XZ for Java y junrar · Lectura de imágenes: Google ML Kit.
+- Versión para PC: Electron (MIT), hls.js (Apache 2.0), mpegts.js (Apache 2.0), EmulatorJS (GPL-3.0), 7-Zip (LGPL, con restricción unRAR), Tesseract.js (Apache 2.0).
 - Avatares: Microsoft Fluent Emoji (MIT) · Fichas: TMDB y MyAnimeList (Jikan) · Canales gratis: Free-TV/IPTV e iptv-org · Cine clásico: Internet Archive.
 - Este producto usa la API de TMDB pero no está respaldado ni certificado por TMDB.
 
