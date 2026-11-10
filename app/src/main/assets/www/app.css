@@ -645,3 +645,43 @@ html.lite .card .shine { display: none; }
 .card .mono.ad em { position: absolute; top: 10px; right: 10px; font: 800 12px var(--ui); font-style: normal; color: #fff; background: #E0447C; border-radius: 999px; padding: 3px 9px; box-shadow: 0 4px 14px rgba(224,68,124,.45); }
 .card.ch .mono.ad i { font-size: 15px; }
 .card.adult .th img:not(.logo) { object-fit: cover; }
+
+/* ===== Animaciones modernas y rendimiento (solo transform y opacity, que no recalculan la página) ===== */
+:root { --spring: cubic-bezier(.16, 1, .3, 1); }
+@keyframes viewIn { from { opacity: 0; transform: translateY(14px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes rowIn { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: none; } }
+@keyframes cardIn { from { opacity: 0; transform: translateX(18px) scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes dialogIn { from { opacity: 0; transform: translateY(26px) scale(.94); } to { opacity: 1; transform: none; } }
+@keyframes toastIn { from { opacity: 0; transform: translateY(18px) scale(.9); } to { opacity: 1; transform: none; } }
+.view-in { animation: viewIn .42s var(--spring) both; }
+.view-in > .row, .view-in > section { animation: rowIn .5s var(--spring) both; }
+.view-in > .row:nth-child(2), .view-in > section:nth-child(2) { animation-delay: 50ms; }
+.view-in > .row:nth-child(3), .view-in > section:nth-child(3) { animation-delay: 100ms; }
+.view-in > .row:nth-child(4), .view-in > section:nth-child(4) { animation-delay: 150ms; }
+.view-in > .row:nth-child(n+5), .view-in > section:nth-child(n+5) { animation-delay: 190ms; }
+.strip > .card { animation: cardIn .45s var(--spring) both; }
+.strip > .card:nth-child(2) { animation-delay: 30ms; } .strip > .card:nth-child(3) { animation-delay: 60ms; } .strip > .card:nth-child(4) { animation-delay: 90ms; }
+.strip > .card:nth-child(5) { animation-delay: 120ms; } .strip > .card:nth-child(6) { animation-delay: 150ms; } .strip > .card:nth-child(n+7) { animation: none; }
+.dialog { animation: dialogIn .38s var(--spring) both; }
+#modal { animation: fade .2s ease both; }
+#toast div { animation: toastIn .35s var(--spring) both; }
+.f { transition: transform .22s var(--spring), box-shadow .22s ease, background .2s, border-color .2s, color .2s; }
+.f:active { transform: scale(.96); transition-duration: .08s; }
+.btn, .chip, .pill, .qbtn { -webkit-tap-highlight-color: transparent; }
+.chip.on, .pill.on { transition: background .25s var(--spring), color .2s; }
+.card .th img { transition: transform .5s var(--spring); }
+.card.f:focus-visible .th img:not(.logo), .card.f.kf .th img:not(.logo) { transform: scale(1.05); }
+/* Rendimiento: lo que no está en pantalla no se dibuja, y cada tarjeta se pinta aparte */
+.view-in > .row, #results > .row { content-visibility: auto; contain-intrinsic-size: auto 300px; }
+.card, .vcard, .bcard, .utile { contain: layout paint; }
+.card.f:focus-visible, .card.f.kf, .bcard:focus { contain: layout; }
+.strip { overscroll-behavior-x: contain; }
+/* TV: animaciones cortas y baratas (antes iban apagadas); el modo ligero las sigue quitando */
+html.tv .view-in { animation: fade .18s ease both !important; }
+html.tv .view-in > .row, html.tv .view-in > section, html.tv .strip > .card { animation: none !important; }
+html.tv .f { transition: transform .14s ease-out, background .14s, color .14s; }
+html.tv .card .th img { transition: none; } html.tv .card.f.kf .th img, html.tv .card.f:focus-visible .th img { transform: none !important; }
+html.tv .dialog { animation: dialogIn .22s ease-out both; }
+html.tv #toast div { animation: toastIn .2s ease-out both; }
+html.lite .view-in, html.lite .dialog, html.lite #toast div, html.lite #modal { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .view-in, .view-in > *, .strip > .card, .dialog, #toast div { animation: none !important; } }

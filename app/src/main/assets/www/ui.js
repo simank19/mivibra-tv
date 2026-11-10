@@ -4111,16 +4111,9 @@
   TOUR.console = [
     ['#console .cgames', 'Tus juegos', 'Los últimos que jugaste, con su carátula. OK juega; deja presionado OK para renombrar, cambiar la carátula y más opciones.', 4],
     ['#console .cconsoles', 'Consolas', 'Tus juegos agrupados por consola. Entra a una para ver todos sus juegos.', 4],
-    ['#console [data-act="lib"]', 'Biblioteca', 'Todos tus juegos en estantes por consola. También cambias entre Inicio y Biblioteca con los botones de lado del mando.', 4],
-    ['#console [data-act="scan"]', 'Buscar juegos', 'Busca ROMs en la memoria de la TV, en una USB o en cualquier carpeta. Abre zip, 7z y rar (incluso rar en partes).', 4],
-    ['#console [data-act="bios"]', 'Importar BIOS', 'Instala las BIOS (PlayStation, Neo Geo…) para el emulador de MiVibra y para RetroArch.', 4],
-    ['#console [data-act="send"]', 'Enviar desde el celular', 'Escanea el código y manda ROMs o BIOS desde el celular por Wi-Fi. Aparecen solas aquí.', 4],
-    ['#console [data-act="scrape"]', 'Buscar información', 'Busca carátulas, nombres correctos y la ficha de cada juego (descripción, año, imágenes).', 4],
-    ['#console [data-act="engine"]', 'Emuladores', 'Elige con qué se juega cada consola: el emulador de MiVibra, RetroArch o PPSSPP para PSP. Aquí también eliges el marco de pantalla.', 4],
-    ['#console [data-act="phone"]', 'Celular como mando', 'Usa uno o dos celulares como control (jugador 1 y 2). Los mandos físicos se configuran dentro del juego.', 4],
-    ['#console [data-act="edit"]', 'Editar juegos', 'Tócalo y luego OK sobre un juego para renombrarlo, buscar otra carátula, ver su ficha o cambiar su sistema.', 4],
-    ['#console [data-act="del"]', 'Borrar juegos', 'Tócalo y luego OK sobre el juego que quieres quitar. Atrás termina.', 4],
-    ['#console [data-act="classic"]', 'Vista clásica', 'Vuelve a la lista sencilla de juegos.', 4]
+    ['#console .ctabs', 'Inicio, Biblioteca y Opciones', 'Cambia de pestaña con los botones L y R del mando, o sube hasta aquí con ▲. En Biblioteca están todos tus juegos por consola.', 5],
+    ['#console .ctab[data-arg="opts"]', 'Opciones', 'Aquí está todo lo demás: buscar juegos, enviarlos desde el celular, carátulas, BIOS, emuladores, editar y borrar. El botón ☰ también la abre.', 5],
+    ['#console .chint', 'Controles', 'OK juega. Mantén OK sobre un juego para renombrarlo, cambiar su carátula o su consola. Atrás regresa.', 5]
   ];
   /** Tutorial de una pantalla que no es una sección (por ejemplo, los juegos estilo consola). */
   MV.tourRun = function (key) {
