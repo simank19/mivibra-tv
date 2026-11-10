@@ -159,9 +159,12 @@
   var BASE_BG = 'radial-gradient(120% 90% at 85% -10%, rgba(255,105,0,.22), transparent 55%), radial-gradient(90% 80% at -10% 110%, rgba(76,141,255,.14), transparent 55%)';
   function setHeroBg(url) {
     if (!box) return;
-    var im = $('#cshot', box), w = im && im.parentNode; if (!im) return;
-    if (!url) { w.classList.remove('on'); return; }
-    im.src = url; w.classList.add('on');
+    if (!url) { box.style.backgroundImage = ''; box.style.backgroundSize = ''; box.style.backgroundPosition = ''; box.style.backgroundRepeat = ''; return; }
+    // La imagen del juego llena el fondo, oscurecida para que las carátulas y el texto se lean bien
+    box.style.backgroundImage = 'linear-gradient(0deg, #0E0D0C 0%, rgba(14,13,12,.92) 26%, rgba(14,13,12,.55) 60%, rgba(14,13,12,.72) 100%), url("' + url.replace(/"/g, '%22') + '")';
+    box.style.backgroundSize = '100% 100%, cover';
+    box.style.backgroundPosition = '0 0, center top';
+    box.style.backgroundRepeat = 'no-repeat';
   }
   function hero(r) {
     if (!box) return;
