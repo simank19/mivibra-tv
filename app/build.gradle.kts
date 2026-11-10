@@ -100,4 +100,5 @@ dependencies {
     // ROMs comprimidas en .7z
     implementation("org.apache.commons:commons-compress:1.21")
     implementation("org.tukaani:xz:1.9")
+    implementation("com.github.junrar:junrar:7.5.5")
 }

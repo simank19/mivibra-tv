@@ -50,7 +50,7 @@
   D.FREEDOOM = { name: 'Freedoom (gratis y libre)', url: 'https://github.com/freedoom/freedoom/releases/download/v0.13.0/freedoom-0.13.0.zip', file: 'freedoom-0.13.0.zip' };
   D.ROM_EXTS = [];
   D.SYSTEMS.forEach(function (s) { s.exts.forEach(function (e) { if (D.ROM_EXTS.indexOf(e) < 0) D.ROM_EXTS.push(e); }); });
-  D.ROM_EXTS.push('7z');
+  D.ROM_EXTS.push('7z', 'rar');
 
   // Fuentes gratuitas y legales de canales
   D.PRESETS = [

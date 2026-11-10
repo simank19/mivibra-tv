@@ -28,25 +28,14 @@ object NeoGeo {
     }
 
     /** Nombres de los archivos de adentro (sin carpetas, en minúsculas) */
-    fun entryNames(path: String): List<String> = try {
-        if (path.lowercase().endsWith(".7z")) { if (android.os.Build.VERSION.SDK_INT >= 26) SevenZ.list(File(path)).map { it.first } else emptyList() }
-        else java.util.zip.ZipFile(path).use { z -> z.entries().toList().filter { !it.isDirectory }.map { it.name } }
-    } catch (_: Throwable) { emptyList() }
+    fun entryNames(path: String): List<String> = try { Archives.list(path).map { it.first } } catch (_: Throwable) { emptyList() }
 
-    private fun entryCrcs(path: String): List<Long> {
-        if (path.lowercase().endsWith(".7z")) {
-            if (android.os.Build.VERSION.SDK_INT < 26) return emptyList()
-            return SevenZ.crcs(File(path))
-        }
-        java.util.zip.ZipFile(path).use { z -> return z.entries().toList().filter { !it.isDirectory }.map { it.crc } }
-    }
+    private fun entryCrcs(path: String): List<Long> = Archives.crcs(path)
 
     /** Si el comprimido trae adentro otro .zip/.7z (y nada más importante), su nombre. */
     fun innerArchive(path: String): String? = try {
-        val names: List<String> = if (path.lowercase().endsWith(".7z")) {
-            if (android.os.Build.VERSION.SDK_INT >= 26) SevenZ.list(File(path)).map { it.first } else emptyList()
-        } else java.util.zip.ZipFile(path).use { z -> z.entries().toList().filter { !it.isDirectory }.map { it.name } }
-        val arch = names.filter { it.lowercase().endsWith(".zip") || it.lowercase().endsWith(".7z") }
+        val names: List<String> = Archives.list(path).map { it.first }
+        val arch = names.filter { Archives.supported(it) }
         val other = names.filter { it !in arch && !Regex("(?i)\\.(txt|nfo|url|htm|html|jpg|png|diz)$").containsMatchIn(it) }
         if (arch.size == 1 && other.isEmpty()) arch[0] else null
     } catch (_: Throwable) { null }
@@ -54,7 +43,7 @@ object NeoGeo {
     /** {set, title, parent} si es un juego de Neo Geo; null si no. */
     fun identify(ctx: Context, path: String): JSONObject? {
         val low = path.lowercase()
-        if (!low.endsWith(".zip") && !low.endsWith(".7z")) return null
+        if (!Archives.supported(low)) return null
         val base = File(path).nameWithoutExtension.lowercase()
         val sets = load(ctx)
         sets.firstOrNull { it.name == base }?.let { return JSONObject().put("set", it.name).put("title", it.title).put("parent", it.parent ?: "") }
@@ -108,8 +97,8 @@ object NeoGeo {
             val name = if (set.isNotBlank()) "$set.${File(inner).extension.lowercase()}" else File(inner).name
             val target = File(outDir, name)
             if (!target.exists()) {
-                if (path.lowercase().endsWith(".7z")) SevenZ.extract(src, setOf(inner), outDir).also { File(outDir, File(inner).name).let { f -> if (f != target) f.renameTo(target) } }
-                else java.util.zip.ZipFile(src).use { z -> z.getInputStream(z.getEntry(inner)).use { i -> target.outputStream().use { i.copyTo(it, 256 * 1024) } } }
+                Archives.extract(path, setOf(inner), outDir)
+                File(outDir, File(inner).name).let { f -> if (f != target && f.exists()) f.renameTo(target) }
             }
             if (own && target.exists()) src.delete()   // el envoltorio ya no hace falta
             src = target

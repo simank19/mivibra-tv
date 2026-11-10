@@ -1523,7 +1523,7 @@
     // Lo que enviaste desde el celular siempre aparece (si no se sabe la consola, en "Sin sistema")
     if (own) return !/\.(part|tmp|txt|nfo|jpg|png|srm|state)$/i.test(low);
     var mine = own || path.indexOf('/co.mivibra.tv/') >= 0 || ROM_DIR.test(path + '/');
-    if (ext === 'zip' || ext === '7z') return mine;                                 // .zip solo en carpetas de juegos (roms, arcade…)
+    if (ext === 'zip' || ext === '7z' || ext === 'rar') return mine;                                 // .zip solo en carpetas de juegos (roms, arcade…)
     if (ext === 'm3u') return /psx|ps1|playstation/.test(path);      // .m3u también son listas de TV
     if (ext === 'iso') return size > 30e6 && (mine || /psx|ps1|playstation|psp|gamecube|dreamcast/.test(path));
     if (ext === 'exe' || ext === 'pak') return true;                 // ya filtrados por nombre (Doukutsu.exe, pak0.pak)
@@ -1545,7 +1545,7 @@
   // ¿Es un juego de Neo Geo? (por el nombre corto o por lo que trae adentro). Se mira una vez y se recuerda.
   var ARCX = MV.load('arcIds3', {}) || {}, arcSaveT = null, arcTried = {};
   function arcId(r) {
-    if (!r || !/^(zip|7z)$/.test(r.ext || '')) return null;
+    if (!r || !/^(zip|7z|rar)$/.test(r.ext || '')) return null;
     if (ARCX[r.path]) return ARCX[r.path];
     if (r.path in ARCX && ARCX[r.path] === null && arcTried[r.path]) return null;
     arcTried[r.path] = 1;
@@ -1561,9 +1561,9 @@
   function romSystem(r) {
     var ov = P.romSystem[r.path];
     // Lo que se marcó como Arcade y en realidad es Neo Geo va a su propia consola
-    if ((ov === 'arcade' || !ov) && /^(zip|7z)$/.test(r.ext || '') && arcId(r)) return NEOGEO();
+    if ((ov === 'arcade' || !ov) && /^(zip|7z|rar)$/.test(r.ext || '') && arcId(r)) return NEOGEO();
     // Un .zip marcado como Arcade que en realidad trae una ROM de consola (enviado con la versión anterior) se corrige solo
-    if (ov === 'arcade' && (r.ext === 'zip' || r.ext === '7z')) {
+    if (ov === 'arcade' && (r.ext === 'zip' || r.ext === '7z' || r.ext === 'rar')) {
       var zin = zipInner(r);
       for (var zq = 0; zq < zin.length; zq++) {
         var real = D.SYSTEMS.find(function (s) { return !s.port && s.id !== 'arcade' && s.exts.indexOf(zin[zq]) >= 0; });
@@ -1572,7 +1572,7 @@
     }
     if (ov) return D.SYSTEMS.find(function (s) { return s.id === ov; });
     var name = (r.name || '').toLowerCase(), path = (r.path || '').toLowerCase();
-    if (r.ext === 'zip' || r.ext === '7z') {
+    if (r.ext === 'zip' || r.ext === '7z' || r.ext === 'rar') {
       // ROM de consola comprimida (Super Mario World.zip con el .sfc adentro): se mira qué trae, aunque esté en una carpeta de Arcade
       var inner = zipInner(r);
       for (var zi = 0; zi < inner.length; zi++) {
@@ -2015,11 +2015,11 @@
     b.innerHTML = 'Preparando “' + esc(String(r.name || '').replace(/\.[^.]+$/, '')) + '”… ' + (pct || 0) + '%<div style="margin-top:.8vw;height:.5vw;border-radius:1vw;background:rgba(255,255,255,.15);overflow:hidden"><i style="display:block;height:100%;width:' + (pct || 0) + '%;background:var(--accent,#FF6900)"></i></div>';
   }
   function playRom(r) {
-    if (/^(rar|tar|gz)$/i.test(r.ext || '')) { MV.toast('El formato .' + r.ext + ' no se puede abrir. Envíalo en .zip, .7z o sin comprimir.'); return; }
+    if (/^(tar|gz)$/i.test(r.ext || '')) { MV.toast('El formato .' + r.ext + ' no se puede abrir. Envíalo en .zip, .7z, .rar o sin comprimir.'); return; }
     var s = romSystem(r);
     if (!s) { chooseSystem(r); return; }
     // Neo Geo en formato .neo (NeoSD/TerraOnion, un solo archivo): lo abre el emulador Geolith, no FBNeo
-    if (s.id === 'neogeo' && (r.ext === 'neo' || (/^(zip|7z)$/.test(r.ext || '') && zipInner(r).indexOf('neo') >= 0)))
+    if (s.id === 'neogeo' && (r.ext === 'neo' || (/^(zip|7z|rar)$/.test(r.ext || '') && zipInner(r).indexOf('neo') >= 0)))
       s = Object.assign({}, s, { core: 'geolith', src: 'bb', exts: ['neo'], geolith: true });
     if (A && gameEngine(s) === 'retroarch') { playRetroArch(r, s); return; }
     var start = function () {
@@ -2030,7 +2030,7 @@
       };
       // ROM de consola en .zip: se descomprime una vez (Arcade se juega tal cual)
       // Neo Geo: el .zip necesita su nombre corto (kof98.zip) y la BIOS neogeo.zip al lado
-      var arc = !s.geolith && (s.id === 'neogeo' || s.id === 'arcade') && /^(zip|7z)$/.test(r.ext || '') && !/^content:/.test(r.path), neo = arc ? arcId(r) : null;
+      var arc = !s.geolith && (s.id === 'neogeo' || s.id === 'arcade') && /^(zip|7z|rar)$/.test(r.ext || '') && !/^content:/.test(r.path), neo = arc ? arcId(r) : null;
       // Neo Geo que no se pudo reconocer: mostrar qué trae el archivo en vez del error del emulador
       if (s.id === 'neogeo' && arc && !neo && !MV._neoForce) {
         var inside = []; try { inside = JSON.parse(A.archiveNames(r.path)); } catch (e) {}
@@ -2056,7 +2056,7 @@
           }
           return go(p.path);
         })
-        : (r.ext === 'zip' || r.ext === '7z') && s.id !== 'arcade'
+        : (r.ext === 'zip' || r.ext === '7z' || r.ext === 'rar') && s.id !== 'arcade'
         ? (unzipBox(r, 0), MV.call('unzipRom', [JSON.stringify({ path: r.path, exts: s.exts })], function (p) { unzipBox(r, p); }).then(function (x) { unzipBox(null); return go(x); }, function (e) { unzipBox(null); throw e; }))
         : go(r.path);
       job.catch(function (e) { MV.toast(e.message, 4000); });

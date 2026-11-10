@@ -127,15 +127,7 @@ object Storage {
 
     private fun is7z(path: String) = path.lowercase().endsWith(".7z")
 
-    private fun entries(path: String): List<Entry> {
-        if (is7z(path)) {
-            if (android.os.Build.VERSION.SDK_INT < 26) throw IllegalStateException("Los .7z necesitan Android 8 o más nuevo")
-            return SevenZ.list(File(path)).map { Entry(it.first, it.second) }
-        }
-        java.util.zip.ZipFile(path).use { z ->
-            return z.entries().toList().filter { !it.isDirectory }.map { Entry(it.name, it.size) }
-        }
-    }
+    private fun entries(path: String): List<Entry> = Archives.list(path).map { Entry(it.first, it.second) }
 
     fun zipExts(path: String): JSONArray {
         val out = JSONArray()
@@ -169,19 +161,7 @@ object Storage {
         var done = 0L; var lastPct = -1
         val tick: (Int) -> Unit = { n -> done += n; val p = if (total > 0) (done * 100 / total).toInt() else 0; if (p != lastPct) { lastPct = p; onPct(p) } }
         try {
-            if (is7z(path)) {
-                SevenZ.extract(src, need, dir, tick)
-            } else {
-                java.util.zip.ZipFile(src).use { z ->
-                    for (e in z.entries().toList().filter { it.name in need }) {
-                        val out = File(dir, File(e.name).name)
-                        z.getInputStream(e).use { inp -> out.outputStream().buffered(256 * 1024).use { o ->
-                            val buf = ByteArray(256 * 1024)
-                            while (true) { val n = inp.read(buf); if (n < 0) break; o.write(buf, 0, n); tick(n) }
-                        } }
-                    }
-                }
-            }
+            Archives.extract(path, need, dir, tick)
         } catch (t: Throwable) { dir.deleteRecursively(); throw t }
         if (!target.exists()) throw IllegalStateException("No se encontró el juego dentro del comprimido")
         // Limpieza: deja solo los 6 más recientes
