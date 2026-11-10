@@ -24,6 +24,8 @@ object Drive {
     // ---------- Permiso (cuenta de Google del equipo) ----------
     /** Pide el token. Si hace falta que el usuario acepte, muestra la pantalla de Google (solo si interactive). */
     fun token(a: MainActivity, interactive: Boolean, done: (String?, String?) -> Unit) {
+        val acct = prefs(a).getString("acct", null)
+        if (acct != null) { legacyToken(a, acct, interactive, true, done); return }
         val req = AuthorizationRequest.builder().setRequestedScopes(SCOPES).build()
         Identity.getAuthorizationClient(a).authorize(req)
             .addOnSuccessListener { r ->
@@ -39,9 +41,11 @@ object Drive {
                                 // Si Google devuelve un error con código (p. ej. 10 = la app no está registrada en Google Cloud), se muestra;
                                 // solo se calla cuando de verdad el usuario cerró la ventana
                                 val st = (e as? com.google.android.gms.common.api.ApiException)?.statusCode
+                                // Error 8 (y otros internos): en muchos televisores esta ventana de permisos no funciona;
+                                // se usa el método clásico de cuentas de Android, que sí abre en TV
+                                if (st != null && st != 10 && st != 16 && st != 12501) { legacySignIn(a, done); return@startSenderForResult }
                                 done(null, when {
                                     st == 10 -> "Google no reconoce la app: falta el cliente Android (paquete co.mivibra.tv y huella SHA-1) en Google Cloud"
-                                    st != null && st != 16 && st != 12501 -> "Google respondió con el error $st"
                                     code == android.app.Activity.RESULT_CANCELED -> "cancelado"
                                     else -> e.message ?: "Google no dio permiso"
                                 })
@@ -55,6 +59,59 @@ object Drive {
             }
             .addOnFailureListener { e -> done(null, e.message ?: "No se pudo conectar con Google") }
     }
+    // ---------- Método clásico (cuenta de Android + GoogleAuthUtil): funciona en Android TV ----------
+    private const val SCOPE_STR = "oauth2:https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file"
+    @Suppress("DEPRECATION")
+    private fun legacySignIn(a: MainActivity, done: (String?, String?) -> Unit) {
+        try {
+            val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN).requestEmail().build()
+            val client = com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(a, gso)
+            a.startForResult(client.signInIntent) { code, data ->
+                try {
+                    val acc = com.google.android.gms.auth.api.signin.GoogleSignIn.getSignedInAccountFromIntent(data)
+                        .getResult(com.google.android.gms.common.api.ApiException::class.java)
+                    val name = acc?.email ?: acc?.account?.name
+                    if (name == null) { done(null, "Google no dio la cuenta"); return@startForResult }
+                    legacyToken(a, name, true, false, done)
+                } catch (e: com.google.android.gms.common.api.ApiException) {
+                    done(null, if (e.statusCode == 12501 || e.statusCode == 16 || code == android.app.Activity.RESULT_CANCELED) "cancelado" else "Google respondió con el error ${e.statusCode} (método clásico)")
+                } catch (e: Exception) { done(null, e.message ?: "Google no dio permiso") }
+            }
+        } catch (e: Exception) { done(null, e.message ?: "No se pudo abrir la cuenta de Google") }
+    }
+    /** Token con la cuenta guardada; si Google pide aceptar los permisos, abre su pantalla (una vez). */
+    @Suppress("DEPRECATION")
+    private fun legacyToken(a: MainActivity, name: String, interactive: Boolean, canRetry: Boolean, done: (String?, String?) -> Unit) {
+        Thread {
+            try {
+                val acc = android.accounts.Account(name, "com.google")
+                val t = com.google.android.gms.auth.GoogleAuthUtil.getToken(a, acc, SCOPE_STR)
+                prefs(a).edit().putString("acct", name).putBoolean("on", true).apply()
+                a.runOnUiThread { done(t, null) }
+            } catch (e: com.google.android.gms.auth.UserRecoverableAuthException) {
+                val i = e.intent
+                a.runOnUiThread {
+                    if (!interactive || i == null) { done(null, "NO_AUTH"); return@runOnUiThread }
+                    try {
+                        a.startForResult(i) { code, _ ->
+                            if (code == android.app.Activity.RESULT_OK) legacyToken(a, name, false, false, done)
+                            else done(null, "cancelado")
+                        }
+                    } catch (x: Exception) { done(null, x.message ?: "No se pudo abrir la pantalla de permisos") }
+                }
+            } catch (e: com.google.android.gms.auth.GoogleAuthException) {
+                // La cuenta guardada ya no sirve (se quitó del equipo, etc.): se olvida y se vuelve a elegir
+                prefs(a).edit().remove("acct").apply()
+                a.runOnUiThread { if (interactive && canRetry) legacySignIn(a, done) else done(null, "Google: ${e.message}") }
+            } catch (e: Exception) {
+                a.runOnUiThread { done(null, e.message ?: "Sin conexión con Google") }
+            }
+        }.start()
+    }
+    /** Al usar el token y recibir 401 (venció): se borra de la caché para pedir uno nuevo. */
+    @Suppress("DEPRECATION")
+    fun dropToken(c: Context, token: String) { try { if (prefs(c).getString("acct", null) != null) com.google.android.gms.auth.GoogleAuthUtil.clearToken(c, token) } catch (_: Exception) {} }
+
     private const val READ = "https://www.googleapis.com/auth/drive.readonly"
     /**
      * En la pantalla de Google cada permiso trae su casilla: si no se marcó "ver y descargar tus archivos",

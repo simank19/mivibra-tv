@@ -672,7 +672,16 @@ class Bridge(private val a: MainActivity) {
                 if (tok == null) { reply(id, false, if (err == "NO_AUTH") "Conecta tu Google Drive" else err); return@token }
                 io.execute {
                     try { reply(id, true, work(tok)) }
-                    catch (e: Exception) { reply(id, false, if (e.message == "AUTH") "Google pidió volver a conectar Drive" else (e.message ?: "Error con Drive")) }
+                    catch (e: Exception) {
+                        if (e.message == "AUTH") {
+                            // El permiso venció: se pide uno nuevo una vez y se reintenta
+                            Drive.dropToken(a, tok)
+                            a.runOnUiThread { Drive.token(a, false) { t2, _ ->
+                                if (t2 == null) { reply(id, false, "Google pidió volver a conectar Drive"); return@token }
+                                io.execute { try { reply(id, true, work(t2)) } catch (e2: Exception) { reply(id, false, if (e2.message == "AUTH") "Google pidió volver a conectar Drive" else (e2.message ?: "Error con Drive")) } }
+                            } }
+                        } else reply(id, false, e.message ?: "Error con Drive")
+                    }
                 }
             }
         }
