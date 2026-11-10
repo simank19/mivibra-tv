@@ -160,10 +160,25 @@ body.local button.k{opacity:.8}
 </nav>
 
 <script>
+/* Clave de vinculación con la TV: viene en el código QR (?k=…); si falta o cambió, se pide la que muestra la TV. */
+var MVK = (function () { var q = new URLSearchParams(location.search).get('k'); try { if (q) localStorage.setItem('mvk:' + location.host, q); return q || localStorage.getItem('mvk:' + location.host) || ''; } catch (e) { return q || ''; } })();
+function mvAskKey(msg) {
+  var k = prompt((msg ? msg + '\n\n' : '') + 'Escribe la clave de 6 números que aparece en la TV (junto al código QR):');
+  if (!k) return; k = k.replace(/\D/g, '');
+  try { localStorage.setItem('mvk:' + location.host, k); } catch (e) {}
+  var u = new URL(location.href); u.searchParams.set('k', k); location.replace(u.toString());
+}
+function mvCheckKey(ok) {
+  fetch('/auth?k=' + encodeURIComponent(MVK), { cache: 'no-store' }).then(function (r) {
+    if (r.status === 401) mvAskKey(MVK ? 'La clave no coincide con la de la TV.' : 'Para conectar este celular con la TV hace falta su clave.'); else if (ok) ok();
+  }).catch(function () { if (ok) ok(); });
+}
+</script>
+<script>
 (function () {
   var local = /[?&]local=1/.test(location.search);
   var bridge = window.PadBridge;
-  var ws = null, connected = false, mode = 'remote', forced = null;
+  var ws = null, connected = false, mode = 'remote', forced = null, opened = false;
   if (local) { document.documentElement.classList.add('local'); document.body.classList.add('local'); }
 
   function vib(ms) { try { navigator.vibrate && navigator.vibrate(ms || 12); } catch (e) {} }
@@ -186,9 +201,9 @@ body.local button.k{opacity:.8}
     document.getElementById('gstt').textContent = txt;
   }
   function connect() {
-    try { ws = new WebSocket('ws://' + location.host + '/'); } catch (e) { setTimeout(connect, 2000); return; }
+    try { ws = new WebSocket('ws://' + location.host + '/?k=' + encodeURIComponent(MVK)); } catch (e) { setTimeout(connect, 2000); return; }
     ws.onopen = function () {
-      connected = true; setStatus(true, 'Conectado');
+      opened = true; connected = true; setStatus(true, 'Conectado');
       var n = localStorage.getItem('mvPadName');
       if (n) send({ t: 'name', v: n });
     };
@@ -197,7 +212,12 @@ body.local button.k{opacity:.8}
       if (m.t === 'hello') setStatus(true, 'Jugador ' + (m.slot + 1));
       if (m.mode) { mode = m.mode; if (!forced) show(mode); }
     };
-    ws.onclose = function () { connected = false; setStatus(false, 'Reconectando…'); setTimeout(connect, 1500); };
+    ws.onclose = function () {
+      connected = false; setStatus(false, 'Reconectando…');
+      // Si la TV rechaza la clave se pide de nuevo; si no, se reintenta
+      if (!opened) { mvCheckKey(function () { setTimeout(connect, 1500); }); return; }
+      setTimeout(connect, 1500);
+    };
     ws.onerror = function () { try { ws.close(); } catch (e) {} };
   }
   setInterval(function () { send({ t: 'ping' }); }, 8000);

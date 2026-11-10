@@ -4,10 +4,10 @@
 #intro.out{opacity:0;pointer-events:none}
 #intro .logo img,#intro .logo svg{width:100%;height:100%;display:block}
 #intro{--a:#FF6900;--bg:#0E0D0C}
-.layer{position:absolute;inset:0;display:grid;place-items:center;opacity:0}
+#intro .layer{position:absolute;inset:0;display:grid;place-items:center;opacity:0}
 /* 1. Logo */
-.s1 .logo{width:13em;height:13em;filter:drop-shadow(0 0 2.5em rgba(255,105,0,.6))}
-.s1 .ring{position:absolute;width:13em;height:13em;border-radius:50%;border:.25em solid var(--a,#FF6900);opacity:0}
+#intro .s1 .logo{width:13em;height:13em;filter:drop-shadow(0 0 2.5em rgba(255,105,0,.6))}
+#intro .s1 .ring{position:absolute;width:13em;height:13em;border-radius:50%;border:.25em solid var(--a,#FF6900);opacity:0}
 #intro.play .s1{animation:show 2.25s 0.15s both}
 #intro.play .s1 .logo{animation:pop 1.65s 0.22s cubic-bezier(.2,1.6,.4,1) both, spin 2.1s 0.22s ease-out both}
 #intro.play .s1 .ring{animation:ring 1.65s 0.83s ease-out both}
@@ -16,14 +16,14 @@
 @keyframes ring{from{transform:scale(.9);opacity:.9}to{transform:scale(2.6);opacity:0}}
 @keyframes show{0%{opacity:0}10%{opacity:1}85%{opacity:1}100%{opacity:0}}
 /* 2. Secciones */
-.s2{align-content:center;gap:2.4em}
-.s2 h2{font-family:var(--brand,"Bricolage Grotesque");font-weight:800;font-size:2.6em;letter-spacing:-.02em;opacity:0}
-.s2 h2 span{color:var(--a,#FF6900)}
-.row{display:flex;gap:1.15em;flex-wrap:wrap;justify-content:center;max-width:92em;flex-wrap:nowrap}
-.sec{width:7.7em;padding:1.5em .6em 1.2em;border-radius:1.4em;background:linear-gradient(160deg,color-mix(in srgb,var(--c) 28%,#1B1916),#141210 80%);border:.12em solid color-mix(in srgb,var(--c) 55%,transparent);display:flex;flex-direction:column;align-items:center;gap:.9em;opacity:0;text-align:center}
-.si{width:4.2em;height:4.2em;border-radius:1.1em;display:grid;place-items:center;background:var(--c);color:#0E0D0C;box-shadow:0 .6em 2em color-mix(in srgb,var(--c) 45%,transparent)}
-.si svg{width:2.6em;height:2.6em}
-.sec b{font-size:1.05em;line-height:1.15}
+#intro .s2{align-content:center;gap:2.4em}
+#intro .s2 h2{font-family:var(--brand,"Bricolage Grotesque");font-weight:800;font-size:2.6em;letter-spacing:-.02em;opacity:0}
+#intro .s2 h2 span{color:var(--a,#FF6900)}
+#intro .row{display:flex;gap:1.15em;flex-wrap:wrap;justify-content:center;max-width:92em;flex-wrap:nowrap}
+#intro .sec{width:7.7em;padding:1.5em .6em 1.2em;border-radius:1.4em;background:linear-gradient(160deg,color-mix(in srgb,var(--c) 28%,#1B1916),#141210 80%);border:.12em solid color-mix(in srgb,var(--c) 55%,transparent);display:flex;flex-direction:column;align-items:center;gap:.9em;opacity:0;text-align:center}
+#intro .si{width:4.2em;height:4.2em;border-radius:1.1em;display:grid;place-items:center;background:var(--c);color:#0E0D0C;box-shadow:0 .6em 2em color-mix(in srgb,var(--c) 45%,transparent)}
+#intro .si svg{width:2.6em;height:2.6em}
+#intro .sec b{font-size:1.05em;line-height:1.15}
 #intro.play .s2{animation:show 4.35s 2.1s both}
 #intro.play .s2 h2{animation:up 0.9s 2.25s both}
 #intro.play .sec{animation:card 0.83s calc(2.47s + var(--i)*0.2s) cubic-bezier(.2,1.4,.4,1) both, glow 0.75s calc(4.35s + var(--i)*0.14s) both}
@@ -31,9 +31,9 @@
 @keyframes card{from{opacity:0;transform:translateY(3em) scale(.8)}to{opacity:1;transform:none}}
 @keyframes glow{50%{transform:scale(1.08);box-shadow:0 0 2.5em color-mix(in srgb,var(--c) 70%,transparent)}}
 /* 3. Consolas */
-.s3 .center{font-family:var(--brand,"Bricolage Grotesque");font-weight:800;font-size:3em;text-align:center;line-height:1.05}
-.s3 .center small{display:block;font:600 .38em var(--ui,"DM Sans");color:#FFB98A;letter-spacing:.14em;text-transform:uppercase;margin-top:.6em;white-space:nowrap}
-.cons{position:absolute;left:50%;top:50%;width:7.5em;height:7.5em;margin:-3.75em;object-fit:contain;opacity:0;filter:drop-shadow(0 .5em 1em rgba(0,0,0,.6))}
+#intro .s3 .center{font-family:var(--brand,"Bricolage Grotesque");font-weight:800;font-size:3em;text-align:center;line-height:1.05}
+#intro .s3 .center small{display:block;font:600 .38em var(--ui,"DM Sans");color:#FFB98A;letter-spacing:.14em;text-transform:uppercase;margin-top:.6em;white-space:nowrap}
+#intro .cons{position:absolute;left:50%;top:50%;width:7.5em;height:7.5em;margin:-3.75em;object-fit:contain;opacity:0;filter:drop-shadow(0 .5em 1em rgba(0,0,0,.6))}
 #intro.play .s3{animation:show 3.0s 6.3s both}
 #intro.play .s3 .center{animation:pop 1.05s 6.45s cubic-bezier(.2,1.5,.4,1) both}
 #intro.play .cons{animation:orbit 2.85s calc(6.38s + var(--i)*0.08s) cubic-bezier(.2,.9,.3,1) both}
@@ -43,11 +43,11 @@
  80%{opacity:1;transform:rotate(calc(var(--i)/var(--n)*360deg + 70deg)) translateX(23em) rotate(calc(var(--i)/var(--n)*-360deg - 70deg)) scale(1)}
  100%{opacity:0;transform:rotate(calc(var(--i)/var(--n)*360deg + 90deg)) translateX(0) rotate(calc(var(--i)/var(--n)*-360deg - 90deg)) scale(.2)}}
 /* 4. Cierre */
-.s4{align-content:center;gap:1.4em;justify-items:center}
-.s4 .logo{width:8em;height:8em;filter:drop-shadow(0 0 2em rgba(255,105,0,.55))}
-.s4 h1{font-family:var(--brand,"Bricolage Grotesque");font-weight:800;font-size:4.6em;letter-spacing:-.03em}
-.s4 h1 span{color:var(--a,#FF6900)}
-.s4 p{color:#CFC8C0;font-size:1.4em}
+#intro .s4{align-content:center;gap:1.4em;justify-items:center}
+#intro .s4 .logo{width:8em;height:8em;filter:drop-shadow(0 0 2em rgba(255,105,0,.55))}
+#intro .s4 h1{font-family:var(--brand,"Bricolage Grotesque");font-weight:800;font-size:4.6em;letter-spacing:-.03em}
+#intro .s4 h1 span{color:var(--a,#FF6900)}
+#intro .s4 p{color:#CFC8C0;font-size:1.4em}
 #intro.play .s4{animation:fin 2.55s 9.0s both}
 #intro.play .s4 .logo{animation:pop 1.2s 9.07s cubic-bezier(.2,1.6,.4,1) both}
 #intro.play .s4 h1{animation:up 0.9s 9.38s both}
@@ -55,10 +55,10 @@
 @keyframes fin{0%{opacity:0}12%{opacity:1}80%{opacity:1;transform:none}100%{opacity:0;transform:scale(1.06)}}
 /* Inicio de la app (lo que aparece al final) */
 #intro .home{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:.8em;opacity:0;color:#A39C94;font-size:1.3em}
-.home b{color:#F3EFEA;font:800 1.8em var(--brand,"Bricolage Grotesque")}
-#intro.play #intro .home{animation:up 0.9s 11.4s both}
+#intro .home b{color:#F3EFEA;font:800 1.8em var(--brand,"Bricolage Grotesque")}
+#intro.play .home{animation:up 0.9s 11.4s both}
 #intro .skip{position:absolute;right:2.4em;bottom:2em;font-size:1.05em;color:#A39C94;display:flex;gap:.6em;align-items:center;opacity:0}
 #intro .skip i{font-style:normal;font-weight:800;font-size:.8em;padding:.2em .6em;border-radius:99em;background:rgba(255,255,255,.14);color:#F3EFEA}
-#intro.play #intro .skip{animation:show 10.8s 0.6s both}
+#intro.play .skip{animation:show 10.8s 0.6s both}
 #intro.skipped *{animation:none!important}
-#intro.skipped #intro .home{opacity:1}
+#intro.skipped .home{opacity:1}

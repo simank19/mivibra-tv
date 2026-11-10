@@ -636,3 +636,5 @@ html.lite .card .shine { display: none; }
 .dialog:has(.wz) { width: min(1100px, 94vw); max-width: min(1100px, 94vw); }
 .wzc .qr { height: auto; aspect-ratio: 1; align-self: flex-start; }
 .wzc .btn { align-self: flex-start; }
+/* Textos largos (enlaces de listas) no se montan sobre los botones */
+.line .t span { overflow-wrap: anywhere; }

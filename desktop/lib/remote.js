@@ -46,9 +46,18 @@ function create(hub) {
   }
   function freeSlot() { const used = new Set(Array.from(pads).map((p) => p.slot)); let s = 0; while (used.has(s)) s++; return s; }
 
+  // Clave de vinculación: va en el QR (?k=) o en la cabecera X-MV-Key
+  function authed(req) {
+    const u = new URL(req.url, 'http://x');
+    const given = Buffer.from(String(u.searchParams.get('k') || req.headers['x-mv-key'] || ''));
+    const want = Buffer.from(String(hub.key()));
+    return given.length === want.length && require('crypto').timingSafeEqual(given, want);
+  }
   async function handle(req, res) {
     const u = new URL(req.url, 'http://x');
     const p = u.pathname;
+    if (p === '/auth') return authed(req) ? json(res, 200, { ok: true }) : json(res, 401, { ok: false, error: 'Clave incorrecta: escribe la clave que aparece en la pantalla' });
+    if ((p.startsWith('/roms/') || p.startsWith('/listas/')) && !authed(req)) return json(res, 401, { ok: false, error: 'Clave incorrecta: escribe la clave que aparece en la pantalla' });
     try {
       if (p === '/roms/info') return json(res, 200, { free: (() => { try { const s = fs.statfsSync(hub.romDir()); return s.bavail * s.bsize; } catch (e) { return 0; } })(), dir: hub.romDir() });
       if (p === '/roms/upload' && req.method === 'POST') {
@@ -98,7 +107,7 @@ function create(hub) {
     if (server) return Promise.resolve();
     return new Promise((resolve, reject) => {
       server = http.createServer(handle);
-      wss = new WebSocketServer({ server });
+      wss = new WebSocketServer({ server, verifyClient: (info) => authed(info.req) });
       wss.on('connection', (ws) => {
         const pad = { ws, slot: freeSlot(), name: '' };
         pad.name = 'Celular ' + (pad.slot + 1);

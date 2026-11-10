@@ -23,6 +23,15 @@ class RemoteServer(private val ctx: Context, port: Int = PORT) : NanoWSD(port) {
     companion object {
         const val PORT = 8765
 
+        /** Clave de vinculación (6 números): va dentro del QR y se muestra en la TV. Sin ella nadie más en el Wi-Fi puede manejar la app. */
+        fun key(ctx: Context): String {
+            val sp = ctx.getSharedPreferences("remote", Context.MODE_PRIVATE)
+            sp.getString("key", null)?.takeIf { it.length == 6 }?.let { return it }
+            val k = String.format("%06d", java.security.SecureRandom().nextInt(1_000_000))
+            sp.edit().putString("key", k).apply()
+            return k
+        }
+
         fun localIp(ctx: Context): String? {
             try {
                 val list = NetworkInterface.getNetworkInterfaces()?.toList() ?: emptyList()
@@ -49,8 +58,24 @@ class RemoteServer(private val ctx: Context, port: Int = PORT) : NanoWSD(port) {
 
     private val pads = CopyOnWriteArrayList<Pad>()
 
+    private fun authed(s: IHTTPSession): Boolean {
+        val given = s.parameters["k"]?.firstOrNull() ?: s.headers["x-mv-key"] ?: ""
+        return java.security.MessageDigest.isEqual(given.toByteArray(), key(ctx).toByteArray())
+    }
+    private fun denied() = NanoHTTPD.newFixedLengthResponse(Response.Status.UNAUTHORIZED, "application/json",
+        JSONObject().put("ok", false).put("error", "Clave incorrecta: escribe la clave que aparece en la TV").toString())
+
+    /** El mando (WebSocket) también necesita la clave. */
+    override fun serve(session: IHTTPSession): Response {
+        if (isWebsocketRequested(session) && !authed(session)) return denied()
+        return super.serve(session)
+    }
+
     override fun serveHttp(session: IHTTPSession): Response {
         val path = session.uri ?: "/"
+        if (path == "/auth") return if (authed(session)) NanoHTTPD.newFixedLengthResponse(Response.Status.OK, "application/json", "{\"ok\":true}") else denied()
+        // Todo lo que manda datos o archivos a la TV exige la clave
+        if (path.startsWith("/roms/") || path.startsWith("/listas/")) { if (!authed(session)) return denied() }
         // Enviar ROMs y BIOS desde el celular
         if (path == "/roms/info") return romInfo()
         if (path == "/roms/upload" && session.method == NanoHTTPD.Method.POST) return romUpload(session)

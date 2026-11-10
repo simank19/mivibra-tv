@@ -473,9 +473,10 @@ class Bridge(private val a: MainActivity) {
 
     @JavascriptInterface
     fun deleteFile(path: String): Boolean {
-        val f = File(path)
-        val dl = downloadsDir()
-        return f.absolutePath.startsWith(dl) && f.delete()
+        // Solo dentro de la carpeta de la app, y sin trucos de "../" en la ruta
+        val f = try { File(path).canonicalFile } catch (_: Exception) { return false }
+        val dl = File(downloadsDir()).canonicalPath + File.separator
+        return f.path.startsWith(dl) && f.isFile && f.delete()
     }
 
     // ---------------- Juegos ----------------
@@ -677,7 +678,7 @@ class Bridge(private val a: MainActivity) {
             return JSONObject().put("ok", false).put("error", e.message).toString()
         }
         val url = if (ip != null) "http://$ip:${RemoteServer.PORT}/" else ""
-        return JSONObject().put("ok", ip != null).put("url", url).put("clients", RemoteHub.server?.clientCount() ?: 0).toString()
+        return JSONObject().put("ok", ip != null).put("url", url).put("key", RemoteServer.key(a)).put("clients", RemoteHub.server?.clientCount() ?: 0).toString()
     }
 
     @JavascriptInterface
@@ -766,6 +767,8 @@ class Bridge(private val a: MainActivity) {
     /** Descarga la APK nueva (con progreso) y abre el instalador. Si falta el permiso, abre el ajuste y avisa. */
     @JavascriptInterface
     fun installUpdate(id: String, url: String) {
+        // Solo actualizaciones oficiales de MiVibra TV (GitHub de MiVibra)
+        if (!Regex("^https://github\\.com/simank19/mivibra-tv/releases/download/[^?#]+\\.apk$").matches(url)) { reply(id, false, "Actualización no válida"); return }
         if (!Updater.canInstall(a)) {
             a.runOnUiThread { Updater.askPermission(a) }
             reply(id, true, JSONObject().put("needPermission", true))

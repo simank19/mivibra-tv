@@ -688,7 +688,7 @@
           (nn.now ? '<div class="prog"><i style="width:' + Math.round((Date.now() - nn.now.s) / (nn.now.e - nn.now.s) * 100) + '%"></i></div>' : '') + '</div>' +
           (fav ? '<span class="fav">' + IC.starFill.replace('<svg', '<svg width="18" height="18"') + '</span>' : '') + '</button>';
       }).join('') + (list.length > lim ? '<button class="btn ghost more f" data-act="more" data-arg="live">Ver más (' + (list.length - lim) + ')</button>' : '') : '<p class="muted" style="padding:20px">No hay canales en esta categoría.</p>') +
-      '</div></div><p class="muted" style="margin-top:10px;font-size:13px">Consejo: con el botón Menú del control (o Y en el mando) agregas el canal enfocado a favoritos.</p>';
+      '</div></div>' + (MV.device.tv ? '<p class="muted" style="margin-top:10px;font-size:13px">Consejo: con el botón Menú del control (o Y en el mando) agregas el canal enfocado a favoritos.</p>' : '');
   };
   function channelsOf(cat, all) {
     if (cat === 'Todos') return all;
@@ -1836,9 +1836,13 @@
     if (!A) { box.innerHTML = '<p class="muted">Disponible en la app instalada.</p>'; return; }
     var r = JSON.parse(A.remoteStart());
     if (!r.ok || !r.url) { box.innerHTML = '<p>Conecta este equipo a una red Wi-Fi para usar el celular como mando.</p>'; return; }
-    var qr = window.qrcode(0, 'M'); qr.addData(r.url); qr.make();
-    box.innerHTML = '<div class="qr">' + qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true }) + '</div><div><p style="margin:0 0 6px">O abre en el navegador del celular:</p><h2 style="font:800 26px var(--brand);margin:0 0 10px">' + esc(r.url.replace(/^http:\/\//, '').replace(/\/$/, '')) + '</h2><p class="muted" id="remoteCount">' + countText(remoteClients) + '</p></div>';
+    var qr = window.qrcode(0, 'M'); qr.addData(MV.remoteLink(r, '')); qr.make();
+    box.innerHTML = '<div class="qr">' + qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true }) + '</div><div><p style="margin:0 0 6px">O abre en el navegador del celular:</p><h2 style="font:800 26px var(--brand);margin:0 0 10px">' + esc(r.url.replace(/^http:\/\//, '').replace(/\/$/, '')) + '</h2>' + keyLine(r) + '<p class="muted" id="remoteCount">' + countText(remoteClients) + '</p></div>';
   }
+  /** Enlace del celular con la clave de vinculación (va dentro del QR). */
+  MV.remoteLink = function (r, path) { return String(r.url || '').replace(/\/?$/, '/') + (path || '') + (r.key ? '?k=' + r.key : ''); };
+  function keyLine(r) { return r.key ? '<p style="margin:0 0 10px">Clave: <b style="font:800 22px var(--brand);letter-spacing:3px">' + esc(r.key) + '</b> <span class="muted" style="font-size:13px">(ya va dentro del código)</span></p>' : ''; }
+  MV.remoteKeyLine = keyLine;
   function countText(n) { return n ? n + (n === 1 ? ' celular conectado' : ' celulares conectados') : 'Esperando celulares…'; }
   MV.onRemoteClients = function (n, names) {
     if (n > remoteClients) MV.toast((names[n - 1] || 'Celular') + ' conectado como mando');
@@ -2879,8 +2883,8 @@
         if (!A) { box.innerHTML = '<p class="muted">Disponible en la app instalada.</p>'; return; }
         var r = JSON.parse(A.remoteStart());
         if (!r.ok || !r.url) { box.innerHTML = '<p>Conecta la TV a una red Wi-Fi para recibir archivos del celular.</p>'; return; }
-        var url = r.url + 'roms', qr = window.qrcode(0, 'M'); qr.addData(url); qr.make();
-        box.innerHTML = '<div class="qr">' + qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true }) + '</div><div><p style="margin:0 0 6px">O abre en el navegador del celular:</p><h2 style="font:800 26px var(--brand);margin:0">' + esc(url.replace(/^http:\/\//, '')) + '</h2></div>';
+        var url = r.url + 'roms', qr = window.qrcode(0, 'M'); qr.addData(MV.remoteLink(r, 'roms')); qr.make();
+        box.innerHTML = '<div class="qr">' + qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true }) + '</div><div><p style="margin:0 0 6px">O abre en el navegador del celular:</p><h2 style="font:800 26px var(--brand);margin:0 0 10px">' + esc(url.replace(/^http:\/\//, '')) + '</h2>' + keyLine(r) + '</div>';
       }
     });
   };
@@ -3516,7 +3520,7 @@
       '<div class="apps" style="margin-bottom:18px"><button class="apptile glass f" data-act="webOpen" data-arg=""><b>Navegador MiVibra</b><span>Pantalla completa · bloqueador de anuncios · cursor con el control</span></button>' +
       '<button class="apptile glass f" data-act="openApp" data-arg="brave"><b>Brave</b><span>' + (brave ? 'Abrir Brave' : 'Instalar Brave desde la tienda') + '</span></button></div>' +
       '<h3 style="margin:6px 0 10px">Accesos rápidos</h3><div class="apps">' + BROWSER_SITES.map(function (x) { return '<button class="apptile glass f" data-act="webOpen" data-arg="' + esc(x[1]) + '"><b>' + esc(x[0]) + '</b><span>' + esc(x[1].replace(/^https?:\/\/(www\.|m\.)?/, '').split('/')[0]) + '</span></button>'; }).join('') + '</div>' +
-      '<p class="muted" style="margin-top:16px;font-size:13px">' + (MV.device.tv ? 'En la TV: las flechas mueven el cursor y OK hace clic. MENÚ muestra la barra (dirección, favoritos, bloqueador , modo escritorio y cursor ). Atrás vuelve a la página anterior.' : 'Toca para ver cuántos anuncios se bloquearon o desactivar el bloqueador en una página que no cargue bien.') + '</p>';
+      '<p class="muted" style="margin-top:16px;font-size:13px">' + (MV.device.tv ? 'En la TV: las flechas mueven el cursor y OK hace clic. MENÚ muestra la barra (dirección, favoritos, bloqueador de anuncios, modo escritorio y cursor). Atrás vuelve a la página anterior.' : 'Toca para ver cuántos anuncios se bloquearon o desactivar el bloqueador en una página que no cargue bien.') + '</p>';
   };
   VIEWS.browser.after = function () { var i = document.getElementById('webIn'); if (i) i.addEventListener('keydown', function (e) { if (e.key === 'Enter') ACT.webGo(); }); };
 

@@ -86,17 +86,17 @@
 
   // ---------- Pantalla "Agregar mi lista" (bienvenida y desde Ajustes) ----------
   MV.listsWelcome = function () {
-    var phone = ''; try { var r = A ? JSON.parse(A.remoteStart()) : null; if (r && r.ok && r.url) phone = r.url.replace(/\/?$/, '/') + 'listas'; } catch (e) {}
+    var phone = '', rk = null; try { var r = A ? JSON.parse(A.remoteStart()) : null; if (r && r.ok && r.url) { rk = r; phone = r.url.replace(/\/?$/, '/') + 'listas'; } } catch (e) {}
     MV.modal('<h2>Agrega tu lista de TV</h2><p class="muted">MiVibra TV no incluye canales: usa la lista que te dio tu proveedor (enlace M3U, cuenta Xtream o Portal y MAC). Elige cómo agregarla:</p>' +
       '<div class="wz">' +
       '<div class="wzc"><b>1 · Desde tu celular</b><span>Escanea el código con la cámara (mismo Wi-Fi que la TV) y pega la lista desde el celular.</span>' +
-      (phone ? '<div class="wzqr" id="wzQr"></div><small>' + MV.esc(phone) + '</small>' : '<small>Conecta la TV a una red Wi-Fi para usar esta opción.</small>') + '</div>' +
+      (phone ? '<div class="wzqr" id="wzQr"></div><small>' + MV.esc(phone) + (rk && rk.key ? ' · clave <b>' + MV.esc(rk.key) + '</b>' : '') + '</small>' : '<small>Conecta la TV a una red Wi-Fi para usar esta opción.</small>') + '</div>' +
       '<div class="wzc"><b>2 · Desde el panel web</b><span>En cualquier computador o celular, aunque no estés en casa, entra a:</span><small class="big">' + MV.esc(PANEL_URL.replace(/^https?:\/\//, '')) + '</small><span>y escribe el código de esta TV:</span><div class="wzcode">' + MV.deviceCodePretty() + '</div></div>' +
       '<div class="wzc"><b>3 · Aquí en la TV</b><span>Escribe el enlace o los datos de tu cuenta con el control.</span><button class="btn f" data-act="addList" data-autofocus>Escribir en la TV</button></div>' +
       '</div><p class="muted" style="font-size:13px">La lista llega sola a la TV en unos segundos. MiVibra TV es solo un reproductor: no vende ni incluye contenido.</p>',
       { onOpen: function () {
         var box = document.getElementById('wzQr');
-        if (box && window.qrcode && phone) { try { var q = qrcode(0, 'M'); q.addData(phone); q.make(); box.innerHTML = '<div class="qr">' + q.createSvgTag({ cellSize: 5, margin: 2, scalable: true }) + '</div>'; } catch (e) {} }
+        if (box && window.qrcode && phone) { try { var q = qrcode(0, 'M'); q.addData(MV.remoteLink ? MV.remoteLink(rk, 'listas') : phone); q.make(); box.innerHTML = '<div class="qr">' + q.createSvgTag({ cellSize: 5, margin: 2, scalable: true }) + '</div>'; } catch (e) {} }
       } });
   };
   if (MV.ACT) MV.ACT.listsWelcome = function () { if (MV.modalOpen()) MV.closeModal(true); MV.listsWelcome(); };

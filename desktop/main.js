@@ -49,7 +49,14 @@ function reply(id, ok, data) { js('window.MV&&MV._cb(' + JSON.stringify(id) + ',
 function progress(id, pct) { js('window.MV&&MV._progress(' + JSON.stringify(id) + ',' + pct + ')'); }
 function netFile(key) { return path.join(NET, crypto.createHash('md5').update(key).digest('hex') + '.txt'); }
 function served(f) { return BASE + '/net/' + path.basename(f); }
-function romUrl(p) { return BASE + '/rom/' + Buffer.from(p, 'utf8').toString('base64url') + '/' + encodeURIComponent(path.basename(p)); }
+const SESSION = crypto.randomBytes(16).toString('hex');   // clave de esta sesión para servir archivos del equipo
+function romUrl(p) { return BASE + '/rom/' + SESSION + '/' + Buffer.from(p, 'utf8').toString('base64url') + '/' + encodeURIComponent(path.basename(p)); }
+/** Clave de vinculación del celular (6 números), guardada en este PC. */
+function remoteKey() {
+  const f = path.join(DATA, 'remote-key.txt');
+  try { const k = fs.readFileSync(f, 'utf8').trim(); if (/^\d{6}$/.test(k)) return k; } catch (e) {}
+  const k = String(crypto.randomInt(0, 1000000)).padStart(6, '0'); fs.writeFileSync(f, k); return k;
+}
 function parseHeaders(j) { try { const o = JSON.parse(j || '{}'); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; } }
 function errMsg(e) { return (e && e.message) || String(e || 'Error'); }
 
@@ -144,6 +151,7 @@ ipcMain.on('main-full', () => { if (win) win.setFullScreen(!win.isFullScreen());
 const NAV = { UP: 'Up', DOWN: 'Down', LEFT: 'Left', RIGHT: 'Right', OK: 'Enter', BACK: 'Escape', PLAYPAUSE: 'Space' };
 const remote = remoteLib.create({
   www: DIRS.www,
+  key: () => remoteKey(),
   romDir: () => storage.init && path.join(DATA, 'roms'),
   importBios: (dir) => storage.importBios([dir]),
   romReceived: (info) => js('window.MV&&MV.onRomReceived&&MV.onRomReceived(' + JSON.stringify(info) + ')'),
@@ -344,7 +352,7 @@ const SYNC = {
   async remoteStart() {
     const ip = remoteLib.localIp();
     try { await remote.start(); } catch (e) { return JSON.stringify({ ok: false, error: errMsg(e) }); }
-    return JSON.stringify({ ok: !!ip, url: ip ? 'http://' + ip + ':' + remoteLib.PORT + '/' : '', clients: remote.clientCount() });
+    return JSON.stringify({ ok: !!ip, url: ip ? 'http://' + ip + ':' + remoteLib.PORT + '/' : '', key: remoteKey(), clients: remote.clientCount() });
   },
   remoteStop() {},
   deviceInfo() {
@@ -405,7 +413,7 @@ async function startServer() {
     if (p === '/pc/vendor/mpegts.js') { server.sendFile(req, res, require.resolve('mpegts.js/dist/mpegts.js')); return true; }
     return false;
   };
-  srv = await server.start(APP_PORT, { www: DIRS.www, pc: DIRS.pc, net: NET }, extra);
+  srv = await server.start(APP_PORT, { www: DIRS.www, pc: DIRS.pc, net: NET }, extra, SESSION);
 }
 
 function createWindow() {
@@ -422,7 +430,14 @@ function createWindow() {
   win.loadURL(BASE + '/index.html');
 }
 
+// Seguridad: sin <webview>, permisos solo los necesarios (pantalla completa, micrófono para búsqueda por voz)
+app.on('web-contents-created', (e, c) => {
+  c.on('will-attach-webview', (ev) => ev.preventDefault());
+});
 app.whenReady().then(async () => {
+  for (const s of [session.defaultSession, session.fromPartition('persist:player')]) {
+    s.setPermissionRequestHandler((wc, perm, cb) => cb(['fullscreen', 'media', 'clipboard-sanitized-write', 'pointerLock'].includes(perm)));
+  }
   // Cabeceras de cada señal (identificación y página de origen que piden algunos servidores)
   session.fromPartition('persist:player').webRequest.onBeforeSendHeaders({ urls: ['http://*/*', 'https://*/*'] }, (d, cb) => {
     const h = d.requestHeaders;

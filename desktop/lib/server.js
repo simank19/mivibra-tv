@@ -19,7 +19,8 @@ function sendFile(req, res, file, extraHeaders = {}) {
   fs.stat(file, (err, st) => {
     if (err || !st.isFile()) { res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('No encontrado'); return; }
     const type = MIME[path.extname(file).toLowerCase()] || 'application/octet-stream';
-    const h = Object.assign({ 'Content-Type': type, 'Accept-Ranges': 'bytes', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-cache' }, extraHeaders);
+    // Sin "Access-Control-Allow-Origin": ninguna página de internet puede leer lo que sirve la app
+    const h = Object.assign({ 'Content-Type': type, 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' }, extraHeaders);
     const range = req.headers.range && /bytes=(\d*)-(\d*)/.exec(req.headers.range);
     if (range) {
       let start = range[1] ? +range[1] : 0, end = range[2] ? +range[2] : st.size - 1;
@@ -40,8 +41,11 @@ function sendFile(req, res, file, extraHeaders = {}) {
 /**
  * dirs: { www, pc, net, sounds } · extra(req, res, url) para rutas propias (devuelve true si respondió).
  */
-function start(port, dirs, extra) {
+function start(port, dirs, extra, secret) {
+  const hostOk = new RegExp('^(localhost|127\\.0\\.0\\.1|\\[::1\\]):' + port + '$', 'i');
   const server = http.createServer((req, res) => {
+    // Contra "DNS rebinding": solo se responde a la dirección propia de la app
+    if (!hostOk.test(String(req.headers.host || ''))) { res.writeHead(403); return res.end(); }
     let u;
     try { u = new URL(req.url, 'http://localhost'); } catch (e) { res.writeHead(400); return res.end(); }
     // Solo desde este equipo
@@ -50,14 +54,12 @@ function start(port, dirs, extra) {
     if (extra && extra(req, res, u)) return;
     const p = decodeURIComponent(u.pathname);
     if (p.startsWith('/rom/')) {
-      // /rom/<ruta en base64url>/<nombre>: el emulador toma el nombre del archivo de la última parte (kof98.zip)
-      const seg = p.split('/')[2] || '';
+      // /rom/<clave de la sesión>/<ruta en base64url>/<nombre>: el emulador toma el nombre del archivo de la última parte (kof98.zip).
+      // La clave cambia cada vez que se abre la app: nadie más puede pedir archivos del equipo.
+      const parts = p.split('/');
+      if (!secret || parts[2] !== secret) { res.writeHead(403); return res.end(); }
+      const seg = parts[3] || '';
       let f = ''; try { f = Buffer.from(seg, 'base64url').toString('utf8'); } catch (e) {}
-      return sendFile(req, res, f);
-    }
-    if (p === '/local') {
-      // Archivos del equipo (ROMs, videos locales): /local?p=C:\ruta\archivo
-      const f = u.searchParams.get('p') || '';
       return sendFile(req, res, f);
     }
     const route = (prefix, dir) => {

@@ -17,12 +17,20 @@ service cloud.firestore {
     match /mivibra/{uid} {
       allow read, write: if signedIn() && request.auth.uid == uid && allowed();
     }
-    // Panel web: buzón donde llegan las listas para cada TV (la TV las borra apenas llegan)
+    // Panel web: buzón donde llegan las listas para cada TV (la TV las borra apenas llegan).
+    // Solo se aceptan listas con los campos y tamaños esperados, y códigos de TV con el formato correcto.
+    function str(d, k, max) { return !(k in d) || (d[k] is string && d[k].size() <= max); }
     match /inbox/{code}/lists/{id} {
-      allow create: if code.size() == 8
+      allow create: if code.matches('^[A-HJKMNP-Z2-9]{8}$')
+        && request.resource.data.keys().hasOnly(['type', 'name', 'url', 'epg', 'host', 'user', 'pass', 'portal', 'mac', 'text', 'at'])
+        && request.resource.data.type in ['url', 'xtream', 'stalker', 'text']
         && request.resource.data.at is number
-        && request.resource.data.size() <= 10;
-      allow read, delete: if true;
+        && request.resource.data.at > request.time.toMillis() - 86400000
+        && request.resource.data.at < request.time.toMillis() + 86400000
+        && str(request.resource.data, 'name', 100) && str(request.resource.data, 'url', 2000) && str(request.resource.data, 'epg', 2000)
+        && str(request.resource.data, 'host', 500) && str(request.resource.data, 'user', 200) && str(request.resource.data, 'pass', 200)
+        && str(request.resource.data, 'portal', 500) && str(request.resource.data, 'mac', 40) && str(request.resource.data, 'text', 100000);
+      allow get, list, delete: if true;
     }
   }
 }
