@@ -33,17 +33,36 @@ object Drive {
                         a.startSenderForResult(r.pendingIntent!!.intentSender) { code, data ->
                             try {
                                 val res = Identity.getAuthorizationClient(a).getAuthorizationResultFromIntent(data)
-                                if (res.accessToken != null) { prefs(a).edit().putBoolean("on", true).apply(); done(res.accessToken, null) }
+                                if (res.accessToken != null) checked(a, res.accessToken!!, res.grantedScopes, done)
                                 else done(null, if (code == android.app.Activity.RESULT_CANCELED) "cancelado" else "Google no dio permiso")
                             } catch (e: Exception) { done(null, if (code == android.app.Activity.RESULT_CANCELED) "cancelado" else (e.message ?: "Google no dio permiso")) }
                         }
                     } catch (e: Exception) { done(null, e.message ?: "No se pudo abrir la cuenta de Google") }
                 } else {
-                    prefs(a).edit().putBoolean("on", true).apply()
-                    done(r.accessToken, null)
+                    val t = r.accessToken
+                    if (t == null) done(null, "Google no dio permiso") else checked(a, t, r.grantedScopes, done)
                 }
             }
             .addOnFailureListener { e -> done(null, e.message ?: "No se pudo conectar con Google") }
+    }
+    private const val READ = "https://www.googleapis.com/auth/drive.readonly"
+    /**
+     * En la pantalla de Google cada permiso trae su casilla: si no se marcó "ver y descargar tus archivos",
+     * Drive solo deja ver lo que creó la app y la carpeta de juegos sale vacía. En ese caso se retira el permiso
+     * (para que la próxima vez Google vuelva a preguntar) y se explica qué marcar.
+     */
+    private fun checked(a: MainActivity, token: String, granted: List<String>?, done: (String?, String?) -> Unit) {
+        if (granted != null && granted.isNotEmpty() && READ !in granted) {
+            prefs(a).edit().clear().apply()
+            Thread {
+                try { val c = URL("https://oauth2.googleapis.com/revoke?token=${q(token)}").openConnection() as HttpURLConnection
+                    c.requestMethod = "POST"; c.doOutput = true; c.outputStream.close(); c.responseCode; c.disconnect() } catch (_: Exception) {}
+                a.runOnUiThread { done(null, "Falta un permiso: vuelve a conectar y en la pantalla de Google marca la casilla «Ver y descargar todos tus archivos de Google Drive»") }
+            }.start()
+            return
+        }
+        prefs(a).edit().putBoolean("on", true).apply()
+        done(token, null)
     }
     fun connected(c: Context) = prefs(c).getBoolean("on", false)
     fun disconnect(c: Context) { prefs(c).edit().clear().apply() }

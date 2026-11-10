@@ -677,6 +677,12 @@ class Bridge(private val a: MainActivity) {
             }
         }
     }
+    /** Intercambiar A y B del mando en los menús (get: solo consultar; on/off: cambiar). */
+    @JavascriptInterface fun padSwap(v: String): Boolean {
+        val p = a.getSharedPreferences("pad", Context.MODE_PRIVATE)
+        if (v == "on" || v == "off") p.edit().putBoolean("swapAB", v == "on").apply()
+        return p.getBoolean("swapAB", false)
+    }
     @JavascriptInterface fun driveConnected(): Boolean = Drive.connected(a)
     @JavascriptInterface fun driveConnect(id: String) = withDrive(id, true) { true }
     @JavascriptInterface fun driveDisconnect() { Drive.disconnect(a) }

@@ -23,13 +23,27 @@ object Cores {
 
     fun installed(ctx: Context, core: String): Boolean {
         val f = file(ctx, core)
-        return f.exists() && f.length() > 50_000
+        return f.exists() && f.length() > 50_000 && (core != "ppsspp" || pspAssets(ctx).exists())
+    }
+
+    /** PSP: el núcleo PPSSPP necesita sus archivos (fuentes y firmware libre) en system/PPSSPP, como en Lemuroid. */
+    private fun pspAssets(ctx: Context) = File(ctx.filesDir, "system/PPSSPP/.listo")
+    private fun downloadPspAssets(ctx: Context, progress: (Int) -> Unit) {
+        if (pspAssets(ctx).exists()) return
+        val zip = File(ctx.cacheDir, "ppsspp_assets.zip")
+        val code = Net.download("$LEMUROID/assets/ppsspp.zip", zip, progress = progress)
+        if (code >= 400) throw IllegalStateException("No se pudieron descargar los archivos de PSP ($code)")
+        val dir = File(ctx.filesDir, "system/PPSSPP").apply { mkdirs() }
+        unzip(zip, dir)
+        zip.delete()
+        pspAssets(ctx).writeText("1")
     }
 
     fun download(ctx: Context, core: String, source: String, progress: (Int) -> Unit): File {
         require(core.matches(Regex("[a-z0-9_]+"))) { "Núcleo no válido" }
         val dest = file(ctx, core)
         if (installed(ctx, core)) return dest
+        if (core == "ppsspp" && dest.exists() && dest.length() > 50_000) { downloadPspAssets(ctx, progress); return dest }
         dest.parentFile?.parentFile?.listFiles()?.filter { it.name != VERSION }?.forEach { it.deleteRecursively() }
 
         if (source == "bb") {
@@ -61,6 +75,7 @@ object Cores {
             dest.delete()
             throw IllegalStateException("El archivo descargado no es un núcleo válido")
         }
+        if (core == "ppsspp") downloadPspAssets(ctx, progress)
         return dest
     }
 

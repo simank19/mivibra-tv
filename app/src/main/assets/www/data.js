@@ -36,8 +36,8 @@
     { id: 'ws', name: 'WonderSwan', core: 'mednafen_wswan', exts: ['ws', 'wsc'], color: '#7A3FD1', mono: 'WS', thumbs: 'Bandai - WonderSwan Color' },
     { id: 'arcade', name: 'Arcade', core: 'fbneo', exts: ['zip'], color: '#FFD15C', mono: 'ARC', thumbs: 'FBNeo - Arcade Games' },
     { id: 'neogeo', name: 'Neo Geo', core: 'fbneo', exts: ['zip', 'neo'], color: '#3B82F6', mono: 'NEO' },
-    // Solo con RetroArch (núcleos pesados que vienen en RetroArch): se elige la carpeta por nombre (psp, gamecube, dreamcast)
-    { id: 'psp', name: 'PSP', core: 'ppsspp', exts: ['cso'], path: /\/(psp)\//i, color: '#2F3A8F', mono: 'PSP', ra: true, thumbs: 'Sony - PlayStation Portable' },
+    // PSP: emulador de MiVibra (núcleo PPSSPP) o RetroArch. Dreamcast y GameCube solo con RetroArch. Se reconocen por la carpeta (psp, gamecube, dreamcast)
+    { id: 'psp', name: 'PSP', core: 'ppsspp', exts: ['cso', 'iso', 'pbp', 'chd'], path: /\/(psp)\//i, color: '#2F3A8F', mono: 'PSP', thumbs: 'Sony - PlayStation Portable' },
     { id: 'dc', name: 'Dreamcast', core: 'flycast', exts: ['cdi', 'gdi'], path: /\/(dreamcast|dc)\//i, color: '#F97316', mono: 'DC', ra: true, thumbs: 'Sega - Dreamcast' },
     { id: 'gc', name: 'GameCube', core: 'dolphin', exts: ['rvz', 'gcm'], path: /\/(gamecube|gcn|ngc|gc)\//i, color: '#6D28D9', mono: 'GC', ra: true, thumbs: 'Nintendo - GameCube' },
     // Ports: juegos de PC con motores libres (núcleos del buildbot de libretro)

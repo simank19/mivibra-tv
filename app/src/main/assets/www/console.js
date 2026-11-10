@@ -69,6 +69,7 @@
     exit: '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/>'
   };
   function ic(n) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + IC[n] + '</svg>'; }
+  function swapTxt() { try { return A && A.padSwap && A.padSwap('get') ? 'Activado: A elige y B vuelve en mandos tipo Nintendo' : 'Si en tu mando A y B están al revés'; } catch (e) { return ''; } }
   function opt(act, icon, label, desc) { return '<button class="cf copt" data-act="' + act + '"><span>' + ic(icon) + '</span><b>' + esc(label) + '</b><small>' + esc(desc) + '</small></button>'; }
   var HINT_TABS = '<span><i>L</i><i>R</i>Cambiar pestaña</span>';
   function hints(back) {
@@ -79,7 +80,7 @@
   function optsHtml() {
     var rows = [
       [opt('scan', 'usb', 'Buscar juegos', 'En tu USB, memoria o carpetas'), opt('send', 'send', 'Enviar desde el celular', 'Pasa juegos por WiFi'), opt('scrape', 'info', 'Buscar información', 'Carátulas, año y descripción'), opt('bios', 'bios', 'Importar BIOS', 'Para PlayStation y otras')],
-      [opt('drive', 'cloud', 'Google Drive', MV.driveStatus ? MV.driveStatus() : 'Tus juegos y partidas en la nube')],
+      [opt('drive', 'cloud', 'Google Drive', MV.driveStatus ? MV.driveStatus() : 'Tus juegos y partidas en la nube'), opt('swapab', 'phone', 'Intercambiar A y B', swapTxt())],
       [opt('edit', 'edit', 'Editar juegos', 'Nombre, carátula y consola'), opt('del', 'trash', 'Borrar juegos', 'Quita los que ya no quieras'), opt('engine', 'engine', 'Emuladores', 'Motor y marco de cada consola'), opt('phone', 'phone', 'Celular como mando', 'Juega con el teléfono')],
       [opt('classic', 'list', 'Vista clásica', 'La lista sencilla de antes'), opt('exit', 'exit', 'Salir de Juegos', 'Volver a MiVibra TV')]
     ];
@@ -252,6 +253,7 @@
       case 'scan': (MV.ACT.scanChooser || MV.ACT.scanRoms)(); break;
       case 'bios': MV.ACT.importBios(); break;
       case 'drive': MV.ACT.driveMenu(); break;
+      case 'swapab': if (A && A.padSwap) { var on = A.padSwap(A.padSwap('get') ? 'off' : 'on'); MV.toast(on ? 'A y B intercambiados en los menús' : 'A y B como vienen de fábrica'); var sm = el.querySelector('small'); if (sm) sm.textContent = swapTxt(); } break;
       case 'engine': engines(); break;
       case 'phone': MV.ACT.remoteQR(); break;
       case 'send': MV.ACT.romsFromPhone(); break;
@@ -276,11 +278,11 @@
         var ov = A && A.overlay ? A.overlay(s.id) : -1, ovs = null;
         if (ov >= 0 && A.overlayStyles) { try { ovs = JSON.parse(A.overlayStyles(s.id)); } catch (e) {} }
         var ovName = ovs ? (ovs.cur >= ovs.n ? 'sin marco' : 'Marco ' + (ovs.cur + 1) + ' de ' + ovs.n) : (ov ? 'puesto' : 'quitado');
-        return '<div class="line"><div class="t"><b>' + esc(s.name) + '</b><span>' + (e === 'ppsspp' ? 'App PPSSPP · sin marco (para usar marco, cambia a RetroArch)' : e === 'retroarch' ? 'RetroArch · núcleo ' + esc(s.raCore || s.core) : 'Emulador de MiVibra') + (s.ra && !psp ? ' (solo RetroArch)' : '') + (ov >= 0 && e !== 'ppsspp' ? ' · ' + ovName : '') + '</span></div>' +
+        return '<div class="line"><div class="t"><b>' + esc(s.name) + '</b><span>' + (e === 'ppsspp' ? 'App PPSSPP · sin marco ni menú de MiVibra' : e === 'retroarch' ? 'RetroArch · núcleo ' + esc(s.raCore || s.core) : 'Emulador de MiVibra') + (s.ra && !psp ? ' (solo RetroArch)' : '') + (ov >= 0 && e !== 'ppsspp' ? ' · ' + ovName : '') + '</span></div>' +
           (ov === 1 && e === 'retroarch' && A.raFrameAdjust ? '<button class="btn ghost sm f" data-act="raFit" data-arg="' + s.id + '">Ajustar al marco</button>' : '') +
           (ov >= 0 && e !== 'ppsspp' ? '<button class="btn ghost sm f" data-act="consoleFrame" data-arg="' + s.id + '">Cambiar marco</button>' : '') +
-          (psp && A && A.ppssppInstalled && A.ppssppInstalled() ? '<button class="btn ghost sm f" data-act="consolePsp">' + (pe === 'ppsspp' ? 'Usar RetroArch (con marco)' : 'Usar la app PPSSPP') + '</button>' : '') +
-          (s.ra ? '' : '<button class="btn ghost sm f" data-act="consoleEngine" data-arg="' + s.id + '">' + (e === 'retroarch' ? 'Usar MiVibra' : 'Usar RetroArch') + '</button>') + '</div>';
+          (psp && A && A.ppssppInstalled && A.ppssppInstalled() ? '<button class="btn ghost sm f" data-act="consolePsp">' + (pe === 'ppsspp' ? 'Dejar la app PPSSPP' : 'Usar la app PPSSPP') + '</button>' : '') +
+          (s.ra || pe === 'ppsspp' ? '' : '<button class="btn ghost sm f" data-act="consoleEngine" data-arg="' + s.id + '">' + (e === 'retroarch' ? 'Usar MiVibra' : 'Usar RetroArch') + '</button>') + '</div>';
       }).join('') + (ra.installed ? '' : '<div class="btns"><button class="btn f" data-act="consoleGetRA">Instalar RetroArch</button></div>'));
   }
   if (MV.ACT) {
@@ -298,7 +300,7 @@
         '<div class="btns">' + b('reset', 'Volver al ajuste automático') + '<button class="btn f" data-act="confirmNo" data-autofocus>Listo</button></div>');
     };
     MV.ACT.raFitDo = function (w) { var st = JSON.parse(A.raFrameAdjust(w)); MV.toast(w === 'reset' ? 'Ajuste automático' : 'Tamaño ' + Math.round(st.k * 100) + '% · posición ' + Math.round(st.x * 100) + ', ' + Math.round(st.y * 100)); };
-    MV.ACT.consolePsp = function () { MV.setPspEngine(MV.pspEngine() === 'ppsspp' ? 'retroarch' : 'ppsspp'); MV.closeModal(true); engines(); setTimeout(function () { var b = document.querySelector('[data-act="consolePsp"]'); if (b) b.focus(); }, 60); };
+    MV.ACT.consolePsp = function () { MV.setPspEngine(MV.pspEngine() === 'ppsspp' ? '' : 'ppsspp'); MV.closeModal(true); engines(); setTimeout(function () { var b = document.querySelector('[data-act="consolePsp"]'); if (b) b.focus(); }, 60); };
     MV.ACT.consoleFrame = function (id) {
       if (A && A.nextOverlay) A.nextOverlay(id); else if (A && A.setOverlay) A.setOverlay(id, A.overlay(id) !== 1);
       MV.closeModal(true); engines();

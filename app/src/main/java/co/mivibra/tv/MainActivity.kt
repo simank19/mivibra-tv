@@ -239,6 +239,15 @@ class MainActivity : ComponentActivity() {
 
     private var okLong = false
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // Mandos con los botones al estilo Nintendo (A a la derecha, B abajo): opción para intercambiar A y B en los menús
+        if ((event.keyCode == KeyEvent.KEYCODE_BUTTON_A || event.keyCode == KeyEvent.KEYCODE_BUTTON_B) &&
+            getSharedPreferences("pad", MODE_PRIVATE).getBoolean("swapAB", false)) {
+            val to = if (event.keyCode == KeyEvent.KEYCODE_BUTTON_A) KeyEvent.KEYCODE_BUTTON_B else KeyEvent.KEYCODE_BUTTON_A
+            return realKey(KeyEvent(event.downTime, event.eventTime, event.action, to, event.repeatCount, event.metaState, event.deviceId, event.scanCode, event.flags, event.source))
+        }
+        return realKey(event)
+    }
+    private fun realKey(event: KeyEvent): Boolean {
         // La intro se salta con cualquier botón (OK, Enter, flechas, mando; Atrás la salta por su cuenta). Se llama directo, sin esperar a que la página
         // termine de cargar: mientras sale la intro la página sigue cargando y la orden quedaba en espera hasta el final
         if (event.action == KeyEvent.ACTION_UP && event.keyCode != KeyEvent.KEYCODE_VOLUME_UP && event.keyCode != KeyEvent.KEYCODE_VOLUME_DOWN && event.keyCode != KeyEvent.KEYCODE_VOLUME_MUTE &&

@@ -2102,13 +2102,13 @@
   /** Motor de cada consola: 'interno' (emulador de MiVibra) o 'retroarch' (app RetroArch). */
   function gameEngine(s) { var e = (P.gameEngine || {})[s.id]; return s.ra ? 'retroarch' : (e || 'interno'); }
   MV.gameEngine = gameEngine;
-  /** PSP: 'ppsspp' (la app, sin marco) o 'retroarch' (con marco). */
-  MV.pspEngine = function () { return A && A.ppssppInstalled && A.ppssppInstalled() && P.pspEngine !== 'retroarch' ? 'ppsspp' : 'retroarch'; };
-  MV.setPspEngine = function (e) { P.pspEngine = e === 'retroarch' ? 'retroarch' : ''; MV.savePrefs(); };
+  /** PSP: emulador de MiVibra (por defecto, con su menú y marco), RetroArch, o la app PPSSPP si se eligió. */
+  MV.pspEngine = function () { if (P.pspEngine === 'ppsspp' && A && A.ppssppInstalled && A.ppssppInstalled()) return 'ppsspp'; var s = D.SYSTEMS.find(function (x) { return x.id === 'psp'; }); return gameEngine(s); };
+  MV.setPspEngine = function (e) { P.pspEngine = e === 'ppsspp' ? 'ppsspp' : ''; MV.savePrefs(); };
   MV.setGameEngine = function (sysId, eng) { P.gameEngine = P.gameEngine || {}; P.gameEngine[sysId] = eng; MV.savePrefs(); };
   function rememberGame(r) { if (r && r.orig) { r = Object.assign({}, r, { path: r.orig }); delete r.orig; } var rec = (MV.load('recentGames', []) || []).filter(function (x) { return x.path !== r.path; }); rec.unshift(r); MV.save('recentGames', rec.slice(0, 30)); }
   function playPpsspp(r, s) {
-    if (!MV.load('pspFrameTip', 0)) { MV.save('pspFrameTip', 1); MV.toast('PSP se abre con la app PPSSPP, que no lleva marco. Para jugar con marco: Juegos › Opciones › Emuladores › PSP › Usar RetroArch.', 9000); }
+    if (!MV.load('pspFrameTip', 0)) { MV.save('pspFrameTip', 1); MV.toast('PSP se abre con la app PPSSPP, que no lleva marco. Para usar el emulador de MiVibra (con menú y marco): Juegos › Opciones › Emuladores › PSP › Dejar la app PPSSPP.', 9000); }
     unzipBox(r, 0);
     MV.call('playPpsspp', [JSON.stringify({ rom: r.path, exts: ['iso', 'cso', 'pbp', 'chd'] })], function (p) { unzipBox(r, p); })
       .then(function () { unzipBox(null); rememberGame(r); })
@@ -2143,16 +2143,8 @@
     // Neo Geo en formato .neo (NeoSD/TerraOnion, un solo archivo): lo abre el emulador Geolith, no FBNeo
     if (s.id === 'neogeo' && (r.ext === 'neo' || (/^(zip|7z|rar)$/.test(r.ext || '') && zipInner(r).indexOf('neo') >= 0)))
       s = Object.assign({}, s, { core: 'geolith', src: 'bb', exts: ['neo'], geolith: true });
-    // PSP: con la app PPSSPP (recomendado: recibe el juego directo, sin permisos de carpetas)
-    if (A && s.id === 'psp' && A.ppssppInstalled && P.pspEngine !== 'retroarch') {
-      if (A.ppssppInstalled()) { playPpsspp(r, s); return; }
-      if (!P.pspEngine) {
-        MV._pspRom = r;
-        MV.modal('<h2>¿Con qué juego PSP?</h2><p>Recomendado: la app <b>PPSSPP</b> (gratis en Play Store). MiVibra le entrega el juego directo y suele ir más fluido que RetroArch.</p>' +
-          '<div class="btns"><button class="btn f" data-act="pspGet" data-autofocus>Instalar PPSSPP</button><button class="btn ghost f" data-act="pspUseRA">Usar RetroArch</button></div>');
-        return;
-      }
-    }
+    // PSP con la app PPSSPP solo si se eligió en Emuladores; si no, va con el emulador de MiVibra (mismo menú y marco que las demás)
+    if (A && s.id === 'psp' && MV.pspEngine() === 'ppsspp') { playPpsspp(r, s); return; }
     if (A && gameEngine(s) === 'retroarch') { playRetroArch(r, s); return; }
     var start = function () {
       // Geolith busca neogeo.zip en la carpeta de BIOS: si la enviaste como juego, se copia ahí primero
