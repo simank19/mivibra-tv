@@ -1683,7 +1683,7 @@
   }
   // Selección de varias listas para borrarlas juntas (null = modo normal)
   var LSEL = null;
-  function listKind(l) { return l.type === 'web' ? 'Página web · ' + (l.url || '') : l.type === 'jellyfin' ? 'Jellyfin' : l.type === 'plex' ? 'Plex' : l.type === 'xtream' ? 'Xtream Codes' : l.type === 'stalker' ? 'Portal MAC · ' + (l.mac || '') : l.type === 'file' ? 'Archivo' : 'Lista M3U'; }
+  function listKind(l) { return l.type === 'web' ? 'Página web' + (MV.acct.canEditList(l) ? ' · ' + (l.url || '') : '') : l.type === 'jellyfin' ? 'Jellyfin' : l.type === 'plex' ? 'Plex' : l.type === 'xtream' ? 'Xtream Codes' : l.type === 'stalker' ? 'Portal MAC · ' + (l.mac || '') : l.type === 'file' ? 'Archivo' : 'Lista M3U'; }
   function selBar() {
     if (edLists().length < 2) return '';
     if (!LSEL) return '<div class="btns" style="margin:4px 0 10px"><button class="btn ghost sm f" data-act="lselStart">' + IC.check + 'Seleccionar varias</button></div>';
@@ -1720,7 +1720,7 @@
           var on = !!LSEL[l.id];
           return '<button class="line selrow f' + (on ? ' on' : '') + '" data-act="lselToggle" data-arg="' + l.id + '" data-fid="ls-' + l.id + '" aria-pressed="' + on + '"><i class="chk"></i><div class="t"><b>' + esc(l.name) + '</b><span>' + esc(listKind(l)) + ' · ' + (l.count || 0) + ' elementos' + (l.enabled === false ? ' · desactivada' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div></button>';
         }
-        return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.type === 'xtream' ? 'Xtream Codes · ' + esc(l.host) : l.type === 'web' ? 'Página web · ' + esc(l.url) : l.type === 'jellyfin' ? 'Jellyfin · ' + esc(l.server) : l.type === 'plex' ? 'Plex · ' + esc(l.server) : l.type === 'stalker' ? 'Portal MAC · ' + esc(l.mac) + ((l.macs || []).length > 1 ? ' (+' + (l.macs.length - 1) + ' de respaldo)' : '') : l.type === 'file' ? 'Archivo' : esc(l.url)) + ' · ' + (l.count || 0) + ' elementos' + ((S.hiddenDupes || {})[l.id] ? ' · ' + S.hiddenDupes[l.id] + ' repetidos ocultos' : '') + (l.epg ? ' · con guía' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div>' +
+        return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.type === 'xtream' ? 'Xtream Codes · ' + esc(l.host) : l.type === 'web' ? 'Página web' + (MV.acct.canEditList(l) ? ' · ' + esc(l.url) : '') : l.type === 'jellyfin' ? 'Jellyfin · ' + esc(l.server) : l.type === 'plex' ? 'Plex · ' + esc(l.server) : l.type === 'stalker' ? 'Portal MAC · ' + esc(l.mac) + ((l.macs || []).length > 1 ? ' (+' + (l.macs.length - 1) + ' de respaldo)' : '') : l.type === 'file' ? 'Archivo' : esc(l.url)) + ' · ' + (l.count || 0) + ' elementos' + ((S.hiddenDupes || {})[l.id] ? ' · ' + S.hiddenDupes[l.id] + ' repetidos ocultos' : '') + (l.epg ? ' · con guía' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div>' +
           '<button class="toggle f' + (l.enabled !== false ? ' on' : '') + '" data-act="listToggle" data-arg="' + l.id + '" aria-label="Activar lista"></button>' +
           '<button class="iconbtn f" data-act="listEpg" data-arg="' + l.id + '" aria-label="Guía EPG">' + IC.guide + '</button>' +
           '<button class="iconbtn f" data-act="listDelete" data-arg="' + l.id + '" aria-label="Eliminar">' + IC.trash + '</button></div>';
@@ -2155,7 +2155,7 @@
         '<label class="field">Direcciones<textarea class="in f" id="lMulti" rows="6" placeholder="https://…/lista1.m3u&#10;Deportes, https://…/lista2.m3u" data-autofocus></textarea></label><p class="muted" id="lMultiCount" style="font-size:13px;margin:-4px 0 8px"></p>' +
         '<label class="line" id="lMacOpt" hidden style="cursor:pointer"><input type="checkbox" class="f" id="lMacBk" style="width:22px;height:22px;accent-color:var(--accent)"><div class="t"><b>Las MAC de un mismo portal tienen el mismo contenido</b><span>Márcalo solo si son copias de la misma suscripción: se agrega una lista por portal y las otras MAC quedan de respaldo. Si cada MAC trae contenido distinto, déjalo sin marcar.</span></div></label>'
       : tab === 'web'
-      ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mis videos educativos" data-autofocus></label><label class="field">Dirección de la página<input class="in f" id="lWeb" placeholder="https://mipagina.com" autocomplete="off" inputmode="url"></label><label class="line" style="cursor:pointer"><input type="checkbox" class="f" id="lDeep" checked style="width:22px;height:22px;accent-color:var(--accent)"><div class="t"><b>Revisar también las páginas enlazadas</b><span>Recorre las páginas del mismo sitio (hasta 80) buscando videos. Las secciones del menú de tu página quedan como categorías.</span></div></label><p class="muted" style="font-size:13px;margin:4px 0 8px">Encuentra videos MP4/M3U8, videos de YouTube y Vimeo incrustados y los marcados como video en la página. Aparecen en Utilidades › Mis páginas.</p><p id="lErr" style="color:#FF8A80;font-size:14px;margin:0 0 8px"></p>'
+      ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mis libros educativos" data-autofocus></label><label class="field">Dirección de la página<input class="in f" id="lWeb" placeholder="https://mipagina.com" autocomplete="off" inputmode="url"></label><label class="line" style="cursor:pointer"><input type="checkbox" class="f" id="lDeep" checked style="width:22px;height:22px;accent-color:var(--accent)"><div class="t"><b>Revisar también las páginas enlazadas</b><span>Recorre las páginas del mismo sitio buscando videos y libros. Las secciones del menú de tu página quedan como categorías.</span></div></label><p class="muted" style="font-size:13px;margin:4px 0 8px">Encuentra videos (MP4, M3U8, YouTube, Vimeo…) y libros (EPUB, PDF, CBZ…). Los videos aparecen en Utilidades › Mis páginas y los libros en Utilidades › Lectura. La dirección queda guardada solo en tu cuenta.</p><p id="lErr" style="color:#FF8A80;font-size:14px;margin:0 0 8px"></p>'
       : tab === 'jellyfin'
       ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi servidor" data-autofocus></label><label class="field">Dirección del servidor<input class="in f" id="lSrv" placeholder="http://192.168.1.10:8096" autocomplete="off" inputmode="url"></label><label class="field">Usuario<input class="in f" id="lUser" autocomplete="off"></label><label class="field">Contraseña<input class="in f" id="lPass" type="password"></label><p class="muted" style="font-size:13px;margin:-4px 0 8px">La misma dirección con la que abres Jellyfin o Emby en el navegador (puerto 8096 por defecto). Tus archivos se ven tal cual: con varios audios y subtítulos eliges latino, original o subtitulado en "Audio y subtítulos".</p><p id="lErr" style="color:#FF8A80;font-size:14px;margin:0 0 8px"></p>'
       : tab === 'plex'
@@ -2168,7 +2168,7 @@
         ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Lista descargada" data-autofocus></label><p>Elige un archivo .m3u del dispositivo, una USB o el administrador de archivos.</p>'
         : '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi lista" data-autofocus></label><label class="field">Enlace de la lista M3U / M3U8<input class="in f" id="lUrl" placeholder="https://…/lista.m3u" autocomplete="off" inputmode="url"></label><label class="field">Guía EPG XMLTV (opcional)<input class="in f" id="lEpg" placeholder="https://…/guia.xml" autocomplete="off" inputmode="url"></label>';
     MV.modal('<h2>Agregar lista</h2><div class="chips">' + tabs.map(function (t) { return '<button class="chip f' + (t[0] === tab ? ' on' : '') + '" data-act="listTab" data-arg="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' + body +
-      '<div class="btns"><button class="btn f" data-act="listSave" data-arg="' + tab + '">' + (tab === 'xtream' || tab === 'stalker' || tab === 'jellyfin' || tab === 'plex' ? 'Conectar' : tab === 'web' ? 'Buscar videos' : tab === 'file' ? 'Elegir archivo' : tab === 'multi' ? 'Importar' : 'Cargar lista') + '</button>' + (tab === 'multi' ? '<button class="btn ghost f" data-act="pasteText">Pegar texto</button><button class="btn ghost f" data-act="multiPick">Subir .txt</button><button class="btn ghost sm f" data-act="multiImage">Desde imagen</button>' : '') + '<button class="btn ghost f" data-act="confirmNo">Cancelar</button></div>',
+      '<div class="btns"><button class="btn f" data-act="listSave" data-arg="' + tab + '">' + (tab === 'xtream' || tab === 'stalker' || tab === 'jellyfin' || tab === 'plex' ? 'Conectar' : tab === 'web' ? 'Revisar la página' : tab === 'file' ? 'Elegir archivo' : tab === 'multi' ? 'Importar' : 'Cargar lista') + '</button>' + (tab === 'multi' ? '<button class="btn ghost f" data-act="pasteText">Pegar texto</button><button class="btn ghost f" data-act="multiPick">Subir .txt</button><button class="btn ghost sm f" data-act="multiImage">Desde imagen</button>' : '') + '<button class="btn ghost f" data-act="confirmNo">Cancelar</button></div>',
       { onOpen: function (root) { var ta = root.querySelector('#lMulti'); if (ta) ta.addEventListener('input', multiCount); var cb = root.querySelector('#lMacBk'); if (cb) cb.addEventListener('change', multiCount); } });
   }
 
@@ -2556,10 +2556,11 @@
       if (tab === 'web') {
         var wl = { type: 'web', name: name || 'Mi página', url: document.getElementById('lWeb').value.trim(), deep: !!document.getElementById('lDeep').checked };
         if (!wl.url) { MV.toast('Escribe la dirección de la página'); return; }
-        MV.closeModal(true); MV.toast('Buscando videos en la página… (puede tardar un minuto)', 4000);
+        MV.closeModal(true); MV.toast('Revisando la página… (puede tardar un minuto)', 4000);
         MV.addList(wl).then(function () {
           var n = (S.lists.find(function (l) { return l.id === wl.id; }) || {}).count || 0;
-          MV.toast(n ? n + ' videos encontrados · están en Utilidades › Mis páginas' : 'No encontré videos en esa página', 5000);
+          var nb = (S.books || []).filter(function (b) { return b.list === wl.id; }).length, nv = n - nb;
+          MV.toast(n ? [nv > 0 ? nv + ' videos (Utilidades › Mis páginas)' : '', nb ? nb + ' libros (Utilidades › Lectura)' : ''].filter(Boolean).join(' · ') : 'No encontré videos ni libros en esa página', 6000);
           MV.rerender();
         }).catch(function (e) { MV.toast(e.message, 6000); });
         return;
@@ -2791,6 +2792,9 @@
     },
     bookTab: function (k) { BOOKF = k; BOOKLIM = 120; MV.rerender(); },
     bookMore: function () { BOOKLIM += 120; MV.rerender(); },
+    bookGroup: function (g) { BOOKG = g || ''; BOOKLIM = 120; MV.rerender(); },
+    bookWebSearch: function () { var i = document.getElementById('bookQ'); if (i) BOOKQ = i.value; bookSearchWeb(BOOKQ); },
+    bookWebAdd: function () { addListDialog('web'); },
     bookFile: function () {
       if (!A || !A.pickFiles) return MV.toast('Disponible en la app instalada');
       MV.call('pickFiles', []).then(function (items) {
@@ -3410,7 +3414,14 @@
   // ---------- Utilidades ----------
   MV.remoteTab = function () { setTab = 'remote'; };
   // ---------- Lectura: libros, mangas, cómics y revistas de tus listas ----------
-  var BOOKF = 'all', BOOKLIM = 120, BOOKQ = '';
+  var BOOKF = 'all', BOOKLIM = 120, BOOKQ = '', BOOKG = '', WEBB = { q: '', loading: false, items: [], done: false };
+  function webBookLists() { return S.lists.filter(function (l) { return l.type === 'web' && l.enabled !== false; }); }
+  function bookSearchWeb(q) {
+    q = (q || '').trim(); if (!q || !webBookLists().length) return;
+    if (WEBB.q === q && (WEBB.loading || WEBB.done)) return;
+    WEBB = { q: q, loading: true, items: [], done: false }; MV.rerender();
+    MV.webBookSearch(q).then(function (r) { if (WEBB.q !== q) return; WEBB.items = r; }).catch(function () {}).then(function () { if (WEBB.q !== q) return; WEBB.loading = false; WEBB.done = true; if (view.name === 'books') { var a = document.activeElement, id = a && a.id; MV.rerender(); var n = id && document.getElementById(id); if (n) n.focus(); } });
+  }
   var BOOK_ADULT = /\+18|adult|xxx|hentai|ecchi|erotic|er[oó]tic/i;
   function visibleBooks() {
     var kids = MV.isKids && MV.isKids();
@@ -3428,25 +3439,40 @@
     var all = visibleBooks(), counts = {};
     all.forEach(function (b) { counts[b.kind] = (counts[b.kind] || 0) + 1; });
     var q = MV.norm ? MV.norm(BOOKQ) : BOOKQ.toLowerCase();
-    var list = all.filter(function (b) { return (BOOKF === 'all' || b.kind === BOOKF) && (!q || (MV.norm ? MV.norm(b.name + ' ' + (b.group || '')) : (b.name + ' ' + b.group).toLowerCase()).indexOf(q) >= 0); });
+    var groups = {}; all.forEach(function (b) { if (BOOKF === 'all' || b.kind === BOOKF) groups[b.group || ''] = (groups[b.group || ''] || 0) + 1; });
+    var gnames = Object.keys(groups).filter(Boolean).sort(function (a, b) { return groups[b] - groups[a]; });
+    if (BOOKG && !groups[BOOKG]) BOOKG = '';
+    var list = all.filter(function (b) { return (!BOOKG || (b.group || '') === BOOKG) && (BOOKF === 'all' || b.kind === BOOKF) && (!q || (MV.norm ? MV.norm(b.name + ' ' + (b.group || '')) : (b.name + ' ' + b.group).toLowerCase()).indexOf(q) >= 0); });
     var rr = (MV.readRecent ? MV.readRecent() : []).map(function (r) { return (S.bookByKey && S.bookByKey[r.key]) || (r.path ? { key: r.key, name: r.name, path: r.path, kind: r.kind, type: 'book', group: 'De tu equipo' } : null); }).filter(Boolean);
     var tabs = [['all', 'Todo', all.length], ['manga', 'Mangas', counts.manga], ['comic', 'Cómics', counts.comic], ['libro', 'Libros', counts.libro], ['revista', 'Revistas', counts.revista]].filter(function (t) { return t[0] === 'all' || t[2]; });
-    var html = top('Lectura', '<button class="pill f" data-act="bookFile">' + IC.book.replace('<svg', '<svg width="18" height="18"') + 'Abrir un archivo</button>') +
+    var webs = webBookLists(), canWeb = MV.acct.canAdd ? MV.acct.canAdd() : MV.acct.canEdit();
+    var html = top('Lectura', (canWeb ? '<button class="pill f" data-act="bookWebAdd">' + IC.plus + 'Agregar página</button>' : '') + '<button class="pill f" data-act="bookFile">' + IC.book.replace('<svg', '<svg width="18" height="18"') + 'Abrir un archivo</button>') +
       (all.length ? '<div class="chips">' + tabs.map(function (t) { return '<button class="chip f' + (BOOKF === t[0] ? ' on' : '') + '" data-act="bookTab" data-arg="' + t[0] + '">' + t[1] + ' <small>' + (t[2] || 0) + '</small></button>'; }).join('') +
-        '<input class="in f" id="bookQ" placeholder="Buscar título…" value="' + esc(BOOKQ) + '" style="max-width:260px;margin-left:auto" autocomplete="off"></div>' : '');
+        '<input class="in f" id="bookQ" placeholder="' + (webs.length ? 'Buscar libro (también en tus páginas)…' : 'Buscar título…') + '" value="' + esc(BOOKQ) + '" style="max-width:320px;margin-left:auto" autocomplete="off" enterkeyhint="search"></div>' +
+        (gnames.length > 1 && gnames.length <= 40 ? '<div class="chips"><button class="chip f' + (!BOOKG ? ' on' : '') + '" data-act="bookGroup" data-arg="">Todas las categorías</button>' + gnames.map(function (g) { return '<button class="chip f' + (BOOKG === g ? ' on' : '') + '" data-act="bookGroup" data-arg="' + esc(g) + '">' + esc(g.replace(/^[^·]+·\s*/, '') || g) + ' <small>' + groups[g] + '</small></button>'; }).join('') + '</div>' : '') : '');
+    // Búsqueda directa en tus páginas (trae también lo que subiste hace poco)
+    if (webs.length && BOOKQ.trim()) {
+      var have = {}; all.forEach(function (b) { have[b.url] = 1; });
+      var extra = WEBB.q === BOOKQ.trim() ? WEBB.items.filter(function (b) { return !have[b.url]; }) : [];
+      if (WEBB.q !== BOOKQ.trim()) html += '<div class="panel glass" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap"><span class="muted" style="flex:1">¿No está aquí? Búscalo directamente en ' + esc(webs.map(function (l) { return l.name; }).join(', ')) + '.</span><button class="btn sm f" data-act="bookWebSearch">' + IC.search + 'Buscar en tus páginas</button></div>';
+      else if (WEBB.loading) html += '<div class="panel glass" style="display:flex;gap:14px;align-items:center"><div class="spinner"></div><b>Buscando «' + esc(WEBB.q) + '» en tus páginas…</b></div>';
+      else if (extra.length) html += '<section class="row"><h3>Encontrado en tus páginas <small>' + extra.length + '</small></h3><div class="bookgrid">' + extra.slice(0, 60).map(bookCard).join('') + '</div></section>';
+      else if (WEBB.done && !list.length) html += '<p class="muted">Tampoco lo encontré en tus páginas.</p>';
+    }
     if (rr.length) html += '<section class="row"><h3>Seguir leyendo</h3><div class="strip">' + rr.slice(0, 20).map(bookCard).join('') + '</div></section>';
     if (!all.length) {
-      html += '<div class="panel glass" style="text-align:center;padding:40px 24px"><h2>Tu biblioteca de lectura</h2><p class="muted">Ninguna de tus listas trae libros, mangas o cómics todavía. Cuando una lista los incluya (PDF, EPUB, CBZ, CBR o CB7) aparecen aquí solos.</p>' +
-        '<div class="btns" style="justify-content:center"><button class="btn f" data-act="bookFile">Abrir un archivo de tu equipo</button></div></div>';
+      html += '<div class="panel glass" style="text-align:center;padding:40px 24px"><h2>Tu biblioteca de lectura</h2><p class="muted">Ninguna de tus listas trae libros, mangas o cómics todavía. Cuando una lista los incluya (PDF, EPUB, CBZ, CBR o CB7) aparecen aquí solos. También puedes agregar la página web donde publicas tus libros: MiVibra los encuentra y los ordena por las categorías de tu página.</p>' +
+        '<div class="btns" style="justify-content:center">' + (canWeb ? '<button class="btn f" data-act="bookWebAdd" data-autofocus>' + IC.plus + 'Agregar tu página de libros</button>' : '') + '<button class="btn ghost f" data-act="bookFile">Abrir un archivo de tu equipo</button></div></div>';
       return html;
     }
     html += '<div class="bookgrid">' + list.slice(0, BOOKLIM).map(bookCard).join('') + '</div>';
     if (list.length > BOOKLIM) html += '<button class="btn ghost more f" data-act="bookMore">Ver más (' + (list.length - BOOKLIM) + ')</button>';
-    if (!list.length) html += '<p class="muted">Nada coincide con tu búsqueda.</p>';
+    if (!list.length && !(webs.length && BOOKQ.trim())) html += '<p class="muted">Nada coincide con tu búsqueda.</p>';
     return html;
   };
   VIEWS.books.after = function () {
     var q = document.getElementById('bookQ');
+    if (q) q.addEventListener('keydown', function (e) { if (e.key === 'Enter') { MV._typedAt = Date.now(); BOOKQ = q.value; bookSearchWeb(q.value); } });
     if (q) q.addEventListener('input', function () { clearTimeout(q.t); q.t = setTimeout(function () { BOOKQ = q.value; BOOKLIM = 120; MV.rerender(); var n = document.getElementById('bookQ'); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } }, 350); });
   };
 

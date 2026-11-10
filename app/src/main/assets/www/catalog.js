@@ -754,13 +754,111 @@
     if (ov) { var oy = ytId(ov); add({ src: absUrl(ov, url), yt: oy, title: pTitle }); }
     return out;
   }
+  /** Libros de un documento HTML: enlaces a EPUB/PDF/CBZ…, botones de descarga de libro y datos estructurados (Book). */
+  var BOOK_LINK = /\.(epub|pdf|cbz|cbr|cb7)(\?|#|$)/i;
+  var GENERIC_LINK = /^(descargar|download|bajar|leer|read|epub|pdf|ver|abrir|aqu[ií]|click|clic|haz clic aqu[ií]|obtener|gratis|free|libro|book|\W*)$/i;
+  function cardOf(a) {
+    var c = a.closest('article, li, .card, .book, .libro, .item, .product, .post, .entry, figure, tr, [class*="card"], [class*="book"], [class*="libro"], [class*="item"]');
+    return c && c !== a && c.tagName !== 'BODY' && c.querySelectorAll('a[href]').length <= 12 ? c : null;
+  }
+  function pageBooks(doc, url, single) {
+    var out = [], seen = {};
+    var pTitle = meta(doc, 'og:title') || txt(doc.querySelector('h1')) || txt(doc.querySelector('title'));
+    var pImg = absUrl(meta(doc, 'og:image'), url), pDesc = meta(doc, 'og:description') || meta(doc, 'description');
+    function add(b) {
+      if (!b.url || seen[b.url]) return; seen[b.url] = 1;
+      var fm = (b.url.match(BOOK_LINK) || [])[1] || b.fmt || 'epub';
+      b.fmt = fm.toLowerCase(); b.title = (b.title || '').replace(/\.(epub|pdf|cbz|cbr|cb7)$/i, '').replace(/\s*[-|·]\s*(descargar|download)\s*(epub|pdf)?$/i, '').trim().slice(0, 140);
+      out.push(b);
+    }
+    // 1) Datos estructurados (schema.org Book con su archivo)
+    Array.prototype.forEach.call(doc.querySelectorAll('script[type="application/ld+json"]'), function (sc) {
+      var j; try { j = JSON.parse(sc.textContent); } catch (e) { return; }
+      [].concat(j['@graph'] || j).forEach(function walk(o) {
+        if (!o || typeof o !== 'object') return;
+        if (/Book/i.test([].concat(o['@type'] || '').join(' '))) {
+          var f = [].concat(o.workExample || [], o.encoding || [], o.associatedMedia || []).map(function (x) { return x && (x.contentUrl || x.url); }).filter(function (u) { return u && BOOK_LINK.test(u); })[0] || (BOOK_LINK.test(o.url || '') ? o.url : '');
+          if (f) add({ url: absUrl(f, url), title: o.name || pTitle, img: absUrl([].concat(o.image || '')[0] && ([].concat(o.image)[0].url || [].concat(o.image)[0]), url) || pImg, desc: o.description || pDesc, author: o.author && ([].concat(o.author)[0].name || [].concat(o.author)[0]) || '' });
+        }
+        ['hasPart', 'itemListElement', 'mainEntity', 'item'].forEach(function (k) { if (o[k]) [].concat(o[k]).forEach(walk); });
+      });
+    });
+    // 2) Enlaces al archivo (y botones "Descargar EPUB" que llevan a una descarga)
+    Array.prototype.forEach.call(doc.querySelectorAll('a[href], [data-epub], [data-download], [data-file]'), function (a) {
+      var raw = a.getAttribute('href') || a.getAttribute('data-epub') || a.getAttribute('data-download') || a.getAttribute('data-file') || '';
+      var h = absUrl(raw, url); if (!h || /^javascript:/i.test(raw)) return;
+      var label = txt(a), isBook = BOOK_LINK.test(h) || (/epub/i.test(h) && /descarg|download|epub/i.test(label + ' ' + h)) || /\bepub\b/i.test(a.getAttribute('type') || '');
+      if (!isBook) return;
+      var card = single ? null : cardOf(a);
+      var t = (a.getAttribute('download') || '').trim();
+      if (!t || /^\d+$/.test(t)) t = !GENERIC_LINK.test(label) && label.length > 2 && !/^(descargar|download)\b/i.test(label) ? label : '';
+      if (!t && card) t = txt(card.querySelector('h1, h2, h3, h4, .title, .titulo, [class*="title"], [itemprop="name"]'));
+      if (!t && (single || (single !== false && !card))) t = pTitle;
+      if (!t) { try { t = decodeURIComponent(h.split(/[?#]/)[0].split('/').pop()).replace(/[_-]+/g, ' '); } catch (e) { t = pTitle; } }
+      var im = card && card.querySelector('img'), img = im ? absUrl(im.getAttribute('data-src') || im.getAttribute('data-lazy-src') || im.getAttribute('src'), url) : '';
+      var inner = a.querySelector('img'); if (inner) img = absUrl(inner.getAttribute('data-src') || inner.getAttribute('src'), url) || img;
+      add({ url: h, title: t, img: img || (single || out.length === 0 ? pImg : ''), desc: card ? txt(card.querySelector('p, .desc, .excerpt, [class*="desc"]')).slice(0, 300) : pDesc });
+    });
+    // 3) Direcciones de libros escritas dentro de los scripts de la página
+    var html = doc.documentElement ? doc.documentElement.innerHTML : '';
+    (html.match(/https?:(?:\\?\/){2}[^"'\s<>()]+?\.epub(?:\?[^"'\s<>()]*)?/gi) || []).slice(0, 40).forEach(function (u) { add({ url: u.replace(/\\\//g, '/'), title: pTitle, img: pImg, desc: pDesc }); });
+    // Si la página es la ficha de un solo libro, se usa el título y la portada de la página
+    if (out.length === 1 && single !== false) { var b = out[0]; if (GENERIC_LINK.test(b.title) || !b.title) b.title = pTitle; if (!b.img) b.img = pImg; if (!b.desc) b.desc = pDesc; }
+    return out;
+  }
+  function bookItem(b, list, group, page) {
+    var e = { name: b.title || 'Libro', group: group, url: b.url };
+    return { key: 'book:' + MV.norm(e.name) + ':' + MV.hash(b.url), type: 'book', name: MV.noEmoji(e.name) || e.name, poster: b.img || '', group: group, url: b.url, ref: page || '', list: list.id, fmt: b.fmt, kind: bookKind(e), plot: b.desc || '', author: b.author || '', web: 1 };
+  }
+  var UA_WEB = { 'User-Agent': 'Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Mobile Safari/537.36', Accept: 'text/html,application/xhtml+xml' };
+  var searchUrls = {};
+  /** Dirección de búsqueda de la página: la que configuraste, la del buscador que tiene la página (formulario) o la de WordPress. */
+  function siteSearchUrl(list) {
+    var start = list.url.trim(); if (!/^https?:\/\//i.test(start)) start = 'https://' + start;
+    if (list.search) return Promise.resolve(/\{q\}/.test(list.search) ? list.search : list.search + (list.search.indexOf('?') >= 0 ? '&' : '?') + 'q={q}');
+    if (searchUrls[list.id]) return Promise.resolve(searchUrls[list.id]);
+    return MV.getText(start, UA_WEB).then(function (t) {
+      var doc = parseHtml(t), inp = doc.querySelector('form input[type="search"], form input[name="s"], form input[name="q"], form input[name="search"], form input[name="buscar"], form input[name="query"], form input[name="busqueda"]');
+      if (!inp) throw 0;
+      var f = inp.closest('form'); if ((f.getAttribute('method') || 'get').toLowerCase() !== 'get') throw 0;
+      var u = new URL(absUrl(f.getAttribute('action') || start, start)), params = [];
+      Array.prototype.forEach.call(f.querySelectorAll('input[type="hidden"][name]'), function (h) { params.push(encodeURIComponent(h.name) + '=' + encodeURIComponent(h.value || '')); });
+      params.push(encodeURIComponent(inp.name) + '={q}');
+      return u.origin + u.pathname + '?' + params.join('&');
+    }).catch(function () { return (start.match(/^(https?:\/\/[^\/]+)/i) || [start])[0] + '/?s={q}'; }).then(function (u) { searchUrls[list.id] = u; return u; });
+  }
+  /** Busca un libro directamente en tu página (lo nuevo aparece aunque todavía no se haya vuelto a revisar la página). */
+  MV.webBookSearch = function (q) {
+    var lists = S.lists.filter(function (l) { return l.type === 'web' && l.enabled !== false; });
+    if (!lists.length || !q) return Promise.resolve([]);
+    var words = MV.norm(q).split(/\s+/).filter(function (w) { return w.length > 2; });
+    var hit = function (s) { var n = MV.norm(s || ''); return !words.length || words.some(function (w) { return n.indexOf(w) >= 0; }); };
+    return Promise.all(lists.map(function (list) {
+      var origin;
+      return siteSearchUrl(list).then(function (tpl) {
+        var su = tpl.replace('{q}', encodeURIComponent(q)); origin = (su.match(/^(https?:\/\/[^\/]+)/i) || [su])[0];
+        return MV.getText(su, UA_WEB).then(function (t) { return { doc: parseHtml(t), url: su }; });
+      }).then(function (r) {
+        var found = pageBooks(r.doc, r.url, false).map(function (b) { return bookItem(b, list, list.name || 'Mi página', r.url); });
+        // Resultados que llevan a la ficha de cada libro: se abren (hasta 8) para encontrar su archivo
+        var links = siteLinks(r.doc, r.url, origin).filter(function (l) { return !/[?&](s|q|search|page|paged)=|\/page\/\d+|\/(tag|category|categoria|author)\//i.test(l.url) && l.label.length > 2 && hit(l.label + ' ' + decodeURIComponent(l.url)); }).slice(0, 8);
+        return Promise.all(links.map(function (l) {
+          return MV.getText(l.url, UA_WEB).then(function (t) { return pageBooks(parseHtml(t), l.url, true).map(function (b) { return bookItem(b, list, list.name || 'Mi página', l.url); }); }).catch(function () { return []; });
+        })).then(function (more) { return found.concat.apply(found, more); });
+      }).catch(function () { return []; });
+    })).then(function (arrs) {
+      var seen = {}, out = [];
+      [].concat.apply([], arrs).forEach(function (b) { if (!seen[b.url]) { seen[b.url] = 1; out.push(b); } });
+      return out;
+    });
+  };
   /** Enlaces del mismo sitio que valen la pena revisar (no imágenes, archivos ni cuentas). */
   function siteLinks(doc, url, origin) {
     var out = [];
     Array.prototype.forEach.call(doc.querySelectorAll('a[href]'), function (a) {
       var h = absUrl(a.getAttribute('href'), url).split('#')[0];
       if (!h || h.indexOf(origin) !== 0 || h === url || VID_EXT.test(h)) return;
-      if (/\.(jpg|jpeg|png|gif|webp|svg|pdf|zip|rar|css|js|xml|json|txt|docx?|xlsx?|pptx?)(\?|$)/i.test(h)) return;
+      if (/\.(jpg|jpeg|png|gif|webp|svg|pdf|epub|mobi|azw3?|cbz|cbr|cb7|zip|rar|7z|css|js|xml|json|txt|docx?|xlsx?|pptx?)(\?|$)/i.test(h)) return;
       if (/\/(login|logout|signin|signup|registro|register|cart|carrito|checkout|wp-admin|wp-login|account|cuenta|feed|author\/)/i.test(h)) return;
       if (out.indexOf(h) < 0) out.push({ url: h, label: txt(a) });
     });
@@ -772,7 +870,7 @@
   function buildFromWeb(list) {
     var start = list.url.trim(); if (!/^https?:\/\//i.test(start)) start = 'https://' + start;
     var origin = (start.match(/^(https?:\/\/[^\/]+)/i) || [start])[0];
-    var rendered = 0, maxPages = list.deep === false ? 1 : 300, pages = {}, queue = [{ url: start, depth: 0, cat: '' }], pageList = [], done = 0, total = 0;
+    var rendered = 0, maxPages = list.deep === false ? 1 : 300, pages = {}, queue = [{ url: start, depth: 0, cat: '' }], pageList = [], done = 0, total = 0, nbooks = 0;
     S.loadMsg = (list.name || 'Página') + ': revisando…'; MV.emit('catalog');
     function worker() {
       var job = queue.shift(); if (!job || done >= maxPages) return Promise.resolve();
@@ -781,7 +879,7 @@
       return MV.getText(job.url, { 'User-Agent': 'Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Mobile Safari/537.36', Accept: 'text/html,application/xhtml+xml' }).then(function (t) {
         var doc = parseHtml(t);
         // Página armada con JavaScript (sin videos en el HTML inicial): se abre en un navegador invisible y se lee ya armada
-        if (!pageVideos(doc, job.url).length && MV.native && rendered < 40) {
+        if (!pageVideos(doc, job.url).length && !pageBooks(doc, job.url).length && MV.native && rendered < 40) {
           rendered++;
           S.loadMsg = (list.name || 'Página') + ': abriendo ' + (job.url.replace(/^https?:\/\//, '').slice(0, 50)) + '…'; MV.emit('catalog');
           return MV.call('renderHtml', [job.url, 5000]).then(function (d) { return d && d.html ? parseHtml(d.html) : doc; }).catch(function () { return doc; });
@@ -791,16 +889,16 @@
         // Categoría de la página: la que ella misma declara (WordPress, Blogger…) o la del filtro/menú por el que se llegó
         var own = meta(doc, 'article:section') || txt(doc.querySelector('a[rel~="category"], .cat-links a, .post-categories a, .breadcrumb li:nth-last-child(2) a, nav[aria-label*="breadcrumb" i] li:nth-last-child(2) a'));
         var cat = (own || job.cat || '').slice(0, 40);
-        var vs = pageVideos(doc, job.url);
-        total += vs.length;
-        pageList.push({ url: job.url, depth: job.depth, cat: cat, title: meta(doc, 'og:title') || txt(doc.querySelector('h1')) || txt(doc.querySelector('title')), img: absUrl(meta(doc, 'og:image'), job.url), desc: meta(doc, 'og:description') || meta(doc, 'description'), isCat: CAT_URL.test(job.url) || job.depth === 0, vids: vs });
+        var vs = pageVideos(doc, job.url), bs = pageBooks(doc, job.url, CAT_URL.test(job.url) || job.depth === 0 ? false : undefined);
+        total += vs.length; nbooks += bs.length;
+        pageList.push({ url: job.url, depth: job.depth, cat: cat, title: meta(doc, 'og:title') || txt(doc.querySelector('h1')) || txt(doc.querySelector('title')), img: absUrl(meta(doc, 'og:image'), job.url), desc: meta(doc, 'og:description') || meta(doc, 'description'), isCat: CAT_URL.test(job.url) || job.depth === 0, vids: vs, books: bs });
         if (job.depth < 3) siteLinks(doc, job.url, origin).forEach(function (l) {
           if (pages[l.url] || queue.length >= 3000) return;
           // El filtro o categoría de tu página (por su dirección, o por estar en el menú principal) pasa a ser la categoría en MiVibra
           var c = CAT_URL.test(l.url) && l.label ? l.label : job.depth === 0 ? (l.label || '') : job.cat;
           queue.push({ url: l.url, depth: job.depth + 1, cat: (c || '').slice(0, 40) });
         });
-        S.loadMsg = (list.name || 'Página') + ': ' + done + ' páginas revisadas · ' + total + ' videos'; MV.emit('catalog');
+        S.loadMsg = (list.name || 'Página') + ': ' + done + ' páginas revisadas · ' + total + ' videos' + (nbooks ? ' · ' + nbooks + ' libros' : ''); MV.emit('catalog');
       }).catch(function (e) { if (job.depth === 0) throw e; }).then(worker);
     }
     // La primera página va sola (si falla, la lista falla); luego varias a la vez
@@ -823,7 +921,12 @@
           out.push(tags({ key: 'video:' + MV.hash(k), type: 'video', name: v.title, poster: v.img, plot: v.desc, group: g(p.cat), url: v.yt ? 'yt:' + v.yt : v.src, yt: v.yt || '', embed: v.embed || '', page: v.page, list: list.id }));
         });
       });
-      if (!out.length) throw new Error('No encontré videos en esa página');
+      // 3) Libros (EPUB, PDF, CBZ…): van a Lectura, con la categoría de tu página
+      var seenB = {};
+      pageList.forEach(function (p) {
+        (p.books || []).forEach(function (b) { if (seenB[b.url]) return; seenB[b.url] = 1; out.push(bookItem(b, list, g(p.cat), p.url)); });
+      });
+      if (!out.length) throw new Error('No encontré videos ni libros en esa página');
       return out;
     });
   }
