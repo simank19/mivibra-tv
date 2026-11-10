@@ -128,3 +128,5 @@ html.console-open #app { visibility: hidden; }
 .cbg { display: none; }
 #console { transition: background-image .5s; }
 .cver { color: #6B645D; font-size: .8em; font-weight: 600; }
+.ctile.cedit::after { content: '✎'; position: absolute; top: .4em; right: .4em; width: 1.6em; height: 1.6em; border-radius: 50%; background: var(--accent, #FF6900); color: #fff; display: grid; place-items: center; font-weight: 700; }
+.ctile.cedit:focus { box-shadow: 0 0 0 .22em #0E0D0C, 0 0 0 .45em var(--accent, #FF6900), 0 1.4em 3em rgba(0,0,0,.6); }

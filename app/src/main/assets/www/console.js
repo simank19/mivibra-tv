@@ -36,11 +36,11 @@
       (t ? '<img loading="lazy" src="' + esc(t) + '" alt="" onload="this.parentNode.classList.add(\'art\')" onerror="this.remove()">' : '') + '</span>';
   }
   var reg = {};
-  var delMode = false;
+  var delMode = false, editMode = false;
   function tile(r, big) {
     var s = MV.romSystem(r), k = 'g' + Object.keys(reg).length; reg[k] = r;
     var eng = s ? MV.gameEngine(s) : '';
-    return '<button class="cf ctile' + (big ? ' big' : '') + (delMode ? ' cdel' : '') + '" data-rom="' + k + '" data-title="' + esc(title(r)) + '" data-sys="' + esc(s ? s.name : 'Elegir sistema') + (eng === 'retroarch' ? ' · RetroArch' : '') + '">' + cover(r, s) + '</button>';
+    return '<button class="cf ctile' + (big ? ' big' : '') + (delMode ? ' cdel' : editMode ? ' cedit' : '') + '" data-rom="' + k + '" data-title="' + esc(title(r)) + '" data-sys="' + esc(s ? s.name : 'Elegir sistema') + (eng === 'retroarch' ? ' · RetroArch' : '') + '">' + cover(r, s) + '</button>';
   }
 
   // ---------------- Pantallas ----------------
@@ -61,6 +61,7 @@
     list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
     send: '<rect x="2" y="3" width="8" height="15" rx="1.5"/><path d="M5.5 15h1M13 10h8M18 7l3 3-3 3M14 21h7a1 1 0 0 0 1-1v-4"/>',
     info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>',
+    edit: '<path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4"/>',
     trash: '<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/>',
     exit: '<path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/>'
   };
@@ -88,8 +89,9 @@
       '<div class="crow cgames">' + row + '</div>' +
       (cons.length ? '<h4 class="clabel">Consolas</h4><div class="crow cconsoles">' + cons.join('') + '</div>' : '') +
       '<div class="crow cbtns">' + round('lib', 'lib', 'Biblioteca') + round('scan', 'usb', 'Buscar juegos') + round('bios', 'bios', 'Importar BIOS') +
-      round('send', 'send', 'Enviar desde el celular') + round('scrape', 'info', 'Buscar información') + round('engine', 'engine', 'Emuladores') + round('phone', 'phone', 'Celular como mando') + round('del', 'trash', delMode ? 'Terminar de borrar' : 'Borrar juegos') + round('classic', 'list', 'Vista clásica') + round('exit', 'exit', 'Salir') + '</div></section>' +
+      round('send', 'send', 'Enviar desde el celular') + round('scrape', 'info', 'Buscar información') + round('engine', 'engine', 'Emuladores') + round('phone', 'phone', 'Celular como mando') + round('edit', 'edit', editMode ? 'Terminar de editar' : 'Editar juegos (nombre y carátula)') + round('del', 'trash', delMode ? 'Terminar de borrar' : 'Borrar juegos') + round('classic', 'list', 'Vista clásica') + round('exit', 'exit', 'Salir') + '</div></section>' +
       (delMode ? '<footer class="chint del"><span><i>OK</i>Borrar el juego elegido</span><span><i>⟵</i>Terminar de borrar</span></footer>' :
+      editMode ? '<footer class="chint edit"><span><i>OK</i>Renombrar, carátula y más</span><span><i>⟵</i>Terminar de editar</span></footer>' :
       '<footer class="chint"><span><i>OK</i>Jugar</span><span><i>OK</i>Dejar presionado: opciones</span><span><i>⟵</i>Atrás</span></footer>');
   }
 
@@ -104,6 +106,7 @@
     if (by['?']) shelves.push('<div class="cshelf" data-sys="?"><h3 style="--c:#6B7280"><i>?</i>Sin sistema<small>' + by['?'].length + ' · OK para elegir</small></h3><div class="crow cshelfrow">' + by['?'].map(function (r) { return tile(r, false); }).join('') + '</div></div>');
     return topBar() + '<div class="csel clibsel"><b id="ctitle"></b><span id="csys"></span><p id="cdesc"></p></div><section class="clib">' + (shelves.length ? shelves.join('') : '<div class="cnone"><h2>Aún no hay juegos</h2><p>Conecta tu USB y usa “Buscar juegos”, o usa “Enviar desde el celular” en el Inicio.</p></div>') + '</section>' +
       (delMode ? '<footer class="chint del"><span><i>OK</i>Borrar el juego elegido</span><span><i>⟵</i>Terminar de borrar</span></footer>' :
+      editMode ? '<footer class="chint edit"><span><i>OK</i>Renombrar, carátula y más</span><span><i>⟵</i>Terminar de editar</span></footer>' :
       '<footer class="chint"><span><i>OK</i>Jugar</span><span><i>OK</i>Dejar presionado: opciones</span><span><i>⟵</i>Inicio</span></footer>');
   }
 
@@ -229,7 +232,7 @@
   // ---------------- Acciones ----------------
   function activate(el) {
     var k = el.getAttribute('data-rom');
-    if (k && reg[k]) { if (delMode) { askDelete(reg[k]); return; } blip(990); MV.playRom(reg[k]); return; }
+    if (k && reg[k]) { if (delMode) { askDelete(reg[k]); return; } if (editMode) { options(el); return; } blip(990); MV.playRom(reg[k]); return; }
     switch (el.getAttribute('data-act')) {
       case 'lib': tab = 'lib'; render(); break;
       case 'sys': tab = 'lib'; render('.cshelf[data-sys="' + el.getAttribute('data-arg') + '"] .cf'); break;
@@ -240,7 +243,8 @@
       case 'send': MV.ACT.romsFromPhone(); break;
       case 'classic': MV.save('gamesClassic', true); close(); if (MV.rerender) MV.rerender(); break;
       case 'scrape': scrapeAll(); break;
-      case 'del': delMode = !delMode; render('.cbtns [data-act="del"]'); if (delMode) MV.toast('Elige con OK el juego que quieres borrar'); break;
+      case 'edit': editMode = !editMode; delMode = false; render('.cbtns [data-act="edit"]'); if (editMode) MV.toast('Elige con OK el juego que quieres editar'); break;
+      case 'del': delMode = !delMode; editMode = false; render('.cbtns [data-act="del"]'); if (delMode) MV.toast('Elige con OK el juego que quieres borrar'); break;
       case 'exit': close(true); break;
     }
   }
@@ -302,7 +306,7 @@
       MV.save('roms', (MV.load('roms', []) || []).filter(function (x) { return x.path !== r.path; }));
       MV.save('recentGames', (MV.load('recentGames', []) || []).filter(function (x) { return x.path !== r.path; }));
       MV.toast('Borrado: ' + title(r));
-      if (box) render(delMode ? '.cf.ctile' : null);
+      if (box) render(delMode || editMode ? '.cf.ctile' : null);
     });
   }
   if (MV.ACT) {
@@ -321,7 +325,7 @@
   // ---------------- Abrir y cerrar ----------------
   function open() {
     if (box) return;
-    tab = 'home'; delMode = false;
+    tab = 'home'; delMode = false; editMode = false;
     box = document.createElement('div'); box.id = 'console'; box.setAttribute('role', 'application');
     document.body.appendChild(box);
     document.documentElement.classList.add('console-open');
@@ -361,6 +365,7 @@
   var origBack = MV.onBack;
   MV.onBack = function () {
     if (box && !MV.modalOpen() && delMode) { delMode = false; render('.cbtns [data-act="del"]'); return true; }
+    if (box && !MV.modalOpen() && editMode) { editMode = false; render('.cbtns [data-act="edit"]'); return true; }
     if (box && !MV.modalOpen()) { if (tab === 'lib') { tab = 'home'; render('.cbtns [data-act="lib"]'); } else close(true); return true; }
     return origBack.apply(this, arguments);
   };
@@ -374,22 +379,31 @@
   };
   // El control maneja la consola mientras está abierta (los diálogos siguen con la navegación normal)
   window.addEventListener('keydown', function (e) {
+    // OK sigue presionado después de abrir las opciones: no elegir nada en el menú
+    if (box && okHeld && (e.key === 'Enter' || e.key === ' ' || e.key === 'NumpadEnter')) { e.preventDefault(); e.stopImmediatePropagation(); return; }
     if (!box || MV.modalOpen()) return;
     var k = e.key;
     if (k === 'ArrowLeft' || k === 'ArrowRight' || k === 'ArrowUp' || k === 'ArrowDown') move(k.replace('Arrow', '').toLowerCase());
     else if (k === 'Enter' || k === ' ' || k === 'NumpadEnter') {
       // OK juega al soltarlo; si se deja presionado abre las opciones (para controles sin botón ☰)
       var a = document.activeElement;
-      if (!e.repeat) { okAt = Date.now(); okEl = a; okHeld = false; }
-      else if (!okHeld && okEl === a && Date.now() - okAt > 650 && a && a.getAttribute('data-rom')) { okHeld = true; options(a); }
+      if (!e.repeat) {
+        okAt = Date.now(); okEl = a; okHeld = false; clearTimeout(okT);
+        // Algunos controles no repiten la tecla al dejarla presionada: se mide con un temporizador
+        if (a && a.getAttribute('data-rom')) okT = setTimeout(function () { if (okEl === a && !okHeld && document.activeElement === a && !MV.modalOpen()) { okHeld = true; blip(660); options(a); } }, 600);
+      }
+      else if (!okHeld && okEl === a && Date.now() - okAt > 600 && a && a.getAttribute('data-rom')) { okHeld = true; clearTimeout(okT); options(a); }
     }
     else if (k === 'ContextMenu') options(document.activeElement);
     else return;
     e.preventDefault(); e.stopImmediatePropagation();
   }, true);
-  var okAt = 0, okEl = null, okHeld = false;
+  var okAt = 0, okEl = null, okHeld = false, okT = null;
   window.addEventListener('keyup', function (e) {
-    if (!box || MV.modalOpen() || (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'NumpadEnter')) return;
+    if (!box || (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'NumpadEnter')) return;
+    clearTimeout(okT);
+    // Al soltar OK después de abrir las opciones no se debe elegir nada en el menú
+    if (MV.modalOpen()) { if (okHeld) { e.preventDefault(); e.stopImmediatePropagation(); } okEl = null; okHeld = false; return; }
     e.preventDefault(); e.stopImmediatePropagation();
     var a = document.activeElement;
     if (!okHeld && okEl && a === okEl && box.contains(a)) activate(a);
