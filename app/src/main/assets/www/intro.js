@@ -64,7 +64,11 @@
   function bassline(t,notes,step,vol){notes.forEach(function(n,i){if(!n)return;var c=ctx(),o=c.createOscillator(),f=c.createBiquadFilter(),g=c.createGain(),tt=t+i*step;o.type='sawtooth';o.frequency.value=n;f.type='lowpass';f.Q.value=10;f.frequency.setValueAtTime(1800,tt);f.frequency.exponentialRampToValueAtTime(180,tt+step*.9);env(g,tt,.004,vol,step*.8,.0001,.03);o.connect(f);f.connect(g);out(g,1,.1);o.start(tt);o.stop(tt+step)})}
   // Glitch de datos
   function glitch(t,n,vol){for(var i=0;i<n;i++){var c=ctx(),o=c.createOscillator(),g=c.createGain(),tt=t+i*.045+Math.random()*.02;o.type='square';o.frequency.value=800+Math.random()*2600;env(g,tt,.001,vol,.025,.0001,.01);o.connect(g);out(g,.6,.2,.3);o.start(tt);o.stop(tt+.05)}}
-  function sfx(){if(!sound)return;startedAt=Date.now();try{score()}catch(e){}setTimeout(fallback,350)}
+  var native=false;
+  function sfx(){if(!sound)return;startedAt=Date.now();
+    // En la app: la banda sonora va grabada y la reproduce Android (suena siempre, aunque el televisor bloquee Web Audio)
+    var A=window.Android;if(A&&A.introAudio){try{A.introAudio(true);native=true;return}catch(e){}}
+    try{score()}catch(e){}setTimeout(fallback,350)}
   function score(){var c=ctx();mkBus();var T=c.currentTime+.05,K=1.5;
     // 1) Encendido: zumbido grave que sube + riser, golpe cuando aparece el logo, destello
     synth(T,[55,82.5],2.2,.05,'sawtooth',120,900,.5);
@@ -102,6 +106,7 @@
     if (!el) return;
     clearTimeout(endT);
     try { if (ac) ac.close(); } catch (e) {}
+    if (native) { native = false; try { window.Android.introAudio(false); } catch (e) {} }
     if (wavAudio) { try { var wa = wavAudio; var v = 1, fade = setInterval(function () { v -= .1; if (v <= 0) { clearInterval(fade); wa.pause(); } else wa.volume = v; }, 40); } catch (e) {} wavAudio = null; }
     ac = null; bus = null;
     el.classList.add('out');

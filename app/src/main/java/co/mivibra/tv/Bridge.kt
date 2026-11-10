@@ -266,6 +266,36 @@ class Bridge(private val a: MainActivity) {
         a.runOnUiThread { a.openPlayer(json) }
     }
 
+    // ---------------- Sonido de la intro ----------------
+    // Se reproduce con Android (no con Web Audio): algunos televisores no dejan sonar el audio de la página al abrir
+    private var introPlayer: android.media.MediaPlayer? = null
+
+    @JavascriptInterface
+    fun introAudio(play: Boolean) {
+        a.runOnUiThread {
+            val old = introPlayer
+            if (old != null) {
+                introPlayer = null
+                // Se apaga suave en medio segundo
+                val h = android.os.Handler(android.os.Looper.getMainLooper())
+                var v = 1f
+                val step = object : Runnable { override fun run() {
+                    v -= 0.1f
+                    if (v <= 0f) { try { old.stop() } catch (_: Exception) {}; old.release() }
+                    else { try { old.setVolume(v, v) } catch (_: Exception) {}; h.postDelayed(this, 45) }
+                } }
+                h.post(step)
+            }
+            if (!play) return@runOnUiThread
+            try {
+                val mp = android.media.MediaPlayer.create(a, R.raw.intro) ?: return@runOnUiThread
+                mp.setOnCompletionListener { if (introPlayer === it) introPlayer = null; it.release() }
+                introPlayer = mp
+                mp.start()
+            } catch (_: Exception) {}
+        }
+    }
+
     // ---------------- Archivos ----------------
 
     @JavascriptInterface
