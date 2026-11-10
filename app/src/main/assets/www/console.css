@@ -171,3 +171,21 @@ html.lite #console *, html.no-anim #console * { animation: none !important; }
   .copts { padding: 1.2em 1.4em 4em; } .coptrow { flex-wrap: wrap; }
   #console .copt { flex: 1 1 100%; max-width: none; min-height: 6em; }
 }
+
+/* ===== Ficha del juego elegido: abajo, con su captura en un marco y el texto sobre el fondo oscuro ===== */
+#console { background-image: radial-gradient(120% 90% at 85% -10%, rgba(255,105,0,.22), transparent 55%), radial-gradient(90% 80% at -10% 110%, rgba(76,141,255,.14), transparent 55%) !important; }
+.csel.cinfo { flex: none; flex-direction: row; align-items: center; justify-content: flex-start; gap: 1.6em; height: 10.5em; min-height: 0; margin: 0 3.6em .8em; padding: 1em 1.4em;
+  border-radius: 1.4em; background: rgba(20,18,16,.92); border: .1em solid rgba(255,255,255,.08); position: relative; z-index: 2; }
+.cshot { flex: none; height: 100%; aspect-ratio: 4 / 3; border-radius: .9em; overflow: hidden; background: #000; display: none; box-shadow: 0 .6em 1.6em rgba(0,0,0,.5); }
+.cshot.on { display: block; }
+.cshot img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; display: block; }
+.ctxt { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+.cinfo b { font-size: 1.7em; }
+.cinfo #cdesc { max-width: none; -webkit-line-clamp: 3; }
+.chome, .clib { min-height: 0; }
+@media (orientation: portrait), (max-width: 760px) {
+  .csel.cinfo { position: sticky; bottom: .8em; margin: auto 1em .8em; height: auto; padding: .9em !important; gap: 1em; align-items: flex-start; box-shadow: 0 -1em 2em rgba(14,13,12,.9); }
+  .cshot { width: 9em; height: auto; }
+  .cinfo b { font-size: 1.25em; white-space: normal; }
+  .cinfo #csys { font-size: .8em; } .cinfo #cdesc { font-size: .8em; -webkit-line-clamp: 4; }
+}
