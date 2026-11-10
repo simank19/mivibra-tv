@@ -2100,6 +2100,9 @@
   /** Motor de cada consola: 'interno' (emulador de MiVibra) o 'retroarch' (app RetroArch). */
   function gameEngine(s) { var e = (P.gameEngine || {})[s.id]; return s.ra ? 'retroarch' : (e || 'interno'); }
   MV.gameEngine = gameEngine;
+  /** PSP: 'ppsspp' (la app, sin marco) o 'retroarch' (con marco). */
+  MV.pspEngine = function () { return A && A.ppssppInstalled && A.ppssppInstalled() && P.pspEngine !== 'retroarch' ? 'ppsspp' : 'retroarch'; };
+  MV.setPspEngine = function (e) { P.pspEngine = e === 'retroarch' ? 'retroarch' : ''; MV.savePrefs(); };
   MV.setGameEngine = function (sysId, eng) { P.gameEngine = P.gameEngine || {}; P.gameEngine[sysId] = eng; MV.savePrefs(); };
   function rememberGame(r) { var rec = (MV.load('recentGames', []) || []).filter(function (x) { return x.path !== r.path; }); rec.unshift(r); MV.save('recentGames', rec.slice(0, 30)); }
   function playPpsspp(r, s) {

@@ -268,12 +268,14 @@
     MV.modal('<h2>Emuladores</h2><p class="muted">' + (ra.installed ? 'RetroArch está instalado.' : 'RetroArch no está instalado (gratis en Play Store).') +
       ' Con RetroArch, descarga cada núcleo en RetroArch → Actualizador en línea → Descargar núcleos. Sus BIOS se copian a ' + esc(ra.bios || 'RetroArch/system') + ' al usar “Importar BIOS”.</p>' +
       list.map(function (s) {
-        var e = MV.gameEngine(s);
+        var e = MV.gameEngine(s), psp = s.id === 'psp', pe = psp && MV.pspEngine ? MV.pspEngine() : '';
+        if (pe === 'ppsspp') e = 'ppsspp';
         var ov = A && A.overlay ? A.overlay(s.id) : -1, ovs = null;
         if (ov >= 0 && A.overlayStyles) { try { ovs = JSON.parse(A.overlayStyles(s.id)); } catch (e) {} }
         var ovName = ovs ? (ovs.cur >= ovs.n ? 'sin marco' : 'Marco ' + (ovs.cur + 1) + ' de ' + ovs.n) : (ov ? 'puesto' : 'quitado');
-        return '<div class="line"><div class="t"><b>' + esc(s.name) + '</b><span>' + (e === 'retroarch' ? 'RetroArch · núcleo ' + esc(s.raCore || s.core) : 'Emulador de MiVibra') + (s.ra ? ' (solo RetroArch)' : '') + (ov >= 0 && e !== 'ppsspp' ? ' · ' + ovName : '') + '</span></div>' +
+        return '<div class="line"><div class="t"><b>' + esc(s.name) + '</b><span>' + (e === 'ppsspp' ? 'App PPSSPP · sin marco (para usar marco, cambia a RetroArch)' : e === 'retroarch' ? 'RetroArch · núcleo ' + esc(s.raCore || s.core) : 'Emulador de MiVibra') + (s.ra && !psp ? ' (solo RetroArch)' : '') + (ov >= 0 && e !== 'ppsspp' ? ' · ' + ovName : '') + '</span></div>' +
           (ov >= 0 && e !== 'ppsspp' ? '<button class="btn ghost sm f" data-act="consoleFrame" data-arg="' + s.id + '">Cambiar marco</button>' : '') +
+          (psp && A && A.ppssppInstalled && A.ppssppInstalled() ? '<button class="btn ghost sm f" data-act="consolePsp">' + (pe === 'ppsspp' ? 'Usar RetroArch (con marco)' : 'Usar la app PPSSPP') + '</button>' : '') +
           (s.ra ? '' : '<button class="btn ghost sm f" data-act="consoleEngine" data-arg="' + s.id + '">' + (e === 'retroarch' ? 'Usar MiVibra' : 'Usar RetroArch') + '</button>') + '</div>';
       }).join('') + (ra.installed ? '' : '<div class="btns"><button class="btn f" data-act="consoleGetRA">Instalar RetroArch</button></div>'));
   }
@@ -283,6 +285,7 @@
       MV.setGameEngine(id, MV.gameEngine(s) === 'retroarch' ? 'interno' : 'retroarch');
       MV.closeModal(true); engines();
     };
+    MV.ACT.consolePsp = function () { MV.setPspEngine(MV.pspEngine() === 'ppsspp' ? 'retroarch' : 'ppsspp'); MV.closeModal(true); engines(); setTimeout(function () { var b = document.querySelector('[data-act="consolePsp"]'); if (b) b.focus(); }, 60); };
     MV.ACT.consoleFrame = function (id) {
       if (A && A.nextOverlay) A.nextOverlay(id); else if (A && A.setOverlay) A.setOverlay(id, A.overlay(id) !== 1);
       MV.closeModal(true); engines();
