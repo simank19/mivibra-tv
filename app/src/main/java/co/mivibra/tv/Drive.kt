@@ -35,7 +35,17 @@ object Drive {
                                 val res = Identity.getAuthorizationClient(a).getAuthorizationResultFromIntent(data)
                                 if (res.accessToken != null) checked(a, res.accessToken!!, res.grantedScopes, done)
                                 else done(null, if (code == android.app.Activity.RESULT_CANCELED) "cancelado" else "Google no dio permiso")
-                            } catch (e: Exception) { done(null, if (code == android.app.Activity.RESULT_CANCELED) "cancelado" else (e.message ?: "Google no dio permiso")) }
+                            } catch (e: Exception) {
+                                // Si Google devuelve un error con código (p. ej. 10 = la app no está registrada en Google Cloud), se muestra;
+                                // solo se calla cuando de verdad el usuario cerró la ventana
+                                val st = (e as? com.google.android.gms.common.api.ApiException)?.statusCode
+                                done(null, when {
+                                    st == 10 -> "Google no reconoce la app: falta el cliente Android (paquete co.mivibra.tv y huella SHA-1) en Google Cloud"
+                                    st != null && st != 16 && st != 12501 -> "Google respondió con el error $st"
+                                    code == android.app.Activity.RESULT_CANCELED -> "cancelado"
+                                    else -> e.message ?: "Google no dio permiso"
+                                })
+                            }
                         }
                     } catch (e: Exception) { done(null, e.message ?: "No se pudo abrir la cuenta de Google") }
                 } else {
