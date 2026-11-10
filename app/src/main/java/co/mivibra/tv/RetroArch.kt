@@ -16,8 +16,16 @@ object RetroArch {
     private val PACKAGES = listOf("com.retroarch.aarch64", "com.retroarch", "com.retroarch.ra32")
     private const val ACTIVITY = "com.retroarch.browser.retroactivity.RetroActivityFuture"
 
-    fun pkg(c: Context): String? = PACKAGES.firstOrNull {
-        try { c.packageManager.getPackageInfo(it, 0); true } catch (_: Exception) { false }
+    /**
+     * Si hay varias instaladas, se prefiere la de la página oficial (puede leer la carpeta /MiVibra/RetroArch);
+     * la de Play Store queda de última porque solo abre juegos de sus propias carpetas.
+     */
+    fun pkg(c: Context): String? {
+        val installed = PACKAGES.filter { try { c.packageManager.getPackageInfo(it, 0); true } catch (_: Exception) { false } }
+        fun fromPlay(p: String) = try {
+            @Suppress("DEPRECATION") c.packageManager.getInstallerPackageName(p) == "com.android.vending"
+        } catch (_: Exception) { false }
+        return installed.sortedBy { if (fromPlay(it)) 1 else 0 }.firstOrNull()
     }
 
     fun info(c: Context): String {
