@@ -256,6 +256,8 @@ class MainActivity : ComponentActivity() {
                     return true
                 }
                 if (event.action == KeyEvent.ACTION_DOWN) okLong = false
+                // La intro se salta con OK aunque la página todavía no tenga el foco del teclado
+                if (event.action == KeyEvent.ACTION_UP) js("window.MV&&MV.introShowing&&MV.introShowing()&&MV.introSkip()")
                 return web.dispatchKeyEvent(KeyEvent(event.downTime, event.eventTime, event.action, KeyEvent.KEYCODE_ENTER, 0))
             }
             KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_BUTTON_Y, KeyEvent.KEYCODE_BUTTON_X -> {

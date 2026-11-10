@@ -63,7 +63,9 @@ object RetroArch {
         lastWhy = ""
         try {
             val p = pkg(c) ?: return null
-            if (sys.isBlank() || !Overlays.enabled(c, sys)) return null
+            if (sys.isBlank()) { lastWhy = "consola desconocida"; return null }
+            if (!Overlays.available(sys)) { lastWhy = "esta consola no tiene marco"; return null }
+            if (!Overlays.enabled(c, sys)) { lastWhy = "lo quitaste en Opciones › Emuladores"; return null }
             val src = Overlays.fetch(c, sys) ?: run { lastWhy = "no se pudo descargar el marco"; return null }
             val dir = File(Environment.getExternalStorageDirectory(), "MiVibra/RetroArch/marcos").apply { mkdirs() }
             if (!dir.canWrite()) { lastWhy = "sin permiso para guardar en la memoria"; return null }

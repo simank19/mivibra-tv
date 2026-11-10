@@ -113,6 +113,7 @@
     var e = el; el = null;
     setTimeout(function () { e.remove(); }, 550);
     window.removeEventListener('keydown', onKey, true);
+    document.removeEventListener('keyup', onKey, true);
     if (done) done();
   }
   function onKey(e) { if (!el) return; e.preventDefault(); e.stopImmediatePropagation(); finish(); }
@@ -133,6 +134,8 @@
     document.body.appendChild(el);
     el.addEventListener('click', finish);
     window.addEventListener('keydown', onKey, true);
+    document.addEventListener('keyup', onKey, true);
+    try { window.focus(); el.tabIndex = -1; el.focus({ preventScroll: true }); } catch (e) {}
     void el.offsetWidth; el.classList.add('play');
     sfx();
     endT = setTimeout(finish, 11300);
