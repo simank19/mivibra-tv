@@ -4,6 +4,7 @@
   'use strict';
   var REPO = 'simank19/mivibra-tv';
   var checking = false, shownFor = 0, lastCheck = 0;
+  var PC = !!(MV.device && MV.device.desktop);
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function current() { return +(MV.device.versionCode || 0); }
@@ -16,18 +17,21 @@
       var n = +m[1];
       var notes = ((t.split('<entry>')[1] || '').match(/<content[^>]*>([\s\S]*?)<\/content>/) || ['', ''])[1]
         .replace(/&lt;[^&]*&gt;/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s{2,}/g, ' ').trim();
-      return { version: n, url: 'https://github.com/' + REPO + '/releases/download/build-' + n + '/MiVibraTV-' + n + '.apk', size: 0, notes: notes, mandatory: /\[obligatoria\]/i.test(notes) };
+      var file = PC ? 'MiVibraTV-PC-' + n + '.exe' : 'MiVibraTV-' + n + '.apk';
+      return { version: n, url: 'https://github.com/' + REPO + '/releases/download/build-' + n + '/' + file, size: 0, notes: notes, mandatory: /\[obligatoria\]/i.test(notes) };
     });
   }
   function fetchLatest() {
-    return fetchApi().catch(function () { return fetchFromFeed(); });
+    // En el PC, si la versión nueva aún no trae su instalador (se compila unos minutos después), se espera
+    return fetchApi().catch(function (e) { if (e && e.noFile) throw e; return fetchFromFeed(); });
   }
   function fetchApi() {
     return MV.getText('https://api.github.com/repos/' + REPO + '/releases/latest', { Accept: 'application/vnd.github+json' }).then(function (t) {
       var r = JSON.parse(t);
       var n = +(String(r.tag_name || '').replace(/\D+/g, '')) || 0;
-      var apk = (r.assets || []).find(function (a) { return /\.apk$/i.test(a.name); });
-      if (!n || !apk) throw new Error('No hay APK publicada');
+      // En el PC se busca el instalador .exe; en Android, la APK
+      var apk = (r.assets || []).find(function (a) { return PC ? /\.exe$/i.test(a.name) : /\.apk$/i.test(a.name); });
+      if (!n || !apk) { var er = new Error(PC ? 'Todavía no hay instalador para PC en esta versión' : 'No hay APK publicada'); er.noFile = PC; throw er; }
       var notes = String(r.body || '').replace(/Co-Authored-By:.*$/gim, '').replace(/Claude-Session:.*$/gim, '').trim();
       return { version: n, url: apk.browser_download_url, size: apk.size || 0, notes: notes, mandatory: /\[obligatoria\]/i.test(notes), date: r.published_at };
     });
@@ -102,6 +106,7 @@
         return;
       }
       fill.style.width = '100%';
+      if (PC) { txt.textContent = 'Instalando… MiVibra TV se cerrará y se abrirá sola con la versión nueva.'; go.textContent = 'Instalando…'; return; }
       txt.textContent = 'Listo. Confirma la instalación en la ventana de Android.';
       go.disabled = false; go.textContent = 'Abrir instalador otra vez';
     }).catch(function (e) {

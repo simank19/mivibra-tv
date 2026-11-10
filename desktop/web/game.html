@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>MiVibra TV · Juego</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0D0C0B; overflow: hidden; font-family: system-ui, Segoe UI, sans-serif; color: #F3EFEA; }
+  #game { width: 100vw; height: 100vh; }
+  #hint { position: fixed; top: 12px; right: 14px; z-index: 50; background: rgba(14,13,12,.8); padding: 8px 12px; border-radius: 10px; font-size: 13px; opacity: 1; transition: opacity .6s; pointer-events: none; }
+  #hint.off { opacity: 0; }
+  #err { position: fixed; inset: 0; display: none; place-items: center; text-align: center; padding: 30px; z-index: 60; background: #0D0C0B; }
+  #err b { color: #FF6900; font-size: 22px; display: block; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+<div id="game"></div>
+<div id="hint">Esc o Atrás: salir del juego · F11: pantalla completa</div>
+<div id="err"><div><b>No se pudo abrir el juego</b><span id="errTxt"></span><p style="opacity:.7">Presiona Esc para volver.</p></div></div>
+<script>
+(function () {
+  'use strict';
+  var q = new URLSearchParams(location.search);
+  var cfg = {}; try { cfg = JSON.parse(q.get('c') || '{}'); } catch (e) {}
+  document.title = (cfg.title || 'Juego') + ' · MiVibra TV';
+  setTimeout(function () { document.getElementById('hint').classList.add('off'); }, 5000);
+
+  window.EJS_player = '#game';
+  window.EJS_core = cfg.core;
+  window.EJS_gameUrl = cfg.rom;
+  window.EJS_gameName = cfg.save || cfg.title || 'juego';
+  if (cfg.bios) window.EJS_biosUrl = cfg.bios;
+  window.EJS_pathtodata = '/pc/ejs/';         // EmulatorJS viene dentro del instalador (funciona sin internet)
+  window.EJS_DEBUG_XX = true;                  // carga los scripts de src/ (el paquete no trae los minificados)
+  window.EJS_startOnLoaded = true;
+  window.EJS_language = 'es-ES';
+  window.EJS_color = '#FF6900';
+  window.EJS_backgroundColor = '#0D0C0B';
+  window.EJS_threads = !!cfg.threads;
+  window.EJS_defaultOptions = { 'save-state-location': 'browser' };
+  if (cfg.vars) window.EJS_defaultOptions = Object.assign(window.EJS_defaultOptions, cfg.vars);
+
+  // Celular como mando: botones → entradas del emulador (jugador = puesto del celular)
+  // Índices de EmulatorJS: 0 B, 1 Y, 2 SELECT, 3 START, 4 ARRIBA, 5 ABAJO, 6 IZQ, 7 DER, 8 A, 9 X, 10 L, 11 R, 12 L2, 13 R2, 16-19 palanca izquierda
+  var IDX = { B: 0, Y: 1, SELECT: 2, START: 3, UP: 4, DOWN: 5, LEFT: 6, RIGHT: 7, A: 8, X: 9, L1: 10, R1: 11, L2: 12, R2: 13 };
+  function gm() { return window.EJS_emulator && window.EJS_emulator.gameManager; }
+  window.MVpad = function (slot, key, down) {
+    var g = gm(); if (!g || !(key in IDX)) return;
+    try { g.simulateInput(slot, IDX[key], down ? 1 : 0); } catch (e) {}
+  };
+  window.MVaxis = function (slot, stick, x, y) {
+    var g = gm(); if (!g) return;
+    var base = stick === 'r' ? 20 : 16, M = 0x7fff;
+    try {
+      g.simulateInput(slot, base, x > 0 ? Math.round(x * M) : 0); g.simulateInput(slot, base + 1, x < 0 ? Math.round(-x * M) : 0);
+      g.simulateInput(slot, base + 2, y > 0 ? Math.round(y * M) : 0); g.simulateInput(slot, base + 3, y < 0 ? Math.round(-y * M) : 0);
+    } catch (e) {}
+  };
+  // Guarda la partida (SRAM) antes de cerrar
+  window.MVsave = function () { try { var g = gm(); if (g && g.saveSaveFiles) g.saveSaveFiles(); } catch (e) {} };
+  setInterval(window.MVsave, 30000);
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' || e.key === 'BrowserBack') { e.preventDefault(); window.MVsave(); setTimeout(function () { if (window.mvGame) window.mvGame.close(); else window.close(); }, 150); }
+  }, true);
+  window.addEventListener('mouseup', function (e) { if (e.button === 3) { window.MVsave(); setTimeout(function () { if (window.mvGame) window.mvGame.close(); else window.close(); }, 150); } });
+  if (!cfg.core || !cfg.rom) {
+    document.getElementById('errTxt').textContent = cfg.error || 'Falta el juego o el emulador.';
+    document.getElementById('err').style.display = 'grid';
+    return;
+  }
+  var s = document.createElement('script');
+  s.src = window.EJS_pathtodata + 'loader.js';
+  s.onerror = function () {
+    document.getElementById('errTxt').textContent = 'No se encontró el emulador. Reinstala MiVibra TV.';
+    document.getElementById('err').style.display = 'grid';
+  };
+  document.body.appendChild(s);
+})();
+</script>
+</body>
+</html>

@@ -3102,7 +3102,7 @@
     kick: { name: 'Kick', pkgs: ['com.kick.mobile'], web: 'https://kick.com' },
     twitch: { name: 'Twitch', pkgs: ['tv.twitch.android.viewer', 'tv.twitch.android.app'], web: 'https://www.twitch.tv' }
   };
-  var installed = null;
+  var installed = null, PCD = !!(MV.device && MV.device.desktop);
   function appsInstalled() {
     if (installed || !A || !A.appsInstalled) return installed || {};
     var all = []; Object.keys(APPS).forEach(function (k) { all = all.concat(APPS[k].pkgs); });
@@ -3114,16 +3114,17 @@
     if (AU.current()) AU.stop();
     var a = APPS[k];
     // Apps que no están en la tienda: si no está instalada, abre su página de descargas
-    if (a.noStore && A && !hasApp(k)) {
+    if (a.noStore && A && !PCD && !hasApp(k)) {
       if (a.web) A.openExternal(a.web);
       else MV.toast('La app ' + a.name + ' no está instalada en este equipo. Instala su APK y vuelve a intentar.', 5000);
       return;
     }
-    if (A && A.openApp) A.openApp(JSON.stringify({ pkgs: a.pkgs, url: url || '' }));
+    // En el PC: la página web de cada servicio en el navegador
+    if (A && A.openApp && !PCD) A.openApp(JSON.stringify({ pkgs: a.pkgs, url: url || '' }));
     else window.open(url || a.web, '_blank');
   }
   function appTile(k, sub) {
-    var a = APPS[k], ok = !A || hasApp(k);
+    var a = APPS[k], ok = !A || PCD || hasApp(k);
     return '<button class="apptile glass f" data-act="openApp" data-arg="' + k + '"><b>' + esc(a.name) + '</b><span>' + esc(ok ? (sub || 'Abrir') : a.noStore ? 'Descargar desde GitHub' : 'Instalar desde la tienda') + '</span></button>';
   }
 

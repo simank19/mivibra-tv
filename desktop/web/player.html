@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>MiVibra TV · Reproductor</title>
+<link rel="stylesheet" href="player.css">
+</head>
+<body>
+<video id="v" playsinline></video>
+<div id="spin"><i></i></div>
+<div id="err" hidden><b>No se pudo reproducir</b><span id="errTxt"></span><small id="errHint"></small></div>
+<div id="osd" hidden></div>
+
+<header id="top">
+  <div class="tt"><img id="logo" alt=""><div><b id="title"></b><span id="sub"></span></div></div>
+  <div class="sp"></div>
+  <button class="ib" id="bFav" title="Favorito (F)">☆</button>
+  <button class="ib" id="bClose" title="Cerrar (Esc)">✕</button>
+</header>
+
+<footer id="bar">
+  <div id="seekRow"><span id="tCur">0:00</span><input type="range" id="seek" min="0" max="1000" value="0"><span id="tDur">0:00</span></div>
+  <div class="row">
+    <button class="ib" id="bPrev" title="Anterior (Re Pág / ▲)">⏮</button>
+    <button class="ib" id="bBack" title="Atrás 10 s (←)">↺10</button>
+    <button class="ib big" id="bPlay" title="Reproducir / pausa (Espacio)">⏸</button>
+    <button class="ib" id="bFwd" title="Adelante 10 s (→)">10↻</button>
+    <button class="ib" id="bNext" title="Siguiente (Av Pág / ▼)">⏭</button>
+    <button class="pill" id="bSkip" title="Saltar la intro">+1:30</button>
+    <div class="sp"></div>
+    <button class="pill" id="bList" title="Canales (L)">☰ Canales</button>
+    <button class="pill" id="bTracks" title="Audio y subtítulos (A)">Audio y subtítulos</button>
+    <div class="vol"><button class="ib" id="bMute" title="Silencio (M)">🔊</button><input type="range" id="vol" min="0" max="100" value="100"></div>
+    <button class="ib" id="bFull" title="Pantalla completa (F11 / doble clic)">⛶</button>
+  </div>
+</footer>
+
+<aside id="list" hidden>
+  <input id="lq" placeholder="Buscar canal…" autocomplete="off">
+  <div id="lchips"><button data-f="all" class="on">Todos</button><button data-f="fav">Favoritos</button><button data-f="sp">Deportes</button></div>
+  <div id="lbox"></div>
+</aside>
+<div id="tracks" hidden></div>
+
+<script src="vendor/hls.min.js"></script>
+<script src="vendor/mpegts.js"></script>
+<script src="player.js"></script>
+</body>
+</html>

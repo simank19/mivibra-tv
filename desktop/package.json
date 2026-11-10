@@ -1,0 +1,99 @@
+{
+  "name": "mivibra-tv",
+  "productName": "MiVibra TV",
+  "version": "1.0.0",
+  "description": "MiVibra TV para PC: tus listas, películas, series, YouTube y juegos clásicos.",
+  "author": "MiVibra Grupo Empresarial",
+  "license": "GPL-3.0",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "ejs": "node scripts/fetch-ejs.js",
+    "dist": "electron-builder --win nsis --x64 --publish never"
+  },
+  "dependencies": {
+    "@tesseract.js-data/eng": "^1.0.0",
+    "hls.js": "^1.5.17",
+    "mpegts.js": "^1.7.3",
+    "sax": "^1.4.1",
+    "tesseract.js": "^5.1.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "co.mivibra.tv.pc",
+    "productName": "MiVibra TV",
+    "copyright": "MiVibra Grupo Empresarial",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "player-preload.js",
+      "game-preload.js",
+      "lib/**",
+      "web/**",
+      "build/icon.png",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/tesseract.js/**",
+      "node_modules/tesseract.js-core/**",
+      "node_modules/@tesseract.js-data/**"
+    ],
+    "extraResources": [
+      {
+        "from": "../app/src/main/assets/www",
+        "to": "www"
+      },
+      {
+        "from": "../app/src/main/assets/neogeo.json",
+        "to": "neogeo.json"
+      },
+      {
+        "from": "../app/src/main/res/raw/intro.ogg",
+        "to": "intro.ogg"
+      },
+      {
+        "from": "build/ejs",
+        "to": "ejs"
+      },
+      {
+        "from": "build/7z",
+        "to": "7z"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "MiVibraTV-PC-${env.MV_BUILD}.exe"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowElevation": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "MiVibra TV",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
+    }
+  },
+  "overrides": {
+    "wasm-feature-detect": "1.6.2"
+  }
+}

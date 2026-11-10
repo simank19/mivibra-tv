@@ -76,3 +76,51 @@ jobs:
           body_path: notes.md
           files: out/*.apk
           make_latest: true
+
+  # Versión para PC (Windows): mismo número que la APK, en la misma Release
+  windows:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Configurar cuenta MiVibra
+        shell: bash
+        env:
+          MV_FIREBASE: ${{ secrets.MV_FIREBASE }}
+          MV_ADMIN_EMAIL: ${{ secrets.MV_ADMIN_EMAIL }}
+          MV_GOOGLE_WEB_CLIENT: ${{ secrets.MV_GOOGLE_WEB_CLIENT }}
+          MV_GOOGLE_TV_CLIENT: ${{ secrets.MV_GOOGLE_TV_CLIENT }}
+          MV_GOOGLE_TV_SECRET: ${{ secrets.MV_GOOGLE_TV_SECRET }}
+        run: python .github/scripts/config.py
+
+      # 7-Zip (abre zip, 7z y rar) va dentro del instalador
+      - name: Incluir 7-Zip
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force desktop/build/7z | Out-Null
+          Copy-Item "C:\Program Files\7-Zip\7z.exe","C:\Program Files\7-Zip\7z.dll" desktop/build/7z/
+
+      - name: Instalar dependencias
+        working-directory: desktop
+        run: npm ci --no-audit --no-fund
+
+      - name: Emuladores (EmulatorJS)
+        working-directory: desktop
+        run: npm run ejs
+
+      - name: Compilar instalador
+        working-directory: desktop
+        shell: bash
+        env:
+          MV_BUILD: ${{ github.run_number }}
+        run: npx electron-builder --win nsis --x64 --publish never -c.extraMetadata.version=1.0.${{ github.run_number }}
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          files: desktop/dist/*.exe

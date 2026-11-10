@@ -24,7 +24,8 @@
     canEditList: function (l) { return acct.canEdit() || !!(l && (l.own || l.type === 'file')); },
     /** ¿Esta lista es del cliente (no viene del superadministrador)? */
     isOwn: function (l) { return !!(l && (l.own || l.type === 'file')) && acct.managed() && !acct.isAdmin(); },
-    hasGoogleButton: function () { return !!(C.webClientId && MV.native); },
+    // En el PC se entra con el código (Google no deja iniciar sesión dentro de apps de escritorio)
+    hasGoogleButton: function () { return !!(C.webClientId && MV.native && !(MV.device && MV.device.desktop)); },
     hasCode: function () { return !!(C.tvClientId && C.tvClientSecret); }
   };
   // Sin cuenta configurada: la app funciona sola, como antes

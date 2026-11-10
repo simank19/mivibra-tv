@@ -106,7 +106,14 @@
     MV.inboxStart();
     setTimeout(function () {
       // Con servicio administrado las listas incluidas llegan solas: la bienvenida es solo para quien empieza sin nada
-      var go = function () { if (MV.acct && MV.acct.managed()) return; if (!S.lists.length && !MV.modalOpen() && !MV.load('listsWelcomeSeen', false)) { MV.save('listsWelcomeSeen', true); MV.listsWelcome(); } };
+      // Espera a que haya un perfil elegido y nada abierto encima (creación del perfil, tutorial…)
+      var go = function () {
+        if (MV.acct && MV.acct.managed()) return;
+        if (S.lists.length || MV.load('listsWelcomeSeen', false)) return;
+        var busy = !S.pid || MV.modalOpen() || (MV.tourOpen && MV.tourOpen()) || /profile/i.test(location.hash) || document.querySelector('.profiles, #pname, [data-act="saveProfile"]');
+        if (busy) { setTimeout(go, 2000); return; }
+        MV.save('listsWelcomeSeen', true); MV.listsWelcome();
+      };
       if (MV.introShowing && MV.introShowing()) { var t = setInterval(function () { if (!MV.introShowing()) { clearInterval(t); setTimeout(go, 600); } }, 400); } else go();
     }, 2500);
   }
