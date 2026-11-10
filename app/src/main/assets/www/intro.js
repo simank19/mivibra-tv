@@ -17,7 +17,25 @@
   }
   // ===== Banda sonora sintetizada (Web Audio): todo se genera en el navegador, sin archivos =====
   var bus=null;
-  function ctx(){ac=ac||new (window.AudioContext||window.webkitAudioContext)();if(ac.state==='suspended')ac.resume();return ac}
+  var offline=false, wavAudio=null, startedAt=0;
+  function ctx(){ac=ac||new (window.AudioContext||window.webkitAudioContext)();if(!offline&&ac.state==='suspended'){try{var pr=ac.resume();if(pr&&pr.catch)pr.catch(function(){})}catch(e){}}return ac}
+  // Algunos televisores no dejan sonar Web Audio sin tocar un botón: se graba la banda sonora y se reproduce como audio normal
+  function toWav(buf){var ch=buf.numberOfChannels,sr=buf.sampleRate,n=buf.length,dv=new DataView(new ArrayBuffer(44+n*ch*2));
+    function w(o,t){for(var i=0;i<t.length;i++)dv.setUint8(o+i,t.charCodeAt(i))}
+    w(0,'RIFF');dv.setUint32(4,36+n*ch*2,true);w(8,'WAVE');w(12,'fmt ');dv.setUint32(16,16,true);dv.setUint16(20,1,true);dv.setUint16(22,ch,true);dv.setUint32(24,sr,true);dv.setUint32(28,sr*ch*2,true);dv.setUint16(32,ch*2,true);dv.setUint16(34,16,true);w(36,'data');dv.setUint32(40,n*ch*2,true);
+    var data=[];for(var c=0;c<ch;c++)data.push(buf.getChannelData(c));var o=44;for(var i=0;i<n;i++)for(c=0;c<ch;c++){var v=Math.max(-1,Math.min(1,data[c][i]));dv.setInt16(o,v<0?v*0x8000:v*0x7FFF,true);o+=2}
+    return new Blob([dv],{type:'audio/wav'})}
+  function fallback(){
+    if(!el||!sound||(ac&&ac.state==='running'))return;
+    var OAC=window.OfflineAudioContext||window.webkitOfflineAudioContext;if(!OAC)return;
+    var live=ac,liveBus=bus;
+    try{ac=new OAC(2,22050*12,22050);bus=null;offline=true;score()}catch(e){ac=live;bus=liveBus;offline=false;return}
+    var off=ac;ac=live;bus=liveBus;offline=false;
+    var pr=off.startRendering();var after=function(buf){
+      if(!el)return;wavAudio=new Audio(URL.createObjectURL(toWav(buf)));
+      try{wavAudio.currentTime=Math.max(0,(Date.now()-startedAt)/1000)}catch(e){}
+      var p=wavAudio.play();if(p&&p.catch)p.catch(function(){})};
+    if(pr&&pr.then)pr.then(after);else off.oncomplete=function(e){after(e.renderedBuffer)}}
   function mkBus(){var c=ctx();if(bus)return bus;
     var comp=c.createDynamicsCompressor();comp.threshold.value=-18;comp.ratio.value=4;comp.connect(c.destination);
     var master=c.createGain();master.gain.value=.9;master.connect(comp);
@@ -46,7 +64,8 @@
   function bassline(t,notes,step,vol){notes.forEach(function(n,i){if(!n)return;var c=ctx(),o=c.createOscillator(),f=c.createBiquadFilter(),g=c.createGain(),tt=t+i*step;o.type='sawtooth';o.frequency.value=n;f.type='lowpass';f.Q.value=10;f.frequency.setValueAtTime(1800,tt);f.frequency.exponentialRampToValueAtTime(180,tt+step*.9);env(g,tt,.004,vol,step*.8,.0001,.03);o.connect(f);f.connect(g);out(g,1,.1);o.start(tt);o.stop(tt+step)})}
   // Glitch de datos
   function glitch(t,n,vol){for(var i=0;i<n;i++){var c=ctx(),o=c.createOscillator(),g=c.createGain(),tt=t+i*.045+Math.random()*.02;o.type='square';o.frequency.value=800+Math.random()*2600;env(g,tt,.001,vol,.025,.0001,.01);o.connect(g);out(g,.6,.2,.3);o.start(tt);o.stop(tt+.05)}}
-  function sfx(){if(!sound)return;try{var c=ctx();mkBus();var T=c.currentTime+.05,K=1.5;
+  function sfx(){if(!sound)return;startedAt=Date.now();try{score()}catch(e){}setTimeout(fallback,350)}
+  function score(){var c=ctx();mkBus();var T=c.currentTime+.05,K=1.5;
     // 1) Encendido: zumbido grave que sube + riser, golpe cuando aparece el logo, destello
     synth(T,[55,82.5],2.2,.05,'sawtooth',120,900,.5);
     sweep(T,.6*K,300,6000,.05,4);
@@ -77,12 +96,13 @@
     synth(F+.05*K,[55],3,.08,'triangle',200,400,.2);
     bell(F+.25*K,1760,.05,2.2);bell(F+.45*K,2217.5,.04,2);bell(F+.65*K,2637,.035,2.4);
     sweep(F+1.8,1.6,6000,300,.025,8);
-   }catch(e){}}
+  }
   
   function finish() {
     if (!el) return;
     clearTimeout(endT);
     try { if (ac) ac.close(); } catch (e) {}
+    if (wavAudio) { try { var wa = wavAudio; var v = 1, fade = setInterval(function () { v -= .1; if (v <= 0) { clearInterval(fade); wa.pause(); } else wa.volume = v; }, 40); } catch (e) {} wavAudio = null; }
     ac = null; bus = null;
     el.classList.add('out');
     var e = el; el = null;
