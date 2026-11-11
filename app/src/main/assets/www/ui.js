@@ -1871,7 +1871,9 @@
   };
   SETTINGS.playback = function () {
     var langs = [['es', 'Español'], ['en', 'Inglés'], ['pt', 'Portugués'], ['ja', 'Japonés'], ['ko', 'Coreano']];
-    return '<div class="panel glass"><h2>Idioma y subtítulos</h2><p>El reproductor elige estas pistas cuando el contenido las trae. Durante la reproducción puedes cambiarlas con el botón de subtítulos y el de ajustes.</p>' +
+    return '<div class="panel glass"><h2>Reproductor</h2><p>Puedes abrir canales, películas y series en otra app (VLC, MX Player, Just Player…). La primera vez Android pregunta cuál usar: elige <b>Siempre</b> para no volver a preguntar. Con MX Player y VLC se recuerda dónde quedaste.</p>' +
+      '<div class="line"><div class="t"><b>Reproducir con</b></div><div class="seg">' + [['', 'MiVibra TV'], ['ext', 'Reproductor externo']].map(function (o) { return '<button class="chip f' + ((P.extPlayer || '') === o[0] ? ' on' : '') + '" data-act="pref" data-arg="extPlayer:' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div></div></div>' +
+      '<div class="panel glass"><h2>Idioma y subtítulos</h2><p>El reproductor elige estas pistas cuando el contenido las trae. Durante la reproducción puedes cambiarlas con el botón de subtítulos y el de ajustes.</p>' +
       '<div class="line"><div class="t"><b>Audio preferido</b></div><div class="seg">' + langs.map(function (l) { return '<button class="chip f' + (P.audioLang === l[0] ? ' on' : '') + '" data-act="pref" data-arg="audioLang:' + l[0] + '">' + l[1] + '</button>'; }).join('') + '</div></div>' +
       '<div class="line"><div class="t"><b>Subtítulos</b></div><div class="seg">' + [['', 'Desactivados']].concat(langs).map(function (l) { return '<button class="chip f' + (P.subLang === l[0] ? ' on' : '') + '" data-act="pref" data-arg="subLang:' + l[0] + '">' + l[1] + '</button>'; }).join('') + '</div></div></div>' +
       '<div class="panel glass"><h2>Xtream Codes</h2><div class="line"><div class="t"><b>Formato de los canales</b><span>Si un canal no carga, prueba el otro formato</span></div><div class="seg">' + [['m3u8', 'HLS (m3u8)'], ['ts', 'MPEG-TS (ts)']].map(function (f) { return '<button class="chip f' + (P.xtFormat === f[0] ? ' on' : '') + '" data-act="pref" data-arg="xtFormat:' + f[0] + '">' + f[1] + '</button>'; }).join('') + '</div></div>' +
@@ -1958,6 +1960,9 @@
     return Object.assign({ id: it.key, url: it.url, title: it.name, subtitle: nn.now ? nn.now.t : (it.group || ''), num: it.num || '', ua: it.ua || '', ref: it.ref || '', alts: it.alts || [], poster: it.type === 'live' ? '' : MV.poster(it), logo: it.type === 'live' ? (it.logo || '') : '', cn: it.type === 'live' && it.country ? D.countryName(it.country) : '', sp: it.type === 'live' && (D.RX.sports.test(it.group || '') || /\b(espn|fox sports|tyc|dsports|directv sports|win sports|bein|gol ?tv|tudn|claro sports|sky sports|eurosport|dazn|nba|nfl|f1)\b/i.test(it.name || '')), fav: MV.isFav(it.key), private: !!it.adult, stk: it.stk || null }, it.type === 'live' ? {} : subInfo(it), extra || {});
   }
   function launch(req, ctx) {
+    var isRom = ctx.item && ctx.item.type === 'rom';
+    // Reproductor externo (Ajustes › Reproducción): canales, películas y series se abren en otra app
+    if (P.extPlayer === 'ext' && !isRom) { req.ext = true; ctx.hinted = true; }
     if (!ctx.hinted && A && !(ctx.item && ctx.item.type === 'rom')) { ctx.hinted = true; return playerHint(!!req.live, function () { launch(req, ctx); }); }
     stopHeroPreview();
     if (MV.isKids() && +P.kidsLimit > 0 && MV.kidsLeft() <= 0) { kidsTimeUp(); return; }

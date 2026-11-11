@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.res.Configuration
@@ -212,10 +213,52 @@ class MainActivity : ComponentActivity() {
 
     /** Abre el reproductor nativo; al cerrarlo devuelve posición y duración a la interfaz. */
     fun openPlayer(json: String) {
+        val req = try { JSONObject(json) } catch (_: Exception) { null }
+        if (req?.optBoolean("ext") == true && openExternalPlayer(req)) return
         PlayerActivity.pendingRequest = json
         startForResult(Intent(this, PlayerActivity::class.java)) { _, data ->
             val r = data?.getStringExtra("result") ?: JSONObject().put("id", "").toString()
             js("window.MV&&MV.onPlayerClosed&&MV.onPlayerClosed($r)")
+        }
+    }
+
+    /**
+     * Abre el video en otra app (VLC, MX Player…). Se envían título, agente y referer (MX Player los usa) y la posición
+     * para continuar; al volver, MX Player y VLC devuelven dónde quedó y se guarda como "continuar viendo".
+     */
+    private fun openExternalPlayer(req: JSONObject): Boolean {
+        val q = req.optJSONArray("queue") ?: return false
+        val it = q.optJSONObject(req.optInt("index", 0)) ?: return false
+        val url = it.optString("url")
+        // Los canales de portal (MAC) necesitan que MiVibra pida el enlace: esos siguen en el reproductor propio
+        if (url.isBlank() || it.opt("stk") is JSONObject) return false
+        val headers = ArrayList<String>()
+        it.optString("ua").takeIf { u -> u.isNotBlank() }?.let { u -> headers.add("User-Agent"); headers.add(u) }
+        it.optString("ref").takeIf { r -> r.isNotBlank() }?.let { r -> headers.add("Referer"); headers.add(r) }
+        val pos = req.optLong("startMs", 0).coerceAtLeast(0)
+        val mime = if (url.contains(".m3u8", true)) "application/x-mpegURL" else if (url.contains(".mpd", true)) "application/dash+xml" else "video/*"
+        val i = Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse(url), mime)
+            .putExtra("title", it.optString("title"))
+            .putExtra("return_result", true)
+            .putExtra("secure_uri", true)
+            .apply {
+                if (headers.isNotEmpty()) putExtra("headers", headers.toTypedArray())
+                if (pos > 0) { putExtra("position", pos.toInt()); putExtra("extra_position", pos) }
+            }
+        val id = it.optString("id")
+        val live = req.optBoolean("live")
+        return try {
+            startForResult(i) { _, data ->
+                // MX Player: position/duration (ms); VLC: extra_position/extra_duration (ms)
+                val p = data?.getIntExtra("position", -1)?.takeIf { v -> v >= 0 }?.toLong() ?: data?.getLongExtra("extra_position", -1L) ?: -1L
+                val d = data?.getIntExtra("duration", -1)?.takeIf { v -> v >= 0 }?.toLong() ?: data?.getLongExtra("extra_duration", -1L) ?: -1L
+                val r = JSONObject().put("id", id).put("position", if (p > 0) p else 0L).put("duration", if (d > 0) d else 0L).put("live", live)
+                js("window.MV&&MV.onPlayerClosed&&MV.onPlayerClosed($r)")
+            }
+            true
+        } catch (_: android.content.ActivityNotFoundException) {
+            js("window.MV&&MV.toast&&MV.toast('No hay un reproductor externo instalado (instala VLC o MX Player). Se abre con MiVibra TV.')")
+            false
         }
     }
 
