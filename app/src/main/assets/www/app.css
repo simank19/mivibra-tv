@@ -713,7 +713,7 @@ html.tv #modal { animation: none !important; }
 .castrow::-webkit-scrollbar { display: none; }
 .castp { flex: 0 0 auto; width: 96px; display: flex; flex-direction: column; align-items: center; gap: 4px; background: transparent; border: 0; color: inherit; text-align: center; padding: 4px; border-radius: 14px; }
 .castp .ph { width: 78px; height: 78px; border-radius: 50%; overflow: hidden; position: relative; background: hsl(var(--h) 35% 30%); display: grid; place-items: center; box-shadow: 0 0 0 2px rgba(255,255,255,.12); }
-.castp .ph img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.castp .ph img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
 .castp .ph i { font-style: normal; font-weight: 700; font-size: 1.2em; opacity: .8; }
 .castp b { font-size: .78em; line-height: 1.15; }
 .castp small { font-size: .7em; color: var(--muted, #aaa); line-height: 1.15; }
