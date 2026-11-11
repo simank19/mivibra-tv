@@ -1196,7 +1196,7 @@
       '<h1 id="mtitle">' + esc(MV.cleanTitle(it.name) || it.name) + '</h1>' +
       '<div class="facts" id="facts">' + facts.map(function (f) { return '<span class="pill">' + esc(f) + '</span>'; }).join('') + '</div>' +
       '<p id="plot">' + esc(it.plot || '') + '</p>' + rateHtml(it) + '<div id="where"></div><div id="cast"></div>' +
-      '<div class="btns">' + (it.type === 'series' ? '' :
+      '<div class="btns">' + (it.type === 'series' ? '<span id="splay" style="display:contents"><button class="btn f" disabled>' + IC.play + 'Cargando capítulos…</button></span>' :
         (prog ? '<button class="btn f" data-act="resume" data-key="' + esc(it.key) + '" data-autofocus>' + IC.play + 'Continuar · ' + MV.fmtDur(prog.pos) + '</button><button class="btn ghost f" data-act="play" data-key="' + esc(it.key) + '">Desde el inicio</button>'
           : '<button class="btn f" data-act="play" data-key="' + esc(it.key) + '" data-autofocus>' + IC.play + 'Reproducir</button>')) +
       (it.type !== 'series' && A && A.dlStartVideo && it.url && !/\.m3u8|\/live\//i.test(it.url) ? (function () { var d = MV.dlOf(it.key); return '<button class="btn ghost f" data-act="dlItem" data-key="' + esc(it.key) + '">' + IC.download + (d ? dlLabel(d) : 'Descargar') + '</button>'; })() : '') +
@@ -1274,8 +1274,23 @@
     if (it.type === 'series') {
       MV.loadEpisodes(it).then(function (eps) {
         var box = document.getElementById('eps'); if (!box) return;
-        if (!eps.length) { box.innerHTML = '<p class="muted">No se encontraron episodios.</p>'; return; }
+        if (!eps.length) { box.innerHTML = '<p class="muted">No se encontraron episodios.</p>'; var sp0 = document.getElementById('splay'); if (sp0) sp0.innerHTML = ''; return; }
         eps.sort(function (a, b) { return a.season - b.season || a.ep - b.ep; });
+        it.episodes = eps;
+        // Botón principal: continúa el último capítulo visto (o el siguiente si ya lo terminó); si no, empieza por el primero
+        (function () {
+          var sp = document.getElementById('splay'); if (!sp) return;
+          var li = -1, lt = 0;
+          eps.forEach(function (e, i) { var pr = MV.progressOf(it.key + '#' + e.season + 'x' + e.ep); if (pr && (pr.ts || 1) >= lt) { lt = pr.ts || 1; li = i; } });
+          var idx = 0, resume = false, lbl = 'Reproducir';
+          if (li >= 0) {
+            var pr = MV.progressOf(it.key + '#' + eps[li].season + 'x' + eps[li].ep);
+            if (pr && pr.dur && pr.pos / pr.dur > 0.9 && li + 1 < eps.length) { idx = li + 1; lbl = 'Siguiente'; }
+            else { idx = li; resume = true; lbl = 'Continuar'; }
+          }
+          var e0 = eps[idx];
+          sp.innerHTML = '<button class="btn f" data-act="' + (resume ? 'resumeEp' : 'playEp') + '" data-key="' + esc(it.key) + '" data-arg="' + idx + '">' + IC.play + lbl + ' · T' + e0.season + ' E' + e0.ep + '</button>';
+        })();
         var seasons = {}; eps.forEach(function (e) { (seasons[e.season] = seasons[e.season] || []).push(e); });
         var keys = Object.keys(seasons).sort(function (a, b) { return a - b; });
         // Temporada inicial: la del último episodio que viste, si no la primera
@@ -1329,7 +1344,7 @@
         render();
         fetchSeason();
         MV.focusFirst(document.querySelector('.main'));
-      }).catch(function (e) { var box = document.getElementById('eps'); if (box) box.innerHTML = '<p class="muted">' + esc(e.message) + '</p>'; });
+      }).catch(function (e) { var box = document.getElementById('eps'); if (box) box.innerHTML = '<p class="muted">' + esc(e.message) + '</p>'; var sp = document.getElementById('splay'); if (sp) sp.innerHTML = ''; });
     }
   };
 
@@ -2554,6 +2569,7 @@
     },
     season: function (k) { if (MV._epsSeason) MV._epsSeason(k); },
     castFind: function (name) { ACT.voiceGo(name); },
+    resumeEp: function (i, el) { var s = S.byKey[el.dataset.key] || MV.reg[el.dataset.key]; MV.playEpisode(s, +i, true); },
     playEp: function (i, el) { var s = S.byKey[el.dataset.key] || MV.reg[el.dataset.key]; MV.playEpisode(s, +i); },
     fav: function (_, el) { var it = S.byKey[el.dataset.key] || MV.reg[el.dataset.key]; var on = MV.toggleFav(it); MV.toast(on ? 'Agregado a favoritos' : 'Quitado de favoritos'); MV.rerender(); },
     covers: function (_, el) {
