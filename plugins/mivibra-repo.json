@@ -1,0 +1,7 @@
+{
+  "name": "Plugins oficiales de MiVibra",
+  "plugins": [
+    { "name": "Cine libre (Internet Archive)", "description": "Clásicos de dominio público", "repo": "simank19/mivibra-tv/plugins/cine-libre" },
+    { "name": "Películas abiertas de Blender", "description": "Cortos animados Creative Commons (ejemplo)", "repo": "simank19/mivibra-tv/plugins/peliculas-abiertas" }
+  ]
+}

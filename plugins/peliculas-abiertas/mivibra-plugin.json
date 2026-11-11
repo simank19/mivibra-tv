@@ -1,0 +1,13 @@
+{
+  "mivibra": 1,
+  "name": "Películas abiertas de Blender",
+  "version": "1.0.0",
+  "author": "MiVibra",
+  "description": "Cortos animados libres (Creative Commons) del Blender Institute. Sirve de ejemplo para crear tu propio plugin.",
+  "items": [
+    { "type": "movie", "name": "Big Buck Bunny", "year": 2008, "genres": ["Animación", "Comedia"], "description": "Un conejo gigante y bonachón se venga de tres roedores que lo molestan.", "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" },
+    { "type": "movie", "name": "Sintel", "year": 2010, "genres": ["Animación", "Fantasía"], "description": "Una joven busca al pequeño dragón que crió y que le fue arrebatado.", "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4" },
+    { "type": "movie", "name": "Tears of Steel", "year": 2012, "genres": ["Ciencia ficción"], "description": "Un grupo de científicos intenta salvar el mundo de robots en un Ámsterdam futurista.", "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4" },
+    { "type": "movie", "name": "Elephants Dream", "year": 2006, "genres": ["Animación", "Ciencia ficción"], "description": "Dos personajes recorren una máquina infinita y extraña.", "url": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4" }
+  ]
+}

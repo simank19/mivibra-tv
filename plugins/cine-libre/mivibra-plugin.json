@@ -1,0 +1,8 @@
+{
+  "mivibra": 1,
+  "name": "Cine libre (Internet Archive)",
+  "version": "1.0.0",
+  "author": "MiVibra",
+  "description": "Películas clásicas de dominio público de la colección Feature Films de Internet Archive.",
+  "source": { "type": "archive", "collection": "feature_films", "group": "Clásicos", "limit": 200 }
+}

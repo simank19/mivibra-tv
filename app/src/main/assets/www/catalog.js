@@ -1090,6 +1090,7 @@
       else if (list.type === 'plex') job = buildFromPlex(list);
       else if (list.type === 'web') job = buildFromWeb(list);
       else if (list.type === 'fb') job = buildFromFirebase(list);
+      else if (list.type === 'mvplugin') job = MV.buildFromMvPlugin(list).then(function (arr) { return arr.map(retag); });
       else if (list.type === 'stremio') job = MV.buildFromStremio(list).then(function (arr) { return arr.map(retag); });
       else if (list.type === 'file') job = MV.idbGet('raw:' + list.id).then(function (txt) { return buildFromM3U(MV.parseM3U(txt || '', list), list); });
       else job = MV.getBig(list.url).then(function (txt) {
@@ -1660,6 +1661,8 @@
       });
     }).catch(function () { return []; });
   };
+  MV.buildFromM3U = function (txt, list) { return buildFromM3U(MV.parseM3U(txt || '', list), list); };
+  MV.retag = retag;
   MV.archiveUrl = function (item) {
     return MV.getJSON('https://archive.org/metadata/' + encodeURIComponent(item.ia)).then(function (j) {
       var files = (j.files || []).filter(function (f) { return /\.mp4$/i.test(f.name); });

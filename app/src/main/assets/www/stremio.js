@@ -136,9 +136,10 @@
       function add(o) {
         if (!o) return;
         if (typeof o === 'string') { o = { url: o }; }
-        var link = o.manifest || o.transportUrl || o.m3u || o.url || '';
-        if (!/^(https?|stremio):\/\//i.test(link)) return;
-        var kind = o.m3u || /\.m3u8?(\?|$)|get\.php\?/i.test(link) ? 'm3u' : 'stremio';
+        var link = o.manifest || o.transportUrl || o.m3u || o.repo || o.url || '';
+        var isMv = /^[\w.-]+\/[\w.-]+$/.test(link) || /mivibra-plugin\.json|github\.com\//i.test(link);
+        if (!isMv && !/^(https?|stremio):\/\//i.test(link)) return;
+        var kind = isMv ? 'mvplugin' : o.m3u || /\.m3u8?(\?|$)|get\.php\?/i.test(link) ? 'm3u' : 'stremio';
         items.push({ name: o.name || (o.manifest && o.manifest.name) || link.replace(/^\w+:\/\//, '').split('/')[0], desc: o.description || (o.manifest && o.manifest.description) || '', logo: o.logo || (o.manifest && o.manifest.logo) || '', link: link, kind: kind });
       }
       if (typeof j === 'string') j.split(/\r?\n/).map(function (s) { return s.trim(); }).forEach(function (s) { if (s && s[0] !== '#') add(s); });
@@ -155,12 +156,13 @@
     MV.modal('<h2>' + esc(repo.name) + '</h2><p class="muted">' + repo.items.length + ' plugins. Toca uno para instalarlo en tus listas.</p><div class="stpick">' +
       repo.items.map(function (p, i) {
         var on = installed[p.link] || installed[base(p.link)];
-        return '<button class="line f" data-act="repoInstall" data-arg="' + i + '"' + (i ? '' : ' data-autofocus') + ' style="width:100%;text-align:left"' + (on ? ' disabled' : '') + '><div class="t"><b>' + esc(p.name) + (on ? ' · instalado ✓' : '') + '</b><span>' + esc((p.kind === 'm3u' ? 'Lista M3U · ' : 'Addon de Stremio · ') + (p.desc || p.link).slice(0, 140)) + '</span></div></button>';
+        return '<button class="line f" data-act="repoInstall" data-arg="' + i + '"' + (i ? '' : ' data-autofocus') + ' style="width:100%;text-align:left"' + (on ? ' disabled' : '') + '><div class="t"><b>' + esc(p.name) + (on ? ' · instalado ✓' : '') + '</b><span>' + esc((p.kind === 'm3u' ? 'Lista M3U · ' : p.kind === 'mvplugin' ? 'Plugin de MiVibra · ' : 'Addon de Stremio · ') + (p.desc || p.link).slice(0, 140)) + '</span></div></button>';
       }).join('') + '</div><div class="btns"><button class="btn ghost f" data-act="confirmNo">Cerrar</button></div>');
   };
   MV.ACT.repoInstall = function (i) {
     var p = MV._repo && MV._repo.items[+i]; if (!p) return;
     MV.closeModal(true);
+    if (p.kind === 'mvplugin') { MV.installMvPlugin(p.link); return; }
     installPlugin(p.link, p.name, p.kind);
   };
   function installPlugin(link, name, kind) {
@@ -180,8 +182,10 @@
   /** Pantalla de Plugins: addons instalados, repositorios guardados y agregar nuevos. */
   MV.pluginsDialog = function () {
     var ad = (S.lists || []).filter(function (l) { return l.type === 'stremio'; }), rp = repos();
-    MV.modal('<h2>Plugins</h2><p>Agrega <b>addons de Stremio</b> (enlace que termina en manifest.json) o <b>repositorios</b> con varios plugins para instalar desde un menú, como en Kodi. Solo agrega fuentes legales o que te pertenezcan.</p>' +
-      '<label class="field">Enlace del addon o del repositorio<input class="in f" id="plUrl" placeholder="https://…/manifest.json  ó  https://…/repo.json" autocomplete="off" inputmode="url" data-autofocus></label>' +
+    var mv = (S.lists || []).filter(function (l) { return l.type === 'mvplugin'; });
+    MV.modal('<h2>Plugins</h2><p>Pega un <b>plugin de MiVibra</b> (<code>usuario/repositorio</code> de GitHub), un <b>addon de Stremio</b> (enlace que termina en manifest.json) o un <b>repositorio</b> con varios plugins para instalar desde un menú. Solo agrega fuentes legales o que te pertenezcan.</p>' +
+      '<label class="field">Plugin, addon o repositorio<input class="in f" id="plUrl" placeholder="usuario/repositorio  ó  https://…/manifest.json" autocomplete="off" inputmode="url" data-autofocus></label>' +
+      (mv.length ? '<h3 style="margin:14px 0 6px">Plugins de MiVibra</h3>' + mv.map(function (l) { return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + esc(l.ref || '') + ' · ' + (l.count || 0) + ' elementos' + (l.error ? ' · ' + esc(l.error) : '') + '</span></div></div>'; }).join('') : '') +
       '<div class="btns"><button class="btn f" data-act="plAdd">Agregar</button><button class="btn ghost f" data-act="plCinemeta">Catálogo oficial de Stremio</button></div>' +
       (ad.length ? '<h3 style="margin:14px 0 6px">Addons instalados</h3>' + ad.map(function (l) { return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.count ? l.count + ' títulos' : 'Solo da enlaces para ver: necesita un addon con catálogo (por ejemplo Cinemeta)') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div></div>'; }).join('') : '') +
       (rp.length ? '<h3 style="margin:14px 0 6px">Repositorios</h3>' + rp.map(function (r, i) { return '<div class="line"><div class="t"><b>' + esc(r.name) + '</b><span>' + esc(r.url) + '</span></div><button class="btn sm f" data-act="repoOpen" data-arg="' + i + '">Abrir</button><button class="iconbtn f" data-act="repoDel" data-arg="' + i + '" aria-label="Quitar">✕</button></div>'; }).join('') : '') +
@@ -190,7 +194,9 @@
   MV.ACT.plCinemeta = function () { MV.closeModal(true); installPlugin(CINEMETA, 'Cinemeta (catálogo de Stremio)', 'stremio'); };
   MV.ACT.plAdd = function () {
     var u = (document.getElementById('plUrl') || {}).value || ''; u = u.trim();
-    if (!/^(https?|stremio):\/\//i.test(u)) { MV.toast('Pega un enlace que empiece por https://'); return; }
+    // Plugins de MiVibra: "usuario/repositorio" de GitHub o enlace a mivibra-plugin.json / mivibra-repo.json
+    if (MV.isMvPluginRef && MV.isMvPluginRef(u)) { MV.closeModal(true); MV.installMvPlugin(u); return; }
+    if (!/^(https?|stremio):\/\//i.test(u)) { MV.toast('Pega usuario/repositorio de GitHub o un enlace que empiece por https://'); return; }
     if (/manifest\.json(\?|$)/i.test(u) || /^stremio:/i.test(u)) { MV.closeModal(true); installPlugin(u, '', 'stremio'); return; }
     MV.toast('Leyendo…');
     // Primero como addon (algunos no terminan en manifest.json); si no, como repositorio
@@ -203,4 +209,101 @@
   };
   MV.ACT.repoOpen = function (i) { var r = repos()[+i]; if (!r) return; MV.closeModal(true); MV.toast('Abriendo repositorio…'); MV.repoLoad(r.url).then(MV.repoMenu).catch(function (e) { MV.toast(e.message, 6000); }); };
   MV.ACT.repoDel = function (i) { var r = repos(); r.splice(+i, 1); MV.save('repos', r); MV.closeModal(true); MV.pluginsDialog(); };
+})();
+
+/* ---------------- Plugins de MiVibra ----------------
+ * Un plugin es un repositorio de GitHub (usuario/repositorio) o un enlace a un archivo mivibra-plugin.json.
+ * No ejecuta código: solo describe contenido, así que es seguro instalarlo. Formato en docs/PLUGINS.md. */
+(function () {
+  'use strict';
+  var S = MV.S, esc = MV.esc;
+  var GH = /^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)((?:\/[A-Za-z0-9_.-]+)*)$/;   // usuario/repo o usuario/repo/carpeta
+  var TYPES = { movie: 'movie', pelicula: 'movie', 'película': 'movie', series: 'series', serie: 'series', live: 'live', canal: 'live', video: 'video' };
+
+  /** "usuario/repo" o enlace de GitHub → posibles direcciones del archivo del plugin. */
+  function candidates(ref) {
+    ref = String(ref || '').trim().replace(/\/+$/, '');
+    var m = GH.exec(ref), sub = '';
+    if (m) sub = m[3] || '';
+    else { m = /^https?:\/\/github\.com\/([^/]+)\/([^/#?]+)(?:\/tree\/[^/]+((?:\/[^/#?]+)*))?/i.exec(ref); if (m) sub = m[3] || ''; }
+    if (m) {
+      var u = m[1], r = m[2].replace(/\.git$/, ''), d = sub.replace(/\/+$/, '');
+      return ['main', 'master'].reduce(function (a, br) { var b = 'https://raw.githubusercontent.com/' + u + '/' + r + '/' + br + d + '/'; return a.concat([b + 'mivibra-plugin.json', b + 'mivibra-repo.json']); }, []);
+    }
+    if (/^https?:\/\//i.test(ref)) return [ref];
+    return [];
+  }
+  MV.isMvPluginRef = function (ref) { return (GH.test(String(ref || '').trim()) && !/^https?:/i.test(ref)) || /github\.com\/[^/]+\/[^/]+|mivibra-(plugin|repo)\.json/i.test(ref || ''); };
+
+  /** Lee el plugin (o repositorio de plugins) y devuelve { kind: 'plugin'|'repo', url, data }. */
+  MV.mvPluginFetch = function (ref) {
+    var c = candidates(ref), chain = Promise.reject(new Error('x'));
+    c.forEach(function (u) { chain = chain.catch(function () { return MV.getJSON(u).then(function (j) { if (!j || typeof j !== 'object') throw new Error('x'); return { url: u, data: j }; }); }); });
+    return chain.then(function (r) {
+      var d = r.data;
+      if (Array.isArray(d.plugins)) return { kind: 'repo', url: r.url, data: d };
+      if (d.mivibra || d.items || d.source || d.catalog) return { kind: 'plugin', url: r.url, data: d };
+      throw new Error('x');
+    }).catch(function () { throw new Error('No encontré un plugin de MiVibra ahí (falta el archivo mivibra-plugin.json)'); });
+  };
+
+  function rel(base, u) { if (!u) return ''; if (/^https?:\/\//i.test(u)) return u; return base.replace(/[^/]*$/, '') + String(u).replace(/^\.\//, ''); }
+
+  /** Convierte el plugin en películas, series, canales o videos de MiVibra. */
+  MV.buildFromMvPlugin = function (list) {
+    return MV.getJSON(list.url).then(function (p) {
+      list.man = { name: p.name || list.name, version: p.version || '', logo: rel(list.url, p.logo || '') };
+      var src = p.source || {}, jobs = [];
+      // 1) Contenido escrito en el mismo archivo (o en otro archivo JSON del repositorio)
+      var itemsJob = p.items ? Promise.resolve(p.items) : p.catalog ? MV.getJSON(rel(list.url, p.catalog)).then(function (j) { return Array.isArray(j) ? j : (j.items || []); }) : Promise.resolve([]);
+      jobs.push(itemsJob.then(function (arr) { return arr.map(function (x, i) { return fromItem(x, i, list, p); }).filter(Boolean); }));
+      // 2) Una lista M3U
+      if (src.type === 'm3u' && src.url) jobs.push(MV.getBig(rel(list.url, src.url)).then(function (txt) { return MV.buildFromM3U(txt, list); }));
+      // 3) Una colección de Internet Archive (cine y videos de dominio público)
+      if (src.type === 'archive' && src.collection) jobs.push(archive(src, list));
+      return Promise.all(jobs).then(function (all) { return all.reduce(function (a, b) { return a.concat(b); }, []); });
+    });
+  };
+  function fromItem(x, i, list, p) {
+    if (!x || !x.name) return null;
+    var type = TYPES[String(x.type || 'movie').toLowerCase()] || 'movie';
+    var year = String(x.year || '').slice(0, 4);
+    var it = {
+      key: (type === 'live' ? 'live:' : type === 'series' ? 'series:' : type === 'video' ? 'video:' : 'movie:') + MV.norm(x.name + (type === 'movie' && year ? ' ' + year : '')) + (type === 'video' ? ':' + list.id + i : ''),
+      type: type, name: x.name + (year && type === 'movie' && !/\(\d{4}\)/.test(x.name) ? ' (' + year + ')' : ''), year: year,
+      poster: rel(list.url, x.poster || ''), logo: rel(list.url, x.logo || ''), plot: x.description || x.plot || '', genre: [].concat(x.genres || x.genre || []).join(', '),
+      group: (p.name || list.name) + (x.group ? ' · ' + x.group : ''), url: rel(list.url, x.url || ''), ua: x.userAgent || '', ref: x.referer || '', list: list.id
+    };
+    if (type === 'series') it.episodes = (x.episodes || []).map(function (e, n) { return { season: +e.season || 1, ep: +(e.episode || e.ep) || n + 1, title: e.name || e.title || ('Episodio ' + (n + 1)), url: rel(list.url, e.url || ''), img: rel(list.url, e.thumbnail || e.image || ''), plot: e.description || '' }; }).filter(function (e) { return e.url; });
+    if (type !== 'series' && !it.url) return null;
+    return it;
+  }
+  function archive(src, list) {
+    var q = 'collection:(' + src.collection + ') AND mediatype:(movies)';
+    return MV.getJSON('https://archive.org/advancedsearch.php?q=' + encodeURIComponent(q) + '&fl[]=identifier&fl[]=title&fl[]=year&fl[]=description&rows=' + Math.min(+src.limit || 200, 500) + '&sort[]=downloads+desc&output=json').then(function (j) {
+      return ((j.response && j.response.docs) || []).map(function (d) {
+        var desc = Array.isArray(d.description) ? d.description[0] : (d.description || '');
+        return { key: 'ia:' + d.identifier, type: 'movie', ia: d.identifier, name: d.title, year: d.year || '', group: (list.name || 'Internet Archive') + (src.group ? ' · ' + src.group : ''), poster: 'https://archive.org/services/img/' + d.identifier, plot: String(desc).replace(/<[^>]+>/g, '').slice(0, 600), list: list.id, url: '' };
+      });
+    });
+  }
+
+  /** Instala un plugin (o abre el menú si es un repositorio de varios). */
+  MV.installMvPlugin = function (ref) {
+    MV.toast('Leyendo el plugin…');
+    return MV.mvPluginFetch(ref).then(function (r) {
+      if (r.kind === 'repo') {
+        var d = r.data;
+        var repo = { name: d.name || 'Repositorio', url: r.url, items: d.plugins.map(function (x) { var link = typeof x === 'string' ? x : (x.repo || x.url || ''); return { name: (x && x.name) || link, desc: (x && x.description) || '', link: link, kind: 'mvplugin' }; }).filter(function (x) { return x.link; }) };
+        var rp = MV.load('repos', []).filter(function (x) { return x.url !== r.url; }); rp.unshift({ name: repo.name, url: r.url }); MV.save('repos', rp.slice(0, 20));
+        MV.repoMenu(repo);
+        return;
+      }
+      var p = r.data;
+      return MV.confirm('Instalar “' + (p.name || 'Plugin') + '”', (p.description || '') + (p.author ? '\nAutor: ' + p.author : '') + (p.version ? ' · versión ' + p.version : ''), 'Instalar').then(function (y) {
+        if (!y) return;
+        return MV.addList({ type: 'mvplugin', name: p.name || 'Plugin', url: r.url, ref: String(ref).trim() }).then(function () { MV.rerender(); });
+      });
+    }).catch(function (e) { MV.toast(e.message, 6000); });
+  };
 })();
