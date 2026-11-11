@@ -190,12 +190,16 @@ async function ocr(file) {
 }
 
 // ---------------- Puente: métodos con respuesta (id primero) ----------------
+const INFLIGHT = new Map();
 const ASYNC = {
   async httpGet(id, url, headersJson, mode) {
     const h = parseHeaders(headersJson);
     if (mode === 'file') {
+      // La misma lista pedida dos veces a la vez: se espera la misma descarga
       const f = netFile(url);
-      const code = await net.download(url, f, h);
+      let job = INFLIGHT.get(f);
+      if (!job) { job = net.download(url, f, h).finally(() => INFLIGHT.delete(f)); INFLIGHT.set(f, job); }
+      const code = await job;
       reply(id, code < 400, { status: code, path: served(f) });
     } else {
       const r = await net.text(url, h);

@@ -1,6 +1,7 @@
 // Red para la versión de PC: igual que Net.kt (descargas con cabeceras, gzip, redirecciones, progreso).
 'use strict';
 const http = require('http');
+const path = require('path');
 const https = require('https');
 const zlib = require('zlib');
 const fs = require('fs');
@@ -79,7 +80,9 @@ async function download(url, dest, headers = {}, onPct = null, decompress = true
     const p = total ? Math.floor(done * 100 / total) : -1;
     if (onPct && p !== last) { last = p; onPct(p); }
   });
-  const tmp = dest + '.part';
+  // Nombre temporal único: si la misma lista se pide dos veces a la vez, cada descarga usa su propio archivo
+  const tmp = dest + '.' + process.pid + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7) + '.part';
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
   await new Promise((resolve, reject) => {
     const out = fs.createWriteStream(tmp);
     src.pipe(out);
@@ -99,7 +102,7 @@ async function download(url, dest, headers = {}, onPct = null, decompress = true
       fs.renameSync(tmp + '2', tmp);
     }
   }
-  fs.renameSync(tmp, dest);
+  try { fs.renameSync(tmp, dest); } catch (e) { try { fs.copyFileSync(tmp, dest); fs.unlinkSync(tmp); } catch (_) { if (!fs.existsSync(dest)) throw e; } }
   return res.statusCode;
 }
 
