@@ -3673,6 +3673,7 @@
     return '<div class="panel glass"><h2>Tu celular como control de la TV</h2><p>Con el celular y la TV en el mismo Wi-Fi: busca tu TV, toca <b>Conectar</b> y escanea el código QR que aparece en la TV. Desde el control tienes la cruceta, el teclado, el mando de juego y accesos directos a Juegos, Buscar, Enviar listas, Enviar juegos y Google Drive.</p>' +
       (t ? '<div class="btns"><button class="btn f" data-act="rcOpen" data-autofocus>' + IC.play + 'Abrir control · ' + esc(t.name || t.ip) + '</button></div>' : '') +
       '<div class="btns"><button class="btn ' + (t ? 'ghost ' : '') + 'f" data-act="rcFind"' + (t ? '' : ' data-autofocus') + '>' + IC.search + (MV._rcBusy ? 'Buscando…' : 'Buscar mi TV') + '</button><button class="btn ghost f" data-act="rcScanOnly">Escanear código QR</button></div>' +
+      (A && A.castScreen ? '<div class="line"><div class="t"><b>Pantalla inalámbrica (Miracast)</b><span>Duplica la pantalla del celular en un TV que lo admita (Samsung, LG, TV Box…). En Google TV usa “Transmitir pantalla” desde la app Google Home.</span></div><button class="btn sm ghost f" data-act="castScreen">Transmitir</button></div>' : '') +
       (found ? (found.length ? found.map(function (x) { return '<div class="line"><div class="t"><b>' + esc(x.name) + '</b><span>' + esc(x.ip) + '</span></div><button class="btn sm f" data-act="rcPair" data-arg="' + esc(x.ip) + '" data-name="' + esc(x.name) + '">Conectar</button></div>'; }).join('')
         : '<p class="muted">No encontré ninguna TV. Revisa que MiVibra TV esté abierta en la TV y que los dos equipos estén en el mismo Wi-Fi.</p>') : '') +
       '</div>';
@@ -3685,6 +3686,7 @@
     A.remoteOpen('http://' + t.ip + ':' + t.port + '/?k=' + t.key + '&app=1');
     MV.rerender();
   }
+  ACT.castScreen = function () { if (A && A.castScreen) A.castScreen(); };
   ACT.rcOpen = function () { var t = rcSaved(); if (t) A.remoteOpen('http://' + t.ip + ':' + (t.port || 8765) + '/?k=' + t.key + '&app=1'); };
   ACT.rcFind = function () {
     if (MV._rcBusy) return; MV._rcBusy = true; MV._rcFound = null; MV.rerender();

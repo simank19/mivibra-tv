@@ -235,6 +235,10 @@ class Bridge(private val a: MainActivity) {
 
     // ---------------- Reproductor ----------------
 
+    /** Duplicar la pantalla en un TV (Miracast / Transmitir pantalla del sistema). */
+    @JavascriptInterface
+    fun castScreen() { a.runOnUiThread { CastScreen.open(a) } }
+
     // ---------------- Descargas para ver sin internet ----------------
     @JavascriptInterface
     fun dlStartVideo(json: String): String = try { Downloads.start(a, JSONObject(json)) } catch (e: Exception) { "error:" + (e.message ?: "No se pudo descargar") }

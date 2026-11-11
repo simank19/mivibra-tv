@@ -826,6 +826,8 @@ class PlayerActivity : ComponentActivity() {
         subSizes.forEachIndexed { idx, sz -> item(Opt(sz.first, idx == curSize) { prefs.edit().putInt("subSize", idx).apply(); applySubtitleStyle(); toastInfo("Subtítulos: ${sz.first}") }) }
 
         header("PANTALLA")
+        // En el celular: duplicar la pantalla en un TV (Miracast / Transmitir)
+        if (!packageManager.hasSystemFeature("android.software.leanback")) { labels.add("📡  Ver en un TV (pantalla inalámbrica)"); actions.add({ CastScreen.open(this) }) }
         listOf(AspectRatioFrameLayout.RESIZE_MODE_FIT to "Original", AspectRatioFrameLayout.RESIZE_MODE_ZOOM to "Recortar (llenar pantalla)", AspectRatioFrameLayout.RESIZE_MODE_FILL to "Estirar").forEach { (m, n) ->
             item(Opt(n, resizeMode == m) { resizeMode = m; view.resizeMode = m; toastInfo("Pantalla: $n") })
         }
