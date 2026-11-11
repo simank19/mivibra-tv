@@ -93,6 +93,8 @@ dependencies {
     implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     // Google Drive (juegos y partidas en la nube del usuario)
     implementation("com.google.android.gms:play-services-auth:21.2.0")
+    // Leer el código QR de la TV desde la app del celular (lo hace Google Play, sin pedir permiso de cámara)
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
 
     // Leer listas desde una foto o captura (reconocimiento de texto en el equipo, sin internet)
     implementation("com.google.mlkit:text-recognition:16.0.1")

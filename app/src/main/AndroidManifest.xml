@@ -151,6 +151,13 @@
             android:theme="@style/Theme.MiVibra.Fullscreen" />
 
         <activity
+            android:name=".RemoteActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.MiVibra.Fullscreen" />
+
+        <activity
             android:name=".BrowserActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode"
             android:exported="false"

@@ -84,6 +84,14 @@ object RemoteHub {
         }
     }
 
+    /** Un celular con la app pide emparejarse: la TV muestra el código QR. */
+    fun pairRequest() { ui.post { main?.js("window.MV&&MV.remotePair&&MV.remotePair()") } }
+    /** Accesos directos del control (Juegos, Buscar, TV en vivo…). */
+    fun go(v: String) {
+        if (!Regex("^[a-z]{2,20}$").matches(v)) return
+        ui.post { main?.js("window.MV&&MV.remoteGo&&MV.remoteGo('" + v + "')") }
+    }
+
     fun text(value: String) {
         ui.post { main?.js("window.MV&&MV.remoteText&&MV.remoteText(" + org.json.JSONObject.quote(value) + ")") }
     }

@@ -3571,6 +3571,50 @@
   }
   // ---------- Utilidades ----------
   MV.remoteTab = function () { setTab = 'remote'; };
+  // ---- TV: un celular con la app pidió emparejarse → se muestra el código QR ----
+  MV.remotePair = function () { if (MV.modalOpen && MV.modalOpen()) MV.closeModal(true); MV.toast('Un celular quiere conectarse como control', 4000); ACT.remoteQR(); };
+  // ---- TV: accesos directos desde el control del celular ----
+  MV.remoteGo = function (v) {
+    if (MV.modalOpen && MV.modalOpen()) MV.closeModal(true);
+    if (v === 'games' && MV.console && MV.console.open) { MV.console.open(); return; }
+    if (VIEWS[v]) ACT.nav(v);
+  };
+  // ---- Celular: control remoto dentro de la app ----
+  function rcSaved() { return MV.load('rcTv', null); }
+  VIEWS.phoneRemote = function () {
+    var t = rcSaved(), found = MV._rcFound;
+    return top('Control remoto') +
+      '<div class="panel glass"><h2>Tu celular como control de la TV</h2><p>Con el celular y la TV en el mismo Wi-Fi: busca tu TV, toca <b>Conectar</b> y escanea el código QR que aparece en la TV. Desde el control tienes la cruceta, el teclado, el mando de juego y accesos directos a Juegos, Buscar, Enviar listas, Enviar juegos y Google Drive.</p>' +
+      (t ? '<div class="btns"><button class="btn f" data-act="rcOpen" data-autofocus>' + IC.play + 'Abrir control · ' + esc(t.name || t.ip) + '</button></div>' : '') +
+      '<div class="btns"><button class="btn ' + (t ? 'ghost ' : '') + 'f" data-act="rcFind"' + (t ? '' : ' data-autofocus') + '>' + IC.search + (MV._rcBusy ? 'Buscando…' : 'Buscar mi TV') + '</button><button class="btn ghost f" data-act="rcScanOnly">Escanear código QR</button></div>' +
+      (found ? (found.length ? found.map(function (x) { return '<div class="line"><div class="t"><b>' + esc(x.name) + '</b><span>' + esc(x.ip) + '</span></div><button class="btn sm f" data-act="rcPair" data-arg="' + esc(x.ip) + '" data-name="' + esc(x.name) + '">Conectar</button></div>'; }).join('')
+        : '<p class="muted">No encontré ninguna TV. Revisa que MiVibra TV esté abierta en la TV y que los dos equipos estén en el mismo Wi-Fi.</p>') : '') +
+      '</div>';
+  };
+  function rcConnect(url, name) {
+    var m = /^http:\/\/([\d.]+):(\d+)\/?\?k=(\d{6})/.exec(String(url || '').trim());
+    if (!m) { MV.toast('Ese código no es de MiVibra TV', 5000); return; }
+    var t = { ip: m[1], port: m[2], key: m[3], name: name || (rcSaved() || {}).name || 'Mi TV' };
+    MV.save('rcTv', t);
+    A.remoteOpen('http://' + t.ip + ':' + t.port + '/?k=' + t.key + '&app=1');
+    MV.rerender();
+  }
+  ACT.rcOpen = function () { var t = rcSaved(); if (t) A.remoteOpen('http://' + t.ip + ':' + (t.port || 8765) + '/?k=' + t.key + '&app=1'); };
+  ACT.rcFind = function () {
+    if (MV._rcBusy) return; MV._rcBusy = true; MV._rcFound = null; MV.rerender();
+    MV.call('remoteFind', []).then(function (l) { MV._rcFound = l || []; })
+      .catch(function (e) { MV._rcFound = []; MV.toast(e.message, 5000); })
+      .then(function () { MV._rcBusy = false; MV.rerender(); });
+  };
+  ACT.rcPair = function (ip, el) {
+    var name = el && el.getAttribute('data-name');
+    MV.call('remotePairAsk', [ip]).then(function () {
+      MV.toast('Mira la TV: apareció un código QR. Escanéalo.', 5000);
+      return MV.call('remoteScan', []);
+    }).then(function (raw) { rcConnect(raw, name); })
+      .catch(function (e) { if (e.message !== 'cancelado') MV.toast(e.message, 6000); });
+  };
+  ACT.rcScanOnly = function () { MV.call('remoteScan', []).then(function (raw) { rcConnect(raw); }).catch(function (e) { if (e.message !== 'cancelado') MV.toast(e.message, 6000); }); };
   // ---------- Lectura: libros, mangas, cómics y revistas de tus listas ----------
   var BOOKF = 'all', BOOKLIM = 120, BOOKQ = '', BOOKG = '', WEBB = { q: '', loading: false, items: [], done: false };
   function webBookLists() { return S.lists.filter(function (l) { return l.type === 'web' && l.enabled !== false; }); }
@@ -3643,6 +3687,7 @@
       '<button class="utile glass f" data-act="nav" data-arg="streams" data-fid="u-streams"><span class="uic">' + IC.play + '</span><b>Twitch y Kick</b><span>Transmisiones en vivo aquí mismo</span></button>' +
       '<button class="utile glass f" data-act="openDiag" data-fid="u-diag"><span class="uic">' + IC.settings + '</span><b>Diagnóstico MiVibra</b><span>Revisa y optimiza este equipo</span></button>' +
       '<button class="utile glass f" data-act="adultOpen" data-fid="u-adult"><span class="uic">' + IC.lock + '</span><b>+18</b><span>' + (MV.adultOk() ? 'Desbloqueado' : 'Protegido con PIN') + '</span></button>' +
+      (A && A.remoteFind && !(MV.device && MV.device.tv) ? '<button class="utile glass f" data-act="nav" data-arg="phoneRemote" data-fid="u-phremote"><span class="uic">' + IC.phone + '</span><b>Control de la TV</b><span>Usa este celular como control de tu TV</span></button>' : '') +
       '<button class="utile glass f" data-act="go" data-arg="settings" data-fid="u-remote" onclick="MV.remoteTab&&MV.remoteTab()"><span class="uic">' + IC.phone + '</span><b>Celular como control</b><span>Control remoto y mando de juegos</span></button></div>';
   };
 

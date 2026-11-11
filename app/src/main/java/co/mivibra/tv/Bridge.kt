@@ -235,6 +235,69 @@ class Bridge(private val a: MainActivity) {
 
     // ---------------- Reproductor ----------------
 
+    // ---------------- Celular como control (app del celular) ----------------
+    /** Busca TVs con MiVibra en el mismo Wi-Fi (revisa las 254 direcciones de la red en paralelo). */
+    @JavascriptInterface
+    fun remoteFind(id: String) {
+        Thread {
+            val me = RemoteServer.localIp(a)
+            if (me == null) { reply(id, false, "Conéctate al Wi-Fi de la casa"); return@Thread }
+            val base = me.substringBeforeLast('.') + "."
+            val found = java.util.Collections.synchronizedList(ArrayList<JSONObject>())
+            val pool = Executors.newFixedThreadPool(48)
+            for (i in 1..254) {
+                val ip = base + i
+                if (ip == me) continue
+                pool.execute {
+                    try {
+                        val c = java.net.URL("http://$ip:${RemoteServer.PORT}/hello").openConnection() as java.net.HttpURLConnection
+                        c.connectTimeout = 700; c.readTimeout = 900
+                        if (c.responseCode == 200) {
+                            val o = JSONObject(c.inputStream.bufferedReader().use { it.readText() })
+                            if (o.optString("app") == "mivibra-tv") found.add(JSONObject().put("ip", ip).put("name", o.optString("name", "TV")))
+                        }
+                        c.disconnect()
+                    } catch (_: Exception) {}
+                }
+            }
+            pool.shutdown()
+            try { pool.awaitTermination(8, java.util.concurrent.TimeUnit.SECONDS) } catch (_: Exception) {}
+            reply(id, true, JSONArray(found.sortedBy { it.optString("ip") }))
+        }.start()
+    }
+    /** Pide a la TV que muestre su código QR para emparejar. */
+    @JavascriptInterface
+    fun remotePairAsk(id: String, ip: String) {
+        io.execute {
+            try {
+                val c = java.net.URL("http://$ip:${RemoteServer.PORT}/pair").openConnection() as java.net.HttpURLConnection
+                c.connectTimeout = 3000; c.readTimeout = 4000
+                val ok = c.responseCode == 200; c.disconnect()
+                reply(id, ok, if (ok) true else "La TV no respondió")
+            } catch (e: Exception) { reply(id, false, "La TV no respondió: revisa que MiVibra TV esté abierta") }
+        }
+    }
+    /** Lee el código QR de la TV con la cámara (lector de Google Play). */
+    @JavascriptInterface
+    fun remoteScan(id: String) {
+        a.runOnUiThread {
+            try {
+                val opts = com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions.Builder()
+                    .setBarcodeFormats(com.google.mlkit.vision.barcode.common.Barcode.FORMAT_QR_CODE).build()
+                com.google.mlkit.vision.codescanner.GmsBarcodeScanning.getClient(a, opts).startScan()
+                    .addOnSuccessListener { b -> reply(id, true, b.rawValue ?: "") }
+                    .addOnCanceledListener { reply(id, false, "cancelado") }
+                    .addOnFailureListener { e -> reply(id, false, e.message ?: "No se pudo abrir la cámara") }
+            } catch (e: Exception) { reply(id, false, e.message ?: "No se pudo abrir la cámara") }
+        }
+    }
+    /** Abre el control (la página que sirve la TV) a pantalla completa dentro de la app. */
+    @JavascriptInterface
+    fun remoteOpen(url: String) {
+        if (!url.startsWith("http://")) return
+        a.runOnUiThread { a.startActivity(Intent(a, RemoteActivity::class.java).putExtra("url", url)) }
+    }
+
     /** Navegador interno a pantalla completa (url vacío = página de inicio). */
     @JavascriptInterface
     fun openBrowser(url: String?) {

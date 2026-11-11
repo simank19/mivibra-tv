@@ -87,6 +87,14 @@ body.local button.k{opacity:.8}
 .rot{position:fixed;inset:0;display:none;align-items:center;justify-content:center;text-align:center;padding:30px;font:600 18px system-ui;z-index:9;background:rgba(13,12,11,.92)}
 @media (orientation:portrait){#game.on ~ .rot.need{display:flex}}
 .hidden{display:none!important}
+/* Accesos directos (herramientas) */
+.tools{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:min(420px,100%)}
+.tools .k,.tools a{height:56px;border-radius:16px;font-size:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:inherit;text-decoration:none;border:0}
+.tools .k b,.tools a b{font-size:20px;line-height:1}
+.toolsh{font:600 12px system-ui;letter-spacing:.08em;opacity:.6;margin:6px 0 -4px;text-transform:uppercase}
+.getapp{display:block;margin:10px auto 0;width:min(420px,100%);padding:12px;border-radius:14px;text-align:center;background:rgba(255,105,0,.18);border:1px solid rgba(255,105,0,.5);color:#FFD2B0;font:600 14px system-ui;text-decoration:none}
+body.inapp .getapp{display:none}
+body.local .tools,body.local .toolsh,body.local .getapp{display:none}
 </style>
 </head>
 <body>
@@ -115,10 +123,22 @@ body.local button.k{opacity:.8}
     <button class="k glass" data-nav="PLAYPAUSE">⏯</button>
     <button class="k glass" data-nav="CHDOWN">Canal −</button>
   </div>
+  <div class="toolsh">Accesos directos</div>
+  <div class="tools">
+    <button class="k glass" data-go="games"><b>🎮</b>Juegos</button>
+    <button class="k glass" data-go="search"><b>🔍</b>Buscar</button>
+    <button class="k glass" data-go="live"><b>📺</b>En vivo</button>
+    <button class="k glass" data-go="movies"><b>🎬</b>Películas</button>
+    <button class="k glass" data-go="series"><b>🍿</b>Series</button>
+    <a class="glass" data-link="/listas/"><b>📋</b>Enviar lista</a>
+    <a class="glass" data-link="/roms/"><b>💾</b>Enviar juegos</a>
+    <a class="glass" data-link="/drive"><b>☁️</b>Drive</a>
+  </div>
   <form class="typ" id="typ">
     <input id="txt" placeholder="Escribir en la TV (buscador)" autocomplete="off">
     <button type="submit">Enviar</button>
   </form>
+  <a class="getapp" id="getapp" href="https://github.com/simank19/mivibra-tv/releases/latest">📲 Descarga la app MiVibra TV para el celular: el control abre más rápido y se conecta solo</a>
 </section>
 
 <section class="view" id="game">
@@ -250,6 +270,14 @@ function mvCheckKey(ok) {
   }
 
   // Control remoto con repetición al mantener presionado
+  // Accesos directos: abren esa sección en la TV; los enlaces llevan a enviar listas, juegos o conectar Drive
+  if (/[?&]app=1/.test(location.search)) document.body.classList.add('inapp');
+  Array.prototype.forEach.call(document.querySelectorAll('[data-go]'), function (el) {
+    el.addEventListener('click', function () { send({ t: 'go', v: el.getAttribute('data-go') }); if (navigator.vibrate) navigator.vibrate(15); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-link]'), function (el) {
+    el.href = el.getAttribute('data-link') + '?k=' + encodeURIComponent(MVK);
+  });
   Array.prototype.forEach.call(document.querySelectorAll('[data-nav]'), function (el) {
     var t1 = null, t2 = null, key = el.getAttribute('data-nav');
     var repeat = /UP|DOWN|LEFT|RIGHT/.test(key);

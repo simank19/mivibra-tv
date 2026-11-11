@@ -73,6 +73,10 @@ class RemoteServer(private val ctx: Context, port: Int = PORT) : NanoWSD(port) {
 
     override fun serveHttp(session: IHTTPSession): Response {
         val path = session.uri ?: "/"
+        // Para que la app del celular encuentre las TVs de la casa y pida emparejarse (la TV muestra su código QR)
+        if (path == "/hello") return NanoHTTPD.newFixedLengthResponse(Response.Status.OK, "application/json",
+            JSONObject().put("app", "mivibra-tv").put("name", android.os.Build.MODEL ?: "TV").toString()).apply { addHeader("Access-Control-Allow-Origin", "*") }
+        if (path == "/pair") { RemoteHub.pairRequest(); return NanoHTTPD.newFixedLengthResponse(Response.Status.OK, "application/json", "{\"ok\":true}") }
         if (path == "/auth") return if (authed(session)) NanoHTTPD.newFixedLengthResponse(Response.Status.OK, "application/json", "{\"ok\":true}") else denied()
         // Todo lo que manda datos o archivos a la TV exige la clave
         if (path.startsWith("/roms/") || path.startsWith("/listas/")) { if (!authed(session)) return denied() }
@@ -309,6 +313,7 @@ class RemoteServer(private val ctx: Context, port: Int = PORT) : NanoWSD(port) {
                 }
                 "a" -> RemoteHub.gameAxis(slot, m.optString("s", "l"), m.optDouble("x", 0.0).toFloat(), m.optDouble("y", 0.0).toFloat())
                 "text" -> RemoteHub.text(m.optString("v"))
+                "go" -> RemoteHub.go(m.optString("v"))
             }
         }
 
