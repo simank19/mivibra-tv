@@ -1055,6 +1055,7 @@
   MV.loadEpisodes = function (item) {
     if (item.stks && !(item.episodes || []).length) return stkEpisodes(item);
     if ((item.jf || item.px) && !(item.episodes || []).length) return mediaEpisodes(item);
+    if (item.st && !item.xt && !(item.episodes || []).length && MV.stremioEpisodes) return MV.stremioEpisodes(item).then(function (eps) { item.episodes = eps; return eps; });
     if (!item.xt) return Promise.resolve(item.episodes || []);
     var list = S.lists.find(function (l) { return l.id === item.xt.list; });
     if (!list) return Promise.resolve([]);
@@ -1089,6 +1090,7 @@
       else if (list.type === 'plex') job = buildFromPlex(list);
       else if (list.type === 'web') job = buildFromWeb(list);
       else if (list.type === 'fb') job = buildFromFirebase(list);
+      else if (list.type === 'stremio') job = MV.buildFromStremio(list).then(function (arr) { return arr.map(retag); });
       else if (list.type === 'file') job = MV.idbGet('raw:' + list.id).then(function (txt) { return buildFromM3U(MV.parseM3U(txt || '', list), list); });
       else job = MV.getBig(list.url).then(function (txt) {
         if (!/#EXTINF|#EXTM3U/i.test(txt.slice(0, 5000))) throw new Error('No parece una lista M3U');
@@ -1293,6 +1295,7 @@
       ex.stk = it.stk; if (it.stks || ex.stks) { ex.stks = it.stks; if (it.stks) ex.episodes = []; }
       if (it.jf || it.px || ex.jf || ex.px) { ex.jf = it.jf; ex.px = it.px; if (it.jf || it.px) ex.episodes = []; }
       if (it.xt) ex.xt = it.xt;
+      if (it.st && !ex.st) ex.st = it.st;
       if (it.episodes && it.episodes.length) ex.episodes = it.episodes.slice();
       ex.q = qScore(it);
     }

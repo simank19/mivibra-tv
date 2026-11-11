@@ -1862,7 +1862,7 @@
   }
   // Selección de varias listas para borrarlas juntas (null = modo normal)
   var LSEL = null;
-  function listKind(l) { return l.type === 'fb' ? 'Firebase' + (MV.acct.canEditList(l) ? ' · ' + ((l.fb || {}).projectId || '') : '') : l.type === 'web' ? 'Página web' + (MV.acct.canEditList(l) ? ' · ' + (l.url || '') : '') : l.type === 'jellyfin' ? 'Jellyfin' : l.type === 'plex' ? 'Plex' : l.type === 'xtream' ? 'Xtream Codes' : l.type === 'stalker' ? 'Portal MAC · ' + (l.mac || '') : l.type === 'file' ? 'Archivo' : 'Lista M3U'; }
+  function listKind(l) { return l.type === 'stremio' ? 'Addon de Stremio' : l.type === 'fb' ? 'Firebase' + (MV.acct.canEditList(l) ? ' · ' + ((l.fb || {}).projectId || '') : '') : l.type === 'web' ? 'Página web' + (MV.acct.canEditList(l) ? ' · ' + (l.url || '') : '') : l.type === 'jellyfin' ? 'Jellyfin' : l.type === 'plex' ? 'Plex' : l.type === 'xtream' ? 'Xtream Codes' : l.type === 'stalker' ? 'Portal MAC · ' + (l.mac || '') : l.type === 'file' ? 'Archivo' : 'Lista M3U'; }
   function selBar() {
     if (edLists().length < 2) return '';
     if (!LSEL) return '<div class="btns" style="margin:4px 0 10px"><button class="btn ghost sm f" data-act="lselStart">' + IC.check + 'Seleccionar varias</button></div>';
@@ -1899,7 +1899,7 @@
           var on = !!LSEL[l.id];
           return '<button class="line selrow f' + (on ? ' on' : '') + '" data-act="lselToggle" data-arg="' + l.id + '" data-fid="ls-' + l.id + '" aria-pressed="' + on + '"><i class="chk"></i><div class="t"><b>' + esc(l.name) + '</b><span>' + esc(listKind(l)) + ' · ' + (l.count || 0) + ' elementos' + (l.enabled === false ? ' · desactivada' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div></button>';
         }
-        return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.type === 'xtream' ? 'Xtream Codes · ' + esc(l.host) : l.type === 'fb' ? 'Firebase' + (MV.acct.canEditList(l) ? ' · ' + esc((l.fb || {}).projectId || '') + (l.coll ? ' / ' + esc(l.coll) : '') : '') : l.type === 'web' ? 'Página web' + (MV.acct.canEditList(l) ? ' · ' + esc(l.url) : '') : l.type === 'jellyfin' ? 'Jellyfin · ' + esc(l.server) : l.type === 'plex' ? 'Plex · ' + esc(l.server) : l.type === 'stalker' ? 'Portal MAC · ' + esc(l.mac) + ((l.macs || []).length > 1 ? ' (+' + (l.macs.length - 1) + ' de respaldo)' : '') : l.type === 'file' ? 'Archivo' : esc(l.url)) + ' · ' + (l.count || 0) + ' elementos' + ((S.hiddenDupes || {})[l.id] ? ' · ' + S.hiddenDupes[l.id] + ' repetidos ocultos' : '') + (l.epg ? ' · con guía' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div>' +
+        return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.type === 'xtream' ? 'Xtream Codes · ' + esc(l.host) : l.type === 'fb' ? 'Firebase' + (MV.acct.canEditList(l) ? ' · ' + esc((l.fb || {}).projectId || '') + (l.coll ? ' / ' + esc(l.coll) : '') : '') : l.type === 'web' ? 'Página web' + (MV.acct.canEditList(l) ? ' · ' + esc(l.url) : '') : l.type === 'stremio' ? 'Addon de Stremio' : l.type === 'jellyfin' ? 'Jellyfin · ' + esc(l.server) : l.type === 'plex' ? 'Plex · ' + esc(l.server) : l.type === 'stalker' ? 'Portal MAC · ' + esc(l.mac) + ((l.macs || []).length > 1 ? ' (+' + (l.macs.length - 1) + ' de respaldo)' : '') : l.type === 'file' ? 'Archivo' : esc(l.url)) + ' · ' + (l.count || 0) + ' elementos' + ((S.hiddenDupes || {})[l.id] ? ' · ' + S.hiddenDupes[l.id] + ' repetidos ocultos' : '') + (l.epg ? ' · con guía' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div>' +
           '<button class="toggle f' + (l.enabled !== false ? ' on' : '') + '" data-act="listToggle" data-arg="' + l.id + '" aria-label="Activar lista"></button>' +
           '<button class="iconbtn f" data-act="listEpg" data-arg="' + l.id + '" aria-label="Guía EPG">' + IC.guide + '</button>' +
           '<button class="iconbtn f" data-act="listDelete" data-arg="' + l.id + '" aria-label="Eliminar">' + IC.trash + '</button></div>';
@@ -1907,7 +1907,7 @@
       '<div class="line"><div class="t"><b>Solo español latino</b><span>Muestra únicamente contenido en español latino (o sin idioma indicado). En K-Drama y Anime también deja el subtitulado con idioma original. Oculta castellano, inglés y otros idiomas; en TV en vivo deja canales de Latinoamérica e hispanos de EE. UU.</span></div><button class="toggle f' + (P.latOnly ? ' on' : '') + '" data-act="latToggle" aria-label="Solo español latino"></button></div>' +
       '<div class="line"><div class="t"><b>Eliminar listas vacías</b><span>Si una lista carga con 0 elementos (vencida, MAC rechazada o enlace caído) se borra sola. Si antes funcionaba, espera a que llegue vacía dos veces seguidas para no borrarla por una falla pasajera.</span></div><button class="toggle f' + (P.pruneEmpty !== false ? ' on' : '') + '" data-act="pruneToggle" aria-label="Eliminar listas vacías"></button></div>' +
       '<div class="line"><div class="t"><b>Ocultar contenido repetido</b><span>Si una película, serie o canal está en varias listas (aunque se llame distinto, como "Animales" y "Animals"), se muestra una sola vez con la versión de mejor calidad: 4K, luego Full HD, HD y SD; latino primero. Las otras quedan de respaldo por si la principal falla.</span></div><button class="toggle f' + (P.dedupe !== false ? ' on' : '') + '" data-act="dedupeToggle" aria-label="Ocultar repetidos"></button></div>' +
-      '<div class="btns" style="margin-top:14px"><button class="btn f" data-act="addList">' + IC.plus + 'Agregar lista</button>' + (MV.listsWelcome ? '<button class="btn ghost f" data-act="listsWelcome">Desde el celular o la web</button>' : '') + '<button class="btn ghost f" data-act="presets">Canales gratis</button><button class="btn ghost f" data-act="reloadAll">' + IC.refresh + 'Actualizar todo</button></div></div>' + dupesPanel();
+      '<div class="btns" style="margin-top:14px"><button class="btn f" data-act="addList">' + IC.plus + 'Agregar lista</button><button class="btn ghost f" data-act="plugins">Plugins</button>' + (MV.listsWelcome ? '<button class="btn ghost f" data-act="listsWelcome">Desde el celular o la web</button>' : '') + '<button class="btn ghost f" data-act="presets">Canales gratis</button><button class="btn ghost f" data-act="reloadAll">' + IC.refresh + 'Actualizar todo</button></div></div>' + dupesPanel();
   };
   SETTINGS.menu = function () {
     var all = allNavItems().filter(function (n) { return n[0] !== 'home' && n[0] !== 'settings'; });
@@ -2094,10 +2094,16 @@
     };
     if (it.ia) { MV.toast('Preparando película…'); MV.archiveUrl(it).then(go).catch(function (e) { MV.toast(e.message); }); }
     else if (it.url) go(it.url);
+    else if (it.st && MV.stremioPick) MV.stremioPick(it.st.type, it.st.id, MV.cleanTitle(it.name) || it.name).then(function (s) { if (s.ua) it.ua = s.ua; if (s.ref) it.ref = s.ref; go(s.url); }).catch(function (e) { if (e.message !== 'cancelado') MV.toast(e.message, 6000); });
     else MV.toast('Este contenido ya no está disponible en tus listas');
   };
   MV.playEpisode = function (series, i, resume) {
     var eps = series.episodes || []; var e = eps[i]; if (!e) return;
+    // Capítulo de un addon de Stremio: primero se pide el enlace (y se elige si hay varios)
+    if (!e.url && e.stId && MV.stremioPick && !MV.dlLocal(series.key + '#' + e.season + 'x' + e.ep)) {
+      MV.stremioPick('series', e.stId, (MV.cleanTitle(series.name) || series.name) + ' T' + e.season + ' E' + e.ep).then(function (s) { e.url = s.url; e.ua = s.ua; e.ref = s.ref; MV.playEpisode(series, i, resume); }).catch(function (er) { if (er.message !== 'cancelado') MV.toast(er.message, 6000); });
+      return;
+    }
     var poster = MV.poster(series);
     var queue = eps.slice(i).map(function (x) { return Object.assign({ id: series.key + '#' + x.season + 'x' + x.ep, url: x.url, title: series.name, subtitle: 'T' + x.season + ' E' + x.ep + ' · ' + x.title, ua: x.ua || '', ref: x.ref || '', poster: poster, stk: x.stk || null }, subInfo(series, x.season, x.ep)); });
     var k = series.key + '#' + e.season + 'x' + e.ep, prog = resume !== false ? MV.progressOf(k) : null;
@@ -2341,7 +2347,8 @@
   }
   function addListDialog(tab) {
     tab = tab || 'url';
-    var tabs = [['url', 'Enlace M3U'], ['multi', 'Varias (.txt)'], ['file', 'Archivo'], ['xtream', 'Xtream Codes'], ['stalker', 'Portal y MAC'], ['jellyfin', 'Jellyfin / Emby'], ['plex', 'Plex'], ['web', 'Página web'], ['fb', 'Mi Firebase']];
+    var tabs = [['url', 'Enlace M3U'], ['multi', 'Varias (.txt)'], ['file', 'Archivo'], ['xtream', 'Xtream Codes'], ['stalker', 'Portal y MAC'], ['jellyfin', 'Jellyfin / Emby'], ['plex', 'Plex'], ['web', 'Página web'], ['fb', 'Mi Firebase'], ['plugins', 'Plugins']];
+    if (tab === 'plugins' && MV.pluginsDialog) { setTimeout(MV.pluginsDialog, 0); return; }
     var body = tab === 'multi'
       ? '<p>Pega tus direcciones (una por línea) o elige tu archivo .txt. Puedes poner un nombre antes de cada una: <code>Mi lista, https://…</code>. Los enlaces de Xtream (get.php?username=…) se agregan como cuenta Xtream con películas y series. También acepta cuentas de <b>Portal y MAC</b> (la URL del portal y debajo sus MAC).</p>' +
         '<label class="field">Direcciones<textarea class="in f" id="lMulti" rows="6" placeholder="https://…/lista1.m3u&#10;Deportes, https://…/lista2.m3u" data-autofocus></textarea></label><p class="muted" id="lMultiCount" style="font-size:13px;margin:-4px 0 8px"></p>' +
@@ -2777,6 +2784,7 @@
     },
     acctRevoke: function (e) { MV.confirm('¿Quitar el acceso a ' + e + '?', '', 'Quitar').then(function (y) { if (y) MV.acct.revoke(e).then(MV.rerender); }); },
     acctOpen: function () { var c = MV.acct.config || {}; MV.acct.setOpen(!c.open).then(MV.rerender); },
+    plugins: function () { if (MV.pluginsDialog) MV.pluginsDialog(); },
     listTab: function (t) { MV.closeModal(true); addListDialog(t); },
     listSave: function (tab) {
       var name = (document.getElementById('lName') || {}).value;

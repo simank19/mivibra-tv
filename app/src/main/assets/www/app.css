@@ -752,3 +752,7 @@ html.tv #modal { animation: none !important; }
 .dlt small { font-size: .78em; color: var(--accent, #FF9A4D); }
 .dlbar { display: block; height: 4px; border-radius: 4px; background: rgba(255,255,255,.12); overflow: hidden; }
 .dlbar u { display: block; height: 100%; background: var(--accent, #FF6900); }
+
+.stpick { display: flex; flex-direction: column; gap: 6px; max-height: 52vh; overflow-y: auto; margin: 8px 0; }
+.stpick .line { border-radius: 12px; }
+.stpick .line:focus { outline: 2px solid var(--accent, #FF6900); }
