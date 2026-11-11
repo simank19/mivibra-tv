@@ -2094,7 +2094,7 @@
     };
     if (it.ia) { MV.toast('Preparando película…'); MV.archiveUrl(it).then(go).catch(function (e) { MV.toast(e.message); }); }
     else if (it.url) go(it.url);
-    else if (it.st && MV.stremioPick) MV.stremioPick(it.st.type, it.st.id, MV.cleanTitle(it.name) || it.name).then(function (s) { if (s.ua) it.ua = s.ua; if (s.ref) it.ref = s.ref; go(s.url); }).catch(function (e) { if (e.message !== 'cancelado') MV.toast(e.message, 6000); });
+    else if (it.st && MV.stremioPick) MV.stremioPick(it.st.type, it.st.id, MV.cleanTitle(it.name) || it.name).then(function (s) { if (s.ua) it.ua = s.ua; if (s.ref) it.ref = s.ref; it.alts = s.rest || []; go(s.url); }).catch(function (e) { if (e.message !== 'cancelado') MV.toast(e.message, 6000); });
     else MV.toast('Este contenido ya no está disponible en tus listas');
   };
   MV.playEpisode = function (series, i, resume) {

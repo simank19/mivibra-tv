@@ -79,7 +79,9 @@
         });
       }).catch(function () { return []; });
     });
-    return Promise.all(jobs).then(function (all) { return all.reduce(function (a, b) { return a.concat(b); }, []); });
+    // Primero los que se ven como video (mp4, mkv, m3u8…); al final los que pueden ser páginas web
+    function score(x) { var u = x.url.toLowerCase().split('?')[0]; return /\.(mp4|mkv|m3u8|webm|avi|mov|ts|mpd)$/.test(u) ? 0 : /\/(hls|stream|video|playlist|manifest)/.test(u) ? 1 : 2; }
+    return Promise.all(jobs).then(function (all) { return all.reduce(function (a, b) { return a.concat(b); }, []).sort(function (a, b) { return score(a) - score(b); }); });
   };
 
   /** Elige el enlace: si hay varios, se muestra la lista para escoger (calidad, idioma, fuente). */
@@ -87,9 +89,11 @@
     MV.toast('Buscando enlaces en tus addons…', 3000);
     return MV.stremioStreams(type, id).then(function (st) {
       if (!st.length) throw new Error('Ningún addon instalado tiene enlaces directos para “' + title + '”');
-      if (st.length === 1) return st[0];
+      // Los demás enlaces quedan de respaldo: si el elegido no es un video, el reproductor prueba el siguiente solo
+      function withRest(x) { x.rest = st.filter(function (y) { return y !== x; }).map(function (y) { return y.url; }).slice(0, 8); return x; }
+      if (st.length === 1) return withRest(st[0]);
       return new Promise(function (resolve, reject) {
-        MV._stPick = function (i) { MV.closeModal(true); resolve(st[+i]); };
+        MV._stPick = function (i) { MV.closeModal(true); resolve(withRest(st[+i])); };
         MV.modal('<h2>Elige el enlace</h2><p class="muted">' + st.length + ' opciones de tus addons para “' + esc(title) + '”.</p><div class="stpick">' +
           st.slice(0, 40).map(function (s, i) { return '<button class="line f" data-act="stPick" data-arg="' + i + '"' + (i ? '' : ' data-autofocus') + ' style="width:100%;text-align:left"><div class="t"><b>' + esc(s.src) + '</b><span style="white-space:pre-line">' + esc(s.title.slice(0, 160)) + '</span></div></button>'; }).join('') +
           '</div><div class="btns"><button class="btn ghost f" data-act="confirmNo">Cancelar</button></div>', { onClose: function () { reject(new Error('cancelado')); } });
