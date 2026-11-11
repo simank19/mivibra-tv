@@ -1119,7 +1119,7 @@
     })).then(function (all) {
       // Listas con 0 elementos: se eliminan solas (si nunca trajeron nada, de una; si antes funcionaban, tras 2 cargas vacías seguidas)
       if (P.pruneEmpty !== false && MV.acct && MV.acct.canEditList) {
-        var gone = lists.filter(function (l, i) { return MV.acct.canEditList(l) && !(all[i] || []).length && !l.count && l.zeroLoads >= (l.hadItems ? 2 : 1); });
+        var gone = lists.filter(function (l, i) { return l.type !== 'stremio' && MV.acct.canEditList(l) && !(all[i] || []).length && !l.count && l.zeroLoads >= (l.hadItems ? 2 : 1); });
         if (gone.length) {
           var ids = gone.map(function (l) { return l.id; });
           all = all.filter(function (_, i) { return ids.indexOf(lists[i].id) < 0; });

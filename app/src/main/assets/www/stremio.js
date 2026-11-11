@@ -73,7 +73,9 @@
     var ls = lists();
     var jobs = ls.filter(function (l) { var m = l.man || {}; return !m.resources || (res(m, 'stream') && resTypes(m, 'stream').indexOf(type) >= 0 && prefixOk(m, 'stream', id)); }).map(function (l) {
       return MV.getJSON(base(l.url) + '/stream/' + type + '/' + encodeURIComponent(id) + '.json').then(function (j) {
-        return ((j && j.streams) || []).filter(function (s) { return s.url && /^https?:/i.test(s.url); }).map(function (s) {
+        var all = (j && j.streams) || [];
+        MV._stTorrents = (MV._stTorrents || 0) + all.filter(function (s) { return s.infoHash && !s.url; }).length;
+        return all.filter(function (s) { return s.url && /^https?:/i.test(s.url); }).map(function (s) {
           var h = (s.behaviorHints && s.behaviorHints.proxyHeaders && s.behaviorHints.proxyHeaders.request) || {};
           return { url: s.url, title: String(s.title || s.description || s.name || '').replace(/\s+/g, ' ').trim(), src: s.name || l.name || '', ua: h['User-Agent'] || h['user-agent'] || '', ref: h.Referer || h.referer || '' };
         });
@@ -87,7 +89,9 @@
   /** Elige el enlace: si hay varios, se muestra la lista para escoger (calidad, idioma, fuente). */
   MV.stremioPick = function (type, id, title) {
     MV.toast('Buscando enlaces en tus addons…', 3000);
+    MV._stTorrents = 0;
     return MV.stremioStreams(type, id).then(function (st) {
+      if (!st.length && MV._stTorrents) throw new Error('Tus addons solo encontraron torrents (' + MV._stTorrents + '). MiVibra reproduce enlaces directos: en la configuración de Torrentio agrega un servicio debrid (Real-Debrid, AllDebrid, Premiumize…) y vuelve a instalarlo con el enlace nuevo.');
       if (!st.length) throw new Error('Ningún addon instalado tiene enlaces directos para “' + title + '”');
       // Los demás enlaces quedan de respaldo: si el elegido no es un video, el reproductor prueba el siguiente solo
       function withRest(x) { x.rest = st.filter(function (y) { return y !== x; }).map(function (y) { return y.url; }).slice(0, 8); return x; }
@@ -163,7 +167,12 @@
     if (kind === 'm3u') { MV.toast('Agregando “' + name + '”…'); return MV.addList({ type: 'url', name: name, url: link }).then(function () { MV.rerender(); }).catch(function (e) { MV.toast(e.message, 6000); }); }
     MV.toast('Instalando “' + name + '”…');
     return MV.stremioManifest(link).then(function (man) {
-      return MV.addList({ type: 'stremio', name: name && !/^[\w.-]+\.\w+$/.test(name) ? name : man.name, url: manifestUrl(link) });
+      var onlyStreams = !(man.catalogs || []).length;
+      return MV.addList({ type: 'stremio', name: name && !/^[\w.-]+\.\w+$/.test(name) ? name : man.name, url: manifestUrl(link) }).then(function () {
+        // Addons como Torrentio no traen películas para mostrar, solo enlaces: hace falta un catálogo (Cinemeta)
+        var hasCat = (S.lists || []).some(function (l) { return l.type === 'stremio' && l.count > 0; });
+        if (onlyStreams && !hasCat) MV.confirm('“' + man.name + '” solo da enlaces', 'Este addon no trae un catálogo de películas y series: entrega los enlaces cuando reproduces. ¿Instalo el catálogo oficial de Stremio (Cinemeta) para ver las películas y series?', 'Instalar catálogo').then(function (y) { if (y) installPlugin(CINEMETA, 'Cinemeta (catálogo de Stremio)', 'stremio'); });
+      });
     }).then(function () { MV.rerender(); }).catch(function (e) { MV.toast(e.message, 6000); });
   }
   MV.installPlugin = installPlugin;
@@ -174,7 +183,7 @@
     MV.modal('<h2>Plugins</h2><p>Agrega <b>addons de Stremio</b> (enlace que termina en manifest.json) o <b>repositorios</b> con varios plugins para instalar desde un menú, como en Kodi. Solo agrega fuentes legales o que te pertenezcan.</p>' +
       '<label class="field">Enlace del addon o del repositorio<input class="in f" id="plUrl" placeholder="https://…/manifest.json  ó  https://…/repo.json" autocomplete="off" inputmode="url" data-autofocus></label>' +
       '<div class="btns"><button class="btn f" data-act="plAdd">Agregar</button><button class="btn ghost f" data-act="plCinemeta">Catálogo oficial de Stremio</button></div>' +
-      (ad.length ? '<h3 style="margin:14px 0 6px">Addons instalados</h3>' + ad.map(function (l) { return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.count || 0) + ' títulos' + (l.error ? ' · ' + esc(l.error) : '') + '</span></div></div>'; }).join('') : '') +
+      (ad.length ? '<h3 style="margin:14px 0 6px">Addons instalados</h3>' + ad.map(function (l) { return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.count ? l.count + ' títulos' : 'Solo da enlaces para ver: necesita un addon con catálogo (por ejemplo Cinemeta)') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div></div>'; }).join('') : '') +
       (rp.length ? '<h3 style="margin:14px 0 6px">Repositorios</h3>' + rp.map(function (r, i) { return '<div class="line"><div class="t"><b>' + esc(r.name) + '</b><span>' + esc(r.url) + '</span></div><button class="btn sm f" data-act="repoOpen" data-arg="' + i + '">Abrir</button><button class="iconbtn f" data-act="repoDel" data-arg="' + i + '" aria-label="Quitar">✕</button></div>'; }).join('') : '') +
       '<div class="btns"><button class="btn ghost f" data-act="confirmNo">Cerrar</button></div>');
   };
