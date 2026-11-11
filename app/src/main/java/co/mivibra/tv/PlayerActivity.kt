@@ -93,6 +93,7 @@ class PlayerActivity : ComponentActivity() {
         audioLang = req.optString("audioLang", "es")
         subLang = req.optString("subLang", "")
         subKey = req.optString("subKey", "")
+        subAddons = req.optJSONArray("subAddons") ?: JSONArray()
 
         root = FrameLayout(this)
         root.setBackgroundColor(Color.BLACK)
@@ -421,6 +422,58 @@ class PlayerActivity : ComponentActivity() {
     private var attemptIndex = 0
     private var startPosition = 0L
     private var subKey = ""
+    private var subAddons = JSONArray()
+    private var addonSubs: List<Subtitles.AddonSub>? = null   // null = buscando
+    private var addonSubsFor = ""
+
+    /** Id del video para los addons de subtítulos: el del addon de Stremio o el de IMDb (tt…:temporada:capítulo). */
+    private fun addonSubId(item: JSONObject): Pair<String, String>? {
+        val tv = item.optString("sKind") == "tv" || item.optInt("sSeason") > 0
+        val st = item.optString("stSubId")
+        if (st.isNotBlank()) return (if (tv) "series" else "movie") to st
+        val imdb = item.optString("sImdb")
+        if (!imdb.startsWith("tt")) return null
+        return if (tv && item.optInt("sSeason") > 0) "series" to "$imdb:${item.optInt("sSeason")}:${item.optInt("sEpisode")}" else "movie" to imdb
+    }
+
+    private fun loadAddonSubs(item: JSONObject) {
+        if (live || subAddons.length() == 0) return
+        val (type, id) = addonSubId(item) ?: run { addonSubs = emptyList(); addonSubsFor = item.optString("id"); return }
+        val key = item.optString("id")
+        addonSubsFor = key; addonSubs = null
+        val addons = subAddons
+        Thread {
+            val res = try { Subtitles.fromAddons(addons, type, id) } catch (_: Exception) { emptyList() }
+            // Primero el idioma preferido
+            val pref = when (subLang) { "en" -> setOf("eng", "en"); "pt" -> setOf("por", "pob", "pt", "pt-br"); else -> setOf("spa", "es", "spn", "esp", "ea", "es-419", "es-mx", "lat") }
+            val sorted = res.sortedBy { if (it.lang.lowercase() in pref) 0 else if (it.lang.lowercase() in setOf("eng", "en")) 1 else 2 }
+            ui.post { if (addonSubsFor == key) addonSubs = sorted }
+        }.start()
+    }
+
+    private fun applyAddonSub(s: Subtitles.AddonSub, label: String) {
+        toastInfo("Descargando subtítulo…")
+        Thread {
+            try {
+                val f = Subtitles.downloadAddon(java.io.File(cacheDir, "subs"), s)
+                ui.post { extSub = f; extSubName = label; extOffset = 0; reloadExternal("Subtítulo listo. Si no coincide con la voz, sincronízalo en Audio y subtítulos") }
+            } catch (e: Exception) {
+                ui.post { toastInfo(e.message ?: "No se pudo descargar") }
+            }
+        }.start()
+    }
+
+    private fun addonSubsMenu(all: Boolean) {
+        val list = addonSubs ?: return
+        val m = GlassMenu(this, "Subtítulos de addons").chips().subtitle("Si no coincide con la voz, prueba otro o sincronízalo después.")
+        val byLang = LinkedHashMap<String, MutableList<Subtitles.AddonSub>>()
+        list.forEach { byLang.getOrPut(Subtitles.langLabel(it.lang)) { mutableListOf() }.add(it) }
+        byLang.forEach { (lang, subs) ->
+            m.header(lang)
+            subs.take(if (all) 40 else 12).forEachIndexed { i, s -> m.option("$lang ${i + 1}", extSubName == "$lang ${i + 1} · ${s.src}") { applyAddonSub(s, "$lang ${i + 1} · ${s.src}") } }
+        }
+        m.close("Cerrar").show()
+    }
     private var extSub: java.io.File? = null
     private var extSubName = ""
     private var extOffset = 0L
@@ -677,6 +730,7 @@ class PlayerActivity : ComponentActivity() {
         val ref = item.optString("ref")
         http.setDefaultRequestProperties(if (ref.isNotBlank()) mapOf("Referer" to ref) else emptyMap())
         extSub = null; extSubName = ""; extOffset = 0L
+        loadAddonSubs(item)
         attempts = buildAttempts(item)
         attemptIndex = 0
         retries = 0
@@ -813,7 +867,19 @@ class PlayerActivity : ComponentActivity() {
             toastInfo("Subtítulos desactivados")
         }
         text.forEach { o -> m.option(o.label, o.selected, action = o.run) }
-        if (extSub != null) m.option("Externo: $extSubName", true, action = null)
+        if (extSub != null && !extSubName.contains(" · ")) m.option("Externo: $extSubName", true, action = null)
+        if (!live && subAddons.length() > 0) {
+            val asubs = addonSubs
+            when {
+                asubs == null -> m.note("Buscando subtítulos en tus addons…")
+                asubs.isEmpty() -> m.note("Tus addons de subtítulos no tienen para este video.")
+                else -> {
+                    // Accesos rápidos: los primeros del idioma preferido; el resto en "Más subtítulos"
+                    asubs.take(4).forEachIndexed { i, sub -> val l = Subtitles.langLabel(sub.lang) + " " + (asubs.filter { Subtitles.langLabel(it.lang) == Subtitles.langLabel(sub.lang) }.indexOf(sub) + 1) + " · " + sub.src; m.option(l.substringBefore(" · "), extSubName == l) { applyAddonSub(sub, l) } }
+                    if (asubs.size > 4) m.option("Más subtítulos (${asubs.size})", action = { addonSubsMenu(true) })
+                }
+            }
+        }
         if (!live) {
             if (subKey.isNotBlank()) m.option("🔎  Buscar en internet", action = { searchSubs() })
             else m.option("🔎  Buscar en internet", action = null)

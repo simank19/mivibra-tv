@@ -79,13 +79,79 @@ object Subtitles {
         return f
     }
 
-    private fun decode(b: ByteArray): String {
+    fun decode(b: ByteArray): String {
         val body = if (b.size >= 3 && b[0] == 0xEF.toByte() && b[1] == 0xBB.toByte() && b[2] == 0xBF.toByte()) b.copyOfRange(3, b.size) else b
         return try {
             Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT)
                 .decode(ByteBuffer.wrap(body)).toString()
         } catch (_: CharacterCodingException) {
             String(body, Charset.forName("windows-1252"))
+        }
+    }
+
+    /** Subtítulo de un addon de Stremio (OpenSubtitles v3, SubDL, SubSource…). */
+    class AddonSub(val url: String, val lang: String, val src: String)
+
+    /** Pide a cada addon de subtítulos los del video. id: tt123 / tt123:1:2 / kitsu:… ; type: movie o series. */
+    fun fromAddons(addons: org.json.JSONArray, type: String, id: String): List<AddonSub> {
+        val out = mutableListOf<AddonSub>(); val seen = HashSet<String>()
+        for (i in 0 until addons.length()) {
+            val a = addons.optJSONObject(i) ?: continue
+            val pre = a.optJSONArray("pre")
+            if (pre != null && pre.length() > 0 && (0 until pre.length()).none { id.startsWith(pre.optString(it)) }) continue
+            val base = a.optString("base").trimEnd('/')
+            try {
+                val (code, body) = Net.text("$base/subtitles/$type/" + java.net.URLEncoder.encode(id, "UTF-8").replace("+", "%20") + ".json")
+                if (code >= 400) continue
+                val arr = org.json.JSONObject(body).optJSONArray("subtitles") ?: continue
+                for (k in 0 until arr.length()) {
+                    val o = arr.optJSONObject(k) ?: continue
+                    val u = o.optString("url"); if (!u.startsWith("http") || !seen.add(u)) continue
+                    out.add(AddonSub(u, o.optString("lang"), a.optString("name")))
+                }
+            } catch (_: Exception) {}
+        }
+        return out
+    }
+
+    /** Descarga el subtítulo del addon y lo deja listo (detecta si es SRT, VTT o ASS). */
+    fun downloadAddon(dir: File, s: AddonSub): File {
+        dir.mkdirs()
+        val tmp = File(dir, "addon.tmp")
+        val code = Net.download(s.url, tmp, emptyMap(), decompress = true)
+        if (code >= 400) throw IllegalStateException("No se pudo descargar ($code)")
+        var raw = tmp.readBytes()
+        // Algunos llegan comprimidos en .gz o .zip
+        if (raw.size > 2 && raw[0] == 0x1f.toByte() && raw[1] == 0x8b.toByte()) raw = java.util.zip.GZIPInputStream(raw.inputStream()).readBytes()
+        if (raw.size > 2 && raw[0] == 'P'.code.toByte() && raw[1] == 'K'.code.toByte()) {
+            ZipInputStream(raw.inputStream()).use { z ->
+                while (true) { val e = z.nextEntry ?: break; val n = e.name.lowercase(); if (!e.isDirectory && (n.endsWith(".srt") || n.endsWith(".vtt") || n.endsWith(".ass") || n.endsWith(".ssa"))) { raw = z.readBytes(); break } }
+            }
+        }
+        val text = decode(raw)
+        val head = text.trimStart().take(200)
+        val ext = when { head.startsWith("WEBVTT") -> "vtt"; head.contains("[Script Info]") -> "ass"; else -> "srt" }
+        val f = File(dir, "externo." + ext)
+        f.writeText(text, Charsets.UTF_8)
+        tmp.delete()
+        return f
+    }
+
+    /** Nombre del idioma en español para códigos como spa, eng, pob, es-419. */
+    fun langLabel(code: String): String {
+        val c = code.lowercase()
+        return when {
+            c in setOf("spa", "es", "esp", "spn", "ea", "es-419", "es-mx", "es-la", "lat") -> if (c in setOf("spn", "ea", "es-419", "es-mx", "es-la", "lat")) "Español latino" else "Español"
+            c in setOf("eng", "en") -> "Inglés"
+            c in setOf("pob", "pt-br") -> "Portugués (Brasil)"
+            c in setOf("por", "pt") -> "Portugués"
+            c in setOf("fre", "fra", "fr") -> "Francés"
+            c in setOf("ita", "it") -> "Italiano"
+            c in setOf("ger", "deu", "de") -> "Alemán"
+            c in setOf("jpn", "ja") -> "Japonés"
+            c in setOf("kor", "ko") -> "Coreano"
+            c.isBlank() -> "Otro"
+            else -> { val n = java.util.Locale.forLanguageTag(c).getDisplayLanguage(java.util.Locale("es")); if (n.isBlank() || n.equals(c, true)) c.uppercase() else n.replaceFirstChar { it.uppercase() } }
         }
     }
 

@@ -2075,7 +2075,11 @@
   /** Datos para buscar subtítulos externos de una película o episodio. */
   function subInfo(it, season, ep) {
     var m = it._meta || {};
-    return { sTitle: MV.cleanTitle(it.name), sYear: String(it.year || m.year || ''), sTmdb: m.tmdbId || '', sImdb: m.imdb || '', sKind: it.type === 'series' || season ? 'tv' : 'movie', sSeason: season || 0, sEpisode: ep || 0 };
+    var o = { sTitle: MV.cleanTitle(it.name), sYear: String(it.year || m.year || ''), sTmdb: m.tmdbId || '', sImdb: m.imdb || '', sKind: it.type === 'series' || season ? 'tv' : 'movie', sSeason: season || 0, sEpisode: ep || 0 };
+    // Id para los addons de subtítulos (Stremio): el del addon o el de IMDb
+    if (it.st && it.st.id) o.stSubId = season ? '' : it.st.id;
+    if (!o.sImdb && it.st && /^tt\d+$/.test(it.st.id)) o.sImdb = it.st.id;
+    return o;
   }
   function q(it, extra) {
     var nn = it.type === 'live' ? MV.nowNext(it) : {};
@@ -2093,6 +2097,7 @@
     if (playing) replaced = playing;
     playing = Object.assign({ started: Date.now() }, ctx);
     req.audioLang = P.audioLang; req.subLang = P.subLang; req.subKey = P.subKey || '';
+    req.subAddons = MV.stremioSubBases ? MV.stremioSubBases() : [];
     if (A) A.play(JSON.stringify(req));
     else { window.open(req.queue[req.index || 0].url, '_blank'); MV.onPlayerClosed({ id: ctx.item.key, position: 0, duration: 0, live: !!req.live }); }
   }
@@ -2130,7 +2135,7 @@
       return;
     }
     var poster = MV.poster(series);
-    var queue = eps.slice(i).map(function (x) { return Object.assign({ id: series.key + '#' + x.season + 'x' + x.ep, url: x.url, title: series.name, subtitle: 'T' + x.season + ' E' + x.ep + ' · ' + x.title, ua: x.ua || '', ref: x.ref || '', poster: poster, stk: x.stk || null }, subInfo(series, x.season, x.ep)); });
+    var queue = eps.slice(i).map(function (x) { return Object.assign({ id: series.key + '#' + x.season + 'x' + x.ep, url: x.url, title: series.name, subtitle: 'T' + x.season + ' E' + x.ep + ' · ' + x.title, ua: x.ua || '', ref: x.ref || '', poster: poster, stk: x.stk || null }, subInfo(series, x.season, x.ep), x.stId ? { stSubId: x.stId } : {}); });
     var k = series.key + '#' + e.season + 'x' + e.ep, prog = resume !== false ? MV.progressOf(k) : null;
     // Capítulos descargados: se ven desde el archivo
     var dls = {}; MV.dlList().forEach(function (d) { if (d.status === 'done') dls[d.key] = 'file://' + d.file; });

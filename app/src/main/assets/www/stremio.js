@@ -33,6 +33,11 @@
     });
   };
 
+  /** Addons instalados que dan subtítulos (OpenSubtitles v3, SubDL, SubSource…): el reproductor les pide los del video. */
+  MV.stremioSubBases = function () {
+    return lists().filter(function (l) { return l.man && res(l.man, 'subtitles'); }).map(function (l) { var m = l.man; return { base: base(l.url), name: l.name || m.name || 'Addon', pre: (function () { var r = (m.resources || []).filter(function (x) { return x && x.name === 'subtitles'; })[0]; return (r && r.idPrefixes) || m.idPrefixes || []; })() }; });
+  };
+
   /** Catálogos del addon → películas y series de MiVibra (hasta 300 por catálogo). */
   MV.buildFromStremio = function (list) {
     var b = base(list.url);
@@ -216,10 +221,12 @@
     if (kind === 'm3u') { MV.toast('Agregando “' + name + '”…'); return MV.addList({ type: 'url', name: name, url: link }).then(function () { MV.rerender(); }).catch(function (e) { MV.toast(e.message, 6000); }); }
     MV.toast('Instalando “' + name + '”…');
     return MV.stremioManifest(link).then(function (man) {
-      var onlyStreams = !(man.catalogs || []).length;
+      var onlyStreams = !(man.catalogs || []).length && res(man, 'stream');
+      var onlySubs = !(man.catalogs || []).length && res(man, 'subtitles') && !res(man, 'stream');
       return MV.addList({ type: 'stremio', name: name && !/^[\w.-]+\.\w+$/.test(name) ? name : man.name, url: manifestUrl(link) }).then(function () {
         // Addons como Torrentio no traen películas para mostrar, solo enlaces: hace falta un catálogo (Cinemeta)
         var hasCat = (S.lists || []).some(function (l) { return l.type === 'stremio' && l.count > 0; });
+        if (onlySubs) MV.toast('Listo: los subtítulos de “' + man.name + '” saldrán en Audio y subtítulos al reproducir', 6000);
         if (onlyStreams && !hasCat) MV.confirm('“' + man.name + '” solo da enlaces', 'Este addon no trae un catálogo de películas y series: entrega los enlaces cuando reproduces. ¿Instalo el catálogo oficial de Stremio (Cinemeta) para ver las películas y series?', 'Instalar catálogo').then(function (y) { if (y) installPlugin(CINEMETA, 'Cinemeta (catálogo de Stremio)', 'stremio'); });
       });
     }).then(function () { MV.rerender(); }).catch(function (e) { MV.toast(e.message, 6000); });
@@ -234,7 +241,7 @@
       '<label class="field">Plugin, addon o repositorio<input class="in f" id="plUrl" placeholder="usuario/repositorio  ó  https://…/manifest.json" autocomplete="off" inputmode="url" data-autofocus></label>' +
       (mv.length ? '<h3 style="margin:14px 0 6px">Plugins de MiVibra</h3>' + mv.map(function (l) { return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + esc(l.ref || '') + ' · ' + (l.count || 0) + ' elementos' + (l.error ? ' · ' + esc(l.error) : '') + '</span></div></div>'; }).join('') : '') +
       '<div class="btns"><button class="btn f" data-act="plAdd">Agregar</button><button class="btn ghost f" data-act="plCinemeta">Catálogo oficial de Stremio</button></div>' +
-      (ad.length ? '<h3 style="margin:14px 0 6px">Addons instalados</h3>' + ad.map(function (l) { return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.count ? l.count + ' títulos' : 'Solo da enlaces para ver: necesita un addon con catálogo (por ejemplo Cinemeta)') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div></div>'; }).join('') : '') +
+      (ad.length ? '<h3 style="margin:14px 0 6px">Addons instalados</h3>' + ad.map(function (l) { return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.count ? l.count + ' títulos' : l.man && res(l.man, 'subtitles') && !res(l.man, 'stream') ? 'Da subtítulos: aparecen en Audio y subtítulos del reproductor' : 'Solo da enlaces para ver: necesita un addon con catálogo (por ejemplo Cinemeta)') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div></div>'; }).join('') : '') +
       (rp.length ? '<h3 style="margin:14px 0 6px">Repositorios</h3>' + rp.map(function (r, i) { return '<div class="line"><div class="t"><b>' + esc(r.name) + '</b><span>' + esc(r.url) + '</span></div><button class="btn sm f" data-act="repoOpen" data-arg="' + i + '">Abrir</button><button class="iconbtn f" data-act="repoDel" data-arg="' + i + '" aria-label="Quitar">✕</button></div>'; }).join('') : '') +
       '<div class="btns"><button class="btn ghost f" data-act="confirmNo">Cerrar</button></div>');
   };
