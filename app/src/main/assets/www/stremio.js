@@ -39,7 +39,8 @@
     return MV.stremioManifest(list.url).then(function (man) {
       list.man = { name: man.name, resources: man.resources, types: man.types, idPrefixes: man.idPrefixes, logo: man.logo || '' };
       var cats = (man.catalogs || []).filter(function (c) {
-        if (c.type !== 'movie' && c.type !== 'series') return false;
+        // Anime Kitsu y otros usan el tipo "anime": se muestran como series o películas según cada título
+        if (c.type !== 'movie' && c.type !== 'series' && c.type !== 'anime') return false;
         // Catálogos que exigen búsqueda o género obligatorio no se pueden listar completos
         return !(c.extra || []).some(function (e) { return e.isRequired; }) && !(c.extraRequired || []).length;
       }).slice(0, 12);
@@ -53,13 +54,15 @@
             metas.forEach(function (m) {
               if (!m || !m.id || seen[c.type + m.id]) return; seen[c.type + m.id] = 1;
               var year = String(m.releaseInfo || m.year || '').slice(0, 4);
+              var t = m.type === 'movie' || m.type === 'series' ? m.type : c.type === 'movie' ? 'movie' : 'series';
+              var isAnime = c.type === 'anime' || /^(kitsu|mal|anilist|anidb)[:_]/i.test(m.id);
               var name = m.name + (/^\d{4}$/.test(year) && !/\(\d{4}\)/.test(m.name) ? ' (' + year + ')' : '');
               out.push({
-                key: (c.type === 'series' ? 'series:' : 'movie:') + MV.norm(m.name + (c.type === 'movie' && year ? ' ' + year : '')),
-                type: c.type === 'series' ? 'series' : 'movie', name: name, year: /^\d{4}$/.test(year) ? year : '',
+                key: (t === 'series' ? 'series:' : 'movie:') + MV.norm(m.name + (t === 'movie' && year ? ' ' + year : '')),
+                type: t, name: name, year: /^\d{4}$/.test(year) ? year : '',
                 poster: m.poster || '', plot: m.description || '', genre: (m.genres || []).join(', '), rating: m.imdbRating || '',
-                group: (list.name || man.name) + ' · ' + (/^(kitsu|mal|anilist|anidb)[:_]/i.test(m.id) && !/anime/i.test(c.name || '') ? 'Anime ' : '') + (c.name || (c.type === 'series' ? 'Series' : 'Películas')),
-                st: { id: m.id, type: c.type, list: list.id }, list: list.id, url: ''
+                group: (list.name || man.name) + ' · ' + (isAnime && !/anime/i.test(c.name || '') ? 'Anime ' : '') + (c.name || (t === 'series' ? 'Series' : 'Películas')),
+                st: { id: m.id, type: t, list: list.id }, list: list.id, url: ''
               });
             });
           });
@@ -71,8 +74,11 @@
   /** Enlaces para ver: se piden a todos los addons que ofrecen "stream" para ese tipo e id. */
   MV.stremioStreams = function (type, id) {
     var ls = lists();
-    var jobs = ls.filter(function (l) { var m = l.man || {}; return !m.resources || (res(m, 'stream') && resTypes(m, 'stream').indexOf(type) >= 0 && prefixOk(m, 'stream', id)); }).map(function (l) {
-      return MV.getJSON(base(l.url) + '/stream/' + type + '/' + encodeURIComponent(id) + '.json').then(function (j) {
+    var animeId = /^(kitsu|mal|anilist|anidb)[:_]/i.test(id);
+    // Tipo que entiende cada addon: algunos de anime solo aceptan "anime"
+    function tyFor(m) { if (!m.resources) return type; var ts = resTypes(m, 'stream'); return ts.indexOf(type) >= 0 ? type : animeId && ts.indexOf('anime') >= 0 ? 'anime' : ''; }
+    var jobs = ls.filter(function (l) { var m = l.man || {}; return !m.resources || (res(m, 'stream') && tyFor(m) && prefixOk(m, 'stream', id)); }).map(function (l) {
+      return MV.getJSON(base(l.url) + '/stream/' + tyFor(l.man || {}) + '/' + encodeURIComponent(id) + '.json').then(function (j) {
         var all = (j && j.streams) || [];
         MV._stTorrents = (MV._stTorrents || 0) + all.filter(function (s) { return s.infoHash && !s.url; }).length;
         return all.filter(function (s) { return s.url && /^https?:/i.test(s.url); }).map(function (s) {
@@ -154,7 +160,8 @@
     var urls = srcs.filter(function (l) { return !l.man || res(l.man, 'meta'); }).map(function (l) { return base(l.url); });
     if (/^tt\d+/.test(st.id)) urls.push(base(CINEMETA));
     var chain = Promise.resolve(null);
-    urls.forEach(function (b) { chain = chain.then(function (m) { return m || MV.getJSON(b + '/meta/series/' + encodeURIComponent(st.id) + '.json').then(function (j) { return j && j.meta && (j.meta.videos || []).length ? j.meta : null; }).catch(function () { return null; }); }); });
+    var tys = /^(kitsu|mal|anilist|anidb)[:_]/i.test(st.id) ? ['series', 'anime'] : ['series'];
+    urls.forEach(function (b) { tys.forEach(function (ty) { chain = chain.then(function (m) { return m || MV.getJSON(b + '/meta/' + ty + '/' + encodeURIComponent(st.id) + '.json').then(function (j) { return j && j.meta && (j.meta.videos || []).length ? j.meta : null; }).catch(function () { return null; }); }); }); });
     return chain.then(function (meta) {
       if (!meta) return [];
       return (meta.videos || []).filter(function (v) { return (v.season || 0) > 0 || v.episode || v.number; }).map(function (v) {

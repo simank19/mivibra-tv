@@ -199,12 +199,13 @@ class GameActivity : ComponentActivity() {
             "<div id=q style='width:260px;height:260px;margin:12px'></div><div style='padding:0 12px 12px;text-align:center'>Escanea con el celular (mismo Wi-Fi) y elige <b>Mando de juego</b><br><small>$url</small></div>" +
             "<script src='qrcode.js'></script><script>var q=qrcode(0,'M');q.addData('$url');q.make();document.getElementById('q').innerHTML=q.createSvgTag({cellSize:6,margin:2,scalable:true});</script></body></html>"
         wv.loadDataWithBaseURL("file:///android_asset/www/", html, "text/html", "utf-8", null)
-        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert)
-            .setTitle("Celular como mando")
-            .setView(wv)
-            .setPositiveButton("Listo") { d, _ -> d.dismiss(); retroView.requestFocus() }
-            .setOnDismissListener { retroView.requestFocus() }
-            .show()
+        val box = FrameLayout(this).apply {
+            background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 18f * resources.displayMetrics.density; setColor(Color.WHITE) }
+            clipToOutline = true
+            addView(wv, FrameLayout.LayoutParams(-1, (330 * resources.displayMetrics.density).toInt()))
+        }
+        GlassMenu(this, "Celular como mando").subtitle("Escanea el código con el celular (en el mismo Wi-Fi) y elige Mando de juego.")
+            .custom(box).onDismiss { retroView.requestFocus() }.show()
     }
 
     fun remoteAxis(slot: Int, stick: String, x: Float, y: Float) = sendAxis(portFor(slot), stick, x, y)
@@ -595,10 +596,10 @@ class GameActivity : ComponentActivity() {
         val n = Overlays.styleCount(sys)
         val names = (0 until n).map { Overlays.styleName(it) } + "Sin marco"
         val cur = if (!Overlays.enabled(this, sys)) n else Overlays.style(this, sys)
-        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-            .setTitle("Marco de la consola")
-            .setSingleChoiceItems(names.toTypedArray(), cur) { d, which ->
-                d.dismiss(); retroView.requestFocus()
+        val m = GlassMenu(this, "Marco de la consola").chips().onDismiss { retroView.requestFocus() }
+        names.forEachIndexed { which, name ->
+            m.option(name, which == cur) {
+                retroView.requestFocus()
                 if (which == n) { Overlays.setEnabled(this, sys, false); removeOverlay() }
                 else {
                     Overlays.setStyle(this, sys, which)
@@ -606,7 +607,8 @@ class GameActivity : ComponentActivity() {
                     loadOverlay()
                 }
             }
-            .show()
+        }
+        m.show()
     }
 
     private fun removeOverlay() {
@@ -620,25 +622,22 @@ class GameActivity : ComponentActivity() {
         pad?.releaseAll()
         val padItem = if (pad == null) null else if (pad?.visibility == View.VISIBLE) "Ocultar controles en pantalla" else "Mostrar controles en pantalla"
         val frameItem = if (!Overlays.available(sys)) null else "Marco: " + (if (Overlays.enabled(this, sys)) Overlays.styleName(Overlays.style(this, sys)) else "sin marco")
-        val items = listOfNotNull("Continuar", "Guardar partida", "Cargar partida", "Reiniciar juego", frameItem, "Celular como mando", "Configurar mando", "Probar mando", "Salir del juego", padItem).toTypedArray()
-        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-            .setTitle(intent.getStringExtra("title") ?: "Juego")
-            .setItems(items) { d, which ->
-                d.dismiss()
-                retroView.requestFocus()
-                when (items[which]) {
-                    "Guardar partida" -> saveState()
-                    "Cargar partida" -> loadState()
-                    "Reiniciar juego" -> retroView.reset()
-                    "Celular como mando" -> phoneQr()
-                    "Configurar mando" -> startConfig()
-                    "Probar mando" -> startTest()
-                    frameItem -> chooseFrame()
-                    "Salir del juego" -> { saveSram(); finish() }
-                    padItem -> { val show = pad?.visibility != View.VISIBLE; padHiddenByUser = !show; setPadVisible(show) }
-                }
-            }
-            .show()
+        val m = GlassMenu(this, intent.getStringExtra("title") ?: "Juego").onDismiss { retroView.requestFocus() }
+        fun act(label: String, f: () -> Unit) { m.option(label, action = { retroView.requestFocus(); f() }) }
+        m.header("Partida")
+        act("▶  Continuar") {}
+        act("💾  Guardar partida") { saveState() }
+        act("📂  Cargar partida") { loadState() }
+        act("🔄  Reiniciar juego") { retroView.reset() }
+        m.header("Pantalla y controles")
+        if (frameItem != null) act("🖼  $frameItem") { chooseFrame() }
+        act("📱  Celular como mando") { phoneQr() }
+        act("🎮  Configurar mando") { startConfig() }
+        act("🕹  Probar mando") { startTest() }
+        if (padItem != null) act("👆  $padItem") { val show = pad?.visibility != View.VISIBLE; padHiddenByUser = !show; setPadVisible(show) }
+        m.header("Salir")
+        act("⏏  Salir del juego") { saveSram(); finish() }
+        m.close("Continuar").show()
     }
 
     private fun saveState() {

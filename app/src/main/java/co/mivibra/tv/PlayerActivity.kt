@@ -186,6 +186,14 @@ class PlayerActivity : ComponentActivity() {
             setScrubberColor(0xFFFF6900.toInt())
             setBufferedColor(0x66FFFFFF)
             setUnplayedColor(0x33FFFFFF)
+            // Con el control: 1 segundo por cada toque (si se mantiene, acelera) y se muestra a qué minuto va
+            setKeyTimeIncrement(1000)
+            timeBar = this
+            addListener(object : androidx.media3.ui.TimeBar.OnScrubListener {
+                override fun onScrubStart(timeBar: androidx.media3.ui.TimeBar, position: Long) = showSeek(position)
+                override fun onScrubMove(timeBar: androidx.media3.ui.TimeBar, position: Long) = showSeek(position)
+                override fun onScrubStop(timeBar: androidx.media3.ui.TimeBar, position: Long, canceled: Boolean) { showSeek(position); ui.removeCallbacks(hideSeekRun); ui.postDelayed(hideSeekRun, 1200) }
+            })
         }
         view.findViewById<View>(R.id.mv_center_play)?.setOnClickListener { player?.play() }
         // Favorito del canal o video actual
@@ -793,54 +801,44 @@ class PlayerActivity : ComponentActivity() {
                 }
             }
         }
-        val labels = mutableListOf<String>()
-        val actions = mutableListOf<(() -> Unit)?>()
-        fun header(t: String) { labels.add("— $t —"); actions.add(null) }
-        fun item(o: Opt) { labels.add((if (o.selected) "●  " else "○  ") + o.label); actions.add(o.run) }
+        val m = GlassMenu(this, "Audio y subtítulos").chips()
+            .subtitle("Elige el idioma del audio, los subtítulos y cómo se ve la imagen.")
+        m.header("Idioma del audio")
+        if (audio.isEmpty()) m.note("Este video no informa sus idiomas") else audio.forEach { o -> m.option(o.label, o.selected, action = o.run) }
+        if (audio.size == 1) m.note("Solo trae este idioma.")
 
-        header("IDIOMA DEL AUDIO")
-        if (audio.isEmpty()) { labels.add("   Este video no informa sus idiomas"); actions.add(null) } else audio.forEach { item(it) }
-        if (audio.size == 1) { labels.add("   Este video solo trae un idioma"); actions.add(null) }
-
-        header("SUBTÍTULOS")
-        item(Opt("Desactivados", text.isEmpty() || !anyTextSelected) {
+        m.header("Subtítulos")
+        m.option("Desactivados", text.isEmpty() || !anyTextSelected) {
             p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build()
             toastInfo("Subtítulos desactivados")
-        })
-        text.forEach { item(it) }
-        if (text.isEmpty() && extSub == null) { labels.add("   Este video no trae subtítulos propios"); actions.add(null) }
-        if (extSub != null) {
-            labels.add("●  Externo: $extSubName"); actions.add(null)
-            labels.add("    ⏪  Que aparezcan antes (−0,5 s)" + offLabel()); actions.add({ extOffset -= 500; reloadExternal("Subtítulos " + offText()) })
-            labels.add("    ⏩  Que aparezcan después (+0,5 s)"); actions.add({ extOffset += 500; reloadExternal("Subtítulos " + offText()) })
-            labels.add("    ⏪⏪  Mucho antes (−5 s)"); actions.add({ extOffset -= 5000; reloadExternal("Subtítulos " + offText()) })
-            labels.add("    ⏩⏩  Mucho después (+5 s)"); actions.add({ extOffset += 5000; reloadExternal("Subtítulos " + offText()) })
-            labels.add("    Quitar el subtítulo externo"); actions.add({ extSub = null; extOffset = 0; reloadExternal("Subtítulo externo quitado") })
         }
+        text.forEach { o -> m.option(o.label, o.selected, action = o.run) }
+        if (extSub != null) m.option("Externo: $extSubName", true, action = null)
         if (!live) {
-            labels.add(if (subKey.isNotBlank()) "Buscar subtítulos en internet" else "Buscar en internet (falta la clave de SubDL en Ajustes)")
-            actions.add(if (subKey.isNotBlank()) ({ searchSubs() }) else null)
+            if (subKey.isNotBlank()) m.option("🔎  Buscar en internet", action = { searchSubs() })
+            else m.option("🔎  Buscar en internet", action = null)
+        }
+        if (text.isEmpty() && extSub == null) m.note(if (live || subKey.isNotBlank()) "No trae subtítulos propios." else "No trae subtítulos propios. Para buscarlos en internet agrega la clave de SubDL en Ajustes.")
+        if (extSub != null) {
+            m.header("Sincronizar subtítulo" + offLabel())
+            m.option("−5 s", action = { extOffset -= 5000; reloadExternal("Subtítulos " + offText()) })
+            m.option("−0,5 s", action = { extOffset -= 500; reloadExternal("Subtítulos " + offText()) })
+            m.option("+0,5 s", action = { extOffset += 500; reloadExternal("Subtítulos " + offText()) })
+            m.option("+5 s", action = { extOffset += 5000; reloadExternal("Subtítulos " + offText()) })
+            m.option("Quitar externo", action = { extSub = null; extOffset = 0; reloadExternal("Subtítulo externo quitado") })
         }
 
-        header("TAMAÑO DE LOS SUBTÍTULOS")
+        m.header("Tamaño de los subtítulos")
         val curSize = prefs.getInt("subSize", 1)
-        subSizes.forEachIndexed { idx, sz -> item(Opt(sz.first, idx == curSize) { prefs.edit().putInt("subSize", idx).apply(); applySubtitleStyle(); toastInfo("Subtítulos: ${sz.first}") }) }
+        subSizes.forEachIndexed { idx, sz -> m.option(sz.first, idx == curSize) { prefs.edit().putInt("subSize", idx).apply(); applySubtitleStyle(); toastInfo("Subtítulos: ${sz.first}") } }
 
-        header("PANTALLA")
-        // En el celular: duplicar la pantalla en un TV (Miracast / Transmitir)
-        if (!packageManager.hasSystemFeature("android.software.leanback")) { labels.add("📡  Ver en un TV (pantalla inalámbrica)"); actions.add({ CastScreen.open(this) }) }
-        listOf(AspectRatioFrameLayout.RESIZE_MODE_FIT to "Original", AspectRatioFrameLayout.RESIZE_MODE_ZOOM to "Recortar (llenar pantalla)", AspectRatioFrameLayout.RESIZE_MODE_FILL to "Estirar").forEach { (m, n) ->
-            item(Opt(n, resizeMode == m) { resizeMode = m; view.resizeMode = m; toastInfo("Pantalla: $n") })
+        m.header("Pantalla")
+        listOf(AspectRatioFrameLayout.RESIZE_MODE_FIT to "Original", AspectRatioFrameLayout.RESIZE_MODE_ZOOM to "Recortar (llenar)", AspectRatioFrameLayout.RESIZE_MODE_FILL to "Estirar").forEach { (mode, n) ->
+            m.option(n, resizeMode == mode) { resizeMode = mode; view.resizeMode = mode; toastInfo("Pantalla: $n") }
         }
-
-        val dlg = AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-            .setTitle("Audio y subtítulos")
-            .setItems(labels.toTypedArray()) { d, which -> actions[which]?.let { it(); d.dismiss() } }
-            .setNegativeButton("Cerrar", null)
-            .create()
-        dlg.show()
-        // Enfoca la opción marcada, saltando los títulos de sección
-        dlg.listView?.post { val first = labels.indexOfFirst { it.startsWith("●") }; if (first >= 0) dlg.listView.setSelection(first) }
+        // En el celular: duplicar la pantalla en un TV (Miracast / Transmitir)
+        if (!packageManager.hasSystemFeature("android.software.leanback")) m.option("📡  Ver en un TV", action = { CastScreen.open(this) })
+        m.show()
     }
 
     private val hideInfoRun = Runnable { info.animate().alpha(0f).setDuration(300).withEndAction { info.visibility = View.GONE }.start() }
@@ -867,11 +865,9 @@ class PlayerActivity : ComponentActivity() {
             ui.post {
                 if (res.isEmpty()) { toastInfo("No encontré subtítulos para este título"); return@post }
                 val names = res.map { r -> (if (r.lang.isNotBlank()) "[" + r.lang.uppercase() + "]  " else "") + r.name + (if (r.episode > 0) "  (T${r.season} E${r.episode})" else "") }.toTypedArray()
-                AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                    .setTitle("Elige un subtítulo (el que coincida con tu versión)")
-                    .setItems(names) { _, w -> applySub(res[w]) }
-                    .setNegativeButton("Cancelar", null)
-                    .show()
+                val m = GlassMenu(this, "Elige un subtítulo").subtitle("Escoge el que coincida con tu versión del video.")
+                names.forEachIndexed { w, n -> m.option(n, action = { applySub(res[w]) }) }
+                m.close("Cancelar").show()
             }
         }.start()
     }
@@ -913,7 +909,45 @@ class PlayerActivity : ComponentActivity() {
         ui.postDelayed({ info.visibility = View.GONE }, 1500)
     }
 
+    private var timeBar: androidx.media3.ui.DefaultTimeBar? = null
+    private var seekLabel: TextView? = null
+    private val hideSeekRun = Runnable { seekLabel?.animate()?.alpha(0f)?.setDuration(250)?.start() }
+
+    private fun fmtTime(ms: Long): String {
+        val t = maxOf(0L, ms) / 1000
+        val h = t / 3600; val mi = (t % 3600) / 60; val se = t % 60
+        return if (h > 0) String.format(Locale.US, "%d:%02d:%02d", h, mi, se) else String.format(Locale.US, "%d:%02d", mi, se)
+    }
+
+    /** Etiqueta grande sobre la barra con el minuto al que se está adelantando o atrasando. */
+    private fun showSeek(pos: Long) {
+        val root = view.overlayFrameLayout ?: return
+        val lbl = seekLabel ?: TextView(this).apply {
+            setTextColor(Color.WHITE)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+            typeface = Typeface.DEFAULT_BOLD
+            setPadding(dp(22), dp(10), dp(22), dp(10))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(999).toFloat(); setColor(0xD9161B26.toInt()); setStroke(dp(2), 0xFFFF8A1F.toInt())
+            }
+            root.addView(this, android.widget.FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(110) })
+            seekLabel = this
+        }
+        val dur = player?.duration ?: 0L
+        lbl.text = fmtTime(pos) + if (dur > 0) "  /  " + fmtTime(dur) else ""
+        ui.removeCallbacks(hideSeekRun)
+        lbl.animate().cancel(); lbl.alpha = 1f; lbl.visibility = View.VISIBLE
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // Barra de tiempo enfocada: un toque = 1 s; mantener presionado acelera poco a poco
+        val tb = timeBar
+        if (tb != null && currentFocus === tb && (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)) {
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                val r = event.repeatCount
+                tb.setKeyTimeIncrement(when { r < 6 -> 1000L; r < 20 -> 5000L; r < 50 -> 15000L; else -> 30000L })
+            }
+        }
         val controllerVisible = view.isControllerFullyVisible
         if (panelOpen && !portraitPanel()) { ui.removeCallbacks(hidePanel); ui.postDelayed(hidePanel, 12_000) }
         if (event.action == KeyEvent.ACTION_DOWN) {
