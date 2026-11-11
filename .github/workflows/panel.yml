@@ -8,6 +8,7 @@ on:
     paths:
       - "app/src/main/assets/www/listas.html"
       - ".github/workflows/panel.yml"
+      - ".github/SIN_CONTACTO"
       - "docs/drive.html"
   workflow_dispatch:
 
@@ -46,7 +47,7 @@ jobs:
               body = re.sub(r'([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:', r'\1"\2":', body)
               body = re.sub(r',\s*}', '}', body).replace("'", '"')
               cfg = json.loads(body)
-          open('site/panel/config.js', 'w').write('window.MV_CONFIG = ' + json.dumps({'firebase': cfg, 'whatsapp': os.environ.get('MV_WHATSAPP', '').strip()}) + ';\n')
+          open('site/panel/config.js', 'w').write('window.MV_CONFIG = ' + json.dumps({'firebase': cfg, 'whatsapp': '' if os.path.exists('.github/SIN_CONTACTO') else os.environ.get('MV_WHATSAPP', '').strip()}) + ';\n')
           PY
           printf '<!doctype html><meta http-equiv="refresh" content="0;url=panel/">' > site/index.html
           # Página de regreso de Google al conectar Drive desde el celular
