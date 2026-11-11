@@ -32,6 +32,14 @@ jobs:
           MV_GOOGLE_TV_SECRET: ${{ secrets.MV_GOOGLE_TV_SECRET }}
         run: python3 .github/scripts/config.py
 
+      - name: Prueba gratuita (sin datos del dueño)
+        shell: bash
+        run: |
+          if [ -f .github/PRUEBA_GRATIS ]; then
+            rm -rf app/src/main/assets/www/mibiblioteca
+            echo "Prueba gratuita: se quitó la biblioteca privada y la configuración de la cuenta"
+          fi
+
       - name: Compilar
         run: |
           set -o pipefail
@@ -97,6 +105,14 @@ jobs:
           MV_GOOGLE_TV_CLIENT: ${{ secrets.MV_GOOGLE_TV_CLIENT }}
           MV_GOOGLE_TV_SECRET: ${{ secrets.MV_GOOGLE_TV_SECRET }}
         run: python .github/scripts/config.py
+
+      - name: Prueba gratuita (sin datos del dueño)
+        shell: bash
+        run: |
+          if [ -f .github/PRUEBA_GRATIS ]; then
+            rm -rf app/src/main/assets/www/mibiblioteca
+            echo "Prueba gratuita: se quitó la biblioteca privada y la configuración de la cuenta"
+          fi
 
       # 7-Zip (abre zip, 7z y rar) va dentro del instalador
       - name: Incluir 7-Zip

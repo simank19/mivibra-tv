@@ -99,7 +99,15 @@
       return new Promise(function (resolve, reject) {
         MV._stPick = function (i) { MV.closeModal(true); resolve(withRest(st[+i])); };
         MV.modal('<h2>Elige el enlace</h2><p class="muted">' + st.length + ' opciones de tus addons para “' + esc(title) + '”.</p><div class="stpick">' +
-          st.slice(0, 40).map(function (s, i) { return '<button class="line f" data-act="stPick" data-arg="' + i + '"' + (i ? '' : ' data-autofocus') + ' style="width:100%;text-align:left"><div class="t"><b>' + esc(s.src) + '</b><span style="white-space:pre-line">' + esc(s.title.slice(0, 160)) + '</span></div></button>'; }).join('') +
+          st.slice(0, 40).map(function (s, i) {
+            // Sin direcciones largas: solo el nombre de la fuente, el detalle y etiquetas de calidad e idioma
+            var txt = String(s.title || '').replace(/https?:\/\/\S+/g, '').replace(/\s+/g, ' ').trim();
+            var all = (s.src + ' ' + s.title + ' ' + s.url).toLowerCase(), tags = [];
+            [['2160p|4k|uhd', '4K'], ['1080p', '1080p'], ['720p', '720p'], ['480p', '480p'], ['hdr', 'HDR'], ['latino|lat\\b|\\bmx\\b', 'Latino'], ['castellano|\\bes\\b|spanish|español', 'Español'], ['dub', 'Doblado'], ['sub', 'Subtitulado']].forEach(function (t) { if (new RegExp(t[0]).test(all) && tags.indexOf(t[1]) < 0) tags.push(t[1]); });
+            var ext = (s.url.toLowerCase().split('?')[0].match(/\.(mp4|mkv|m3u8|avi|webm)$/) || [])[1];
+            if (ext) tags.push(ext.toUpperCase());
+            return '<button class="stopt f" data-act="stPick" data-arg="' + i + '"' + (i ? '' : ' data-autofocus') + '><b>' + esc(s.src || 'Enlace ' + (i + 1)) + '</b>' + (txt ? '<span>' + esc(txt.slice(0, 140)) + '</span>' : '') + (tags.length ? '<i>' + tags.map(function (t) { return '<em>' + esc(t) + '</em>'; }).join('') + '</i>' : '') + '</button>';
+          }).join('') +
           '</div><div class="btns"><button class="btn ghost f" data-act="confirmNo">Cancelar</button></div>', { onClose: function () { reject(new Error('cancelado')); } });
       });
     });

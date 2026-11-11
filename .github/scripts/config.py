@@ -2,6 +2,10 @@
 import json, os, re
 
 out = 'app/src/main/assets/www/config.js'
+# Prueba gratuita: sin los datos del dueño (sin cuenta, sin superadministrador, sin Firebase propio)
+if os.path.exists('.github/PRUEBA_GRATIS'):
+    print('Prueba gratuita: config.js queda vacío')
+    raise SystemExit(0)
 fb = os.environ.get('MV_FIREBASE', '').strip()
 if not fb:
     print('Sin MV_FIREBASE: la app queda sin inicio de sesión')
