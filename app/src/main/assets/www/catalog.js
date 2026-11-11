@@ -1077,11 +1077,14 @@
 
   // ---------- Carga y combinación de todas las listas ----------
   function retag(o) { if (o.type === 'book') return o; try { return tags(o); } catch (e) { return o; } }
+  var ST_V = 2; // sube cuando cambia la forma de leer los addons (fuerza recargarlos)
   function loadList(list, force) {
     var ck = 'list:' + list.id;
     return MV.idbGet(ck).then(function (cached) {
       // Las páginas web se actualizan cada hora (tus series nuevas aparecen solas); lo demás cada 12 horas
       var fresh = cached && cached.ts > Date.now() - (list.type === 'web' || list.type === 'fb' ? 3600e3 : 12 * 3600e3) && cached.v === 8;
+      // Addons: si quedaron vacíos o se guardaron con una versión anterior de la app, se vuelven a pedir
+      if (fresh && (list.type === 'stremio' || list.type === 'mvplugin') && (!cached.items.length || cached.sv !== ST_V)) fresh = false;
       // Lo guardado se vuelve a clasificar con las reglas actuales (+18, infantil, géneros, sin emojis)
       if (cached && !force && fresh) return cached.items.map(retag);
       var job;
@@ -1102,7 +1105,7 @@
         list.count = items.length; list.updated = Date.now(); list.error = '';
         // Para borrar listas vacías sin equivocarse: se recuerda si alguna vez trajo contenido y cuántas veces seguidas llegó vacía
         if (items.length) { list.hadItems = true; list.zeroLoads = 0; } else list.zeroLoads = (list.zeroLoads || 0) + 1;
-        MV.idbSet(ck, { ts: Date.now(), v: 8, items: items });
+        MV.idbSet(ck, { ts: Date.now(), v: 8, sv: ST_V, items: items });
         return items;
       }).catch(function (e) {
         list.error = e.message || 'Error';

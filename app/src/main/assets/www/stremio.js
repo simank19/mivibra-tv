@@ -51,10 +51,16 @@
       }).slice(0, 12);
       var out = [], seen = {};
       return Promise.all(cats.map(function (c) {
-        var pages = [0, 100, 200];
-        return Promise.all(pages.map(function (skip) {
-          return MV.getJSON(b + '/catalog/' + c.type + '/' + encodeURIComponent(c.id) + (skip ? '/skip=' + skip : '') + '.json').then(function (j) { return (j && j.metas) || []; }).catch(function () { return []; });
-        })).then(function (pp) {
+        // Páginas seguidas según lo que trae cada una (Kitsu da 20 por página, Cinemeta 100); solo si el catálogo acepta "skip"
+        var canSkip = (c.extra || []).some(function (e) { return e && e.name === 'skip'; }) || (c.extraSupported || []).indexOf('skip') >= 0;
+        var pp = [];
+        function page(skip, n) {
+          return MV.getJSON(b + '/catalog/' + c.type + '/' + encodeURIComponent(c.id) + (skip ? '/skip=' + skip : '') + '.json').then(function (j) { return (j && j.metas) || []; }).catch(function () { return []; }).then(function (metas) {
+            pp.push(metas);
+            if (canSkip && metas.length && n < 6 && skip + metas.length < 300) return page(skip + metas.length, n + 1);
+          });
+        }
+        return page(0, 1).then(function () {
           pp.forEach(function (metas) {
             metas.forEach(function (m) {
               if (!m || !m.id || seen[c.type + m.id]) return; seen[c.type + m.id] = 1;
