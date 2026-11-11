@@ -1981,9 +1981,12 @@
         : '<label class="field">Usuario<input class="in f" id="adUser" autocomplete="off"></label><label class="field">Contraseña (mínimo 8)<input class="in f" id="adPass" type="password"></label><label class="field">PIN rápido para el control (4 dígitos)<input class="in f" id="adPin" type="password" inputmode="numeric" maxlength="4"></label><button class="btn f" data-act="adultCreate">Crear usuario protegido</button>') + '</div>';
   };
   SETTINGS.remote = function () {
+    // En el celular lo útil es controlar la TV (buscarla y escanear su código), no mostrar un código propio
+    if (isPhoneCtl()) return phoneRemotePanel() + '<div class="panel glass"><h2>Otro celular como mando de este</h2><p>Si quieres que otro celular controle este equipo (por ejemplo una tablet conectada a la TV), toca el botón para ver el código.</p><div class="btns"><button class="btn ghost f" data-act="remoteQR">Mostrar código QR</button></div></div>';
     return '<div class="panel glass"><h2>Usa tu celular como control o mando</h2><p>Conecta el celular a la misma red Wi-Fi que este equipo y escanea el código. Funciona como control remoto, teclado para el buscador y mando de juego con joysticks (cada celular es un jugador).</p><div id="qrBox" style="display:flex;gap:24px;align-items:center;flex-wrap:wrap"><div class="spinner"></div></div></div>';
   };
-  SETTINGS.remote.after = function () { showQR(document.getElementById('qrBox')); };
+  SETTINGS.remote.after = function () { var b = document.getElementById('qrBox'); if (b) showQR(b); };
+  function isPhoneCtl() { return !!(A && A.remoteFind && !(MV.device && MV.device.tv)); }
   SETTINGS.sync = function () {
     var u = MV.sync.user;
     return '<div class="panel glass"><h2>Sincronización entre dispositivos</h2><p>Perfiles, favoritos, historial, “continuar viendo” y tus listas se guardan en tu propio proyecto de Firebase (gratis) para seguir viendo desde la TV, el celular o la tablet.</p>' +
@@ -3664,10 +3667,10 @@
   };
   // ---- Celular: control remoto dentro de la app ----
   function rcSaved() { return MV.load('rcTv', null); }
-  VIEWS.phoneRemote = function () {
+  VIEWS.phoneRemote = function () { return top('Control remoto') + phoneRemotePanel(); };
+  function phoneRemotePanel() {
     var t = rcSaved(), found = MV._rcFound;
-    return top('Control remoto') +
-      '<div class="panel glass"><h2>Tu celular como control de la TV</h2><p>Con el celular y la TV en el mismo Wi-Fi: busca tu TV, toca <b>Conectar</b> y escanea el código QR que aparece en la TV. Desde el control tienes la cruceta, el teclado, el mando de juego y accesos directos a Juegos, Buscar, Enviar listas, Enviar juegos y Google Drive.</p>' +
+    return '<div class="panel glass"><h2>Tu celular como control de la TV</h2><p>Con el celular y la TV en el mismo Wi-Fi: busca tu TV, toca <b>Conectar</b> y escanea el código QR que aparece en la TV. Desde el control tienes la cruceta, el teclado, el mando de juego y accesos directos a Juegos, Buscar, Enviar listas, Enviar juegos y Google Drive.</p>' +
       (t ? '<div class="btns"><button class="btn f" data-act="rcOpen" data-autofocus>' + IC.play + 'Abrir control · ' + esc(t.name || t.ip) + '</button></div>' : '') +
       '<div class="btns"><button class="btn ' + (t ? 'ghost ' : '') + 'f" data-act="rcFind"' + (t ? '' : ' data-autofocus') + '>' + IC.search + (MV._rcBusy ? 'Buscando…' : 'Buscar mi TV') + '</button><button class="btn ghost f" data-act="rcScanOnly">Escanear código QR</button></div>' +
       (found ? (found.length ? found.map(function (x) { return '<div class="line"><div class="t"><b>' + esc(x.name) + '</b><span>' + esc(x.ip) + '</span></div><button class="btn sm f" data-act="rcPair" data-arg="' + esc(x.ip) + '" data-name="' + esc(x.name) + '">Conectar</button></div>'; }).join('')
