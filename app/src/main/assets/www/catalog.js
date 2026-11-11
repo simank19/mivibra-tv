@@ -317,7 +317,8 @@
     }
     return Promise.resolve().then(attempt);
   };
-  function catMap(arr) { var m = {}; (arr || []).forEach(function (c) { m[c.category_id] = c.category_name; }); return m; }
+  function asList(x) { return Array.isArray(x) ? x : x && typeof x === 'object' ? Object.keys(x).map(function (k) { return x[k]; }).filter(function (v) { return v && typeof v === 'object'; }) : []; }
+  function catMap(arr) { var m = {}; asList(arr).forEach(function (c) { m[c.category_id] = c.category_name; }); return m; }
 
   function buildFromXtream(list) {
     var base = xtBase(list), u = encodeURIComponent(list.user), p = encodeURIComponent(list.pass);
@@ -333,13 +334,13 @@
       safe(xtGet(list, 'get_series', '', true))
     ]).then(function (r) {
       var lc = catMap(r[0]), vc = catMap(r[2]), sc = catMap(r[4]), out = [];
-      (r[1] || []).forEach(function (c) {
+      (asList(r[1])).forEach(function (c) {
         out.push(tags({ key: 'live:' + (c.epg_channel_id ? String(c.epg_channel_id).toLowerCase() : MV.norm(c.name)), type: 'live', name: c.name, logo: c.stream_icon, group: lc[c.category_id] || 'En vivo', tvg: c.epg_channel_id || '', num: c.num, url: base + '/live/' + u + '/' + p + '/' + c.stream_id + '.' + fmt, ua: list.ua || '', list: list.id }));
       });
-      (r[3] || []).forEach(function (m) {
+      (asList(r[3])).forEach(function (m) {
         out.push(tags({ key: 'movie:' + MV.norm(m.name), type: 'movie', name: m.name, poster: m.stream_icon, group: vc[m.category_id] || 'Películas', url: base + '/movie/' + u + '/' + p + '/' + m.stream_id + '.' + (m.container_extension || 'mp4'), ua: list.ua || '', rating: m.rating, added: +m.added || 0, list: list.id, ltid: /^\d+$/.test(String(m.tmdb || m.tmdb_id || '')) ? +(m.tmdb || m.tmdb_id) : undefined }));
       });
-      (r[5] || []).forEach(function (s) {
+      (asList(r[5])).forEach(function (s) {
         out.push(tags({ key: 'series:' + MV.norm(s.name), type: 'series', name: s.name, poster: s.cover, group: sc[s.category_id] || 'Series', plot: s.plot, genre: s.genre || '', rating: s.rating, year: (s.releaseDate || s.release_date || '').slice(0, 4), xt: { list: list.id, id: s.series_id }, list: list.id, ltid: /^\d+$/.test(String(s.tmdb || s.tmdb_id || '')) ? +(s.tmdb || s.tmdb_id) : undefined }));
       });
       return out;
@@ -1368,6 +1369,8 @@
       if (i.adult) return false;
       if (kids && !MV.kidsOk(i)) return false;
       if (P.latOnly && !D.latOk(i)) return false;
+      // Títulos de catálogos de addons: con "Solo con enlaces" se muestran únicamente los que ya se comprobó que tienen enlaces
+      if (P.stOnlyLinked && i.st && !i.url && !i.xt && MV.stLinked && MV.stLinked(i) !== true) return false;
       return true;
     });
   };

@@ -58,7 +58,7 @@
                 key: (c.type === 'series' ? 'series:' : 'movie:') + MV.norm(m.name + (c.type === 'movie' && year ? ' ' + year : '')),
                 type: c.type === 'series' ? 'series' : 'movie', name: name, year: /^\d{4}$/.test(year) ? year : '',
                 poster: m.poster || '', plot: m.description || '', genre: (m.genres || []).join(', '), rating: m.imdbRating || '',
-                group: (list.name || man.name) + ' · ' + (c.name || (c.type === 'series' ? 'Series' : 'Películas')),
+                group: (list.name || man.name) + ' · ' + (/^(kitsu|mal|anilist|anidb)[:_]/i.test(m.id) && !/anime/i.test(c.name || '') ? 'Anime ' : '') + (c.name || (c.type === 'series' ? 'Series' : 'Películas')),
                 st: { id: m.id, type: c.type, list: list.id }, list: list.id, url: ''
               });
             });
@@ -113,6 +113,38 @@
     });
   };
   MV.ACT.stPick = function (i) { if (MV._stPick) MV._stPick(i); };
+
+  // ---------- "Solo con enlaces": se revisa en segundo plano qué títulos de los catálogos tienen enlaces ----------
+  var LK = null;
+  function lk() { if (!LK) { LK = MV.load('stLinks', {}) || {}; var now = Date.now(); Object.keys(LK).forEach(function (k) { if (now - LK[k].t > 2 * 86400e3) delete LK[k]; }); } return LK; }
+  MV.stLinked = function (it) { var c = lk()[it.st.type + ':' + it.st.id]; return c ? c.ok : undefined; };
+  var running = false, saveT = 0;
+  MV.stCheckLinks = function () {
+    if (running || !MV.S.prefs.stOnlyLinked) return;
+    var streamers = lists().filter(function (l) { var m = l.man || {}; return !m.resources || res(m, 'stream'); });
+    if (!streamers.length) return;
+    var todo = (MV.S.items || []).filter(function (i) { return i.st && !i.url && !i.xt && MV.stLinked(i) === undefined; });
+    if (!todo.length) return;
+    running = true;
+    var n = 0, found = 0;
+    function next() {
+      var it = todo.shift();
+      if (!it) { running = false; MV.save('stLinks', lk()); MV._stLinkV = (MV._stLinkV || 0) + 1; if (found && MV.rerender) MV.rerender(); return; }
+      MV._stTorrents = 0;
+      MV.stremioStreams(it.st.type === 'series' ? 'series' : 'movie', it.st.type === 'series' ? it.st.id + (/^(kitsu|mal|anilist|anidb)[:_]/i.test(it.st.id) ? ':1' : ':1:1') : it.st.id).then(function (st) {
+        lk()[it.st.type + ':' + it.st.id] = { ok: st.length > 0, t: Date.now() };
+        if (st.length) found++;
+      }).catch(function () {}).then(function () {
+        n++;
+        // Cada 25 revisados se guarda y se muestra lo nuevo
+        if (n % 25 === 0) { MV.save('stLinks', lk()); MV._stLinkV = (MV._stLinkV || 0) + 1; if (found && MV.rerender) { found = 0; MV.rerender(); } }
+        setTimeout(next, 150);
+      });
+    }
+    for (var w = 0; w < 3; w++) next();
+  };
+  setTimeout(function () { MV.stCheckLinks(); }, 8000);
+  setInterval(function () { MV.stCheckLinks(); }, 5 * 60e3);
 
   /** Capítulos de una serie de Stremio (del addon que da la ficha o de Cinemeta). */
   MV.stremioEpisodes = function (item) {

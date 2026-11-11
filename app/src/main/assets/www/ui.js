@@ -1369,7 +1369,7 @@
   var SRCH = {}, VISC = {}, FUZZY = true, GENC = {};
   /** Qué títulos puede ver este perfil (se recalcula solo si cambian las listas, el perfil o los filtros). */
   function visibleMap() {
-    var k = [S.pid, MV.isKids(), !!P.latOnly, MV.adultOk ? MV.adultOk() : 0].join('|');
+    var k = [S.pid, MV.isKids(), !!P.latOnly, MV.adultOk ? MV.adultOk() : 0, P.stOnlyLinked ? (MV._stLinkV || 0) : -1].join('|');
     if (VISC.ref === S.items && VISC.k === k) return VISC.map;
     var m = {}; MV.visible(S.items).forEach(function (i) { m[i.key] = 1; });
     VISC = { ref: S.items, k: k, map: m };
@@ -1910,6 +1910,7 @@
           '<button class="iconbtn f" data-act="listEpg" data-arg="' + l.id + '" aria-label="Guía EPG">' + IC.guide + '</button>' +
           '<button class="iconbtn f" data-act="listDelete" data-arg="' + l.id + '" aria-label="Eliminar">' + IC.trash + '</button></div>';
       }).join('') : '<p class="muted">' + (provBlock ? 'Aún no has agregado listas propias.' : 'No has agregado listas.') + '</p>') +
+      '<div class="line"><div class="t"><b>Solo títulos con enlaces</b><span>En los catálogos de addons (Cinemeta, TMDB, anime…) oculta lo que tus addons de enlaces no pueden reproducir. Se revisa poco a poco en segundo plano, así que al activarlo los títulos van apareciendo a medida que se confirman.</span></div><button class="toggle f' + (P.stOnlyLinked ? ' on' : '') + '" data-act="stLinkToggle" aria-label="Solo títulos con enlaces"></button></div>' +
       '<div class="line"><div class="t"><b>Solo español latino</b><span>Muestra únicamente contenido en español latino (o sin idioma indicado). En K-Drama y Anime también deja el subtitulado con idioma original. Oculta castellano, inglés y otros idiomas; en TV en vivo deja canales de Latinoamérica e hispanos de EE. UU.</span></div><button class="toggle f' + (P.latOnly ? ' on' : '') + '" data-act="latToggle" aria-label="Solo español latino"></button></div>' +
       '<div class="line"><div class="t"><b>Eliminar listas vacías</b><span>Si una lista carga con 0 elementos (vencida, MAC rechazada o enlace caído) se borra sola. Si antes funcionaba, espera a que llegue vacía dos veces seguidas para no borrarla por una falla pasajera.</span></div><button class="toggle f' + (P.pruneEmpty !== false ? ' on' : '') + '" data-act="pruneToggle" aria-label="Eliminar listas vacías"></button></div>' +
       '<div class="line"><div class="t"><b>Ocultar contenido repetido</b><span>Si una película, serie o canal está en varias listas (aunque se llame distinto, como "Animales" y "Animals"), se muestra una sola vez con la versión de mejor calidad: 4K, luego Full HD, HD y SD; latino primero. Las otras quedan de respaldo por si la principal falla.</span></div><button class="toggle f' + (P.dedupe !== false ? ' on' : '') + '" data-act="dedupeToggle" aria-label="Ocultar repetidos"></button></div>' +
@@ -2494,6 +2495,7 @@
       }
       MV.playWebVideo({ key: s.key + '#' + i, name: s.name + ' · ' + e.title, yt: e.yt, embed: e.embed, url: e.url, poster: e.img || s.poster, group: s.group, type: 'video' });
     },
+    stLinkToggle: function (_, el) { P.stOnlyLinked = !P.stOnlyLinked; MV.savePrefs(); if (el) el.classList.toggle('on', P.stOnlyLinked); MV.toast(P.stOnlyLinked ? 'Revisando qué títulos tienen enlaces… irán apareciendo' : 'Mostrando todos los títulos de los catálogos'); if (P.stOnlyLinked && MV.stCheckLinks) MV.stCheckLinks(); },
     latToggle: function (_, el) { P.latOnly = !P.latOnly; MV.savePrefs(); if (el) el.classList.toggle('on', P.latOnly); MV.toast(P.latOnly ? 'Mostrando solo español latino (K-Drama y Anime con subtitulado)' : 'Mostrando todos los idiomas'); MV.reloadCatalog(false).then(function () { if (view.name === 'settings') MV.rerender(); }); },
     pruneToggle: function (_, el) { P.pruneEmpty = P.pruneEmpty === false; MV.savePrefs(); if (el) el.classList.toggle('on', P.pruneEmpty !== false); MV.toast(P.pruneEmpty !== false ? 'Las listas con 0 elementos se eliminarán solas' : 'Las listas vacías ya no se eliminan solas'); if (P.pruneEmpty !== false) MV.reloadCatalog(false).then(function () { if (view.name === 'settings') MV.rerender(); }); },
     dedupeToggle: function () { P.dedupe = P.dedupe === false; MV.savePrefs(); MV.toast(P.dedupe ? 'Mostrando solo la mejor versión de cada título' : 'Mostrando todas las versiones'); MV.reloadCatalog(false).then(MV.rerender); },
