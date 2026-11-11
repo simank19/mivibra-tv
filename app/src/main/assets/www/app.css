@@ -735,3 +735,20 @@ html.tv #modal { animation: none !important; }
 .ep2 .tx b small { font-weight: 400; color: var(--muted, #aaa); margin-left: 6px; }
 .ep2 .tx span { font-size: .85em; color: var(--muted, #bbb); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 @media (max-width: 640px) { .ep2 .st { width: 120px; } .castp { width: 80px; } .castp .ph { width: 64px; height: 64px; } }
+
+/* ---- Descargas ---- */
+.eprow { display: flex; align-items: center; gap: 6px; }
+.eprow .ep2 { flex: 1; min-width: 0; }
+.epdl { flex: 0 0 auto; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line, rgba(255,255,255,.15)); background: transparent; color: inherit; display: grid; place-items: center; font-weight: 700; }
+.epdl svg { width: 20px; height: 20px; }
+.epdl.on { color: var(--accent, #FF6900); border-color: var(--accent, #FF6900); }
+.epdl:focus { background: var(--accent, #FF6900); color: #fff; outline: none; }
+.dls { display: flex; flex-direction: column; gap: 10px; }
+.dlrow { display: flex; align-items: center; gap: 14px; padding: 10px 12px; border-radius: 16px; }
+.dlp { flex: 0 0 auto; width: 64px; aspect-ratio: 2/3; border-radius: 8px; overflow: hidden; background: hsl(var(--h) 35% 25%); }
+.dlp img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dlt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.dlt > span { font-size: .85em; color: var(--muted, #aaa); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dlt small { font-size: .78em; color: var(--accent, #FF9A4D); }
+.dlbar { display: block; height: 4px; border-radius: 4px; background: rgba(255,255,255,.12); overflow: hidden; }
+.dlbar u { display: block; height: 100%; background: var(--accent, #FF6900); }

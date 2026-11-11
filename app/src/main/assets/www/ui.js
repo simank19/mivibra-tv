@@ -148,7 +148,7 @@
         '</nav>';
       // Botones flotantes arriba en todas las pestañas: Buscar, Favoritos, Historial y Perfil
       var q = function (id, icon, label) { return '<button class="qbtn f' + (navOwner(view.name) === id ? ' on' : '') + '" data-act="nav" data-arg="' + id + '" data-fid="q-' + id + '" aria-label="' + label + '" title="' + label + '">' + icon + '</button>'; };
-      var quick = '<div class="qbar">' + MV.updBell() + (MV.isKids() ? '' : q('utils', IC.grid, 'Utilidades') + q('discover', IC.compass, 'Descubrir')) + q('search', IC.search, 'Buscar') + (MV.isKids() ? '' : q('favs', IC.star, 'Favoritos') + q('saved', IC.bookmark, 'Mi lista') + q('history', IC.history, 'Historial')) +
+      var quick = '<div class="qbar">' + MV.updBell() + (MV.isKids() ? '' : q('utils', IC.grid, 'Utilidades') + q('discover', IC.compass, 'Descubrir')) + q('search', IC.search, 'Buscar') + (MV.isKids() ? '' : q('favs', IC.star, 'Favoritos') + q('saved', IC.bookmark, 'Mi lista') + (A && A.dlList ? q('downloads', IC.download, 'Descargas') : '') + q('history', IC.history, 'Historial')) +
         (p ? '<button class="qprof f' + (view.name === 'settings' ? ' on' : '') + '" data-act="' + (MV.isKids() ? 'go' : 'profMenu') + '" data-arg="profiles" data-fid="q-prof" aria-label="Perfil y ajustes"><img class="avatar" src="' + esc(MV.avatarOf(p.avatar)) + '" alt=""><span>' + esc(p.name) + '</span></button>' : '') + '</div>';
       app.innerHTML = '<div class="shell">' + side + '<main class="main">' + quick + '<div class="view-in' + (still ? ' still' : '') + '">' + body + '</div></main></div>';
     }
@@ -1199,6 +1199,7 @@
       '<div class="btns">' + (it.type === 'series' ? '' :
         (prog ? '<button class="btn f" data-act="resume" data-key="' + esc(it.key) + '" data-autofocus>' + IC.play + 'Continuar · ' + MV.fmtDur(prog.pos) + '</button><button class="btn ghost f" data-act="play" data-key="' + esc(it.key) + '">Desde el inicio</button>'
           : '<button class="btn f" data-act="play" data-key="' + esc(it.key) + '" data-autofocus>' + IC.play + 'Reproducir</button>')) +
+      (it.type !== 'series' && A && A.dlStartVideo && it.url && !/\.m3u8|\/live\//i.test(it.url) ? (function () { var d = MV.dlOf(it.key); return '<button class="btn ghost f" data-act="dlItem" data-key="' + esc(it.key) + '">' + IC.download + (d ? dlLabel(d) : 'Descargar') + '</button>'; })() : '') +
       '<button class="btn ghost f" data-act="saveLater" data-key="' + esc(it.key) + '">' + (MV.isSaved(it.key) ? IC.bookmarkFill + 'Guardado' : IC.bookmark + 'Guardar') + '</button>' +
       '<button class="btn ghost f' + (fav ? ' favon' : '') + '" data-act="fav" data-key="' + esc(it.key) + '">' + (fav ? IC.heartFill : IC.heart) + (fav ? 'En favoritos' : 'Favorito') + '</button>' +
       '<button class="btn ghost f" data-act="langMenu" data-arg="' + esc(it.key) + '">Audio y subtítulos</button>' +
@@ -1278,7 +1279,8 @@
         var fbImg = (it._meta && (it._meta.backdrop || it._meta.poster)) || MV.poster(it) || '';
         function render(focusChip) {
           fbImg = (it._meta && (it._meta.backdrop || it._meta.poster)) || fbImg;
-          var list = seasons[cur] || [], seen = 0;
+          var list = seasons[cur] || [], seen = 0, dlMap = {};
+          MV.dlList().forEach(function (d) { dlMap[d.key] = d; });
           list.forEach(function (e) { var pr = MV.progressOf(it.key + '#' + e.season + 'x' + e.ep); if (pr && pr.dur && pr.pos / pr.dur > 0.9) seen++; });
           var info = tm[cur] || [];
           box.innerHTML = (keys.length > 1 ? '<div class="seasons">' + keys.map(function (k) { return '<button class="chip f' + (k === cur ? ' on' : '') + '" data-act="season" data-arg="' + k + '">Temporada ' + k + '</button>'; }).join('') + '</div>' : '') +
@@ -1291,9 +1293,11 @@
               // "Dragon Ball Super - S01E01 - ¡El gran premio…" → "¡El gran premio…"
               var raw = String(e.title || '').replace(/^.*?\bS\d{1,2}\s*E\d{1,4}\b\s*[-–:.]?\s*/i, '').trim();
               var name = /^(episodio|episode|cap[ií]tulo|ep\.?)?\s*\d+$/i.test(raw) || !raw ? (t.name || raw) : raw;
-              return '<button class="ep2 f" data-act="playEp" data-key="' + esc(it.key) + '" data-arg="' + eps.indexOf(e) + '"><span class="n">' + e.ep + '</span>' +
+              var dl = dlMap[k], canDl = A && A.dlStartVideo && e.url && !/\.m3u8/i.test(e.url);
+              return '<div class="eprow"><button class="ep2 f" data-act="playEp" data-key="' + esc(it.key) + '" data-arg="' + eps.indexOf(e) + '"><span class="n">' + e.ep + '</span>' +
                 '<span class="st' + (still ? '' : ' fb') + '" style="--h:' + MV.hue(it.name) + (still || !fbImg ? '' : ';--fb:url(&quot;' + esc(fbImg) + '&quot;)') + '">' + (still ? '<img loading="lazy" src="' + esc(still) + '" alt="" onerror="this.parentNode.classList.add(\'fb\');this.remove()">' : '') + (done ? '<em>✓ Visto</em>' : '') + (pct && !done ? '<u style="width:' + pct + '%"></u>' : '') + '</span>' +
-                '<span class="tx"><b>' + esc(name || ('Episodio ' + e.ep)) + (t.runtime ? ' <small>' + t.runtime + ' min</small>' : '') + '</b>' + (ov ? '<span>' + esc(ov) + '</span>' : '') + '</span></button>';
+                '<span class="tx"><b>' + esc(name || ('Episodio ' + e.ep)) + (t.runtime ? ' <small>' + t.runtime + ' min</small>' : '') + '</b>' + (ov ? '<span>' + esc(ov) + '</span>' : '') + '</span></button>' +
+                (canDl ? '<button class="epdl f' + (dl ? ' on' : '') + '" data-act="dlEp" data-key="' + esc(it.key) + '" data-arg="' + eps.indexOf(e) + '" aria-label="Descargar" title="' + (dl ? esc(dlLabel(dl)) : 'Descargar para ver sin internet') + '">' + (dl && dl.status === 'done' ? '✓' : IC.download) + '</button>' : '') + '</div>';
             }).join('');
           if (focusChip) { var c = box.querySelector('.seasons .chip.on'); if (c) c.focus(); }
         }
@@ -1577,6 +1581,40 @@
   VIEWS.favs = function () {
     var f = MV.favs().map(MV.resolve);
     return top('Favoritos') + (f.length ? grid(f, 'poster', 'favs') : '<div class="empty glass"><h2>Aún no tienes favoritos</h2><p class="muted">Abre un canal o película y toca “Favorito”, o presiona Menú en el control sobre cualquier tarjeta.</p></div>');
+  };
+  // ---------- Descargas para ver sin internet ----------
+  MV.dlList = function () { try { return A && A.dlList ? JSON.parse(A.dlList()) : []; } catch (e) { return []; } };
+  MV.dlOf = function (key) { var l = MV.dlList(); for (var i = 0; i < l.length; i++) if (l[i].key === key) return l[i]; return null; };
+  MV.dlLocal = function (key) { var d = MV.dlOf(key); return d && d.status === 'done' && d.file ? 'file://' + d.file : ''; };
+  function dlPct(d) { return d.total > 0 ? Math.min(99, Math.round(d.bytes / d.total * 100)) : 0; }
+  function dlLabel(d) { return !d ? '' : d.status === 'done' ? 'Descargado' : d.status === 'error' ? 'Falló · reintentar' : d.status === 'paused' ? 'En pausa (esperando red)' : 'Descargando ' + dlPct(d) + '%'; }
+  function fmtMB(b) { return b > 1e9 ? (b / 1e9).toFixed(1) + ' GB' : Math.round((b || 0) / 1e6) + ' MB'; }
+  function dlStart(info) {
+    if (!A || !A.dlStartVideo) { MV.toast('Las descargas funcionan en la app de Android'); return false; }
+    var r = A.dlStartVideo(JSON.stringify(info));
+    if (/^error:/.test(r)) { MV.toast(r.slice(6), 6000); return false; }
+    MV.toast(r === 'ya' ? 'Ya está en tus descargas' : 'Descargando… lo verás en Descargas (también sin internet)', 4500);
+    return true;
+  }
+  VIEWS.downloads = function () {
+    var l = MV.dlList().sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); });
+    var free = A && A.dlFree ? A.dlFree() : 0;
+    return top('Descargas') + '<p class="muted" style="margin:-4px 0 14px">Para ver sin internet: en un vuelo o sin señal. ' + (free ? 'Espacio libre: ' + fmtMB(free) + '.' : '') + '</p>' +
+      (l.length ? '<div class="dls">' + l.map(function (d) {
+        return '<div class="dlrow glass"><span class="dlp" style="--h:' + MV.hue(d.title || '') + '">' + (d.poster ? '<img loading="lazy" src="' + esc(d.poster) + '" alt="" onerror="this.remove()">' : '') + '</span>' +
+          '<span class="dlt"><b>' + esc(d.title || '') + '</b><span>' + esc(d.sub || '') + '</span><small data-dlk="' + esc(d.key) + '">' + esc(dlLabel(d)) + (d.total > 0 ? ' · ' + fmtMB(d.total) : '') + '</small>' + (d.status !== 'done' ? '<i class="dlbar"><u style="width:' + dlPct(d) + '%"></u></i>' : '') + '</span>' +
+          (d.status === 'done' ? '<button class="btn sm f" data-act="dlPlay" data-arg="' + esc(d.key) + '">' + IC.play + 'Ver</button>' : d.status === 'error' ? '<button class="btn sm ghost f" data-act="dlRetry" data-arg="' + esc(d.key) + '">Reintentar</button>' : '') +
+          '<button class="iconbtn f" data-act="dlDel" data-arg="' + esc(d.key) + '" aria-label="Borrar">' + IC.trash + '</button></div>';
+      }).join('') + '</div>' : '<div class="empty glass"><h2>Aún no tienes descargas</h2><p class="muted">En la ficha de una película toca “Descargar”, o en una serie el botón ⤓ de cada capítulo. Funciona con películas y series (no con canales en vivo).</p></div>');
+  };
+  VIEWS.downloads.after = function () {
+    clearInterval(MV._dlT);
+    MV._dlT = setInterval(function () {
+      if (!document.querySelector('.dls')) { clearInterval(MV._dlT); return; }
+      var l = MV.dlList(), changed = false;
+      l.forEach(function (d) { var el = document.querySelector('[data-dlk="' + (window.CSS && CSS.escape ? CSS.escape(d.key) : d.key) + '"]'); if (!el) return; var bar = el.parentNode.querySelector('.dlbar u'); if (d.status === 'done' && bar) changed = true; el.textContent = dlLabel(d) + (d.total > 0 ? ' · ' + fmtMB(d.total) : ''); if (bar) bar.style.width = dlPct(d) + '%'; });
+      if (changed) MV.rerender();
+    }, 2000);
   };
   VIEWS.saved = function () {
     var f = MV.savedList().map(MV.resolve);
@@ -2043,6 +2081,9 @@
       return;
     }
     var prog = resume ? MV.progressOf(it.key) : null;
+    // Descargada: se ve desde el archivo (funciona sin internet)
+    var local = MV.dlLocal(it.key);
+    if (local) { launch({ queue: [q(it, { url: local, alts: [] })], index: 0, live: false, startMs: prog ? prog.pos : 0 }, { item: it }); return; }
     var go = function (url) {
       // Antes de abrir, se elige entre la versión principal y las de respaldo la que responde (así el video arranca de una)
       pickWorking(it, url).then(function (r) { launch({ queue: [q(it, { url: r.url, alts: r.alts })], index: 0, live: false, startMs: prog ? prog.pos : 0 }, { item: it }); });
@@ -2056,6 +2097,9 @@
     var poster = MV.poster(series);
     var queue = eps.slice(i).map(function (x) { return Object.assign({ id: series.key + '#' + x.season + 'x' + x.ep, url: x.url, title: series.name, subtitle: 'T' + x.season + ' E' + x.ep + ' · ' + x.title, ua: x.ua || '', ref: x.ref || '', poster: poster, stk: x.stk || null }, subInfo(series, x.season, x.ep)); });
     var k = series.key + '#' + e.season + 'x' + e.ep, prog = resume !== false ? MV.progressOf(k) : null;
+    // Capítulos descargados: se ven desde el archivo
+    var dls = {}; MV.dlList().forEach(function (d) { if (d.status === 'done') dls[d.key] = 'file://' + d.file; });
+    queue.forEach(function (x) { if (dls[x.id]) x.url = dls[x.id]; });
     launch({ queue: queue, index: 0, live: false, startMs: prog ? prog.pos : 0 }, { item: series, episodes: eps, start: i });
   };
   /** Desde "Continuar viendo" del inicio de Android TV: sigue donde iba (espera a que cargue el catálogo). */
@@ -2458,6 +2502,27 @@
       MV.playItem(it, true);
     },
     playLive: function (_, el) { MV.playItem(S.byKey[el.dataset.key] || MV.reg[el.dataset.key]); },
+    dlItem: function (_, el) {
+      var it = S.byKey[el.dataset.key] || MV.reg[el.dataset.key]; if (!it) return;
+      var d = MV.dlOf(it.key); if (d && d.status === 'done') { MV.go('downloads'); return; }
+      var url = it.url; if (!url) { MV.toast('Este contenido no tiene un archivo para descargar'); return; }
+      if (dlStart({ key: it.key, url: url, title: MV.cleanTitle(it.name) || it.name, sub: it.year ? String(it.year) : 'Película', poster: MV.poster(it), ua: it.ua || '', ref: it.ref || '', type: 'movie' })) el.innerHTML = IC.download + 'Descargando…';
+    },
+    dlEp: function (i, el) {
+      var s = S.byKey[el.dataset.key] || MV.reg[el.dataset.key]; if (!s || !s.episodes) return;
+      var e = s.episodes[+i]; if (!e) return;
+      var k = s.key + '#' + e.season + 'x' + e.ep, d = MV.dlOf(k);
+      if (d && d.status === 'done') { MV.toast('Ya está descargado: búscalo en Descargas'); return; }
+      if (dlStart({ key: k, url: e.url, title: MV.cleanTitle(s.name) || s.name, sub: 'T' + e.season + ' E' + e.ep + ' · ' + (e.title || ''), poster: MV.poster(s), ua: e.ua || s.ua || '', ref: e.ref || s.ref || '', type: 'episode', parent: s.key })) el.classList.add('on');
+    },
+    dlPlay: function (key) {
+      var d = MV.dlOf(key); if (!d || d.status !== 'done') return;
+      var base = key.split('#')[0], it = S.byKey[base] || { key: base, type: d.type === 'episode' ? 'series' : 'movie', name: d.title, poster: d.poster };
+      var prog = MV.progressOf(key);
+      launch({ queue: [{ id: key, url: 'file://' + d.file, title: d.title, subtitle: d.sub || '', poster: d.poster || '', ua: '', ref: '', alts: [] }], index: 0, live: false, startMs: prog ? prog.pos : 0 }, { item: it });
+    },
+    dlRetry: function (key) { var d = MV.dlOf(key); if (!d) return; A.dlRemove(key); delete d.dmId; delete d.status; dlStart(d); MV.rerender(); },
+    dlDel: function (key) { MV.confirm('¿Borrar esta descarga?', 'Se libera el espacio. Podrás descargarla otra vez.', 'Borrar').then(function (y) { if (y) { A.dlRemove(key); MV.toast('Descarga borrada'); MV.rerender(); } }); },
     saveLater: function (_, el) { var it = S.byKey[el.dataset.key] || MV.reg[el.dataset.key]; if (!it) return; var on = MV.toggleSaved(it); MV.toast(on ? 'Guardado en Mi lista' : 'Quitado de Mi lista'); el.innerHTML = (on ? IC.bookmarkFill + 'Guardado' : IC.bookmark + 'Guardar'); },
     rate: function (n, el) {
       var it = S.byKey[el.dataset.key] || MV.reg[el.dataset.key]; if (!it) return;

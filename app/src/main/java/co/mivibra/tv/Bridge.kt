@@ -235,6 +235,16 @@ class Bridge(private val a: MainActivity) {
 
     // ---------------- Reproductor ----------------
 
+    // ---------------- Descargas para ver sin internet ----------------
+    @JavascriptInterface
+    fun dlStartVideo(json: String): String = try { Downloads.start(a, JSONObject(json)) } catch (e: Exception) { "error:" + (e.message ?: "No se pudo descargar") }
+    @JavascriptInterface
+    fun dlList(): String = try { Downloads.list(a).toString() } catch (_: Exception) { "[]" }
+    @JavascriptInterface
+    fun dlRemove(key: String) { Downloads.remove(a, key) }
+    @JavascriptInterface
+    fun dlFree(): Double = Downloads.free(a).toDouble()
+
     // ---------------- Celular como control (app del celular) ----------------
     /** Busca TVs con MiVibra en el mismo Wi-Fi (revisa las 254 direcciones de la red en paralelo). */
     @JavascriptInterface
