@@ -1661,6 +1661,26 @@
       });
     }).catch(function () { return []; });
   };
+  /** Dónde ver una película o serie de forma legal (Streaming Availability API de Movie of the Night, por RapidAPI). Se guarda 3 días. */
+  MV.whereToWatch = function (kind, tmdbId) {
+    var cc = (P.saCountry || 'co').toLowerCase(), ck = 'sa1:' + cc + ':' + kind + ':' + tmdbId;
+    return MV.idbGet(ck).then(function (c) {
+      if (c && c.ts > Date.now() - 3 * 86400e3) return c.data;
+      if (!P.saKey) return [];
+      return MV.getJSON('https://streaming-availability.p.rapidapi.com/shows/' + kind + '/' + tmdbId + '?country=' + cc + '&output_language=es', { 'X-RapidAPI-Key': P.saKey, 'X-RapidAPI-Host': 'streaming-availability.p.rapidapi.com' }).then(function (j) {
+        var seen = {}, out = [];
+        ((j && j.streamingOptions && j.streamingOptions[cc]) || []).forEach(function (o) {
+          var sv = o.service || {}, k = (sv.id || sv.name) + '|' + o.type;
+          if (seen[k]) return; seen[k] = 1;
+          out.push({ name: sv.name || sv.id || '', type: o.type || '', link: o.link || o.videoLink || sv.homePage || '', quality: o.quality || '', price: o.price && o.price.formatted || '', logo: sv.imageSet && (sv.imageSet.darkThemeImage || sv.imageSet.whiteImage || sv.imageSet.lightThemeImage) || '' });
+        });
+        var rank = { free: 0, subscription: 1, addon: 2, rent: 3, buy: 4 };
+        out.sort(function (a, b) { return (rank[a.type] || 9) - (rank[b.type] || 9); });
+        MV.idbSet(ck, { ts: Date.now(), data: out });
+        return out;
+      }).catch(function () { return []; });
+    });
+  };
   MV.buildFromM3U = function (txt, list) { return buildFromM3U(MV.parseM3U(txt || '', list), list); };
   MV.retag = retag;
   MV.archiveUrl = function (item) {

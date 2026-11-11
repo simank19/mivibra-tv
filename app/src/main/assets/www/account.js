@@ -45,7 +45,7 @@
   }
   function payload() {
     // "allowed" y "open" no van aquí: solo se escriben al cambiarlos (así un envío automático nunca los revierte)
-    return { lists: sharedLists(), tmdbKey: P.tmdbKey || '', ytKey: P.ytKey || '', subKey: P.subKey || '', streamKeys: P.streamKeys || {}, navOrder: P.navOrder || [], navHidden: P.navHidden || [] };
+    return { lists: sharedLists(), tmdbKey: P.tmdbKey || '', ytKey: P.ytKey || '', saKey: P.saKey || '', saCountry: P.saCountry || '', subKey: P.subKey || '', streamKeys: P.streamKeys || {}, navOrder: P.navOrder || [], navHidden: P.navHidden || [] };
   }
 
   /** Guarda en la nube los cambios del superadministrador. */
@@ -74,6 +74,7 @@
       var keyChanged = (cfg.tmdbKey || '') !== (P.tmdbKey || '');
       if (keyChanged) { P.tmdbKey = cfg.tmdbKey || ''; MV.save('prefs', P); }
       if ((cfg.ytKey || '') !== (P.ytKey || '')) { P.ytKey = cfg.ytKey || ''; MV.save('prefs', P); }
+      if ((cfg.saKey || '') !== (P.saKey || '') || (cfg.saCountry || '') !== (P.saCountry || '')) { P.saKey = cfg.saKey || ''; P.saCountry = cfg.saCountry || ''; MV.save('prefs', P); }
       if ((cfg.subKey || '') !== (P.subKey || '')) { P.subKey = cfg.subKey || ''; MV.save('prefs', P); }
       if (JSON.stringify(cfg.streamKeys || {}) !== JSON.stringify(P.streamKeys || {})) { P.streamKeys = cfg.streamKeys || {}; MV.save('prefs', P); MV.streamReset && MV.streamReset(); }
       // Orden del menú elegido por el superadministrador

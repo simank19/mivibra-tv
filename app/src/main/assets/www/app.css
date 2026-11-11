@@ -756,3 +756,11 @@ html.tv #modal { animation: none !important; }
 .stpick { display: flex; flex-direction: column; gap: 6px; max-height: 52vh; overflow-y: auto; margin: 8px 0; }
 .stpick .line { border-radius: 12px; }
 .stpick .line:focus { outline: 2px solid var(--accent, #FF6900); }
+
+/* ---- Dónde verlo ---- */
+.where { display: flex; gap: 10px; overflow-x: auto; padding: 2px 2px 12px; scrollbar-width: none; }
+.where::-webkit-scrollbar { display: none; }
+.wsvc { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 120px; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--line, rgba(255,255,255,.14)); background: var(--glass, rgba(255,255,255,.06)); color: inherit; text-align: left; }
+.wsvc img { height: 22px; max-width: 100px; object-fit: contain; }
+.wsvc small { font-size: .72em; color: var(--muted, #aaa); }
+.wsvc:focus { border-color: var(--accent, #FF6900); outline: none; background: rgba(255,255,255,.12); }

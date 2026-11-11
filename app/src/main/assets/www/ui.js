@@ -1195,7 +1195,7 @@
       '<div class="info"><span class="badge" id="metaSrc">' + (it.ia ? 'DOMINIO PÚBLICO · INTERNET ARCHIVE' : 'BUSCANDO FICHA…') + '</span>' +
       '<h1 id="mtitle">' + esc(MV.cleanTitle(it.name) || it.name) + '</h1>' +
       '<div class="facts" id="facts">' + facts.map(function (f) { return '<span class="pill">' + esc(f) + '</span>'; }).join('') + '</div>' +
-      '<p id="plot">' + esc(it.plot || '') + '</p>' + rateHtml(it) + '<div id="cast"></div>' +
+      '<p id="plot">' + esc(it.plot || '') + '</p>' + rateHtml(it) + '<div id="where"></div><div id="cast"></div>' +
       '<div class="btns">' + (it.type === 'series' ? '' :
         (prog ? '<button class="btn f" data-act="resume" data-key="' + esc(it.key) + '" data-autofocus>' + IC.play + 'Continuar · ' + MV.fmtDur(prog.pos) + '</button><button class="btn ghost f" data-act="play" data-key="' + esc(it.key) + '">Desde el inicio</button>'
           : '<button class="btn f" data-act="play" data-key="' + esc(it.key) + '" data-autofocus>' + IC.play + 'Reproducir</button>')) +
@@ -1259,6 +1259,12 @@
         '<div class="castrow">' + m.people.map(function (c) { return '<button class="castp f" data-act="castFind" data-arg="' + esc(c.n) + '"><span class="ph" style="--h:' + MV.hue(c.n) + '">' + (c.img ? '<img loading="lazy" src="' + esc(c.img) + '" alt="" onerror="this.remove()">' : '') + '<i>' + esc(c.n.split(' ').map(function (w) { return w[0]; }).slice(0, 2).join('')) + '</i></span><b>' + esc(c.n) + '</b><small>' + esc(c.ch) + '</small></button>'; }).join('') + '</div>';
       else if (cb && m.cast && m.cast.length) cb.innerHTML = '<p class="muted">Reparto: ' + esc(m.cast.join(', ')) + '</p>';
       if (it.type === 'series' && m.tmdbId) { it._tvId = m.tmdbId; if (MV._epsRender) MV._epsRender(); }
+      if (m.tmdbId && P.saKey && MV.whereToWatch) MV.whereToWatch(it.type === 'series' ? 'tv' : 'movie', m.tmdbId).then(function (opts) {
+        var wb = document.getElementById('where'); if (!wb || !opts || !opts.length) return;
+        var lbl = { subscription: 'Suscripción', free: 'Gratis', rent: 'Alquiler', buy: 'Compra', addon: 'Canal adicional' };
+        wb.innerHTML = '<div class="castlbl"><b>DÓNDE VERLO</b><span>' + esc((P.saCountry || 'co').toUpperCase()) + ' · Streaming Availability</span></div><div class="where">' +
+          opts.map(function (o) { return '<button class="wsvc f" data-act="openSa" data-arg="' + esc(o.link) + '">' + (o.logo ? '<img src="' + esc(o.logo) + '" alt="" onerror="this.remove()">' : '') + '<b>' + esc(o.name) + '</b><small>' + esc(lbl[o.type] || o.type) + (o.price ? ' · ' + esc(o.price) : '') + (o.quality ? ' · ' + esc(String(o.quality).toUpperCase()) : '') + '</small></button>'; }).join('') + '</div>';
+      });
       if (m.backdrop) document.getElementById('bd').style.backgroundImage = 'url("' + m.backdrop + '")';
       // Carátula: la elegida por ti, luego la de TMDB y luego la de la lista (si alguna no carga, pasa a la siguiente)
       if (!(P.covers && P.covers[it.key])) { var ps = document.getElementById('ps'); if (ps) ps.innerHTML = posterImg(it.poster ? [it.poster, m.poster, m.posters && m.posters[0]] : [m.poster, m.posters && m.posters[0]], it.name); }
@@ -2005,6 +2011,9 @@
       '<div class="panel glass"><h2>Subtítulos externos</h2><p>Con una clave gratuita de subdl.com (crea tu cuenta y copia tu API Key en tu panel) el reproductor busca subtítulos en español para cada película o episodio, desde el menú Audio y subtítulos.</p>' +
       (MV.acct.canEdit() ? '<label class="field">Clave de SubDL' + (MV.acct.isAdmin() ? ' · se comparte con todos los usuarios' : '') + '<input class="in f" id="subKey" value="' + esc(P.subKey || '') + '" autocomplete="off"></label><div class="btns"><button class="btn f" data-act="saveSubKey">Guardar</button></div>'
         : '<div class="line"><div class="t"><b>' + (P.subKey ? 'Clave configurada por el administrador' : 'El administrador aún no ha puesto la clave') + '</b></div></div>') + '</div>' +
+      '<div class="panel glass"><h2>Dónde verlo (Streaming Availability)</h2><p>Con tu clave de Streaming Availability API (RapidAPI › Movie of the Night) la ficha de cada película y serie muestra en qué plataformas está disponible en tu país (Netflix, Prime Video, Disney+, Max…) y abre la app de esa plataforma.</p>' +
+      (MV.acct.canEdit() ? '<label class="field">Clave de RapidAPI' + (MV.acct.isAdmin() ? ' · se comparte con todos los usuarios' : '') + '<input class="in f" id="saKey" value="' + esc(P.saKey || '') + '" autocomplete="off"></label><label class="field">País (código de 2 letras)<input class="in f" id="saCountry" value="' + esc(P.saCountry || 'co') + '" maxlength="2" autocomplete="off"></label><div class="btns"><button class="btn f" data-act="saveSaKey">Guardar</button></div>'
+        : '<div class="line"><div class="t"><b>' + (P.saKey ? 'Clave configurada por el administrador' : 'El administrador aún no ha puesto la clave') + '</b></div></div>') + '</div>' +
       '<div class="panel glass"><h2>YouTube dentro de la app</h2><p>Con una clave gratuita de la API de YouTube (Google Cloud › APIs y servicios › YouTube Data API v3) puedes buscar y ver videos sin salir de MiVibra TV. El cupo gratis alcanza para unas 100 búsquedas al día entre todos los usuarios; las tendencias casi no gastan cupo.</p>' +
       (MV.acct.canEdit() ? '<label class="field">Clave de la API de YouTube' + (MV.acct.isAdmin() ? ' · se comparte con todos los usuarios' : '') + '<input class="in f" id="ytKey" value="' + esc(P.ytKey || '') + '" autocomplete="off" placeholder="AIza…"></label><div class="btns"><button class="btn f" data-act="saveYtKey">Guardar</button></div>'
         : '<div class="line"><div class="t"><b>' + (P.ytKey ? 'Clave configurada por el administrador' : 'El administrador aún no ha puesto la clave') + '</b></div></div>') + '</div>' +
@@ -2998,6 +3007,8 @@
       MV.savePrefs(); MV.streamReset(); MV.toast('Claves de Twitch y Kick guardadas');
     },
     saveYtKey: function () { P.ytKey = document.getElementById('ytKey').value.trim(); MV.savePrefs(); YT.key = ''; YT.list = null; MV.toast('Clave de YouTube guardada'); },
+    saveSaKey: function () { P.saKey = document.getElementById('saKey').value.trim(); P.saCountry = (document.getElementById('saCountry').value.trim() || 'co').toLowerCase().slice(0, 2); MV.savePrefs(); MV.toast('Clave guardada: las fichas mostrarán dónde verlo'); },
+    openSa: function (u) { if (!u) return; if (A && A.openExternal) A.openExternal(u); else window.open(u, '_blank'); },
     saveTmdb: function () { P.tmdbKey = document.getElementById('tmdbKey').value.trim(); MV.savePrefs(); MV.toast('Clave guardada'); },
     clearMeta: function () { MV.toast('Las fichas se volverán a buscar'); S.items.forEach(function (i) { MV.idbDel('meta2:' + i.key); }); },
     // Búsqueda con teclado en pantalla
