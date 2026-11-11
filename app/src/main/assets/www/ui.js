@@ -1273,8 +1273,11 @@
         // Temporada inicial: la del último episodio que viste, si no la primera
         var cur = keys[0], last = 0;
         eps.forEach(function (e) { var pr = MV.progressOf(it.key + '#' + e.season + 'x' + e.ep); if (pr && (pr.ts || 0) >= last) { last = pr.ts || 1; cur = String(e.season); } });
-        var tm = {};
+        var tm = {}, absInfo = null, absTried = false;
+        // Sin imagen del capítulo: se usa el fondo o la carátula de la serie
+        var fbImg = (it._meta && (it._meta.backdrop || it._meta.poster)) || MV.poster(it) || '';
         function render(focusChip) {
+          fbImg = (it._meta && (it._meta.backdrop || it._meta.poster)) || fbImg;
           var list = seasons[cur] || [], seen = 0;
           list.forEach(function (e) { var pr = MV.progressOf(it.key + '#' + e.season + 'x' + e.ep); if (pr && pr.dur && pr.pos / pr.dur > 0.9) seen++; });
           var info = tm[cur] || [];
@@ -1282,18 +1285,33 @@
             '<h3 class="sh">Temporada ' + cur + ' <small>' + list.length + ' episodios' + (seen ? ' · ' + seen + ' vistos' : '') + '</small></h3>' +
             list.map(function (e) {
               var k = it.key + '#' + e.season + 'x' + e.ep, pr = MV.progressOf(k), t = info.filter(function (x) { return x.ep === +e.ep; })[0] || {};
+              if (!t.name && absInfo) t = absInfo[(+e.ep) - 1] || {};
+              var still = t.still || e.img || '', ov = t.overview || e.plot || '';
               var pct = pr && pr.dur ? Math.round(pr.pos / pr.dur * 100) : 0, done = pct > 90;
-              var name = /^(episodio|episode|cap[ií]tulo|ep\.?)?\s*\d+$/i.test(String(e.title || '').trim()) || !e.title ? (t.name || e.title) : e.title;
+              // "Dragon Ball Super - S01E01 - ¡El gran premio…" → "¡El gran premio…"
+              var raw = String(e.title || '').replace(/^.*?\bS\d{1,2}\s*E\d{1,4}\b\s*[-–:.]?\s*/i, '').trim();
+              var name = /^(episodio|episode|cap[ií]tulo|ep\.?)?\s*\d+$/i.test(raw) || !raw ? (t.name || raw) : raw;
               return '<button class="ep2 f" data-act="playEp" data-key="' + esc(it.key) + '" data-arg="' + eps.indexOf(e) + '"><span class="n">' + e.ep + '</span>' +
-                '<span class="st" style="--h:' + MV.hue(it.name + e.ep) + '">' + (t.still ? '<img loading="lazy" src="' + esc(t.still) + '" alt="" onerror="this.remove()">' : '') + (done ? '<em>✓ Visto</em>' : '') + (pct && !done ? '<u style="width:' + pct + '%"></u>' : '') + '</span>' +
-                '<span class="tx"><b>' + esc(name || ('Episodio ' + e.ep)) + (t.runtime ? ' <small>' + t.runtime + ' min</small>' : '') + '</b>' + (t.overview ? '<span>' + esc(t.overview) + '</span>' : '') + '</span></button>';
+                '<span class="st' + (still ? '' : ' fb') + '" style="--h:' + MV.hue(it.name) + (still || !fbImg ? '' : ';--fb:url(&quot;' + esc(fbImg) + '&quot;)') + '">' + (still ? '<img loading="lazy" src="' + esc(still) + '" alt="" onerror="this.parentNode.classList.add(\'fb\');this.remove()">' : '') + (done ? '<em>✓ Visto</em>' : '') + (pct && !done ? '<u style="width:' + pct + '%"></u>' : '') + '</span>' +
+                '<span class="tx"><b>' + esc(name || ('Episodio ' + e.ep)) + (t.runtime ? ' <small>' + t.runtime + ' min</small>' : '') + '</b>' + (ov ? '<span>' + esc(ov) + '</span>' : '') + '</span></button>';
             }).join('');
           if (focusChip) { var c = box.querySelector('.seasons .chip.on'); if (c) c.focus(); }
         }
+        function rerender() {
+          if (document.getElementById('eps') !== box) return;
+          var f = document.activeElement, inBox = box.contains(f), idx = inBox ? [].indexOf.call(box.querySelectorAll('.f'), f) : -1; render(); if (idx >= 0) { var nf = box.querySelectorAll('.f')[idx]; if (nf) nf.focus({ preventScroll: true }); }
+        }
         function fetchSeason() {
-          if (!it._tvId || tm[cur] || !MV.tmdbSeason) return;
+          if (!MV.tmdbSeason) return;
+          // Anime (ficha de otra fuente): se busca la serie en TMDB solo para las imágenes de los capítulos
+          if (!it._tvId) { if (!it._tvIdTried && MV.tmdbTvId) { it._tvIdTried = true; MV.tmdbTvId(it).then(function (id) { if (id) { it._tvId = id; fetchSeason(); } }); } return; }
+          if (tm[cur]) return;
           var want = cur;
-          MV.tmdbSeason(it._tvId, want).then(function (d) { if (d) { tm[want] = d; if (cur === want && document.getElementById('eps') === box) { var f = document.activeElement, inBox = box.contains(f), idx = inBox ? [].indexOf.call(box.querySelectorAll('.f'), f) : -1; render(); if (idx >= 0) { var nf = box.querySelectorAll('.f')[idx]; if (nf) nf.focus({ preventScroll: true }); } } } });
+          MV.tmdbSeason(it._tvId, want).then(function (d) {
+            tm[want] = d || [];
+            // La lista numera seguido (más capítulos que los de esa temporada en TMDB): se usan todos los de TMDB en orden
+            if ((seasons[want] || []).length > tm[want].length + 2 && !absTried) { absTried = true; MV.tmdbAllEps(it._tvId).then(function (all) { if (all && all.length) { absInfo = all; rerender(); } }); }
+            if (d) { if (cur === want && document.getElementById('eps') === box) { var f = document.activeElement, inBox = box.contains(f), idx = inBox ? [].indexOf.call(box.querySelectorAll('.f'), f) : -1; render(); if (idx >= 0) { var nf = box.querySelectorAll('.f')[idx]; if (nf) nf.focus({ preventScroll: true }); } } } });
         }
         MV._epsRender = function () { fetchSeason(); };
         MV._epsSeason = function (k) { cur = String(k); render(true); fetchSeason(); };

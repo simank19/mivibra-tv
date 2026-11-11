@@ -1682,6 +1682,26 @@
       }).catch(function () { return null; });
     });
   };
+  /** Id de la serie en TMDB (para animes cuya ficha sale de otra fuente). */
+  MV.tmdbTvId = function (item) {
+    if (!P.tmdbKey) return Promise.resolve(null);
+    var ck = 'tvid1:' + item.key;
+    return MV.idbGet(ck).then(function (c) {
+      if (c && c.id) return c.id;
+      var t = MV.cleanTitle(item.name).replace(/[(\[]\s*(19|20)\d{2}\s*[)\]]/g, ' ').trim();
+      return tmdb('/search/tv', '&query=' + encodeURIComponent(t)).then(function (d) {
+        var r = (d && d.results || [])[0]; if (!r) return null;
+        MV.idbSet(ck, { ts: Date.now(), id: r.id }); return r.id;
+      }).catch(function () { return null; });
+    });
+  };
+  /** Todos los episodios de TMDB en orden (para listas que numeran seguido: anime con 131 capítulos en "Temporada 1"). */
+  MV.tmdbAllEps = function (tvId) {
+    return tmdb('/tv/' + tvId).then(function (d) {
+      var ss = ((d && d.seasons) || []).filter(function (x) { return x.season_number > 0; }).map(function (x) { return x.season_number; });
+      return Promise.all(ss.map(function (n) { return MV.tmdbSeason(tvId, n); })).then(function (all) { return all.reduce(function (a, b) { return a.concat(b || []); }, []); });
+    }).catch(function () { return []; });
+  };
   // "Guardar para después" (Mi lista): igual que favoritos, pero aparte
   MV.isSaved = function (key) { var d = MV.pdata(); var f = (d.saved || {})[key]; return !!(f && !f.del); };
   MV.toggleSaved = function (it) {
