@@ -1261,8 +1261,9 @@
       if (it.type === 'series' && m.tmdbId) { it._tvId = m.tmdbId; if (MV._epsRender) MV._epsRender(); }
       if (m.backdrop) document.getElementById('bd').style.backgroundImage = 'url("' + m.backdrop + '")';
       // Carátula: la elegida por ti, luego la de TMDB y luego la de la lista (si alguna no carga, pasa a la siguiente)
-      if (!(P.covers && P.covers[it.key])) { var ps = document.getElementById('ps'); if (ps) ps.innerHTML = posterImg([m.poster, it.poster, m.posters && m.posters[0]], it.name); }
+      if (!(P.covers && P.covers[it.key])) { var ps = document.getElementById('ps'); if (ps) ps.innerHTML = posterImg(it.poster ? [it.poster, m.poster, m.posters && m.posters[0]] : [m.poster, m.posters && m.posters[0]], it.name); }
       if (m.poster && !it.poster) it.poster = m.poster;
+      // La carátula de la lista es la que corresponde a ese archivo; la de la ficha puede ser de otra película con el mismo nombre
     });
     if (it.type === 'series') {
       MV.loadEpisodes(it).then(function (eps) {

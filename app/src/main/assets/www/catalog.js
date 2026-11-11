@@ -337,10 +337,10 @@
         out.push(tags({ key: 'live:' + (c.epg_channel_id ? String(c.epg_channel_id).toLowerCase() : MV.norm(c.name)), type: 'live', name: c.name, logo: c.stream_icon, group: lc[c.category_id] || 'En vivo', tvg: c.epg_channel_id || '', num: c.num, url: base + '/live/' + u + '/' + p + '/' + c.stream_id + '.' + fmt, ua: list.ua || '', list: list.id }));
       });
       (r[3] || []).forEach(function (m) {
-        out.push(tags({ key: 'movie:' + MV.norm(m.name), type: 'movie', name: m.name, poster: m.stream_icon, group: vc[m.category_id] || 'Películas', url: base + '/movie/' + u + '/' + p + '/' + m.stream_id + '.' + (m.container_extension || 'mp4'), ua: list.ua || '', rating: m.rating, added: +m.added || 0, list: list.id }));
+        out.push(tags({ key: 'movie:' + MV.norm(m.name), type: 'movie', name: m.name, poster: m.stream_icon, group: vc[m.category_id] || 'Películas', url: base + '/movie/' + u + '/' + p + '/' + m.stream_id + '.' + (m.container_extension || 'mp4'), ua: list.ua || '', rating: m.rating, added: +m.added || 0, list: list.id, ltid: /^\d+$/.test(String(m.tmdb || m.tmdb_id || '')) ? +(m.tmdb || m.tmdb_id) : undefined }));
       });
       (r[5] || []).forEach(function (s) {
-        out.push(tags({ key: 'series:' + MV.norm(s.name), type: 'series', name: s.name, poster: s.cover, group: sc[s.category_id] || 'Series', plot: s.plot, genre: s.genre || '', rating: s.rating, year: (s.releaseDate || s.release_date || '').slice(0, 4), xt: { list: list.id, id: s.series_id }, list: list.id }));
+        out.push(tags({ key: 'series:' + MV.norm(s.name), type: 'series', name: s.name, poster: s.cover, group: sc[s.category_id] || 'Series', plot: s.plot, genre: s.genre || '', rating: s.rating, year: (s.releaseDate || s.release_date || '').slice(0, 4), xt: { list: list.id, id: s.series_id }, list: list.id, ltid: /^\d+$/.test(String(s.tmdb || s.tmdb_id || '')) ? +(s.tmdb || s.tmdb_id) : undefined }));
       });
       return out;
     });
@@ -1079,7 +1079,7 @@
     var ck = 'list:' + list.id;
     return MV.idbGet(ck).then(function (cached) {
       // Las páginas web se actualizan cada hora (tus series nuevas aparecen solas); lo demás cada 12 horas
-      var fresh = cached && cached.ts > Date.now() - (list.type === 'web' || list.type === 'fb' ? 3600e3 : 12 * 3600e3) && cached.v === 7;
+      var fresh = cached && cached.ts > Date.now() - (list.type === 'web' || list.type === 'fb' ? 3600e3 : 12 * 3600e3) && cached.v === 8;
       // Lo guardado se vuelve a clasificar con las reglas actuales (+18, infantil, géneros, sin emojis)
       if (cached && !force && fresh) return cached.items.map(retag);
       var job;
@@ -1098,7 +1098,7 @@
         list.count = items.length; list.updated = Date.now(); list.error = '';
         // Para borrar listas vacías sin equivocarse: se recuerda si alguna vez trajo contenido y cuántas veces seguidas llegó vacía
         if (items.length) { list.hadItems = true; list.zeroLoads = 0; } else list.zeroLoads = (list.zeroLoads || 0) + 1;
-        MV.idbSet(ck, { ts: Date.now(), v: 7, items: items });
+        MV.idbSet(ck, { ts: Date.now(), v: 8, items: items });
         return items;
       }).catch(function (e) {
         list.error = e.message || 'Error';
@@ -1149,7 +1149,7 @@
     var lists = S.lists.filter(function (l) { return l.enabled !== false; });
     if (!lists.length) return Promise.resolve();
     return Promise.all(lists.map(function (l) {
-      return MV.idbGet('list:' + l.id).then(function (c) { return c && c.v === 7 && c.items ? c : null; }).catch(function () { return null; });
+      return MV.idbGet('list:' + l.id).then(function (c) { return c && c.v >= 7 && c.items ? c : null; }).catch(function () { return null; });
     })).then(function (caches) {
       if (!caches.some(function (c) { return c && c.items.length; })) return MV.reloadCatalog(false);
       var all = caches.map(function (c) { return c ? c.items.map(retag) : []; });
@@ -1517,12 +1517,13 @@
       // Fichas guardadas antes de saber la edad se vuelven a pedir en perfiles infantiles
       // Fichas guardadas sin fecha de estreno (versiones anteriores) se vuelven a pedir una vez
       var fresh = c && c.ts > Date.now() - 14 * 86400e3 && !(MV.isKids() && c.data && c.data.age === undefined) && !(c.data && c.data.source === 'TMDB' && (c.data.date === undefined || c.data.people === undefined));
+      if (fresh && item.ltid && c.data && c.data.tmdbId && c.data.tmdbId !== item.ltid) fresh = false;
       if (fresh) { if (c.data) { MV.learnGenres(item, c.data.genres, c.data.age, c.data.year, c.data.date); if (c.data.tmdbId) MV.learnTid(item, c.data.kind + ':' + c.data.tmdbId); } return c.data; }
       var title = MV.cleanTitle(item.name);
       var year = (item.year || (item.name.match(/\((19|20)\d{2}\)/) || [''])[0].replace(/[()]/g, ''));
       var job;
       if (item.anime && item.type !== 'live') job = jikan(title);
-      else if (P.tmdbKey && item.type !== 'live') job = tmdbMeta(title, year, item.type === 'series' ? 'tv' : 'movie');
+      else if (P.tmdbKey && item.type !== 'live') job = tmdbMeta(title, year, item.type === 'series' ? 'tv' : 'movie', item.ltid || null);
       else job = Promise.resolve(null);
       return job.then(function (data) {
         if (!data && item.anime && P.tmdbKey) return tmdbMeta(title, year, item.type === 'series' ? 'tv' : 'movie');
@@ -1533,7 +1534,7 @@
       }).catch(function () { return null; });
     });
   };
-  function tmdbMeta(title, year, kind) {
+  function tmdbMeta(title, year, kind, knownId) {
     // Elige el mejor resultado: título igual, año cercano y la más conocida (evita confundir "2012" con otra película parecida)
     function best(results) {
       var want = MV.norm(title);
@@ -1566,7 +1567,8 @@
     // Intentos en orden: con año, sin año, solo la parte antes de ":" o " - ", en inglés y como el otro tipo (serie/película)
     var short = title.split(/\s[-–:|]\s|:\s/)[0].trim();
     var tries = [[title, kind, year], [title, kind, ''], short !== title ? [short, kind, year] : null, [title, kind, '', 'en-US'], [title, other, year], [title, other, '']].filter(Boolean);
-    var chain = Promise.resolve(null);
+    // Si la lista trae el id de TMDB, se usa directo (sin adivinar por el título)
+    var chain = Promise.resolve(knownId ? { id: knownId, _kind: kind } : null);
     tries.forEach(function (tr) { chain = chain.then(function (r) { return r || q(tr[0], tr[1], tr[2], tr[3]); }); });
     return chain.then(function (r) {
       if (!r) return null;
