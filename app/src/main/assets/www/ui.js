@@ -148,7 +148,7 @@
         '</nav>';
       // Botones flotantes arriba en todas las pestañas: Buscar, Favoritos, Historial y Perfil
       var q = function (id, icon, label) { return '<button class="qbtn f' + (navOwner(view.name) === id ? ' on' : '') + '" data-act="nav" data-arg="' + id + '" data-fid="q-' + id + '" aria-label="' + label + '" title="' + label + '">' + icon + '</button>'; };
-      var quick = '<div class="qbar">' + MV.updBell() + (MV.isKids() ? '' : q('utils', IC.grid, 'Utilidades') + q('discover', IC.compass, 'Descubrir')) + q('search', IC.search, 'Buscar') + (MV.isKids() ? '' : q('favs', IC.star, 'Favoritos') + q('history', IC.history, 'Historial')) +
+      var quick = '<div class="qbar">' + MV.updBell() + (MV.isKids() ? '' : q('utils', IC.grid, 'Utilidades') + q('discover', IC.compass, 'Descubrir')) + q('search', IC.search, 'Buscar') + (MV.isKids() ? '' : q('favs', IC.star, 'Favoritos') + q('saved', IC.bookmark, 'Mi lista') + q('history', IC.history, 'Historial')) +
         (p ? '<button class="qprof f' + (view.name === 'settings' ? ' on' : '') + '" data-act="' + (MV.isKids() ? 'go' : 'profMenu') + '" data-arg="profiles" data-fid="q-prof" aria-label="Perfil y ajustes"><img class="avatar" src="' + esc(MV.avatarOf(p.avatar)) + '" alt=""><span>' + esc(p.name) + '</span></button>' : '') + '</div>';
       app.innerHTML = '<div class="shell">' + side + '<main class="main">' + quick + '<div class="view-in' + (still ? ' still' : '') + '">' + body + '</div></main></div>';
     }
@@ -551,6 +551,8 @@
     }
     html += row('Continuar viendo', cont.map(function (c) { return MV.resolve(c); }), 'wide');
     html += row('Favoritos', favs.slice(0, 30));
+    var saved = MV.savedList ? MV.savedList().map(MV.resolve) : [];
+    if (saved.length) html += row('Mi lista', saved.slice(0, 30));
     html += row('Canales en vivo', coFirst(live).slice(0, 30), 'ch', live.length + ' canales', 'live');
     html += row('Sugerido para ti', suggested(), 'poster', 'Según lo que ves en este perfil');
     var trendHave = (DISC.rows.trend || []).filter(function (t) { return t.have; });
@@ -1193,17 +1195,23 @@
       '<div class="info"><span class="badge" id="metaSrc">' + (it.ia ? 'DOMINIO PÚBLICO · INTERNET ARCHIVE' : 'BUSCANDO FICHA…') + '</span>' +
       '<h1 id="mtitle">' + esc(MV.cleanTitle(it.name) || it.name) + '</h1>' +
       '<div class="facts" id="facts">' + facts.map(function (f) { return '<span class="pill">' + esc(f) + '</span>'; }).join('') + '</div>' +
-      '<p id="plot">' + esc(it.plot || '') + '</p><div class="muted" id="cast"></div>' +
+      '<p id="plot">' + esc(it.plot || '') + '</p>' + rateHtml(it) + '<div id="cast"></div>' +
       '<div class="btns">' + (it.type === 'series' ? '' :
         (prog ? '<button class="btn f" data-act="resume" data-key="' + esc(it.key) + '" data-autofocus>' + IC.play + 'Continuar · ' + MV.fmtDur(prog.pos) + '</button><button class="btn ghost f" data-act="play" data-key="' + esc(it.key) + '">Desde el inicio</button>'
           : '<button class="btn f" data-act="play" data-key="' + esc(it.key) + '" data-autofocus>' + IC.play + 'Reproducir</button>')) +
-      '<button class="btn ghost f" data-act="fav" data-key="' + esc(it.key) + '">' + (fav ? IC.starFill : IC.star) + (fav ? 'En favoritos' : 'Favorito') + '</button>' +
+      '<button class="btn ghost f" data-act="saveLater" data-key="' + esc(it.key) + '">' + (MV.isSaved(it.key) ? IC.bookmarkFill + 'Guardado' : IC.bookmark + 'Guardar') + '</button>' +
+      '<button class="btn ghost f' + (fav ? ' favon' : '') + '" data-act="fav" data-key="' + esc(it.key) + '">' + (fav ? IC.heartFill : IC.heart) + (fav ? 'En favoritos' : 'Favorito') + '</button>' +
       '<button class="btn ghost f" data-act="langMenu" data-arg="' + esc(it.key) + '">Audio y subtítulos</button>' +
       (it.adult ? '<button class="btn ghost f" data-act="adultCover" data-arg="' + esc(it.key) + '">Carátula</button>' : '') +
       '</div>' +
       (it.type === 'series' ? '<div id="eps" class="eps"><div class="spinner"></div></div>' : '') + '</div></div>' +
       '<div id="related">' + relatedHtml(it) + '</div>';
   };
+  /** Tu calificación (1 a 5 estrellas), se guarda en tu perfil y se sincroniza. */
+  function rateHtml(it) {
+    var v = MV.myRate ? MV.myRate(it.key) : 0;
+    return '<div class="rate"><span>Tu calificación</span>' + [1, 2, 3, 4, 5].map(function (n) { return '<button class="rstar f' + (n <= v ? ' on' : '') + '" data-act="rate" data-key="' + esc(it.key) + '" data-arg="' + n + '" aria-label="' + n + ' estrellas">' + (n <= v ? IC.starFill : IC.star) + '</button>'; }).join('') + (v ? '<small>' + ['', 'No me gustó', 'Regular', 'Buena', 'Muy buena', '¡Excelente!'][v] + '</small>' : '') + '</div>';
+  }
   /** Relacionadas: misma saga, mismos géneros (de la ficha), misma categoría o plataforma y años cercanos. */
   function relatedOf(it) {
     var pool = MV.visible(it.type === 'series' ? S.series : S.movies);
@@ -1245,7 +1253,11 @@
       if (m.overview) document.getElementById('plot').textContent = m.overview;
       var facts = [m.year, m.runtime, m.rating ? '★ ' + m.rating : ''].concat(m.genres || []).filter(Boolean);
       document.getElementById('facts').innerHTML = facts.map(function (f) { return '<span class="pill">' + esc(f) + '</span>'; }).join('');
-      if (m.cast && m.cast.length) document.getElementById('cast').textContent = 'Reparto: ' + m.cast.join(', ');
+      var cb = document.getElementById('cast');
+      if (cb && m.people && m.people.length) cb.innerHTML = '<div class="castlbl"><b>REPARTO</b>' + (m.creator ? '<span>' + (it.type === 'series' ? 'Creada por ' : 'Dirigida por ') + esc(m.creator) + '</span>' : '') + '</div>' +
+        '<div class="castrow">' + m.people.map(function (c) { return '<button class="castp f" data-act="castFind" data-arg="' + esc(c.n) + '"><span class="ph" style="--h:' + MV.hue(c.n) + '">' + (c.img ? '<img loading="lazy" src="' + esc(c.img) + '" alt="" onerror="this.remove()">' : '') + '<i>' + esc(c.n.split(' ').map(function (w) { return w[0]; }).slice(0, 2).join('')) + '</i></span><b>' + esc(c.n) + '</b><small>' + esc(c.ch) + '</small></button>'; }).join('') + '</div>';
+      else if (cb && m.cast && m.cast.length) cb.innerHTML = '<p class="muted">Reparto: ' + esc(m.cast.join(', ')) + '</p>';
+      if (it.type === 'series' && m.tmdbId) { it._tvId = m.tmdbId; if (MV._epsRender) MV._epsRender(); }
       if (m.backdrop) document.getElementById('bd').style.backgroundImage = 'url("' + m.backdrop + '")';
       // Carátula: la elegida por ti, luego la de TMDB y luego la de la lista (si alguna no carga, pasa a la siguiente)
       if (!(P.covers && P.covers[it.key])) { var ps = document.getElementById('ps'); if (ps) ps.innerHTML = posterImg([m.poster, it.poster, m.posters && m.posters[0]], it.name); }
@@ -1257,15 +1269,36 @@
         if (!eps.length) { box.innerHTML = '<p class="muted">No se encontraron episodios.</p>'; return; }
         eps.sort(function (a, b) { return a.season - b.season || a.ep - b.ep; });
         var seasons = {}; eps.forEach(function (e) { (seasons[e.season] = seasons[e.season] || []).push(e); });
-        var html = '';
-        Object.keys(seasons).forEach(function (s) {
-          html += '<h3 style="margin:10px 0 4px">Temporada ' + s + '</h3>';
-          seasons[s].forEach(function (e) {
-            var k = it.key + '#' + e.season + 'x' + e.ep, pr = MV.progressOf(k);
-            html += '<button class="ep f" data-act="playEp" data-key="' + esc(it.key) + '" data-arg="' + eps.indexOf(e) + '"><span class="badge">' + e.season + 'x' + e.ep + '</span><b>' + esc(e.title) + '</b>' + (pr ? '<span class="muted">' + Math.round(pr.pos / pr.dur * 100) + '%</span>' : '') + IC.play.replace('<svg', '<svg width="16" height="16"') + '</button>';
-          });
-        });
-        box.innerHTML = html;
+        var keys = Object.keys(seasons).sort(function (a, b) { return a - b; });
+        // Temporada inicial: la del último episodio que viste, si no la primera
+        var cur = keys[0], last = 0;
+        eps.forEach(function (e) { var pr = MV.progressOf(it.key + '#' + e.season + 'x' + e.ep); if (pr && (pr.ts || 0) >= last) { last = pr.ts || 1; cur = String(e.season); } });
+        var tm = {};
+        function render(focusChip) {
+          var list = seasons[cur] || [], seen = 0;
+          list.forEach(function (e) { var pr = MV.progressOf(it.key + '#' + e.season + 'x' + e.ep); if (pr && pr.dur && pr.pos / pr.dur > 0.9) seen++; });
+          var info = tm[cur] || [];
+          box.innerHTML = (keys.length > 1 ? '<div class="seasons">' + keys.map(function (k) { return '<button class="chip f' + (k === cur ? ' on' : '') + '" data-act="season" data-arg="' + k + '">Temporada ' + k + '</button>'; }).join('') + '</div>' : '') +
+            '<h3 class="sh">Temporada ' + cur + ' <small>' + list.length + ' episodios' + (seen ? ' · ' + seen + ' vistos' : '') + '</small></h3>' +
+            list.map(function (e) {
+              var k = it.key + '#' + e.season + 'x' + e.ep, pr = MV.progressOf(k), t = info.filter(function (x) { return x.ep === +e.ep; })[0] || {};
+              var pct = pr && pr.dur ? Math.round(pr.pos / pr.dur * 100) : 0, done = pct > 90;
+              var name = /^(episodio|episode|cap[ií]tulo|ep\.?)?\s*\d+$/i.test(String(e.title || '').trim()) || !e.title ? (t.name || e.title) : e.title;
+              return '<button class="ep2 f" data-act="playEp" data-key="' + esc(it.key) + '" data-arg="' + eps.indexOf(e) + '"><span class="n">' + e.ep + '</span>' +
+                '<span class="st" style="--h:' + MV.hue(it.name + e.ep) + '">' + (t.still ? '<img loading="lazy" src="' + esc(t.still) + '" alt="" onerror="this.remove()">' : '') + (done ? '<em>✓ Visto</em>' : '') + (pct && !done ? '<u style="width:' + pct + '%"></u>' : '') + '</span>' +
+                '<span class="tx"><b>' + esc(name || ('Episodio ' + e.ep)) + (t.runtime ? ' <small>' + t.runtime + ' min</small>' : '') + '</b>' + (t.overview ? '<span>' + esc(t.overview) + '</span>' : '') + '</span></button>';
+            }).join('');
+          if (focusChip) { var c = box.querySelector('.seasons .chip.on'); if (c) c.focus(); }
+        }
+        function fetchSeason() {
+          if (!it._tvId || tm[cur] || !MV.tmdbSeason) return;
+          var want = cur;
+          MV.tmdbSeason(it._tvId, want).then(function (d) { if (d) { tm[want] = d; if (cur === want && document.getElementById('eps') === box) { var f = document.activeElement, inBox = box.contains(f), idx = inBox ? [].indexOf.call(box.querySelectorAll('.f'), f) : -1; render(); if (idx >= 0) { var nf = box.querySelectorAll('.f')[idx]; if (nf) nf.focus({ preventScroll: true }); } } } });
+        }
+        MV._epsRender = function () { fetchSeason(); };
+        MV._epsSeason = function (k) { cur = String(k); render(true); fetchSeason(); };
+        render();
+        fetchSeason();
         MV.focusFirst(document.querySelector('.main'));
       }).catch(function (e) { var box = document.getElementById('eps'); if (box) box.innerHTML = '<p class="muted">' + esc(e.message) + '</p>'; });
     }
@@ -1526,6 +1559,10 @@
   VIEWS.favs = function () {
     var f = MV.favs().map(MV.resolve);
     return top('Favoritos') + (f.length ? grid(f, 'poster', 'favs') : '<div class="empty glass"><h2>Aún no tienes favoritos</h2><p class="muted">Abre un canal o película y toca “Favorito”, o presiona Menú en el control sobre cualquier tarjeta.</p></div>');
+  };
+  VIEWS.saved = function () {
+    var f = MV.savedList().map(MV.resolve);
+    return top('Mi lista') + (f.length ? grid(f, 'poster', 'saved') : '<div class="empty glass"><h2>Tu lista está vacía</h2><p class="muted">En la ficha de una película o serie toca “Guardar” para verla después.</p></div>');
   };
   VIEWS.history = function () {
     var h = MV.pdata().history;
@@ -2403,6 +2440,15 @@
       MV.playItem(it, true);
     },
     playLive: function (_, el) { MV.playItem(S.byKey[el.dataset.key] || MV.reg[el.dataset.key]); },
+    saveLater: function (_, el) { var it = S.byKey[el.dataset.key] || MV.reg[el.dataset.key]; if (!it) return; var on = MV.toggleSaved(it); MV.toast(on ? 'Guardado en Mi lista' : 'Quitado de Mi lista'); el.innerHTML = (on ? IC.bookmarkFill + 'Guardado' : IC.bookmark + 'Guardar'); },
+    rate: function (n, el) {
+      var it = S.byKey[el.dataset.key] || MV.reg[el.dataset.key]; if (!it) return;
+      var v = MV.myRate(it.key) === +n ? 0 : +n; MV.setRate(it, v);
+      var box = el.closest('.rate'); if (box) { box.outerHTML = rateHtml(it); var nb = document.querySelector('.rate .rstar:nth-of-type(' + (+n) + ')'); if (nb) nb.focus(); }
+      MV.toast(v ? 'Calificaste con ' + v + (v === 1 ? ' estrella' : ' estrellas') : 'Calificación quitada');
+    },
+    season: function (k) { if (MV._epsSeason) MV._epsSeason(k); },
+    castFind: function (name) { ACT.voiceGo(name); },
     playEp: function (i, el) { var s = S.byKey[el.dataset.key] || MV.reg[el.dataset.key]; MV.playEpisode(s, +i); },
     fav: function (_, el) { var it = S.byKey[el.dataset.key] || MV.reg[el.dataset.key]; var on = MV.toggleFav(it); MV.toast(on ? 'Agregado a favoritos' : 'Quitado de favoritos'); MV.rerender(); },
     covers: function (_, el) {

@@ -1516,7 +1516,7 @@
     return MV.idbGet(ck).then(function (c) {
       // Fichas guardadas antes de saber la edad se vuelven a pedir en perfiles infantiles
       // Fichas guardadas sin fecha de estreno (versiones anteriores) se vuelven a pedir una vez
-      var fresh = c && c.ts > Date.now() - 14 * 86400e3 && !(MV.isKids() && c.data && c.data.age === undefined) && !(c.data && c.data.source === 'TMDB' && c.data.date === undefined);
+      var fresh = c && c.ts > Date.now() - 14 * 86400e3 && !(MV.isKids() && c.data && c.data.age === undefined) && !(c.data && c.data.source === 'TMDB' && (c.data.date === undefined || c.data.people === undefined));
       if (fresh) { if (c.data) { MV.learnGenres(item, c.data.genres, c.data.age, c.data.year, c.data.date); if (c.data.tmdbId) MV.learnTid(item, c.data.kind + ':' + c.data.tmdbId); } return c.data; }
       var title = MV.cleanTitle(item.name);
       var year = (item.year || (item.name.match(/\((19|20)\d{2}\)/) || [''])[0].replace(/[()]/g, ''));
@@ -1587,6 +1587,10 @@
             .concat((((d.keywords && (d.keywords.keywords || d.keywords.results)) || []).map(function (k) { return k.name; })
               .filter(function (n) { return /\b(religion|christian|christianity|bible|biblical|jesus christ|faith|gospel|church|catholic|god|saint|apostle|resurrection|moses)\b/i.test(n); }).slice(0, 1).map(function () { return 'religion'; }))),
           cast: ((d.credits && d.credits.cast) || []).slice(0, 5).map(function (c) { return c.name; }),
+          // Reparto con foto y personaje, y quién la creó o dirigió
+          people: ((d.credits && d.credits.cast) || []).slice(0, 14).map(function (c) { return { n: c.name, ch: c.character || '', img: c.profile_path ? IMG + 'w185' + c.profile_path : '' }; }),
+          creator: kind === 'tv' ? (d.created_by || []).map(function (c) { return c.name; }).slice(0, 2).join(', ') : ((d.credits && d.credits.crew) || []).filter(function (c) { return c.job === 'Director'; }).map(function (c) { return c.name; }).slice(0, 2).join(', '),
+          seasons: kind === 'tv' ? (d.seasons || []).filter(function (x) { return x.season_number > 0; }).map(function (x) { return { n: x.season_number, eps: x.episode_count || 0, name: x.name || '' }; }) : [],
           poster: d.poster_path ? IMG + 'w500' + d.poster_path : (d.images && d.images.posters && d.images.posters[0] ? IMG + 'w500' + d.images.posters[0].file_path : (r.poster_path ? IMG + 'w500' + r.poster_path : '')),
           backdrop: d.backdrop_path ? IMG + 'w1280' + d.backdrop_path : '',
           posters: ((d.images && d.images.posters) || []).slice(0, 12).map(function (p) { return IMG + 'w342' + p.file_path; })
@@ -1665,6 +1669,35 @@
   function mini(it) {
     return { key: it.key, type: it.type, name: it.name, logo: it.logo || '', poster: MV.poster(it), url: it.url || '', group: it.group || '', tvg: it.tvg || '', ia: it.ia || '', ep: it.epTitle || '', parent: it.parent || '' };
   }
+  /** Episodios de una temporada en TMDB (título, sinopsis, imagen y duración), guardados una semana. */
+  MV.tmdbSeason = function (tvId, n) {
+    var ck = 'season1:' + tvId + ':' + n;
+    return MV.idbGet(ck).then(function (c) {
+      if (c && c.ts > Date.now() - 7 * 86400e3) return c.data;
+      if (!P.tmdbKey) return null;
+      return tmdb('/tv/' + tvId + '/season/' + n).then(function (d) {
+        var data = ((d && d.episodes) || []).map(function (e) { return { ep: e.episode_number, name: e.name || '', overview: e.overview || '', still: e.still_path ? IMG + 'w300' + e.still_path : '', runtime: e.runtime || 0, date: e.air_date || '' }; });
+        MV.idbSet(ck, { ts: Date.now(), data: data });
+        return data;
+      }).catch(function () { return null; });
+    });
+  };
+  // "Guardar para después" (Mi lista): igual que favoritos, pero aparte
+  MV.isSaved = function (key) { var d = MV.pdata(); var f = (d.saved || {})[key]; return !!(f && !f.del); };
+  MV.toggleSaved = function (it) {
+    var d = MV.pdata(); d.saved = d.saved || {};
+    var f = d.saved[it.key];
+    if (f && !f.del) d.saved[it.key] = { key: it.key, del: true, ts: Date.now() };
+    else d.saved[it.key] = Object.assign(mini(it), { ts: Date.now() });
+    MV.savePdata(d);
+    return MV.isSaved(it.key);
+  };
+  MV.savedList = function () {
+    var f = MV.pdata().saved || {};
+    return Object.keys(f).map(function (k) { return f[k]; }).filter(function (x) { return !x.del; }).sort(function (a, b) { return b.ts - a.ts; });
+  };
+  MV.myRate = function (key) { var r = (MV.pdata().rates || {})[key]; return r && r.v ? r.v : 0; };
+  MV.setRate = function (it, v) { var d = MV.pdata(); d.rates = d.rates || {}; d.rates[it.key] = { v: v, ts: Date.now(), name: it.name }; MV.savePdata(d); };
   MV.isFav = function (key) { var f = MV.pdata().favs[key]; return !!(f && !f.del); };
   MV.toggleFav = function (it) {
     var d = MV.pdata(), f = d.favs[it.key];
@@ -1804,6 +1837,10 @@
       Object.keys(r.pdata || {}).forEach(function (pid) {
         var rd = r.pdata[pid], ld = MV.pdata(pid);
         Object.keys(rd.favs || {}).forEach(function (k) { if (!ld.favs[k] || (rd.favs[k].ts || 0) > (ld.favs[k].ts || 0)) ld.favs[k] = rd.favs[k]; });
+        ld.rates = ld.rates || {};
+        Object.keys(rd.rates || {}).forEach(function (k) { if (!ld.rates[k] || (rd.rates[k].ts || 0) > (ld.rates[k].ts || 0)) ld.rates[k] = rd.rates[k]; });
+        ld.saved = ld.saved || {};
+        Object.keys(rd.saved || {}).forEach(function (k) { if (!ld.saved[k] || (rd.saved[k].ts || 0) > (ld.saved[k].ts || 0)) ld.saved[k] = rd.saved[k]; });
         var hist = {}; (ld.history || []).concat(rd.history || []).forEach(function (h) { if (!hist[h.key] || hist[h.key].ts < h.ts) hist[h.key] = h; });
         ld.history = Object.keys(hist).map(function (k) { return hist[k]; }).sort(function (a, b) { return b.ts - a.ts; }).slice(0, 150);
         Object.keys(rd.progress || {}).forEach(function (k) { if (!ld.progress[k] || (rd.progress[k].ts || 0) > (ld.progress[k].ts || 0)) ld.progress[k] = rd.progress[k]; });
