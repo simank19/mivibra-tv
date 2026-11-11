@@ -244,7 +244,7 @@
       if (Array.isArray(d.plugins)) return { kind: 'repo', url: r.url, data: d };
       if (d.mivibra || d.items || d.source || d.catalog) return { kind: 'plugin', url: r.url, data: d };
       throw new Error('x');
-    }).catch(function () { throw new Error('No encontré un plugin de MiVibra ahí (falta el archivo mivibra-plugin.json)'); });
+    }).catch(function () { throw new Error('Ese repositorio no es un plugin de MiVibra (no tiene mivibra-plugin.json). Los plugins de otras apps, como ZUPER TV, no son compatibles.'); });
   };
 
   function rel(base, u) { if (!u) return ''; if (/^https?:\/\//i.test(u)) return u; return base.replace(/[^/]*$/, '') + String(u).replace(/^\.\//, ''); }
@@ -275,7 +275,9 @@
       group: (p.name || list.name) + (x.group ? ' · ' + x.group : ''), url: rel(list.url, x.url || ''), ua: x.userAgent || '', ref: x.referer || '', list: list.id
     };
     if (type === 'series') it.episodes = (x.episodes || []).map(function (e, n) { return { season: +e.season || 1, ep: +(e.episode || e.ep) || n + 1, title: e.name || e.title || ('Episodio ' + (n + 1)), url: rel(list.url, e.url || ''), img: rel(list.url, e.thumbnail || e.image || ''), plot: e.description || '' }; }).filter(function (e) { return e.url; });
-    if (type !== 'series' && !it.url) return null;
+    // Película de Internet Archive por su identificador (MiVibra busca el archivo de video al reproducir)
+    if (x.archive) { it.ia = String(x.archive); it.key = 'ia:' + it.ia; if (!it.poster) it.poster = 'https://archive.org/services/img/' + it.ia; }
+    if (type !== 'series' && !it.url && !it.ia) return null;
     return it;
   }
   function archive(src, list) {

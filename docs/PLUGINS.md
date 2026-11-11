@@ -56,6 +56,7 @@ Las direcciones relativas (`poster.jpg`, `videos/1.mp4`) se toman desde la carpe
 | `genres` | Lista de géneros |
 | `group` | Categoría dentro del plugin |
 | `url` | Enlace del video (mp4, mkv, m3u8…) |
+| `archive` | En vez de `url`: identificador de una película de Internet Archive |
 | `userAgent` / `referer` | Encabezados, si el servidor los pide |
 | `episodes` | Solo series (ver abajo) |
 
