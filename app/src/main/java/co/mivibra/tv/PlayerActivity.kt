@@ -574,7 +574,8 @@ class PlayerActivity : ComponentActivity() {
         for (u in (urls + altList).distinct()) {
             val isHls = hlsOf(u)
             out.add(Attempt(u, isHls, ua))
-            if (!isHls && live) out.add(Attempt(u, true, ua))     // HLS sin extensión .m3u8
+            // HLS sin extensión .m3u8 (también películas: muchos enlaces de addons y servidores son HLS sin decirlo)
+            if (!isHls) out.add(Attempt(u, true, ua))
             out.add(Attempt(u, isHls, vlcUa))                      // servidores que solo aceptan reproductores conocidos
             if (!live) out.add(Attempt(u, isHls, "IPTVSmartersPro"))
             if (!live && u == url) out.add(Attempt(u, isHls, "okhttp/4.12.0"))
