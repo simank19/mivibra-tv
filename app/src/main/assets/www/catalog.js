@@ -1528,7 +1528,7 @@
     return MV.idbGet(ck).then(function (c) {
       // Fichas guardadas antes de saber la edad se vuelven a pedir en perfiles infantiles
       // Fichas guardadas sin fecha de estreno (versiones anteriores) se vuelven a pedir una vez
-      var fresh = c && c.ts > Date.now() - 14 * 86400e3 && !(MV.isKids() && c.data && c.data.age === undefined) && !(c.data && c.data.source === 'TMDB' && (c.data.date === undefined || c.data.people === undefined));
+      var fresh = c && c.ts > Date.now() - 14 * 86400e3 && !(MV.isKids() && c.data && c.data.age === undefined) && !(c.data && c.data.source === 'TMDB' && (c.data.date === undefined || c.data.people === undefined || !c.data.tr));
       if (fresh && item.ltid && c.data && c.data.tmdbId && c.data.tmdbId !== item.ltid) fresh = false;
       if (fresh) { if (c.data) { MV.learnGenres(item, c.data.genres, c.data.age, c.data.year, c.data.date); if (c.data.tmdbId) MV.learnTid(item, c.data.kind + ':' + c.data.tmdbId); } return c.data; }
       var title = MV.cleanTitle(item.name);
@@ -1585,13 +1585,17 @@
     return chain.then(function (r) {
       if (!r) return null;
       kind = r._kind || kind;
-      return tmdb('/' + kind + '/' + r.id, '&append_to_response=credits,images,external_ids,keywords,' + (kind === 'tv' ? 'content_ratings' : 'release_dates') + '&include_image_language=es,en,null').then(function (d) {
+      return tmdb('/' + kind + '/' + r.id, '&append_to_response=credits,images,external_ids,keywords,translations,' + (kind === 'tv' ? 'content_ratings' : 'release_dates') + '&include_image_language=es,en,null').then(function (d) {
+        // Si no hay sinopsis en español de España, se usa la de México u otro país hispano antes que el inglés
+        var trs = ((d.translations && d.translations.translations) || []).filter(function (t) { return t.iso_639_1 === 'es' && t.data; }).sort(function (a, b) { return (b.iso_3166_1 === 'MX') - (a.iso_3166_1 === 'MX'); });
+        var esData = function (k) { var t = trs.filter(function (x) { return x.data[k]; })[0]; return t ? t.data[k] : ''; };
+        if (!d.overview) d.overview = esData('overview');
         var certs = kind === 'tv'
           ? ((d.content_ratings && d.content_ratings.results) || []).map(function (x) { return { c: x.iso_3166_1, cert: x.rating }; })
           : ((d.release_dates && d.release_dates.results) || []).map(function (x) { var rd = (x.release_dates || []).filter(function (y) { return y.certification; })[0]; return { c: x.iso_3166_1, cert: rd ? rd.certification : '' }; });
         return {
           age: certAge(certs),
-          source: 'TMDB', tmdbId: d.id, kind: kind, imdb: (d.external_ids && d.external_ids.imdb_id) || d.imdb_id || '', title: d.title || d.name, overview: d.overview || r.overview || '',
+          source: 'TMDB', tr: 1, tmdbId: d.id, kind: kind, imdb: (d.external_ids && d.external_ids.imdb_id) || d.imdb_id || '', title: d.title || d.name, overview: d.overview || r.overview || '',
           year: (d.release_date || d.first_air_date || '').slice(0, 4),
           date: d.release_date || d.first_air_date || '',
           runtime: d.runtime ? d.runtime + ' min' : (d.number_of_seasons ? d.number_of_seasons + ' temporadas' : ''),

@@ -186,15 +186,21 @@
     var animeId = /^(kitsu|mal|anilist|anidb)[:_]/i.test(id);
     // Tipo que entiende cada addon: algunos de anime solo aceptan "anime"
     function tyFor(m) { if (!m.resources) return type; var ts = resTypes(m, 'stream'); return ts.indexOf(type) >= 0 ? type : animeId && ts.indexOf('anime') >= 0 ? 'anime' : ''; }
-    var jobs = ls.filter(function (l) { var m = l.man || {}; return !m.resources || (res(m, 'stream') && tyFor(m) && prefixOk(m, 'stream', id)); }).map(function (l) {
+    var D = MV._stDiag = MV._stDiag || {};
+    var ok = ls.filter(function (l) { var m = l.man || {}; return !m.resources || (res(m, 'stream') && tyFor(m) && prefixOk(m, 'stream', id)); });
+    // Para explicar el resultado: qué addon respondió qué
+    ls.forEach(function (l) { var m = l.man || {}; if (m.resources && res(m, 'stream') && ok.indexOf(l) < 0 && D[l.name] === undefined) D[l.name] = 'no tiene este tipo de contenido'; });
+    var jobs = ok.map(function (l) {
       return MV.getJSON(base(l.url) + '/stream/' + tyFor(l.man || {}) + '/' + encodeURIComponent(id) + '.json').then(function (j) {
         var all = (j && j.streams) || [];
         MV._stTorrents = (MV._stTorrents || 0) + all.filter(function (s) { return s.infoHash && !s.url; }).length;
+        var nd = all.filter(function (s) { return s.url && /^https?:/i.test(s.url); }).length, nt = all.length - nd;
+        if (typeof D[l.name] !== 'number' || nd > D[l.name]) D[l.name] = nd || (nt ? nt + ' torrents (sin debrid no sirven)' : 0);
         return all.filter(function (s) { return s.url && /^https?:/i.test(s.url); }).map(function (s) {
           var h = (s.behaviorHints && s.behaviorHints.proxyHeaders && s.behaviorHints.proxyHeaders.request) || {};
           return { url: s.url, title: String(s.title || s.description || s.name || '').replace(/\s+/g, ' ').trim(), src: s.name || l.name || '', ua: h['User-Agent'] || h['user-agent'] || '', ref: h.Referer || h.referer || '' };
         });
-      }).catch(function () { return []; });
+      }).catch(function (e) { if (typeof D[l.name] !== 'number') D[l.name] = 'no respondió' + (e && /40[13]/.test(e.message || '') ? ' (acceso denegado: revisa su configuración)' : ''); return []; });
     });
     // Primero los que se ven como video (mp4, mkv, m3u8…); al final los que pueden ser páginas web
     function score(x) { var u = x.url.toLowerCase().split('?')[0]; return /\.(mp4|mkv|m3u8|webm|avi|mov|ts|mpd)$/.test(u) ? 0 : /\/(hls|stream|video|playlist|manifest)/.test(u) ? 1 : 2; }
@@ -204,7 +210,8 @@
   /** Elige el enlace: si hay varios, se muestra la lista para escoger (calidad, idioma, fuente). */
   /** Idioma de un enlace según lo que dice el addon (nombre, detalle, banderas): lat, cast, es, sub o ''. */
   MV.stLang = function (x) {
-    var t = (x.src + ' ' + x.title + ' ' + decodeURIComponent(String(x.url || '').split('?')[0].replace(/%(?![0-9a-f]{2})/gi, ''))).toLowerCase();
+    var u = String(x.url || '').split('?')[0]; try { u = decodeURIComponent(u); } catch (e) {}
+    var t = (x.src + ' ' + x.title + ' ' + u).toLowerCase();
     if (/latino|latam|\blat\b|\uD83C\uDDF2\uD83C\uDDFD|es[-_ ]?mx|es[-_ ]?419|spanish ?\(?latin/.test(t)) return 'lat';
     if (/castellano|\uD83C\uDDEA\uD83C\uDDF8|espa[nñ]a|\bspain\b|es[-_ ]es\b/.test(t)) return 'cast';
     if (/subtitulad|\bvose\b|\bsub(s|bed)?\b/.test(t)) return 'sub';
@@ -218,6 +225,7 @@
   MV.stremioPick = function (type, id, title, showAll) {
     MV.toast('Buscando enlaces en tus addons…', 3000);
     MV._stTorrents = 0;
+    MV._stDiag = {};
     var anime = /^(kitsu|mal|anilist|anidb)[:_]/i.test(id);
     return MV.stremioStreams(type, id).then(function (st) {
       // Latino primero; con "Solo español latino" solo se ofrecen enlaces en latino (o español sin especificar)
@@ -234,7 +242,12 @@
         st = lat;
       }
       if (!st.length && MV._stTorrents) throw new Error('Tus addons solo encontraron torrents (' + MV._stTorrents + '). MiVibra reproduce enlaces directos: en la configuración de Torrentio agrega un servicio debrid (Real-Debrid, AllDebrid, Premiumize…) y vuelve a instalarlo con el enlace nuevo.');
-      if (!st.length) throw new Error('Ningún addon instalado tiene enlaces directos para “' + title + '”');
+      if (!st.length) {
+        var dg = MV._stDiag || {}, names = Object.keys(dg);
+        if (!names.length) throw new Error('No tienes addons que den enlaces para ver (por ejemplo Torrentio con debrid). Instálalo en Plugins.');
+        MV.modal('<h2>Sin enlaces para “' + esc(title) + '”</h2><p class="muted">Esto respondió cada addon de enlaces:</p><div class="dlist">' + names.map(function (n) { var v = dg[n]; return '<div class="line"><div class="t"><b>' + esc(n) + '</b><span>' + esc(v === 0 ? 'no encontró nada' : typeof v === 'number' ? v + ' enlaces' : v) + '</span></div></div>'; }).join('') + '</div><p class="muted">Si es un estreno reciente, puede que todavía no haya enlaces. Con “Solo títulos con enlaces” (Ajustes › Listas) estos títulos no te aparecen.</p><div class="btns"><button class="btn f" data-act="closeModal" data-autofocus>Entendido</button></div>');
+        throw new Error('cancelado');
+      }
       // Los demás enlaces quedan de respaldo: si el elegido no es un video, el reproductor prueba el siguiente solo
       function withRest(x) { x.rest = st.filter(function (y) { return y !== x; }).map(function (y) { return y.url; }).slice(0, 8); return x; }
       if (st.length === 1) return withRest(st[0]);
