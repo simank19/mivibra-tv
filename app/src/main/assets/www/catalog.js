@@ -201,6 +201,8 @@
   var EMOJI = /[\uD83C-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27BF\u2B50\u2B55\uFE0F\u200D\u20E3]/g;
   MV.noEmoji = function (s) { return String(s == null ? '' : s).replace(EMOJI, ' ').replace(/\s{2,}/g, ' ').replace(/^[\s|·\-–:]+|[\s|·\-–:]+$/g, '').trim(); };
   function tags(o) {
+    // Addons de Stremio: español (si ya se tradujo) y categoría de la app según el género, también en lo guardado de antes
+    if (o.st && MV.stFix) MV.stFix(o);
     if (o.name) o.name = MV.noEmoji(o.name) || o.name;
     if (o.group) o.group = MV.noEmoji(o.group);
     if (o.genre) o.genre = MV.noEmoji(o.genre);

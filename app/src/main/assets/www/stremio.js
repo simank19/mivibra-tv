@@ -50,12 +50,24 @@
     return isAnime ? 'Anime · ' + g : g;
   }
   MV.stCatFor = catFor;
+  function isAnimeIt(o) { return /^(kitsu|mal|anilist|anidb)[:_]/i.test(o.st.id) || /anime/i.test((o.src || '') + ' ' + (o.group || '')); }
+  /** Aplica a un título de addon la traducción guardada y la categoría de la app (también a listas guardadas con versiones anteriores). */
+  MV.stFix = function (o) {
+    var an = isAnimeIt(o);
+    if (!o.src) o.src = o.group || '';
+    if (!o.orig) o.orig = String(o.name || '').replace(/\s*\(\d{4}\)$/, '');
+    var d = ES()[o.st.id];
+    if (d && d.n) o.name = d.n + (o.year && !/\(\d{4}\)/.test(d.n) ? ' (' + o.year + ')' : '');
+    if (d && d.p) o.plot = d.p;
+    if (d && d.g) o.genre = d.g;
+    o.group = catFor(o.genre || '', an, o.type);
+  };
   var trRunning = false;
   /** Traduce en segundo plano (con tu clave de TMDB) los títulos de addons que vienen en inglés. */
   MV.stTranslate = function () {
     if (trRunning || !(S.prefs.tmdbKey || '').trim()) return;
     var es = ES(), seen = {};
-    var todo = (S.items || []).filter(function (i) { if (!i.st || !/^tt\d+$/.test(i.st.id) || es[i.st.id] || seen[i.st.id]) return false; seen[i.st.id] = 1; return true; });
+    var todo = (S.items || []).filter(function (i) { if (!i.st || es[i.st.id] || seen[i.st.id]) return false; seen[i.st.id] = 1; return true; });
     if (!todo.length) return;
     trRunning = true;
     var n = 0, changed = 0;
@@ -72,8 +84,14 @@
       var it = todo.shift();
       if (!it) { if (--active === 0) { trRunning = false; MV.save('stEs', es); if (changed && MV.rerender) MV.rerender(); } return; }
       var id = it.st.id;
-      MV.tmdb('/find/' + id, '&external_source=imdb_id&language=es-MX').then(function (r) {
-        var x = (r && ((r.movie_results || [])[0] || (r.tv_results || [])[0])) || null;
+      // Con id de IMDb se busca exacto; anime (Kitsu, MAL…) y otros se buscan por nombre y año
+      var q = /^tt\d+$/.test(id) ? MV.tmdb('/find/' + id, '&external_source=imdb_id&language=es-MX').then(function (r) { return r && ((r.movie_results || [])[0] || (r.tv_results || [])[0]); })
+        : MV.tmdb('/search/' + (it.type === 'movie' ? 'movie' : 'tv'), '&language=es-MX&query=' + encodeURIComponent(it.orig || String(it.name).replace(/\s*\(\d{4}\)$/, '')) + (it.year ? (it.type === 'movie' ? '&year=' : '&first_air_date_year=') + it.year : '')).then(function (r) {
+          var rs = (r && r.results) || [];
+          // En anime se prefiere el resultado japonés o de animación
+          return isAnimeIt(it) ? (rs.filter(function (x) { return x.original_language === 'ja' || (x.genre_ids || []).indexOf(16) >= 0; })[0] || null) : rs[0] || null;
+        });
+      q.then(function (x) {
         var d = x ? { n: x.title || x.name || '', p: x.overview || '', g: (x.genre_ids || []).map(function (g) { return TMDB_G[g]; }).filter(Boolean).join(', ') } : { n: '' };
         es[id] = d; if (d.n || d.p) { apply(id, d); changed++; }
       }).catch(function () {}).then(function () {
