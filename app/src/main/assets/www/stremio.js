@@ -74,7 +74,8 @@
   MV.stTranslate = function () {
     if (trRunning || !(S.prefs.tmdbKey || '').trim()) return;
     var es = ES(), seen = {};
-    var todo = (S.items || []).filter(function (i) { if (!i.st || es[i.st.id] || seen[i.st.id]) return false; seen[i.st.id] = 1; return true; });
+    // Las series se revisan otra vez si se guardaron antes de reconocer novelas (v 2)
+    var todo = (S.items || []).filter(function (i) { if (!i.st || (es[i.st.id] && (i.type !== 'series' || es[i.st.id].v === 2)) || seen[i.st.id]) return false; seen[i.st.id] = 1; return true; });
     if (!todo.length) return;
     trRunning = true;
     var n = 0, changed = 0;
@@ -99,7 +100,13 @@
           return isAnimeIt(it) ? (rs.filter(function (x) { return x.original_language === 'ja' || (x.genre_ids || []).indexOf(16) >= 0; })[0] || null) : rs[0] || null;
         });
       q.then(function (x) {
-        var d = x ? { n: x.title || x.name || '', p: x.overview || '', g: (x.genre_ids || []).map(function (g) { return TMDB_G[g]; }).filter(Boolean).join(', ') } : { n: '' };
+        var d = x ? { v: 2, n: x.title || x.name || '', p: x.overview || '', g: (x.genre_ids || []).map(function (g) { return TMDB_G[g]; }).filter(Boolean).join(', ') } : { v: 2, n: '' };
+        // Telenovela: género "Soap" de TMDB, o serie de Latinoamérica/Brasil/Turquía de drama, romance o comedia (no animación, documental, reality ni infantil)
+        if (x && it.type === 'series') {
+          var gi = x.genre_ids || [], oc = (x.origin_country || []).join(',');
+          var nv = gi.indexOf(10766) >= 0 || (/\b(CO|MX|VE|AR|PE|CL|EC|BR|TR|DO|PR|CU|UY|BO|PY|GT|HN|SV|NI|CR|PA)\b/.test(oc) && (gi.indexOf(18) >= 0 || gi.indexOf(10749) >= 0 || gi.indexOf(35) >= 0) && !gi.some(function (g) { return [16, 99, 10764, 10762, 10767].indexOf(g) >= 0; }));
+          if (nv && !/telenovela/i.test(d.g)) d.g = 'Telenovela' + (d.g ? ', ' + d.g : '');
+        }
         es[id] = d; if (d.n || d.p) { apply(id, d); changed++; }
       }).catch(function () {}).then(function () {
         n++;
