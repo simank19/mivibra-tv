@@ -950,6 +950,10 @@
       (!cur ? '<button class="fbtn f" data-act="viewMode" data-arg="' + (mode === 'rows' ? 'grid' : 'rows') + '" data-v="' + vkey + '">' + (mode === 'rows' ? '▦ Cuadrícula' : '☰ Filas') + '</button>' : '') +
       (active.length ? '<button class="fbtn f" data-act="clearFilters" data-arg="' + vkey + '">✕ Limpiar</button>' : '') + '</div>';
     MV._fbarPre = '';
+    // Aviso: cuántos títulos de esta sección esconden los filtros automáticos, con opción de verlos
+    var hid = MV.hiddenByFilters(items);
+    if (hid) bar += '<div class="fsum hidn"><span>' + hid + (hid === 1 ? ' título oculto' : ' títulos ocultos') + ' por ' + [P.latOnly ? '“Solo español latino”' : '', P.stOnlyLinked ? '“Solo títulos con enlaces”' : ''].filter(Boolean).join(' y ') + '</span><button class="btn ghost sm f" data-act="showHidden">Verlos también</button></div>';
+    else if (MV._showHidden && (P.latOnly || P.stOnlyLinked)) bar += '<div class="fsum hidn"><span>Mostrando también lo que ocultan tus filtros</span><button class="btn ghost sm f" data-act="showHidden">Volver a ocultarlos</button></div>';
     return top(title) + loadingBlock() + bar + (active.length || cur || mode !== 'rows' ? summary : '') +
       (list.length ? (mode === 'rows' && !cur && !ysel ? catRows(vkey, list, kind) : grid(list, kind, vkey)) : stPend && !active.length ? '<div class="empty glass"><h2>Revisando qué títulos tienen enlaces…</h2><p class="muted">Tienes activado “Solo títulos con enlaces”. Faltan ' + stPend + ' por revisar en esta sección; van apareciendo solos a medida que se confirman.</p><div class="btns" style="justify-content:center"><button class="btn f" data-act="stLinkToggle">Mostrar todo mientras tanto</button></div></div>' : '<div class="empty glass"><h2>' + (active.length ? 'Nada con esos filtros' : 'No hay contenido aquí todavía') + '</h2><p class="muted">' + (active.length ? 'Prueba quitando algún filtro.' : 'Se llena con lo que traen tus listas M3U o tu cuenta Xtream.') + '</p>' + (active.length ? '<div class="btns" style="justify-content:center"><button class="btn f" data-act="clearFilters" data-arg="' + vkey + '">Limpiar filtros</button></div>' : '') + '</div>');
   }
@@ -1428,7 +1432,7 @@
   var SRCH = {}, VISC = {}, FUZZY = true, GENC = {};
   /** Qué títulos puede ver este perfil (se recalcula solo si cambian las listas, el perfil o los filtros). */
   function visibleMap() {
-    var k = [S.pid, MV.isKids(), !!P.latOnly, MV.adultOk ? MV.adultOk() : 0, P.stOnlyLinked ? (MV._stLinkV || 0) : -1].join('|');
+    var k = [S.pid, MV.isKids(), !!P.latOnly, MV.adultOk ? MV.adultOk() : 0, P.stOnlyLinked ? (MV._stLinkV || 0) : -1, MV._showHidden ? 1 : 0].join('|');
     if (VISC.ref === S.items && VISC.k === k) return VISC.map;
     var m = {}; MV.visible(S.items).forEach(function (i) { m[i.key] = 1; });
     VISC = { ref: S.items, k: k, map: m };
@@ -2597,6 +2601,7 @@
       MV.playWebVideo({ key: s.key + '#' + i, name: s.name + ' · ' + e.title, yt: e.yt, embed: e.embed, url: e.url, poster: e.img || s.poster, group: s.group, type: 'video' });
     },
     stPrefSet: function (id) { P.stPref = id || ''; MV.savePrefs(); var l = MV.stPrefList && MV.stPrefList(); MV.toast(l ? 'Se reproducirá primero desde ' + l.name : 'Se mostrará la lista de enlaces para elegir'); MV.rerender(); },
+    showHidden: function () { MV._showHidden = !MV._showHidden; MV.rerender(); },
     stAutoToggle: function (_, el) { P.stAutoRefresh = !P.stAutoRefresh; MV.savePrefs(); if (el) el.classList.toggle('on', P.stAutoRefresh); MV.toast(P.stAutoRefresh ? 'Los addons se actualizarán al abrir la app' : 'Los addons se guardan 12 horas'); },
     stRefreshNow: function () {
       MV.toast('Actualizando tus addons…', 3000);

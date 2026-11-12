@@ -836,3 +836,10 @@ html.tv .eqbar { height: 130px; }
 .pltile b { font: 700 15px var(--ui); } .pltile small { color: var(--muted); }
 .pltile:focus, .pltile.kf { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent), 0 14px 34px var(--glow); }
 .plrow { display: flex; align-items: center; gap: 8px; } .plrow > .track { flex: 1; min-width: 0; }
+
+/* Filtros de cada sección: en celular una sola fila que se desliza; en TV como antes */
+html:not(.tv) .fbar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 4px; margin-right: -16px; padding-right: 16px; }
+html:not(.tv) .fbar::-webkit-scrollbar { display: none; }
+html:not(.tv) .fbar > * { flex: 0 0 auto; }
+.fbtn.on { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
+.fsum.hidn { padding: 10px 14px; border-radius: 16px; background: rgba(255,105,0,.08); border: 1px solid rgba(255,105,0,.3); color: var(--text2); }

@@ -130,17 +130,18 @@
       list.man = { name: man.name, resources: man.resources, types: man.types, idPrefixes: man.idPrefixes, logo: man.logo || '' };
       // Catálogos que se pueden listar: cualquier tipo (algunos addons usan tipos propios, como los +18) menos canales en vivo.
       // Si el catálogo exige un género, se piden sus primeros géneros por separado; los que exigen búsqueda no se pueden listar.
-      var cats = [];
+      var cats = [], byGenre = [], total = 0;
       (man.catalogs || []).forEach(function (c) {
         if (!c || !c.id || /^(tv|channel|channels|events?|radio)$/i.test(c.type || '')) return;
         var req = (c.extra || []).filter(function (e) { return e && e.isRequired; }).map(function (e) { return e.name; }).concat(c.extraRequired || []);
         if (!req.length) { cats.push(c); return; }
         if (req.length === 1 && req[0] === 'genre') {
           var g = ((c.extra || []).filter(function (e) { return e && e.name === 'genre'; })[0] || {}).options || c.genres || [];
-          g.slice(0, 30).forEach(function (o) { cats.push(Object.assign({}, c, { _genre: o, name: (c.name ? c.name + ' · ' : '') + o })); });
+          g.slice(0, 12).forEach(function (o) { byGenre.push(Object.assign({}, c, { _genre: o, name: (c.name ? c.name + ' · ' : '') + o })); });
         }
       });
-      cats = cats.slice(0, 60);
+      // Primero todos los catálogos normales (Netflix, Apple TV+, populares…) y después los que se piden por género
+      cats = cats.concat(byGenre).slice(0, 90);
       var out = [], seen = {};
       // De a 6 catálogos a la vez (con muchos a la vez algunos servidores cortan)
       var queue = cats.slice(), workers = [];
@@ -156,7 +157,10 @@
             if (prev && prev.length && metas.length && prev[0].id === metas[0].id) return;
             pp.push(metas);
             // Se siguen pidiendo páginas mientras traigan títulos (hasta unos 1000 por catálogo)
-            if (canSkip && metas.length && n < 25 && skip + metas.length < 1000) return page(skip + metas.length, n + 1);
+            // Muchos addons (como TMDB) aceptan "skip" aunque no lo declaren: se intenta igual mientras sigan llegando títulos nuevos
+            total += metas.length;
+            // Tope por catálogo (~500) y por addon (~8000) para que la app no se ponga lenta en TV
+            if (metas.length >= (canSkip ? 1 : 10) && n < 25 && skip + metas.length < 500 && total < 8000) return page(skip + metas.length, n + 1);
           });
         }
         return page(0, 1).then(function () {

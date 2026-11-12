@@ -1087,7 +1087,7 @@
 
   // ---------- Carga y combinación de todas las listas ----------
   function retag(o) { if (o.type === 'book') return o; try { return tags(o); } catch (e) { return o; } }
-  var ST_V = 5, ST_SESSION = {}; // sube cuando cambia la forma de leer los addons (fuerza recargarlos)
+  var ST_V = 6, ST_SESSION = {}; // sube cuando cambia la forma de leer los addons (fuerza recargarlos)
   function loadList(list, force) {
     var ck = 'list:' + list.id;
     return MV.idbGet(ck).then(function (cached) {
@@ -1381,11 +1381,23 @@
 
   /** Lo que el perfil actual puede ver. El +18 nunca sale en las secciones normales:
       solo en Utilidades › +18, desbloqueado con el PIN (MV.adultOnly lo pide esa pantalla). */
+  /** Cuántos títulos están ocultos solo por "Solo español latino" o "Solo títulos con enlaces". */
+  MV.hiddenByFilters = function (arr) {
+    if (MV._showHidden || (!P.latOnly && !P.stOnlyLinked)) return 0;
+    var kids = MV.isKids(), n = 0;
+    arr.forEach(function (i) {
+      if (i.adult || (kids && !MV.kidsOk(i))) return;
+      if ((P.latOnly && !D.latOk(i)) || (P.stOnlyLinked && i.st && !i.url && !i.xt && MV.stLinked && MV.stLinked(i) !== true)) n++;
+    });
+    return n;
+  };
   MV.visible = function (arr) {
     var kids = MV.isKids();
     return arr.filter(function (i) {
       if (i.adult) return false;
       if (kids && !MV.kidsOk(i)) return false;
+      // "Ver también los ocultos" (por esta sesión) quita los dos filtros automáticos
+      if (MV._showHidden) return true;
       if (P.latOnly && !D.latOk(i)) return false;
       // Títulos de catálogos de addons: con "Solo con enlaces" se muestran únicamente los que ya se comprobó que tienen enlaces
       if (P.stOnlyLinked && i.st && !i.url && !i.xt && MV.stLinked && MV.stLinked(i) !== true) return false;
