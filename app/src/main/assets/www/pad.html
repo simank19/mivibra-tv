@@ -97,6 +97,11 @@ body.inapp .getapp{display:none}
 body.local .tools,body.local .toolsh,body.local .getapp{display:none}
 /* Control por internet (Samsung / LG): solo control remoto */
 body.cloud:not(.rtc) .tabs,body.cloud [data-link="/roms/"],body.cloud [data-link="/drive"],body.cloud:not(.rtc) [data-go="games"],body.cloud .getapp{display:none}
+body.cloud #remote{justify-content:flex-start;overflow-y:auto;touch-action:pan-y;gap:12px;padding:calc(66px + env(safe-area-inset-top)) 16px calc(96px + env(safe-area-inset-bottom))}
+body.cloud .dpad{width:min(56vw,215px);flex:none}
+body.cloud .row .k{height:46px}
+body.cloud .tools .k,body.cloud .tools a{height:50px}
+body.cloud .tools,body.cloud .typ,body.cloud .row,body.cloud .toolsh{flex:none}
 .send{display:none;width:min(420px,100%);border-radius:18px;padding:12px;gap:8px;flex-direction:column}
 body.cloud.rtc .send{display:flex}
 .send .sb{display:flex;gap:8px}.send label{flex:1;height:50px;border-radius:14px;display:flex;align-items:center;justify-content:center;gap:6px;font:700 14px system-ui;background:rgba(255,105,0,.2);border:1px solid rgba(255,105,0,.55);color:#FFD2B0}

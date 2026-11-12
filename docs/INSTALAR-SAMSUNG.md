@@ -50,6 +50,9 @@ Listo: **MiVibra TV** aparece en las apps del TV.
 - Las mejoras nuevas llegan solas: la app usa la versión más reciente publicada cada vez que se abre con internet. Solo hay que reinstalar si cambia algo del propio TV (te avisaremos).
 
 ## Control y juegos desde el celular
+
+<p align="center"><img src="capturas/cel-control-tv.jpg" width="260" alt="Control desde el celular"></p>
+
 - **Control:** en la TV entra a *Ajustes › Mando con celular* y escanea el código QR con la cámara del celular. Se abre el control en el navegador (no hay que instalar nada) y funciona por internet.
 - **Enviar juegos:** con el celular en el **mismo Wi-Fi** que la TV, en el control toca **Enviar juegos** (o **Enviar BIOS**) y elige los archivos. Van directo a la TV por tu Wi-Fi y aparecen en *Juegos*. Usa tus propias copias de seguridad o juegos libres; hasta unos 200 MB por juego.
 - **Mando de juego:** al abrir un juego, el control del celular cambia solo a mando de juego (cada celular es un jugador). También se puede jugar con el control del TV: cruceta, OK = A, rojo = B, reproducir = START; **Atrás** abre el menú del juego (continuar, guardar y salir, reiniciar).

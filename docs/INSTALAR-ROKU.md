@@ -2,6 +2,8 @@
 
 MiVibra TV para Roku es una versión hecha especialmente para Roku: TV en vivo con guía de programación, películas y series de tus listas, addons de Stremio, Plex y Jellyfin, YouTube, música libre y radio, con tu misma cuenta MiVibra.
 
+<p align="center"><img src="capturas/roku-envivo.jpg" width="720" alt="MiVibra TV en Roku"></p>
+
 ## Lo que necesitas
 - Un Roku (TV Roku, Roku Express, Streaming Stick…) y un computador conectados al mismo Wi-Fi.
 - El archivo **[MiVibraTV-Roku.zip](https://github.com/simank19/mivibra-tv/releases/latest/download/MiVibraTV-Roku.zip)**. No lo descomprimas: se sube tal cual.

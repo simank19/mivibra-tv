@@ -7,8 +7,12 @@ sub init()
     url = libUrl()
     if url = "" then
         startApp(false)
-        return
+    else
+        loadLib(url)
     end if
+end sub
+
+sub loadLib(url as String)
     m.lib = CreateObject("roSGNode", "ComponentLibrary")
     m.lib.id = "MVLib"
     m.lib.ObserveField("loadStatus", "onLib")

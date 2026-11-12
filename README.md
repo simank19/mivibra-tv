@@ -6,7 +6,7 @@
 
 <p align="center">
   <b>Toda tu televisión, tus películas y tus videos en una sola app.</b><br>
-  Reproductor para <b>Android TV, celular y tablet</b> con interfaz de vidrio, hecho en Colombia por MiVibra.
+  Reproductor para <b>Android TV, celular, tablet, PC, televisores Samsung y LG, y Roku</b>, con interfaz de vidrio, hecho en Colombia por MiVibra.
 </p>
 
 <p align="center">
@@ -24,7 +24,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/capturas/tv-inicio.jpg" width="880" alt="Inicio de MiVibra TV en un televisor">
+  <img src="docs/capturas/plataformas.jpg" width="880" alt="MiVibra TV en Android TV, PC, Samsung, LG, Roku y el celular como control">
 </p>
 
 ---
@@ -34,6 +34,18 @@
 MiVibra TV junta en un solo lugar las listas que ya tienes (M3U, Xtream Codes, Portal y MAC), tu propio servidor de películas (Jellyfin, Emby o Plex), tus páginas de videos, canales gratuitos y legales, YouTube, Twitch, Kick, radio, música y juegos clásicos. Todo se organiza solo: sin repetidos, con la mejor calidad, por géneros, año y estrenos, con fichas, carátulas y perfiles para toda la familia.
 
 > MiVibra TV **no incluye ni vende contenido**. Reproduce las fuentes que agrega cada usuario y canales públicos gratuitos.
+
+## Dónde funciona
+
+| Pantalla | Descarga | Cómo se instala | Se actualiza sola | Qué no tiene |
+|---|---|---|---|---|
+| **Android TV, TV Box, celular y tablet** | [APK](https://github.com/simank19/mivibra-tv/releases/latest) | Abrir el APK ([ver abajo](#instalar)) | ✅ Avisa con la campana | — (es la versión completa) |
+| **PC Windows 10/11** | [Instalador .exe](https://github.com/simank19/mivibra-tv/releases/latest) | Abrir el .exe ([ver abajo](#instalar)) | ✅ Sola | — |
+| **TV Samsung (Tizen)** | [MiVibraTV-Samsung.wgt](https://github.com/simank19/mivibra-tv/releases/latest/download/MiVibraTV-Samsung.wgt) | [Guía Samsung](docs/INSTALAR-SAMSUNG.md) | ✅ Al abrirla | Descargas, reproductor externo, portales MAC, PSP/Dreamcast/GameCube |
+| **TV LG (webOS)** | [MiVibraTV-LG.ipk](https://github.com/simank19/mivibra-tv/releases/latest/download/MiVibraTV-LG.ipk) | [Guía LG](docs/INSTALAR-LG.md) | ✅ Al abrirla | Igual que Samsung; el modo desarrollador de LG hay que extenderlo cada 50 horas |
+| **Roku** | [MiVibraTV-Roku.zip](https://github.com/simank19/mivibra-tv/releases/latest/download/MiVibraTV-Roku.zip) | [Guía Roku](docs/INSTALAR-ROKU.md) | ✅ Al abrirla | Juegos, portales MAC, descargas; YouTube se abre en la app oficial |
+
+En todas usas la **misma cuenta**: tus listas, perfiles, favoritos y "Continuar viendo" se sincronizan, y puedes agregar listas desde el **[panel web](https://simank19.github.io/mivibra-tv/panel/)** con el código de cada TV. El **celular sirve como control** en todas (en Samsung, LG y Roku escaneando el código QR de Ajustes).
 
 ## Cómo se ve
 
@@ -51,6 +63,15 @@ MiVibra TV junta en un solo lugar las listas que ya tienes (M3U, Xtream Codes, P
 | **Ajustes › Listas:** activar, guía EPG, borrar, sin repetidos, solo latino y agregar desde el celular o la web | **Ajustes › Temas:** intro de bienvenida, tutorial, temas por celebración y colores |
 | <img src="docs/capturas/tv-agregar-lista.jpg" alt="Agregar tu lista"> | <img src="docs/capturas/tv-celular-mando.jpg" alt="Celular como mando"> |
 | **Agrega tu lista:** con el QR desde el celular, desde el panel web con el código de la TV o con el control | **Celular como mando:** escanea el código y úsalo como control remoto o mando de juego (jugador 1 y 2) |
+| <img src="docs/capturas/tv-inicio.jpg" alt="Inicio con canal en vivo"> | |
+| **Inicio:** canal en vivo, Continuar viendo, Deportes en vivo con marcador y el canal que lo transmite | |
+
+**Roku**
+
+| | | |
+|---|---|---|
+| <img src="docs/capturas/roku-envivo.jpg" alt="Roku: TV en vivo con guía"> | <img src="docs/capturas/roku-peliculas.jpg" alt="Roku: películas"> | <img src="docs/capturas/roku-enlaces.jpg" alt="Roku: elegir enlace de un addon"> |
+| **TV en vivo** con lo que están dando ahora y después | **Películas y series** de tus listas, addons, Plex y Jellyfin | **Addons de Stremio:** elige el enlace, latino primero |
 
 **Juegos estilo consola**
 
@@ -66,6 +87,8 @@ MiVibra TV junta en un solo lugar las listas que ya tienes (M3U, Xtream Codes, P
 | <img src="docs/capturas/cel-inicio.jpg" width="260" alt="Inicio en celular"> | <img src="docs/capturas/cel-peliculas.jpg" width="260" alt="Películas en celular"> | <img src="docs/capturas/cel-ficha.jpg" width="260" alt="Ficha en celular"> |
 | <img src="docs/capturas/cel-mando.jpg" width="260" alt="Celular como mando"> | <img src="docs/capturas/cel-enviar-juegos.jpg" width="260" alt="Enviar juegos desde el celular"> | <img src="docs/capturas/cel-panel-listas.jpg" width="260" alt="Panel web para agregar listas"> |
 | **Control remoto y mando** | **Enviar juegos y BIOS** a la TV | **Panel web:** agrega tu lista con el código de la TV |
+| <img src="docs/capturas/cel-control-tv.jpg" width="260" alt="Control para Samsung, LG y Roku"> | | |
+| **Control para Samsung y LG** por internet, con envío de juegos directo por Wi-Fi | | |
 
 <sub>Las carátulas y títulos de las capturas son de ejemplo: clásicos de dominio público, canales y juegos inventados.</sub>
 
@@ -97,6 +120,8 @@ Cada usuario monta **su propia lista** y, si tiene un servicio con MiVibra, la s
 - **Solo español latino** (opcional), con subtitulado en K-Drama y Anime.
 - **Estrenos primero**, filas por año, ganadoras del Óscar por categoría y géneros según TMDB.
 - **Anime en emisión** (MyAnimeList), K-Drama, Infantil, Documentales, Western y Plataformas.
+- **Oculta lo que aún no se estrena** (activado por defecto): los títulos de addons con fecha de estreno futura aparecen solos cuando llega la fecha.
+- **Deportes en vivo** en el inicio: partidos del día con marcador y el canal de tus listas que los transmite.
 - **Búsqueda inteligente:** por título, por **actor o director**, y filtros **En cartelera** y **Próximos estrenos** en Colombia.
 - Listas vacías o caídas se eliminan solas; se pueden seleccionar varias y borrarlas juntas.
 
