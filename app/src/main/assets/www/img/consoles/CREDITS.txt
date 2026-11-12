@@ -1,3 +1,5 @@
 Íconos de consolas: "Retro game console icons" de KyleBing
 https://github.com/KyleBing/retro-game-console-icons
 Licencia CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Copiados de series_trimui/300w@1x y renombrados por id de sistema; sin otros cambios.
+Agregados después (mismo origen y licencia): SG1000→sg1000, SEGA32X→32x, SEGACD→segacd, SATURN→saturn, PANASONIC→3do, VB→vb,
+ATARI5200→a52, COLECO→coleco, C64→c64, AMIGA→amiga, CPC→cpc, ZXS→zx.

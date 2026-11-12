@@ -10,8 +10,11 @@
   var DIR = '/android/data/co.mivibra.tv/juegos/';
   var EJS_DATA = window.MV_EJS_DATA || 'https://cdn.emulatorjs.org/stable/data/';
   // Consola de MiVibra → sistema de EmulatorJS (las que el TV puede mover)
-  var EJS_SYS = { nes: 'nes', snes: 'snes', gb: 'gb', gbc: 'gb', gba: 'gba', md: 'segaMD', sms: 'segaMS', gg: 'segaGG', psx: 'psx', a26: 'atari2600', a78: 'atari7800', lynx: 'lynx', pce: 'pce', ngp: 'ngp', ws: 'ws', arcade: 'arcade', neogeo: 'arcade', n64: 'n64', nds: 'nds' };
-  var SLOW = { psx: 1, n64: 1, nds: 1 };
+  var EJS_SYS = { nes: 'nes', snes: 'snes', gb: 'gb', gbc: 'gb', gba: 'gba', md: 'segaMD', sms: 'segaMS', gg: 'segaGG', psx: 'psx', a26: 'atari2600', a78: 'atari7800', lynx: 'lynx', pce: 'pce', ngp: 'ngp', ws: 'ws', arcade: 'arcade', neogeo: 'arcade', n64: 'n64', nds: 'nds',
+    sg1000: 'segaMS', '32x': 'sega32x', segacd: 'segaCD', saturn: 'segaSaturn', '3do': '3do', vb: 'vb', a52: 'atari5200', jaguar: 'jaguar', coleco: 'coleco',
+    c64: 'c64', amiga: 'amiga', cpc: 'cap32', zx: 'fuse' };
+  MV.webSystems = Object.keys(EJS_SYS);
+  var SLOW = { psx: 1, n64: 1, nds: 1, saturn: 1, '3do': 1, jaguar: 1, amiga: 1 };
   function reply(id, ok, data) { setTimeout(function () { if (MV._cb) MV._cb(id, { ok: ok, data: data == null ? null : data }); }, 0); }
   function esc(s) { return MV.esc ? MV.esc(s) : String(s); }
   function baseName(p) { return String(p || '').split('/').pop(); }
@@ -68,7 +71,7 @@
       });
     }).catch(function () { return []; });
   }
-  var BIOS_RX = /^(neogeo\.zip|scph\d+\.bin|psxonpsp660\.bin|ps1_rom\.bin|gba_bios\.bin|gb_bios\.bin|gbc_bios\.bin|bios7\.bin|bios9\.bin|firmware\.bin|syscard3\.pce|lynxboot\.img|7800 bios \(u\)\.rom)$/i;
+  var BIOS_RX = /^(neogeo\.zip|scph\d+\.bin|psxonpsp660\.bin|ps1_rom\.bin|gba_bios\.bin|gb_bios\.bin|gbc_bios\.bin|bios7\.bin|bios9\.bin|firmware\.bin|syscard3\.pce|lynxboot\.img|7800 bios \(u\)\.rom|bios_cd_[uej]\.bin|saturn_bios\.bin|sega_101\.bin|mpr-17933\.bin|panafz1j?\.bin|panafz10\.bin|goldstar\.bin|5200\.rom|colecovision\.rom)$/i;
 
   /** Guarda un archivo que llegó del celular. */
   function store(file, asBios) {
@@ -163,7 +166,8 @@
     if (!ejs) return Promise.reject(new Error('Esta consola no se puede jugar en el TV'));
     return fget('rom/' + name).then(function (file) {
       if (!file) throw new Error('No encuentro el archivo del juego. Envíalo otra vez desde el celular.');
-      return Promise.all([fget('state/' + name), o.sys === 'neogeo' ? fget('bios/neogeo.zip') : null, o.sys === 'psx' ? firstBios(/^scph|ps1_rom/i) : null]).then(function (x) {
+      return Promise.all([fget('state/' + name), o.sys === 'neogeo' ? fget('bios/neogeo.zip') : null, o.sys === 'psx' ? firstBios(/^scph|ps1_rom/i) : (s && s.bios) ? firstBios(s.bios) : null]).then(function (x) {
+        if (s && s.bios && !x[2]) MV.toast(s.name + ' necesita su BIOS (' + s.biosName + '). Envíala desde el celular con “Enviar BIOS”.', 6000);
         if (SLOW[o.sys]) MV.toast((s ? s.name : 'Esta consola') + ' puede ir lenta en algunos TV.', 4000);
         start(file, o, ejs, x[0], x[1] || x[2]);
       });
@@ -195,7 +199,13 @@
       w.EJS_gameName = me.title;
       // El archivo se vuelve a crear dentro del iframe: EmulatorJS revisa "instanceof File" con el File de su propia ventana
       w.EJS_gameUrl = new w.File([file], me.name);
-      if (bios) w.EJS_biosUrl = new w.File([bios], bios.name || (o.sys === 'neogeo' ? 'neogeo.zip' : 'bios.bin'));
+      if (bios) {
+        // El núcleo busca la BIOS por su nombre exacto (con mayúsculas): Sega CD bios_CD_U.bin, Saturn saturn_bios.bin…
+        var sd = D_sys(o.sys), bn = bios.name || (o.sys === 'neogeo' ? 'neogeo.zip' : 'bios.bin');
+        if (o.sys === 'segacd') bn = bn.replace(/^bios_cd_([uej])\.bin$/i, function (m, c) { return 'bios_CD_' + c.toUpperCase() + '.bin'; });
+        else if (sd && sd.biosName && o.sys !== 'psx') bn = sd.biosName;
+        w.EJS_biosUrl = new w.File([bios], bn);
+      }
       if (state) { try { w.EJS_loadStateURL = URL.createObjectURL(state); } catch (e) {} }
       w.EJS_pathtodata = EJS_DATA;
       w.EJS_startOnLoaded = true;

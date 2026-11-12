@@ -58,11 +58,14 @@
     quake: '<path d="M24 4l16 9v22l-16 9-16-9V13z"/><path d="M24 14l-6 14h12z"/>',
     wolf: '<rect x="5" y="7" width="38" height="26" rx="2"/><path d="M16 41h16M24 33v8"/><path d="M15 26l6-11 4 6 3-4 5 9z"/>',
     cave: '<path d="M4 40c3-14 9-26 20-26s17 12 20 26z"/><path d="M24 22l2.5 5 5.5.8-4 3.8 1 5.4-5-2.6-5 2.6 1-5.4-4-3.8 5.5-.8z"/>',
+    // Control con teclado numérico (Jaguar)
+    jaguar: '<path d="M8 14h32c3 0 5 2 5 5v8c0 4-3 7-7 7h-3l-3 8H16l-3-8h-3c-4 0-7-3-7-7v-8c0-3 2-5 5-5z"/>' + dpad(12, 22, 3.6) + dot(33, 20, 1.7) + dot(37, 23, 1.7) + dot(41, 20, 1.7) + '<path d="M20 30h8M20 34h8M22 38h4"/>',
     '?': '<rect x="6" y="14" width="36" height="20" rx="10"/><path d="M21 21c0-2 1.5-3 3-3s3 1 3 3c0 2.5-3 2.5-3 5"/>' + dot(24, 30, 1.4)
   };
 
   // Íconos a color de KyleBing/retro-game-console-icons (CC BY 4.0); los demás usan el dibujo de línea
-  var PNG = ['nes', 'snes', 'gb', 'gbc', 'gba', 'n64', 'nds', 'md', 'sms', 'gg', 'psx', 'a26', 'a78', 'lynx', 'pce', 'ngp', 'ws', 'arcade', 'neogeo', 'psp', 'dc', 'doom', 'quake', 'cave'];
+  var PNG = ['nes', 'snes', 'gb', 'gbc', 'gba', 'n64', 'nds', 'md', 'sms', 'gg', 'psx', 'a26', 'a78', 'lynx', 'pce', 'ngp', 'ws', 'arcade', 'neogeo', 'psp', 'dc', 'doom', 'quake', 'cave',
+    'sg1000', '32x', 'segacd', 'saturn', '3do', 'vb', 'a52', 'coleco', 'c64', 'amiga', 'cpc', 'zx'];
   MV.sysIcon = function (id) {
     if (PNG.indexOf(id) >= 0) return '<img class="sysic sysimg" src="img/consoles/' + id + '.png" alt="" loading="lazy">';
     var body = I[id] || I['?'];

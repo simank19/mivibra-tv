@@ -8,7 +8,8 @@ const os = require('os');
 
 const VER = '4.2.3';
 const CORES = ['fceumm', 'snes9x', 'gambatte', 'mgba', 'mupen64plus_next', 'melonds', 'genesis_plus_gx', 'pcsx_rearmed', 'stella2014',
-  'prosystem', 'handy', 'mednafen_pce', 'mednafen_ngp', 'mednafen_wswan', 'fbneo', 'ppsspp', 'prboom'];
+  'prosystem', 'handy', 'mednafen_pce', 'mednafen_ngp', 'mednafen_wswan', 'fbneo', 'ppsspp', 'prboom',
+  'picodrive', 'yabause', 'opera', 'beetle_vb', 'a5200', 'virtualjaguar', 'gearcoleco', 'vice_x64', 'puae', 'cap32', 'fuse'];
 const THREADED = ['ppsspp'];
 const out = path.join(__dirname, '..', 'build', 'ejs');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ejs-'));

@@ -140,7 +140,8 @@ const BIOS_NAMES = new Set([
   'scph5500.bin', 'scph5501.bin', 'scph5502.bin', 'scph1001.bin', 'scph7001.bin', 'scph101.bin', 'psxonpsp660.bin',
   'lynxboot.img', 'bios_cd_u.bin', 'bios_cd_e.bin', 'bios_cd_j.bin', 'bios7.bin', 'bios9.bin', 'firmware.bin',
   'neogeo.zip', 'syscard3.pce', '7800 bios (u).rom', 'gba_bios.bin', 'gb_bios.bin', 'gbc_bios.bin',
-  'dc_boot.bin', 'dc_flash.bin', 'sega_101.bin', 'mpr-17933.bin', 'saturn_bios.bin'
+  'dc_boot.bin', 'dc_flash.bin', 'sega_101.bin', 'mpr-17933.bin', 'saturn_bios.bin',
+  'panafz10.bin', 'panafz1.bin', 'panafz1j.bin', 'goldstar.bin', '5200.rom', 'colecovision.rom'
 ]);
 
 async function importBios(rootsList) {

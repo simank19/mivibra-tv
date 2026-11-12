@@ -1785,7 +1785,7 @@
   var sysSel = 'all', gameGenre = '';
   function romGenres(r) { var s = romSystem(r); var g = D.classifyGenres(r.name, D.GAME_GENRES); if (s && s.port && g.indexOf('disparos') < 0 && /doom|quake|wolf/.test(s.id)) g.push('disparos'); if (s && s.id === 'cave' && g.indexOf('aventura') < 0) g.push('aventura'); return g; }
   /** ¿Es de verdad un juego? Descarta APK, documentos (README.md), listas .m3u y .zip/.iso que no son de juegos. */
-  var ROM_DIR = /\/(roms?|juegos|games|emuladore?s?|emulators?|emulation|retro\w*|arcade|mame|fbneo|fba|neogeo|cps\d?|snes|nes|sfc|genesis|megadrive|mega drive|gba|gbc|gb|n64|nds|psx|ps1|playstation|psp|gamecube|gcn|ngc|dreamcast|dc|sega|nintendo|atari|pce|ports?|doom|quake)\//i;
+  var ROM_DIR = /\/(roms?|juegos|games|emuladore?s?|emulators?|emulation|retro\w*|arcade|mame|fbneo|fba|neogeo|cps\d?|snes|nes|sfc|genesis|megadrive|mega drive|gba|gbc|gb|n64|nds|psx|ps1|playstation|psp|gamecube|gcn|ngc|dreamcast|dc|sega|nintendo|atari|pce|ports?|doom|quake|saturn|3do|segacd|megacd|32x|jaguar|coleco|colecovision|c64|commodore|amiga|amstrad|cpc|spectrum|zx|virtualboy|vb|sg1000)\//i;
   function isGame(r) {
     if ((MV.load('romsHidden', []) || []).indexOf(r.path) >= 0) return false;
     // En Windows las rutas usan "\\": se igualan a "/" para reconocer las carpetas de juegos
@@ -1802,9 +1802,10 @@
     var mine = own || path.indexOf('/co.mivibra.tv/') >= 0 || ROM_DIR.test(path + '/');
     if (ext === 'zip' || ext === '7z' || ext === 'rar') return mine;                                 // .zip solo en carpetas de juegos (roms, arcade…)
     if (ext === 'm3u') return /psx|ps1|playstation/.test(path);      // .m3u también son listas de TV
-    if (ext === 'iso') return size > 30e6 && (mine || /psx|ps1|playstation|psp|gamecube|dreamcast/.test(path));
+    if (ext === 'iso') return size > 30e6 && (mine || /psx|ps1|playstation|psp|gamecube|dreamcast|saturn|3do|segacd|sega cd|megacd|mega cd/.test(path));
     if (ext === 'exe' || ext === 'pak') return true;                 // ya filtrados por nombre (Doukutsu.exe, pak0.pak)
     if (['md', 'gen', 'smd', '32x'].indexOf(ext) >= 0 && size && size < 65536) return false; // un .md de 5 KB es un documento
+    if (['dsk', 'prg', 'sna'].indexOf(ext) >= 0 && !mine) return false;   // extensiones comunes en otros programas: solo en carpetas de juegos
     if (size && size < 1024) return false;
     return true;
   }

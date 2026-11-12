@@ -108,9 +108,14 @@
   function sysIcon(id, mono) { return MV.sysIcon ? MV.sysIcon(id) : esc(mono || '?'); }
   function homeHtml() {
     var all = roms(), by = bySystem();
-    var cards = systems().filter(function (s) { return by[s.id]; }).map(function (s) {
-      var n = by[s.id].length;
-      return '<button class="cf gx-card" data-act="sys" data-arg="' + s.id + '" data-title="' + esc(s.name) + '" data-sys="' + n + (n === 1 ? ' juego' : ' juegos') + '" style="--c:' + s.color + '">' +
+    // Todas las consolas: primero las que tienen juegos y después las demás (atenuadas, con 0), para saber qué se puede jugar.
+    // En Samsung/LG solo las que ese TV puede mover.
+    var canHere = function (s) { return !MV.webSystems || MV.webSystems.indexOf(s.id) >= 0; };
+    var withG = systems().filter(function (s) { return by[s.id]; });
+    var noG = systems().filter(function (s) { return !by[s.id] && !s.port && canHere(s); });
+    var cards = withG.concat(noG).map(function (s) {
+      var n = by[s.id] ? by[s.id].length : 0;
+      return '<button class="cf gx-card' + (n ? '' : ' gx-empty') + '" data-act="sys" data-arg="' + s.id + '" data-title="' + esc(s.name) + '" data-sys="' + (n ? n + (n === 1 ? ' juego' : ' juegos') : 'Sin juegos todavía · agrégalos desde el USB o el celular') + '" style="--c:' + s.color + '">' +
         '<i class="gx-n">' + n + '</i><span class="gx-ic">' + sysIcon(s.id, s.mono) + '</span><b>' + esc(s.name) + '</b></button>';
     });
     if (by['?']) cards.push('<button class="cf gx-card" data-act="sys" data-arg="?" data-title="Sin sistema" data-sys="' + by['?'].length + ' por elegir" style="--c:#6B7280"><i class="gx-n">' + by['?'].length + '</i><span class="gx-ic">?</span><b>Sin sistema</b></button>');
@@ -139,7 +144,7 @@
     var chip = function (id, label, n) { return '<button class="cf gx-chip' + (sysFilter === id ? ' on' : '') + '" data-act="filter" data-arg="' + id + '" data-title="' + esc(label) + '" data-sys="' + n + (n === 1 ? ' juego' : ' juegos') + '">' + esc(label) + '</button>'; };
     var chips = [chip('all', 'Todo', roms().length)];
     if (favs().length) chips.push(chip('fav', '★ Favoritos', roms().filter(isFav).length));
-    systems().forEach(function (s) { if (by[s.id]) chips.push(chip(s.id, s.mono && s.mono.length <= 4 ? s.mono : s.name, by[s.id].length)); });
+    systems().forEach(function (s) { if (by[s.id] || sysFilter === s.id) chips.push(chip(s.id, s.mono && s.mono.length <= 4 ? s.mono : s.name, by[s.id] ? by[s.id].length : 0)); });
     if (by['?']) chips.push(chip('?', 'Sin sistema', by['?'].length));
     return topBar() +
       '<div class="crow gx-chips">' + chips.join('') + '</div>' +

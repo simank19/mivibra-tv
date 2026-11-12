@@ -298,3 +298,7 @@ html.tv #console, html.tv #console * { animation: none !important; transition: n
 .gx-home .gx-recent { padding-top: 1.6em; padding-bottom: 1.8em; }
 .gx-home .gx-recent .ctile { width: 8.6em; height: 12em; }
 #cdesc[hidden] { display: none !important; }
+/* Consolas sin juegos: se ven, pero atenuadas */
+#console .gx-card.gx-empty { filter: saturate(.35) brightness(.7); }
+#console .gx-card.gx-empty .gx-n { background: rgba(243,239,234,.55); }
+#console .gx-card.gx-empty:focus { filter: saturate(.8) brightness(.95); }

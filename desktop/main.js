@@ -64,12 +64,18 @@ function errMsg(e) { return (e && e.message) || String(e || 'Error'); }
 const EJS = {
   fceumm: 'fceumm', snes9x: 'snes9x', gambatte: 'gambatte', mgba: 'mgba', mupen64plus_next_gles3: 'mupen64plus_next', mupen64plus_next: 'mupen64plus_next',
   melonds: 'melonds', genesis_plus_gx: 'genesis_plus_gx', pcsx_rearmed: 'pcsx_rearmed', stella: 'stella2014', prosystem: 'prosystem', handy: 'handy',
-  mednafen_pce_fast: 'mednafen_pce', mednafen_ngp: 'mednafen_ngp', mednafen_wswan: 'mednafen_wswan', fbneo: 'fbneo', ppsspp: 'ppsspp', prboom: 'prboom'
+  mednafen_pce_fast: 'mednafen_pce', mednafen_ngp: 'mednafen_ngp', mednafen_wswan: 'mednafen_wswan', fbneo: 'fbneo', ppsspp: 'ppsspp', prboom: 'prboom',
+  picodrive: 'picodrive', yabause: 'yabause', opera: 'opera', mednafen_vb: 'beetle_vb', a5200: 'a5200', virtualjaguar: 'virtualjaguar',
+  gearcoleco: 'gearcoleco', vice_x64: 'vice_x64', puae: 'puae', cap32: 'cap32', fuse: 'fuse'
 };
 const BIOS_FOR = {
   pcsx_rearmed: ['scph5501.bin', 'scph5500.bin', 'scph5502.bin', 'scph1001.bin', 'scph7001.bin', 'scph101.bin'],
-  handy: ['lynxboot.img'], fbneo: ['neogeo.zip'], mgba: ['gba_bios.bin']
+  handy: ['lynxboot.img'], fbneo: ['neogeo.zip'], mgba: ['gba_bios.bin'],
+  yabause: ['saturn_bios.bin', 'sega_101.bin', 'mpr-17933.bin'], opera: ['panafz10.bin', 'panafz1.bin', 'panafz1j.bin', 'goldstar.bin'],
+  a5200: ['5200.rom'], gearcoleco: ['colecovision.rom']
 };
+// Sega CD usa el mismo núcleo que Mega Drive pero con su BIOS
+const BIOS_SYS = { segacd: ['bios_CD_U.bin', 'bios_CD_E.bin', 'bios_CD_J.bin'] };
 
 // ---------------- RetroArch para Windows (Dreamcast, GameCube y quien lo prefiera) ----------------
 function retroArchExe() {
@@ -356,7 +362,7 @@ const ASYNC = {
       return reply(id, false, why);
     }
     let bios = '';
-    for (const b of BIOS_FOR[core] || []) {
+    for (const b of BIOS_SYS[o.sys] || BIOS_FOR[core] || []) {
       const local = storage.biosPath(b) || (storage.exists(path.join(path.dirname(o.rom), b)) ? path.join(path.dirname(o.rom), b) : null);
       if (local) { bios = romUrl(local); break; }
     }

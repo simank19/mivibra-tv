@@ -229,7 +229,10 @@ object Storage {
         "lynxboot.img", "bios_cd_u.bin", "bios_cd_e.bin", "bios_cd_j.bin", "bios7.bin", "bios9.bin", "firmware.bin",
         "neogeo.zip", "syscard3.pce", "7800 bios (u).rom", "gba_bios.bin", "gb_bios.bin", "gbc_bios.bin",
         "dc_boot.bin", "dc_flash.bin", "sega_101.bin", "mpr-17933.bin", "saturn_bios.bin",
+        "panafz10.bin", "panafz1.bin", "panafz1j.bin", "goldstar.bin", "5200.rom", "colecovision.rom",
     )
+    /** Nombre exacto que espera cada núcleo (en Android las mayúsculas cuentan). */
+    private val BIOS_CANON = mapOf("bios_cd_u.bin" to "bios_CD_U.bin", "bios_cd_e.bin" to "bios_CD_E.bin", "bios_cd_j.bin" to "bios_CD_J.bin")
     /** Estas van en una subcarpeta del directorio de sistema (como las espera el núcleo). */
     private val BIOS_SUBDIR = mapOf("dc_boot.bin" to "dc", "dc_flash.bin" to "dc")
 
@@ -250,6 +253,7 @@ object Storage {
                     for (base in listOfNotNull(sys, ra)) {
                         val dir = if (sub != null) File(base, sub).apply { mkdirs() } else base
                         try { f.copyTo(File(dir, f.name), overwrite = true) } catch (_: Exception) {}
+                        BIOS_CANON[low]?.takeIf { it != f.name }?.let { c -> try { f.copyTo(File(dir, c), overwrite = true) } catch (_: Exception) {} }
                         // FBNeo busca la BIOS de Neo Geo en system/fbneo
                         if (low == "neogeo.zip") try { f.copyTo(File(File(base, "fbneo").apply { mkdirs() }, f.name), overwrite = true) } catch (_: Exception) {}
                     }
