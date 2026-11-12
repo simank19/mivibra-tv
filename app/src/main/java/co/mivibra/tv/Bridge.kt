@@ -745,6 +745,61 @@ class Bridge(private val a: MainActivity) {
         }
     }
 
+    // ---------------- Emuladores externos (consolas modernas) ----------------
+    private fun installedPkg(list: org.json.JSONArray): String? {
+        for (i in 0 until list.length()) {
+            val p = list.optString(i)
+            if (p.isNotEmpty() && try { a.packageManager.getPackageInfo(p, 0); true } catch (_: Exception) { false }) return p
+        }
+        return null
+    }
+
+    /** Primer emulador instalado de la lista de paquetes (JSON). "" si ninguno. */
+    @JavascriptInterface
+    fun extInstalled(pkgsJson: String): String = try { installedPkg(org.json.JSONArray(pkgsJson)) ?: "" } catch (_: Exception) { "" }
+
+    /**
+     * Abre el juego en el emulador de la consola instalado en el equipo (Dolphin, Cemu, Azahar, NetherSX2, aPS3e, Vita3K…).
+     * Se le entrega el archivo con permiso de lectura; si el emulador no acepta abrir archivos de afuera, se abre la app
+     * y se responde {opened:"app", path} para que el usuario elija el juego desde ahí. {rom, pkgs:[..], exts:[..]}
+     */
+    @JavascriptInterface
+    fun playExternal(id: String, json: String) {
+        io.execute {
+            try {
+                val o = JSONObject(json)
+                val pkg = installedPkg(o.optJSONArray("pkgs") ?: org.json.JSONArray()) ?: throw IllegalStateException("NOAPP")
+                var rom = Storage.toLocalFile(a, o.getString("rom"))
+                if (Archives.supported(rom.absolutePath)) {
+                    val ex = o.optJSONArray("exts"); val exts = if (ex == null) emptyList() else (0 until ex.length()).map { ex.getString(it).lowercase() }
+                    rom = File(Storage.unzipRom(a, rom.absolutePath, exts, onPct = { progress(id, it) }, keep = 3))
+                }
+                val uri = androidx.core.content.FileProvider.getUriForFile(a, a.packageName + ".files", rom)
+                a.runOnUiThread {
+                    val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK
+                    try { a.grantUriPermission(pkg, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION) } catch (_: Exception) {}
+                    val view = Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/octet-stream").setPackage(pkg).addFlags(flags)
+                        // Nombres de "extra" que usan algunos emuladores para arrancar un juego directo
+                        .putExtra("bootPath", uri.toString())
+                        .putExtra("AutoStartFile", uri.toString())
+                        .putExtra("SelectedGames", arrayOf(uri.toString()))
+                        .putExtra("GamePath", uri.toString())
+                    try {
+                        a.startActivity(view)
+                        reply(id, true, JSONObject().put("opened", "game").put("pkg", pkg))
+                    } catch (_: Exception) {
+                        try {
+                            val launch = a.packageManager.getLeanbackLaunchIntentForPackage(pkg) ?: a.packageManager.getLaunchIntentForPackage(pkg)
+                                ?: throw IllegalStateException("No se pudo abrir el emulador")
+                            a.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                            reply(id, true, JSONObject().put("opened", "app").put("pkg", pkg).put("path", rom.absolutePath))
+                        } catch (e: Exception) { reply(id, false, e.message ?: "No se pudo abrir el emulador") }
+                    }
+                }
+            } catch (e: Throwable) { reply(id, false, e.message ?: "No se pudo abrir el emulador") }
+        }
+    }
+
     // ---------------- Google Drive (juegos y partidas) ----------------
     /** Ejecuta con un token de Drive; si venció, lo pide otra vez (sin molestar si ya se dio permiso). */
     private fun withDrive(id: String, interactive: Boolean, work: (String) -> Any?) {

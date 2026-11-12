@@ -1785,7 +1785,7 @@
   var sysSel = 'all', gameGenre = '';
   function romGenres(r) { var s = romSystem(r); var g = D.classifyGenres(r.name, D.GAME_GENRES); if (s && s.port && g.indexOf('disparos') < 0 && /doom|quake|wolf/.test(s.id)) g.push('disparos'); if (s && s.id === 'cave' && g.indexOf('aventura') < 0) g.push('aventura'); return g; }
   /** ¿Es de verdad un juego? Descarta APK, documentos (README.md), listas .m3u y .zip/.iso que no son de juegos. */
-  var ROM_DIR = /\/(roms?|juegos|games|emuladore?s?|emulators?|emulation|retro\w*|arcade|mame|fbneo|fba|neogeo|cps\d?|snes|nes|sfc|genesis|megadrive|mega drive|gba|gbc|gb|n64|nds|psx|ps1|playstation|psp|gamecube|gcn|ngc|dreamcast|dc|sega|nintendo|atari|pce|ports?|doom|quake|saturn|3do|segacd|megacd|32x|jaguar|coleco|colecovision|c64|commodore|amiga|amstrad|cpc|spectrum|zx|virtualboy|vb|sg1000)\//i;
+  var ROM_DIR = /\/(roms?|juegos|games|emuladore?s?|emulators?|emulation|retro\w*|arcade|mame|fbneo|fba|neogeo|cps\d?|snes|nes|sfc|genesis|megadrive|mega drive|gba|gbc|gb|n64|nds|psx|ps1|playstation|psp|gamecube|gcn|ngc|dreamcast|dc|sega|nintendo|atari|pce|ports?|doom|quake|saturn|3do|segacd|megacd|32x|jaguar|coleco|colecovision|c64|commodore|amiga|amstrad|cpc|spectrum|zx|virtualboy|vb|sg1000|ps2|ps3|ps4|playstation ?[234]|vita|psvita|xbox|xbox ?360|x360|wii|wiiu|wii u|3ds|n3ds)\//i;
   function isGame(r) {
     if ((MV.load('romsHidden', []) || []).indexOf(r.path) >= 0) return false;
     // En Windows las rutas usan "\\": se igualan a "/" para reconocer las carpetas de juegos
@@ -1802,10 +1802,10 @@
     var mine = own || path.indexOf('/co.mivibra.tv/') >= 0 || ROM_DIR.test(path + '/');
     if (ext === 'zip' || ext === '7z' || ext === 'rar') return mine;                                 // .zip solo en carpetas de juegos (roms, arcade…)
     if (ext === 'm3u') return /psx|ps1|playstation/.test(path);      // .m3u también son listas de TV
-    if (ext === 'iso') return size > 30e6 && (mine || /psx|ps1|playstation|psp|gamecube|dreamcast|saturn|3do|segacd|sega cd|megacd|mega cd/.test(path));
+    if (ext === 'iso') return size > 30e6 && (mine || /psx|ps1|ps2|ps3|playstation|psp|gamecube|dreamcast|saturn|3do|segacd|sega cd|megacd|mega cd|xbox|x360|wii/.test(path));
     if (ext === 'exe' || ext === 'pak') return true;                 // ya filtrados por nombre (Doukutsu.exe, pak0.pak)
     if (['md', 'gen', 'smd', '32x'].indexOf(ext) >= 0 && size && size < 65536) return false; // un .md de 5 KB es un documento
-    if (['dsk', 'prg', 'sna'].indexOf(ext) >= 0 && !mine) return false;   // extensiones comunes en otros programas: solo en carpetas de juegos
+    if (['dsk', 'prg', 'sna', 'pkg', 'xex'].indexOf(ext) >= 0 && !mine) return false;   // extensiones comunes en otros programas: solo en carpetas de juegos
     if (size && size < 1024) return false;
     return true;
   }
@@ -1868,7 +1868,7 @@
       return byDir || null;
     }
     // Discos de PSP, GameCube y Dreamcast: se reconocen por la carpeta (psp/, gamecube/, dreamcast/)
-    if (['iso', 'chd', 'cue', 'cso', 'rvz', 'gcm', 'gdi', 'cdi'].indexOf(r.ext) >= 0) {
+    if (['iso', 'chd', 'cue', 'cso', 'rvz', 'gcm', 'gdi', 'cdi', 'pkg', 'xiso'].indexOf(r.ext) >= 0) {
       var byPath = D.SYSTEMS.find(function (s) { return s.path && s.path.test(path); });
       if (byPath) return byPath;
     }
@@ -2376,6 +2376,35 @@
       .then(function () { unzipBox(null); rememberGame(r); })
       .catch(function (e) { unzipBox(null); MV.toast(e.message, 6000); });
   }
+  // Consolas modernas: el juego se abre en el emulador de esa consola instalado en el equipo (MiVibra no lo trae ni lo descarga)
+  function playExternal(r, s) {
+    var pc = !!MV.device.desktop;
+    if (!A || MV.device.webtv) { MV.toast(s.name + ' no se puede jugar en este TV. Juégalo en el Android TV o en el PC.', 6000); return; }
+    if (!pc && !(s.android && s.android.length)) { MV.toast(s.name + ' todavía no tiene emulador para Android: juégalo en el PC con ' + s.pc.name + '.', 6000); return; }
+    var need = function () {
+      var name = pc ? s.pc.name : s.app, site = pc ? s.pc.site : s.androidSite;
+      MV._extSite = site; MV._extSys = s.id; MV._extRom = r;
+      MV.modal('<h2>' + esc(s.name) + ' se juega con ' + esc(name) + '</h2>' +
+        '<p>' + esc(s.name) + ' necesita mucha potencia, así que MiVibra abre tus juegos en <b>' + esc(name) + '</b>, el emulador gratuito y de código abierto de esa consola. Instálalo una vez en este equipo y vuelve a abrir el juego.</p>' +
+        (s.heavy ? '<p class="muted">Pide un equipo potente' + (pc ? ' (procesador y tarjeta de video recientes)' : ' (celular o TV box de gama alta)') + '. En equipos modestos puede ir lento o no abrir.</p>' : '') +
+        (s.early ? '<p class="muted">Este emulador todavía está en desarrollo: solo algunos juegos funcionan.</p>' : '') +
+        (s.biosNote ? '<p class="muted">' + esc(s.biosNote) + '.</p>' : '') +
+        '<p class="muted">MiVibra no incluye BIOS, firmware ni llaves de las consolas: si el emulador las pide, se sacan de tu propia consola.</p>' +
+        '<div class="btns">' + (site ? '<button class="btn f" data-act="extSite">Ver dónde descargarlo</button>' : '') + (pc ? '<button class="btn ghost f" data-act="extPick">Ya lo tengo: buscar el programa</button>' : '') + '<button class="btn ghost f" data-act="closeModal">Cerrar</button></div>');
+    };
+    if (!pc && !A.extInstalled(JSON.stringify(s.android))) { need(); return; }
+    unzipBox(r, 0);
+    var job = pc ? MV.call('playExternal', [JSON.stringify({ rom: r.path, sys: s.id, pc: s.pc, exts: s.exts })], function (p) { unzipBox(r, p); })
+      : MV.call('playExternal', [JSON.stringify({ rom: r.path, pkgs: s.android, exts: s.exts })], function (p) { unzipBox(r, p); });
+    job.then(function (x) {
+      unzipBox(null); rememberGame(r);
+      if (x && x.opened === 'app') MV.toast('Se abrió ' + s.app + '. Si no arranca solo, elige el juego ahí: ' + String(x.path || '').split('/').pop(), 8000);
+      if (s.heavy && !MV.load('extHeavyTip:' + s.id, 0)) { MV.save('extHeavyTip:' + s.id, 1); }
+    }).catch(function (e) {
+      unzipBox(null);
+      if (e && /NOEXE|NOAPP/.test(e.message || '')) need(); else MV.toast(e.message, 6000);
+    });
+  }
   function playRetroArch(r, s) {
     var info = {}; try { info = JSON.parse(A.retroArch()); } catch (e) {}
     if (!info.installed) {
@@ -2406,6 +2435,7 @@
     // Neo Geo en formato .neo (NeoSD/TerraOnion, un solo archivo): lo abre el emulador Geolith, no FBNeo
     if (s.id === 'neogeo' && (r.ext === 'neo' || (/^(zip|7z|rar)$/.test(r.ext || '') && zipInner(r).indexOf('neo') >= 0)))
       s = Object.assign({}, s, { core: 'geolith', src: 'bb', exts: ['neo'], geolith: true });
+    if (s.extern) { playExternal(r, s); return; }
     // PSP con la app PPSSPP solo si se eligió en Emuladores; si no, va con el emulador de MiVibra (mismo menú y marco que las demás)
     if (A && s.id === 'psp' && MV.pspEngine() === 'ppsspp') { playPpsspp(r, s); return; }
     if (A && gameEngine(s) === 'retroarch') { playRetroArch(r, s); return; }
@@ -3106,6 +3136,11 @@
       MV.setPerfMode(m);
       MV.toast('Aplicando…');
       setTimeout(function () { location.reload(); }, 500);
+    },
+    extSite: function () { if (MV._extSite) A.openExternal(MV._extSite); },
+    extPick: function () {
+      MV.closeModal(true);
+      MV.call('pickEmulator', [MV._extSys]).then(function (ok) { if (ok && MV._extRom) playRom(MV._extRom); }).catch(function (e) { MV.toast(e.message, 5000); });
     },
     prefToggle: function (k, el) {
       P[k] = P[k] === false ? true : !P[k]; MV.savePrefs();

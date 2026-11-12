@@ -77,6 +77,37 @@ const BIOS_FOR = {
 // Sega CD usa el mismo núcleo que Mega Drive pero con su BIOS
 const BIOS_SYS = { segacd: ['bios_CD_U.bin', 'bios_CD_E.bin', 'bios_CD_J.bin'] };
 
+// ---------------- Emuladores de consolas modernas ----------------
+function emuMap() { try { return JSON.parse(fs.readFileSync(path.join(DATA, 'emuladores.json'), 'utf8')) || {}; } catch (e) { return {}; } }
+/** Busca el .exe del emulador: el que eligió el usuario, o en las carpetas de siempre (Archivos de programa, Descargas, Escritorio, C:\Emuladores…). */
+function findEmulator(sys, pc) {
+  const saved = emuMap()[sys];
+  if (saved && storage.exists(saved)) return saved;
+  const names = (pc.exe || []).filter((n) => /^[\w .()-]+\.exe$/i.test(n));
+  const dirs = (pc.dirs || []).map((d) => String(d).toLowerCase());
+  if (!names.length || process.platform !== 'win32') return null;
+  const env = process.env, home = os.homedir();
+  const bases = [env.ProgramFiles, env['ProgramFiles(x86)'], path.join(env.LOCALAPPDATA || '', 'Programs'), env.LOCALAPPDATA, env.APPDATA,
+    home, path.join(home, 'Downloads'), path.join(home, 'Desktop'), path.join(home, 'Documents'), path.join(home, 'OneDrive', 'Desktop'),
+    'C:\\', 'C:\\Emuladores', 'C:\\Emulators', 'D:\\', 'D:\\Emuladores', 'D:\\Emulators'].filter(Boolean);
+  const tryDir = (d) => { for (const n of names) { const f = path.join(d, n); if (storage.exists(f)) return f; } return null; };
+  for (const b of bases) {
+    let ents = [];
+    try { ents = fs.readdirSync(b, { withFileTypes: true }); } catch (e) { continue; }
+    for (const e of ents) {
+      if (!e.isDirectory()) continue;
+      const low = e.name.toLowerCase();
+      // "PCSX2", "pcsx2-v2.2.0-windows-x64", "Dolphin-x64"…
+      if (!dirs.some((d) => low === d || low.startsWith(d + '-') || low.startsWith(d + ' ') || low.startsWith(d + '_') || low.startsWith(d + '.'))) continue;
+      const hit = tryDir(path.join(b, e.name));
+      if (hit) return hit;
+      // Un nivel más (zip descomprimido dentro de su propia carpeta)
+      try { for (const s2 of fs.readdirSync(path.join(b, e.name), { withFileTypes: true })) if (s2.isDirectory()) { const h2 = tryDir(path.join(b, e.name, s2.name)); if (h2) return h2; } } catch (er) {}
+    }
+  }
+  return null;
+}
+
 // ---------------- RetroArch para Windows (Dreamcast, GameCube y quien lo prefiera) ----------------
 function retroArchExe() {
   const env = process.env;
@@ -368,6 +399,26 @@ const ASYNC = {
     }
     openGame({ core, rom: romUrl(o.rom), bios, title: o.title || path.basename(o.rom), save: path.parse(o.rom).name, sys: o.sys, threads: core === 'ppsspp' });
     reply(id, true, {});
+  },
+  // Consolas modernas: abre el juego en el emulador de esa consola instalado en Windows (PCSX2, RPCS3, Dolphin, Cemu, xemu, Xenia…)
+  async playExternal(id, json) {
+    const o = JSON.parse(json), pc = o.pc || {};
+    const exe = findEmulator(o.sys, pc);
+    if (!exe) return reply(id, false, 'NOEXE');
+    try {
+      let rom = o.rom;
+      if (archives.supported(rom)) rom = await storage.unzipRom(rom, (o.exts || []).map((x) => String(x).toLowerCase()), (p) => progress(id, p));
+      const args = (pc.args || ['{rom}']).map((a) => a === '{rom}' ? rom : String(a));
+      spawn(exe, args, { detached: true, stdio: 'ignore', cwd: path.dirname(exe) }).unref();
+      reply(id, true, { opened: 'game', exe });
+    } catch (e) { reply(id, false, 'No se pudo abrir ' + (pc.name || 'el emulador') + ': ' + errMsg(e)); }
+  },
+  /** El usuario indica dónde está el emulador (se recuerda por consola). */
+  async pickEmulator(id, sys) {
+    const r = await dialog.showOpenDialog(win, { title: 'Elige el programa del emulador (.exe)', properties: ['openFile'], filters: [{ name: 'Programas', extensions: ['exe'] }] });
+    if (r.canceled || !r.filePaths[0]) return reply(id, true, false);
+    const map = emuMap(); map[String(sys)] = r.filePaths[0]; fs.writeFileSync(path.join(DATA, 'emuladores.json'), JSON.stringify(map, null, 1));
+    reply(id, true, true);
   },
   async playRetroArch(id, json) {
     const o = JSON.parse(json), exe = retroArchExe();

@@ -110,7 +110,11 @@
     var all = roms(), by = bySystem();
     // Todas las consolas: primero las que tienen juegos y después las demás (atenuadas, con 0), para saber qué se puede jugar.
     // En Samsung/LG solo las que ese TV puede mover.
-    var canHere = function (s) { return !MV.webSystems || MV.webSystems.indexOf(s.id) >= 0; };
+    var canHere = function (s) {
+      if (MV.webSystems) return MV.webSystems.indexOf(s.id) >= 0;
+      if (s.extern && !(MV.device && MV.device.desktop) && !(s.android && s.android.length)) return false;   // PS4 y Xbox: solo en el PC
+      return true;
+    };
     var withG = systems().filter(function (s) { return by[s.id]; });
     var noG = systems().filter(function (s) { return !by[s.id] && !s.port && canHere(s); });
     var cards = withG.concat(noG).map(function (s) {

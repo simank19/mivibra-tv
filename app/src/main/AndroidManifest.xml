@@ -84,6 +84,20 @@
         <package android:name="com.retroarch" />
         <package android:name="com.retroarch.aarch64" />
         <package android:name="com.retroarch.ra32" />
+        <!-- Emuladores externos para consolas modernas (PS2, PS3, Wii, Wii U, 3DS, Xbox 360, PS Vita) -->
+        <package android:name="xyz.aethersx2.android" />
+        <package android:name="com.armsx2.android" />
+        <package android:name="aenu.aps3e" />
+        <package android:name="aenu.ax360e" />
+        <package android:name="org.dolphinemu.dolphinemu" />
+        <package android:name="org.dolphinemu.mmjr" />
+        <package android:name="info.cemu.cemu" />
+        <package android:name="org.azahar_emu.azahar" />
+        <package android:name="io.github.lime3ds.android" />
+        <package android:name="org.citra.citra_emu" />
+        <package android:name="org.citra.emu" />
+        <package android:name="org.vita3k.emulator" />
+        <package android:name="com.github.stenzek.duckstation" />
     </queries>
 
     <application

@@ -58,6 +58,24 @@
     quake: '<path d="M24 4l16 9v22l-16 9-16-9V13z"/><path d="M24 14l-6 14h12z"/>',
     wolf: '<rect x="5" y="7" width="38" height="26" rx="2"/><path d="M16 41h16M24 33v8"/><path d="M15 26l6-11 4 6 3-4 5 9z"/>',
     cave: '<path d="M4 40c3-14 9-26 20-26s17 12 20 26z"/><path d="M24 22l2.5 5 5.5.8-4 3.8 1 5.4-5-2.6-5 2.6 1-5.4-4-3.8 5.5-.8z"/>',
+    // Consola vertical con bandeja (PS2)
+    ps2: '<rect x="14" y="4" width="20" height="40" rx="2"/><path d="M14 12h20M18 8h8"/><path d="M14 38h20" stroke-width="1.6"/><circle cx="29" cy="8" r="1.2" fill="currentColor"/>',
+    // Consola ancha con ranura de disco (PS3)
+    ps3: '<path d="M4 16c0-2 2-4 4-4h32c2 0 4 2 4 4v14c0 4-3 6-7 6H11c-4 0-7-2-7-6z"/><path d="M12 22h24" stroke-width="1.8"/><circle cx="38" cy="30" r="1.3" fill="currentColor"/>',
+    // Consola plana en capas (PS4)
+    ps4: '<path d="M6 30l6-14h28l-6 14z"/><path d="M9 23h29" stroke-width="1.6"/><path d="M6 30v4h28l6-18" stroke-width="1.8"/>',
+    // Portátil ancha con dos palancas (PS Vita)
+    vita: '<path d="M10 14h28c5 0 8 4 8 10s-3 10-8 10H10c-5 0-8-4-8-10s3-10 8-10z"/><rect x="14" y="17" width="20" height="14" rx="1"/><circle cx="9" cy="28" r="1.8"/><circle cx="39" cy="28" r="1.8"/>' + dpad(8.6, 21, 2.4) + dot(39, 20, 1.2),
+    // Control con botón central redondo (Xbox)
+    xbox: '<path d="M13 13h22c5 0 8 4 9 9l2 10c1 5-3 8-7 5l-6-5H15l-6 5c-4 3-8 0-7-5l2-10c1-5 4-9 9-9z"/><circle cx="24" cy="20" r="3.2"/><circle cx="14" cy="22" r="2.6"/>' + diamond(34, 22, 3.4, 1.6) + '<circle cx="29" cy="29" r="2.2"/>',
+    // Control con anillo central (Xbox 360)
+    x360: '<path d="M13 13h22c5 0 8 4 9 9l2 10c1 5-3 8-7 5l-6-5H15l-6 5c-4 3-8 0-7-5l2-10c1-5 4-9 9-9z"/><circle cx="24" cy="21" r="4"/><circle cx="24" cy="21" r="1.6" fill="currentColor"/><circle cx="13" cy="21" r="2.4"/>' + diamond(35, 21, 3.2, 1.5) + dpad(18, 30, 2.6),
+    // Control remoto delgado (Wii)
+    wii: '<rect x="17" y="3" width="14" height="42" rx="6"/>' + dpad(24, 12, 3.6) + '<circle cx="24" cy="21" r="2.4"/>' + dot(24, 33, 1.3) + dot(24, 37, 1.3) + '<path d="M21 27h6" stroke-width="1.6"/>',
+    // Control con pantalla (Wii U)
+    wiiu: '<path d="M6 12h36c2 0 4 2 4 4v16c0 2-2 4-4 4H6c-2 0-4-2-4-4V16c0-2 2-4 4-4z"/><rect x="14" y="15" width="20" height="16" rx="1"/><circle cx="8" cy="19" r="2"/><circle cx="40" cy="19" r="2"/>' + dpad(8, 28, 2.4) + dot(40, 27, 1.2) + dot(40, 31, 1.2),
+    // Plegable con dos pantallas, la de arriba más ancha (3DS)
+    '3ds': '<rect x="7" y="4" width="34" height="19" rx="2"/><rect x="11" y="7" width="26" height="13" rx="1"/><rect x="10" y="25" width="28" height="19" rx="2"/><rect x="17" y="28" width="14" height="11" rx="1"/><circle cx="13.5" cy="30" r="1.6"/>' + dot(35, 31, 1) + dot(35, 35, 1),
     // Control con teclado numérico (Jaguar)
     jaguar: '<path d="M8 14h32c3 0 5 2 5 5v8c0 4-3 7-7 7h-3l-3 8H16l-3-8h-3c-4 0-7-3-7-7v-8c0-3 2-5 5-5z"/>' + dpad(12, 22, 3.6) + dot(33, 20, 1.7) + dot(37, 23, 1.7) + dot(41, 20, 1.7) + '<path d="M20 30h8M20 34h8M22 38h4"/>',
     '?': '<rect x="6" y="14" width="36" height="20" rx="10"/><path d="M21 21c0-2 1.5-3 3-3s3 1 3 3c0 2.5-3 2.5-3 5"/>' + dot(24, 30, 1.4)
