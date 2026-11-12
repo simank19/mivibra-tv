@@ -1,4 +1,4 @@
-' MiVibra TV para Roku: pantalla principal.
+' MiVibra TV para Roku: la app (va dentro de Shell, que la descarga actualizada de internet).
 
 sub init()
     m.nav = m.top.FindNode("nav")
@@ -76,7 +76,24 @@ sub init()
     m.kbdMode = "all"
     m.aList = invalid
 
+end sub
+
+' La pantalla principal (Shell) avisa cuando la app ya está en pantalla
+sub onGo()
     m.nav.SetFocus(true)
+    if m.top.apiName = "Api" then
+        startWork()
+        return
+    end if
+    tm = m.top.FindNode("taskT")
+    tm.ObserveField("fire", "onTaskCheck")
+    tm.control = "start"
+    api({ cmd: "ping" }, "onPing")
+end sub
+
+sub startWork()
+    if m.started = true then return
+    m.started = true
     load()
     m.top.FindNode("pollT").control = "start"
 end sub
@@ -85,13 +102,32 @@ end sub
 function api(req as Object, cb as String) as Object
     m.reqN = m.reqN + 1
     req.id = m.reqN
-    t = CreateObject("roSGNode", "Api")
+    t = CreateObject("roSGNode", m.top.apiName)
+    if t = invalid then
+        m.top.apiName = "Api"
+        t = CreateObject("roSGNode", "Api")
+    end if
     t.req = req
     t.ObserveField("res", cb)
     m.tasks[m.reqN.ToStr()] = t
     t.control = "RUN"
     return t
 end function
+
+' La versión descargada trae sus propias tareas; si en este Roku no arrancan, se usan las de la copia instalada
+sub onTaskCheck()
+    if m.pingOk = true then return
+    m.top.apiName = "Api"
+    startWork()
+end sub
+
+sub onPing(ev as Object)
+    r = done(ev)
+    if m.pingOk = true or m.top.apiName = "Api" and m.started = true then return
+    m.pingOk = true
+    m.top.FindNode("taskT").control = "stop"
+    startWork()
+end sub
 
 function done(ev as Object) as Object
     r = ev.GetData()
@@ -1195,7 +1231,7 @@ sub settingsInfo(i as Integer)
     else if id = "logout" then
         t = "Cierra la sesión en este Roku. Tus datos siguen en la cuenta."
     else if id = "about" then
-        t = "MiVibra TV para Roku" + Chr(10) + "Reproductor de listas: no incluye ni vende contenido." + Chr(10) + Chr(10) + "Control: OK abre · * agrega a favoritos · ▲▼ cambia de canal mientras ves TV en vivo." + Chr(10) + Chr(10) + "Las listas, favoritos y Continuar viendo se sincronizan con tu cuenta MiVibra."
+        t = "MiVibra TV para Roku · " + toS(m.top.libInfo) + Chr(10) + "Reproductor de listas: no incluye ni vende contenido." + Chr(10) + Chr(10) + "Control: OK abre · * agrega a favoritos · ▲▼ cambia de canal mientras ves TV en vivo." + Chr(10) + Chr(10) + "Las listas, favoritos y Continuar viendo se sincronizan con tu cuenta MiVibra."
     end if
     m.info.text = t
 end sub

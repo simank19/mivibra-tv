@@ -8,7 +8,9 @@ sub work()
     r = m.top.req
     c = r.cmd
     out = invalid
-    if c = "load" then
+    if c = "ping" then
+        out = { pong: true }
+    else if c = "load" then
         out = cmdLoad(r)
     else if c = "login" then
         out = cmdLogin(r)

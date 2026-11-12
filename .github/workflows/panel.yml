@@ -14,6 +14,8 @@ on:
       - "tvweb/**"
       - "desktop/web/player.*"
       - ".github/scripts/tvpack.py"
+      - "roku/**"
+      - ".github/scripts/rokupack.py"
   workflow_dispatch:
 
 permissions:
@@ -67,6 +69,8 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/build-tv-vendor"
           cp node_modules/hls.js/dist/hls.min.js node_modules/mpegts.js/dist/mpegts.js node_modules/pako/dist/pako_inflate.min.js "$GITHUB_WORKSPACE/build-tv-vendor/"
           cd "$GITHUB_WORKSPACE" && python3 .github/scripts/tvpack.py site site/tv ${{ github.run_number }}
+          # Roku: la app se publica como librería; el Roku la descarga al abrir y así se actualiza solo
+          python3 .github/scripts/rokupack.py site/roku/lib.zip ${{ github.run_number }} lib
       - uses: actions/configure-pages@v5
         with:
           enablement: true

@@ -3,7 +3,7 @@ sub Main(args as Dynamic)
     screen = CreateObject("roSGScreen")
     port = CreateObject("roMessagePort")
     screen.SetMessagePort(port)
-    scene = screen.CreateScene("MainScene")
+    scene = screen.CreateScene("Shell")
     screen.Show()
     scene.ObserveField("exitApp", port)
     while true

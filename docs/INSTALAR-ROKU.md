@@ -45,7 +45,9 @@ Tienes dos formas, desde **Ajustes** dentro de la app:
 - Los addons que solo dan torrents (sin servicio de debrid) no sirven en Roku: se muestran solo los enlaces directos.
 
 ## Actualizar
-Tus listas, favoritos y "Continuar viendo" se actualizan solos. Para tener una **versión nueva de la app**, descarga otra vez `MiVibraTV-Roku.zip` y súbela igual que la primera vez (paso 2): se reemplaza y conserva tus datos.
+**Se actualiza sola.** Cada vez que abres MiVibra TV en el Roku, descarga la versión más reciente de la app (tarda un par de segundos). Si en ese momento no hay internet, abre la versión que tiene instalada. Tus listas, favoritos y "Continuar viendo" también se actualizan solos.
+
+En *Ajustes › Acerca de MiVibra TV* ves si estás usando la versión "actualizada desde internet" o la "copia instalada". Solo hace falta volver a subir `MiVibraTV-Roku.zip` (paso 2) si algún día te lo pedimos, por ejemplo si cambian los íconos o la cuenta.
 
 ## Problemas comunes
 - **No abre la página del Roku en el computador:** revisa que estén en el mismo Wi-Fi y que escribiste `http://` y la dirección exacta.

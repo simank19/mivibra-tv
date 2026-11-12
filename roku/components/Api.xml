@@ -6,7 +6,6 @@
     <field id="prog" type="assocarray"/>
     <field id="cancel" type="boolean" value="false"/>
   </interface>
-  <script type="text/brightscript" uri="pkg:/components/Config.brs"/>
   <script type="text/brightscript" uri="pkg:/components/Util.brs"/>
   <script type="text/brightscript" uri="pkg:/components/Api.brs"/>
 </component>

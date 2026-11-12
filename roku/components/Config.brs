@@ -1,5 +1,5 @@
 ' Datos de la cuenta MiVibra. En GitHub Actions este archivo se reemplaza con los secretos del repositorio.
-function mvConfig() as Object
+function mvConfigPkg() as Object
     return {
         apiKey: ""
         projectId: ""

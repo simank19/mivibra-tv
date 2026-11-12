@@ -1,14 +1,15 @@
-"""Arma el canal de Roku (MiVibraTV-Roku.zip) a partir de roku/.
+"""Arma el canal de Roku (MiVibraTV-Roku.zip) a partir de roku/, o la librería que se publica en GitHub Pages.
 
-Uso: python3 .github/scripts/rokupack.py <salida.zip> <número de versión>
+Uso: python3 .github/scripts/rokupack.py <salida.zip> <número de versión> [lib]
+  lib: solo la app (sin datos de la cuenta ni imágenes) para site/roku/lib.zip; el Roku la descarga al abrir y así se actualiza solo.
 Toma la cuenta MiVibra de app/src/main/assets/www/config.js (lo escribe config.py con los secretos)
 y genera los íconos y la pantalla de inicio con el logo de la app.
 """
 import json, os, re, shutil, sys, tempfile, zipfile
-from PIL import Image, ImageDraw, ImageFilter
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 out_zip, num = sys.argv[1], int(sys.argv[2])
+LIB = len(sys.argv) > 3 and sys.argv[3] == 'lib'
 src = os.path.join(ROOT, 'roku')
 tmp = tempfile.mkdtemp()
 dst = os.path.join(tmp, 'roku')
@@ -18,6 +19,35 @@ shutil.copytree(src, dst)
 man = open(os.path.join(dst, 'manifest')).read()
 man = re.sub(r'build_version=\d+', 'build_version=%05d' % (num % 100000), man)
 open(os.path.join(dst, 'manifest'), 'w').write(man)
+
+def zipdir(d, out):
+    if os.path.exists(out):
+        os.remove(out)
+    os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
+    with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
+        for base, _, files in os.walk(d):
+            for fn in files:
+                p = os.path.join(base, fn)
+                z.write(p, os.path.relpath(p, d))
+
+if LIB:
+    # Librería pública: sin Config.brs (datos de la cuenta), sin Shell y sin imágenes (las trae la app instalada)
+    lib = os.path.join(tmp, 'lib')
+    os.makedirs(os.path.join(lib, 'components'))
+    for fn in os.listdir(os.path.join(dst, 'components')):
+        if fn.startswith('Shell.') or fn == 'Config.brs':
+            continue
+        t = open(os.path.join(dst, 'components', fn)).read()
+        if fn.endswith('.xml'):
+            t = t.replace('uri="pkg:/components/', 'uri="')
+        open(os.path.join(lib, 'components', fn), 'w').write(t)
+    open(os.path.join(lib, 'manifest'), 'w').write('title=MiVibra TV (app)\nmajor_version=1\nminor_version=0\nbuild_version=%05d\nsg_component_libs_provided=MVLib\n' % (num % 100000))
+    zipdir(lib, out_zip)
+    shutil.rmtree(tmp)
+    print('Librería Roku:', out_zip, os.path.getsize(out_zip), 'bytes')
+    sys.exit(0)
+
+from PIL import Image, ImageDraw, ImageFilter
 
 # Cuenta MiVibra (Firebase y el inicio con código de Google)
 cfg = {}
@@ -34,7 +64,7 @@ fb = cfg.get('firebase') or {}
 def q(s):
     return '"' + str(s or '').replace('"', '""') + '"'
 open(os.path.join(dst, 'components/Config.brs'), 'w').write(
-    "' Generado al compilar\nfunction mvConfig() as Object\n    return {\n"
+    "' Generado al compilar\nfunction mvConfigPkg() as Object\n    return {\n"
     "        apiKey: %s\n        projectId: %s\n        tvClientId: %s\n        tvClientSecret: %s\n"
     "        panel: \"https://simank19.github.io/mivibra-tv/panel/\"\n    }\nend function\n" % (
         q(fb.get('apiKey')), q(fb.get('projectId')), q(cfg.get('tvClientId')), q(cfg.get('tvClientSecret'))))
@@ -85,12 +115,6 @@ lg.putalpha(lg.getchannel('A').point(lambda a: a * 0.35))
 t.alpha_composite(lg, (110, 46))
 t.save(os.path.join(img, 'tile.png'))
 
-if os.path.exists(out_zip):
-    os.remove(out_zip)
-with zipfile.ZipFile(out_zip, 'w', zipfile.ZIP_DEFLATED) as z:
-    for base, _, files in os.walk(dst):
-        for fn in files:
-            p = os.path.join(base, fn)
-            z.write(p, os.path.relpath(p, dst))
+zipdir(dst, out_zip)
 shutil.rmtree(tmp)
 print('Listo:', out_zip, os.path.getsize(out_zip), 'bytes')

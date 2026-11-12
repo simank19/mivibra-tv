@@ -1,4 +1,12 @@
-' Utilidades compartidas (se incluyen en la escena y en las tareas).
+' Utilidades compartidas (se incluyen en la app y en las tareas).
+
+' Datos de la cuenta MiVibra: los pone Shell en m.global (no van en la librería pública)
+function mvConfig() as Object
+    c = invalid
+    if m.global <> invalid then c = m.global.mvcfg
+    if c = invalid then c = { apiKey: "", projectId: "", tvClientId: "", tvClientSecret: "" }
+    return c
+end function
 
 function nowSec() as Integer
     return CreateObject("roDateTime").AsSeconds()

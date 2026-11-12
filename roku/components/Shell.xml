@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pantalla base del Roku: descarga la versión más reciente de la app (librería en GitHub Pages)
+     y, si no hay internet o falla, abre la copia que viene instalada. -->
+<component name="Shell" extends="Scene">
+  <interface>
+    <field id="exitApp" type="boolean" value="false"/>
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/Config.brs"/>
+  <script type="text/brightscript" uri="pkg:/components/Shell.brs"/>
+  <children>
+    <Rectangle width="1920" height="1080" color="0x0D0C0BFF"/>
+    <Poster uri="pkg:/images/glow.png" width="1920" height="1080"/>
+    <Group id="splash">
+      <Poster uri="pkg:/images/logo.png" translation="[928,440]" width="64" height="64"/>
+      <Label text="Cargando MiVibra TV…" translation="[0,530]" width="1920" horizAlign="center" font="font:MediumSystemFont" color="0xA39C94FF"/>
+    </Group>
+    <Timer id="libT" repeat="false" duration="12"/>
+  </children>
+</component>

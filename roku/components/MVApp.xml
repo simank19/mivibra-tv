@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- MiVibra TV para Roku: menú a la izquierda, categorías en el centro y carátulas a la derecha. -->
-<component name="MainScene" extends="Scene">
+<!-- MiVibra TV para Roku: menú a la izquierda, categorías en el centro y carátulas a la derecha.
+     Se publica también como librería en GitHub Pages: el Roku la descarga al abrir y así se actualiza solo. -->
+<component name="MVApp" extends="Group">
   <interface>
     <field id="exitApp" type="boolean" value="false"/>
+    <field id="go" type="boolean" onChange="onGo"/>
+    <field id="apiName" type="string" value="Api"/>
+    <field id="libInfo" type="string"/>
   </interface>
-  <script type="text/brightscript" uri="pkg:/components/Config.brs"/>
   <script type="text/brightscript" uri="pkg:/components/Util.brs"/>
-  <script type="text/brightscript" uri="pkg:/components/MainScene.brs"/>
+  <script type="text/brightscript" uri="pkg:/components/MVApp.brs"/>
   <children>
     <Rectangle id="bg" width="1920" height="1080" color="0x0D0C0BFF"/>
     <Poster id="glow" uri="pkg:/images/glow.png" width="1920" height="1080" opacity="0.9"/>
@@ -74,5 +77,6 @@
     <Timer id="osdT" repeat="false" duration="4"/>
     <Timer id="toastT" repeat="false" duration="4"/>
     <Timer id="epgT" repeat="false" duration="0.8"/>
+    <Timer id="taskT" repeat="false" duration="3"/>
   </children>
 </component>
