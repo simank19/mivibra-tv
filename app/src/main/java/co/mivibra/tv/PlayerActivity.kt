@@ -985,24 +985,40 @@ class PlayerActivity : ComponentActivity() {
         return if (h > 0) String.format(Locale.US, "%d:%02d:%02d", h, mi, se) else String.format(Locale.US, "%d:%02d", mi, se)
     }
 
-    /** Etiqueta grande sobre la barra con el minuto al que se está adelantando o atrasando. */
+    /** Minuto al que se adelanta o atrasa: pequeño, justo debajo de la barra y siguiendo el punto de la barra. */
     private fun showSeek(pos: Long) {
-        val root = view.overlayFrameLayout ?: return
+        val root = findViewById<android.widget.FrameLayout>(android.R.id.content) ?: return
+        val tb = timeBar
         val lbl = seekLabel ?: TextView(this).apply {
             setTextColor(Color.WHITE)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             typeface = Typeface.DEFAULT_BOLD
-            setPadding(dp(22), dp(10), dp(22), dp(10))
+            setPadding(dp(9), dp(3), dp(9), dp(3))
             background = android.graphics.drawable.GradientDrawable().apply {
-                cornerRadius = dp(999).toFloat(); setColor(0xD9161B26.toInt()); setStroke(dp(2), 0xFFFF8A1F.toInt())
+                cornerRadius = dp(999).toFloat(); setColor(0xCC161B26.toInt()); setStroke(dp(1), 0xFFFF8A1F.toInt())
             }
-            root.addView(this, android.widget.FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(110) })
+            root.addView(this, android.widget.FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START))
             seekLabel = this
         }
         val dur = player?.duration ?: 0L
-        lbl.text = fmtTime(pos) + if (dur > 0) "  /  " + fmtTime(dur) else ""
+        lbl.text = fmtTime(pos)
         ui.removeCallbacks(hideSeekRun)
         lbl.animate().cancel(); lbl.alpha = 1f; lbl.visibility = View.VISIBLE
+        lbl.post {
+            val rootLoc = IntArray(2); root.getLocationOnScreen(rootLoc)
+            if (tb != null && tb.width > 0) {
+                val loc = IntArray(2); tb.getLocationOnScreen(loc)
+                val frac = if (dur > 0) (pos.toFloat() / dur).coerceIn(0f, 1f) else 0f
+                val cx = loc[0] - rootLoc[0] + tb.paddingLeft + frac * (tb.width - tb.paddingLeft - tb.paddingRight)
+                val x = (cx - lbl.width / 2f).coerceIn(dp(8).toFloat(), (root.width - lbl.width - dp(8)).toFloat())
+                // Debajo de la barra; si no cabe, justo encima
+                var y = (loc[1] - rootLoc[1] + tb.height - dp(4)).toFloat()
+                if (y + lbl.height > root.height - dp(2)) y = (loc[1] - rootLoc[1] - lbl.height).toFloat()
+                lbl.translationX = x; lbl.translationY = y
+            } else {
+                lbl.translationX = (root.width - lbl.width) / 2f; lbl.translationY = (root.height - lbl.height - dp(60)).toFloat()
+            }
+        }
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {

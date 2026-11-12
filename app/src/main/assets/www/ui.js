@@ -1492,10 +1492,17 @@
       '<button class="iconbtn f" data-act="kbClear" aria-label="Borrar búsqueda">' + IC.close + '</button></div>' + kb +
       '<div class="chips" id="stypes"></div><div id="results"></div>';
   };
+  // Después de buscar (Enter, abrir un resultado o volver a Buscar), al escribir de nuevo se empieza desde cero
+  var searchDone = false;
   VIEWS.search.after = function () {
     var inp = document.getElementById('searchIn');
+    searchDone = !!query;
+    inp.addEventListener('beforeinput', function (e) { if (searchDone && /^insert/.test(e.inputType || '')) { inp.value = ''; query = ''; } searchDone = false; });
+    inp.addEventListener('focus', function () { if (searchDone && inp.value) setTimeout(function () { try { inp.select(); } catch (er) {} }, 0); });
+    var rb = document.getElementById('results'); if (rb) rb.addEventListener('focusin', function () { if (query) searchDone = true; });
+    var tb = document.getElementById('stypes'); if (tb) tb.addEventListener('focusin', function () { if (query) searchDone = true; });
     inp.addEventListener('input', MV.debounce(function () { query = inp.value; showResults(); saveRecentLater(query); }, 180));
-    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { saveRecent(query); var f = document.querySelector('#results .card, #results .f'); if (f) f.focus(); } });
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { saveRecent(query); searchDone = !!query; var f = document.querySelector('#results .card, #results .f'); if (f) f.focus(); } });
     showResults();
   };
   function showResults() {
@@ -3066,8 +3073,8 @@
     saveTmdb: function () { P.tmdbKey = document.getElementById('tmdbKey').value.trim(); MV.savePrefs(); MV.toast('Clave guardada'); },
     clearMeta: function () { MV.toast('Las fichas se volverán a buscar'); S.items.forEach(function (i) { MV.idbDel('meta2:' + i.key); }); },
     // Búsqueda con teclado en pantalla
-    kb: function (c, el) { kbSet((el && el.dataset.v) || 'searchIn', function (v) { return v + c; }); },
-    kbDel: function (_, el) { kbSet((el && el.dataset.v) || 'searchIn', function (v) { return v.slice(0, -1); }); },
+    kb: function (c, el) { var t = (el && el.dataset.v) || 'searchIn', fresh = t === 'searchIn' && searchDone; searchDone = false; kbSet(t, function (v) { return (fresh ? '' : v) + c; }); },
+    kbDel: function (_, el) { var t = (el && el.dataset.v) || 'searchIn'; if (t === 'searchIn') searchDone = false; kbSet(t, function (v) { return v.slice(0, -1); }); },
     kbClear: function (_, el) { kbSet((el && el.dataset.v) || 'searchIn', function () { return ''; }); },
     kbGo: function (_, el) {
       var t = (el && el.dataset.v) || 'searchIn';
