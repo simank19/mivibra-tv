@@ -38,6 +38,61 @@
     return lists().filter(function (l) { return l.man && res(l.man, 'subtitles'); }).map(function (l) { var m = l.man; return { base: base(l.url), name: l.name || m.name || 'Addon', pre: (function () { var r = (m.resources || []).filter(function (x) { return x && x.name === 'subtitles'; })[0]; return (r && r.idPrefixes) || m.idPrefixes || []; })() }; });
   };
 
+  // ---------- Contenido de addons en español y en las categorías de la app ----------
+  var ESC = null;
+  function ES() { if (!ESC) ESC = MV.load('stEs', {}) || {}; return ESC; }
+  var TMDB_G = { 28: 'Acción', 12: 'Aventura', 16: 'Animación', 35: 'Comedia', 80: 'Crimen', 99: 'Documental', 18: 'Drama', 10751: 'Familia', 14: 'Fantasía', 36: 'Historia', 27: 'Terror', 10402: 'Música', 9648: 'Misterio', 10749: 'Romance', 878: 'Ciencia ficción', 53: 'Suspenso', 10752: 'Bélica', 37: 'Western', 10759: 'Acción, Aventura', 10762: 'Infantil', 10764: 'Reality', 10765: 'Ciencia ficción, Fantasía', 10768: 'Bélica', 10766: 'Drama', 10767: 'Talk show' };
+  /** Categoría según el género principal (en español). Animación sola no cuenta como infantil. */
+  function catFor(gtxt, isAnime, t) {
+    var D = window.MVD, ids = D.classifyGenres(String(gtxt || ''));
+    if (ids[0] === 'infantil' && (isAnime || !/family|familia|kids|infantil|children/i.test(gtxt))) ids = ids.slice(1);
+    var g = ids.length ? D.genreName(ids[0]) : (t === 'series' ? 'Series populares' : 'Películas populares');
+    return isAnime ? 'Anime · ' + g : g;
+  }
+  MV.stCatFor = catFor;
+  var trRunning = false;
+  /** Traduce en segundo plano (con tu clave de TMDB) los títulos de addons que vienen en inglés. */
+  MV.stTranslate = function () {
+    if (trRunning || !(S.prefs.tmdbKey || '').trim()) return;
+    var es = ES(), seen = {};
+    var todo = (S.items || []).filter(function (i) { if (!i.st || !/^tt\d+$/.test(i.st.id) || es[i.st.id] || seen[i.st.id]) return false; seen[i.st.id] = 1; return true; });
+    if (!todo.length) return;
+    trRunning = true;
+    var n = 0, changed = 0;
+    function apply(id, d) {
+      (S.items || []).forEach(function (it) {
+        if (!it.st || it.st.id !== id) return;
+        if (d.n) it.name = d.n + (it.year && !/\(\d{4}\)/.test(d.n) && it.type === 'movie' ? ' (' + it.year + ')' : it.year && it.type === 'series' && !/\(\d{4}\)/.test(d.n) ? ' (' + it.year + ')' : '');
+        if (d.p) it.plot = d.p;
+        if (d.g) { it.genre = d.g; it.group = catFor(d.g, /^Anime/.test(it.group || ''), it.type); }
+        if (MV.retag) MV.retag(it);
+      });
+    }
+    function next() {
+      var it = todo.shift();
+      if (!it) { if (--active === 0) { trRunning = false; MV.save('stEs', es); if (changed && MV.rerender) MV.rerender(); } return; }
+      var id = it.st.id;
+      MV.tmdb('/find/' + id, '&external_source=imdb_id&language=es-MX').then(function (r) {
+        var x = (r && ((r.movie_results || [])[0] || (r.tv_results || [])[0])) || null;
+        var d = x ? { n: x.title || x.name || '', p: x.overview || '', g: (x.genre_ids || []).map(function (g) { return TMDB_G[g]; }).filter(Boolean).join(', ') } : { n: '' };
+        es[id] = d; if (d.n || d.p) { apply(id, d); changed++; }
+      }).catch(function () {}).then(function () {
+        n++;
+        if (n % 40 === 0) {
+          var keys = Object.keys(es); if (keys.length > 8000) keys.slice(0, keys.length - 8000).forEach(function (k) { delete es[k]; });
+          MV.save('stEs', es);
+          // Solo se reorganiza la pantalla si no estás moviéndote con el control
+          if (changed && Date.now() - (MV._lastKey || 0) > 4000 && MV.rerender && !(MV.modalOpen && MV.modalOpen())) { changed = 0; MV.rerender(); }
+        }
+        setTimeout(next, 120);
+      });
+    }
+    var active = 3;
+    for (var w = 0; w < 3; w++) next();
+  };
+  setTimeout(function () { MV.stTranslate(); }, 6000);
+  setInterval(function () { MV.stTranslate(); }, 3 * 60e3);
+
   /** Catálogos del addon → películas y series de MiVibra (hasta 300 por catálogo). */
   MV.buildFromStremio = function (list) {
     var b = base(list.url);
@@ -67,12 +122,17 @@
               var year = String(m.releaseInfo || m.year || '').slice(0, 4);
               var t = m.type === 'movie' || m.type === 'series' ? m.type : c.type === 'movie' ? 'movie' : 'series';
               var isAnime = c.type === 'anime' || /^(kitsu|mal|anilist|anidb)[:_]/i.test(m.id);
-              var name = m.name + (/^\d{4}$/.test(year) && !/\(\d{4}\)/.test(m.name) ? ' (' + year + ')' : '');
+              var es = ES()[m.id];   // título, sinopsis y géneros en español (de TMDB), si ya se tradujo
+              var nm = (es && es.n) || m.name;
+              var name = nm + (/^\d{4}$/.test(year) && !/\(\d{4}\)/.test(nm) ? ' (' + year + ')' : '');
+              var gtxt = (es && es.g) || (m.genres || []).join(', ');
               out.push({
+                // La clave sigue siendo la del nombre original: así no se pierde el avance al traducirse
                 key: (t === 'series' ? 'series:' : 'movie:') + MV.norm(m.name + (t === 'movie' && year ? ' ' + year : '')),
-                type: t, name: name, year: /^\d{4}$/.test(year) ? year : '',
-                poster: m.poster || '', plot: m.description || '', genre: (m.genres || []).join(', '), rating: m.imdbRating || '',
-                group: (list.name || man.name) + ' · ' + (isAnime && !/anime/i.test(c.name || '') ? 'Anime ' : '') + (c.name || (t === 'series' ? 'Series' : 'Películas')),
+                type: t, name: name, year: /^\d{4}$/.test(year) ? year : '', orig: m.name,
+                poster: m.poster || '', plot: (es && es.p) || m.description || '', genre: gtxt, rating: m.imdbRating || '',
+                // Se organiza en las categorías de la app (Acción, Comedia, Terror…) en vez de "Cinemeta · Popular"
+                group: catFor(gtxt, isAnime, t), src: (list.name || man.name) + ' · ' + (c.name || ''),
                 st: { id: m.id, type: t, list: list.id }, list: list.id, url: ''
               });
             });
