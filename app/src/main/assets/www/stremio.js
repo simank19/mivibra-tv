@@ -154,7 +154,8 @@
                 // La clave sigue siendo la del nombre original: así no se pierde el avance al traducirse
                 key: (t === 'series' ? 'series:' : 'movie:') + MV.norm(m.name + (t === 'movie' && year ? ' ' + year : '')),
                 type: t, name: name, year: /^\d{4}$/.test(year) ? year : '', orig: m.name,
-                poster: m.poster || '', plot: (es && es.p) || m.description || '', genre: gtxt, rating: m.imdbRating || '',
+                // Si el addon no trae carátula se usa su fondo o logo
+                poster: m.poster || m.background || m.logo || '', plot: (es && es.p) || m.description || '', genre: gtxt, rating: m.imdbRating || '',
                 // Se organiza en las categorías de la app (Acción, Comedia, Terror…) en vez de "Cinemeta · Popular"
                 group: catFor(gtxt, isAnime, t), src: (list.name || man.name) + ' · ' + (c.name || ''),
                 st: { id: m.id, type: t, list: list.id }, list: list.id, url: ''

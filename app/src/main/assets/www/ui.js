@@ -205,7 +205,7 @@
     var list = (urls || []).filter(function (u, i, a) { return u && a.indexOf(u) === i; });
     var mono = '<span class="mono" style="font:800 30px var(--brand)">' + esc(name) + '</span>';
     if (!list.length) return mono;
-    return '<img src="' + esc(list[0]) + '" alt="" data-alt="' + esc(list.slice(1).join('|')) + '" data-name="' + esc(name) + '" onerror="MV.imgNext(this)">';
+    return '<img referrerpolicy="no-referrer" src="' + esc(list[0]) + '" alt="" data-alt="' + esc(list.slice(1).join('|')) + '" data-name="' + esc(name) + '" onerror="MV.imgNext(this)">';
   }
   MV.imgNext = function (el) {
     var alt = (el.getAttribute('data-alt') || '').split('|').filter(Boolean);
@@ -219,10 +219,11 @@
     var mono = it.adult ? '<span class="mono ad"><i>' + esc(MV.cleanTitle(it.name) || it.name) + '</i><em>+18</em></span>' : '<span class="mono">' + esc(MV.mono(MV.cleanTitle(it.name) || it.name)) + '</span>';
     if (it.adult && !big) MV.adultThumbWant(it);
     if (!img) return mono;
-    if (it.adult) return '<img class="' + (isLogo ? 'logo' : '') + '" loading="lazy" decoding="async" src="' + esc(img) + '" alt="" data-k="' + esc(it.key) + '" onerror="MV.adultImgFail(this)">';
+    // Sin "referer": muchos sitios bloquean sus imágenes si se piden desde otra app
+    if (it.adult) return '<img class="' + (isLogo ? 'logo' : '') + '" referrerpolicy="no-referrer" loading="lazy" decoding="async" src="' + esc(img) + '" alt="" data-k="' + esc(it.key) + '" onerror="MV.adultImgFail(this)">';
     // En tarjetas basta una carátula pequeña de TMDB (carga y decodifica mucho más rápido en TV box)
     if (!big) img = img.replace(/(image\.tmdb\.org\/t\/p\/)(w\d+|original)\//, '$1' + (MV.lite ? 'w154' : 'w185') + '/');
-    return '<img class="' + (isLogo ? 'logo' : '') + '" loading="lazy" decoding="async" src="' + esc(img) + '" alt=""" onerror="this.outerHTML=\'' + mono.replace(/'/g, "\\'").replace(/"/g, '&quot;') + '\'">';
+    return '<img class="' + (isLogo ? 'logo' : '') + '"' + (it.st ? ' referrerpolicy="no-referrer"' : '') + ' loading="lazy" decoding="async" src="' + esc(img) + '" alt=""" onerror="this.outerHTML=\'' + mono.replace(/'/g, "\\'").replace(/"/g, '&quot;') + '\'">';
   }
   function card(it, kind, i) {
     reg(it);
@@ -1150,7 +1151,7 @@
     Array.prototype.forEach.call(document.querySelectorAll('[data-key="' + (window.CSS && CSS.escape ? CSS.escape(it.key) : it.key) + '"] .th, #ps'), function (th) {
       if (th.id === 'ps' && MV._detailKey !== it.key) return;
       var old = th.querySelector('img, .mono');
-      var im = document.createElement('img'); im.src = u; im.alt = ''; im.setAttribute('data-k', it.key); im.setAttribute('onerror', 'MV.adultImgFail(this)');
+      var im = document.createElement('img'); im.referrerPolicy = 'no-referrer'; im.src = u; im.alt = ''; im.setAttribute('data-k', it.key); im.setAttribute('onerror', 'MV.adultImgFail(this)');
       if (old) old.replaceWith(im); else th.insertBefore(im, th.firstChild);
     });
   }
