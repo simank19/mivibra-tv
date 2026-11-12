@@ -262,7 +262,24 @@
 
   /** Addon preferido para reproducir: se le pregunta primero y, si tiene enlace, se reproduce de una sin esperar a los demás. */
   MV.stPrefList = function () { var id = S.prefs.stPref; return id ? lists().filter(function (l) { return l.id === id; })[0] || null : null; };
-  MV.stremioPick = function (type, id, title, showAll, skipPref) {
+  /** ¿El enlace es de este título? Muchos addons buscan por nombre y a veces traen otra película ("Lords of War" → "The Lord of the Rings").
+      false = claramente otro título; true = coincide o no se puede saber. */
+  var STOP = { the: 1, of: 1, and: 1, a: 1, an: 1, el: 1, la: 1, los: 1, las: 1, de: 1, del: 1, y: 1, en: 1, un: 1, una: 1 };
+  function words(t) { return MV.norm(String(t || '').replace(/\(\d{4}\)/g, '')).split(' ').filter(function (w) { return w.length > 1 && !STOP[w] && !/^\d+$/.test(w); }); }
+  function titleMatch(x, opts) {
+    if (!opts) return true;
+    var u = String(x.url || '').split('?')[0]; try { u = decodeURIComponent(u); } catch (e) {}
+    var txt = MV.norm((x.title || '') + ' ' + u.split('/').pop().replace(/[._]/g, ' ')), tw = ' ' + txt + ' ';
+    var names = [opts.name, opts.alt].filter(Boolean), best = -1;
+    names.forEach(function (n) { var w = words(n); if (!w.length) return; var hit = w.filter(function (x) { return tw.indexOf(' ' + x + ' ') >= 0; }).length; best = Math.max(best, hit / w.length); });
+    // El enlace no dice ningún nombre reconocible (solo calidad, servidor…): no se puede saber
+    var hasWords = words(txt).filter(function (w) { return !/^(1080p|720p|480p|2160p|4k|hdr|web|webrip|bluray|hdtv|x264|x265|h264|hevc|aac|dual|latino|castellano|mkv|mp4|m3u8|sub|esp|eng|multi|hd|fhd|uhd)$/.test(w); }).length;
+    if (best >= 0 && hasWords >= 2 && best < 0.5) return false;
+    if (opts.year) { var ys = (txt.match(/\b(19|20)\d{2}\b/g) || []).map(Number); if (ys.length && !ys.some(function (y) { return Math.abs(y - +opts.year) <= 1; })) return false; }
+    return true;
+  }
+  MV.stremioPick = function (type, id, title, showAll, skipPref, opts) {
+    if (opts && !opts.name) opts.name = title;
     var pref = !showAll && !skipPref && MV.stPrefList();
     MV.toast(pref ? 'Buscando en ' + (pref.name || 'tu addon preferido') + '…' : 'Buscando enlaces en tus addons…', 3000);
     MV._stTorrents = 0;
@@ -271,10 +288,12 @@
     if (pref) {
       return MV.stremioStreams(type, id, pref.id).then(function (st) {
         if (S.prefs.latOnly) st = st.filter(function (x) { return latLink(x, anime); });
+        // Solo se reproduce de una si el enlace es de este título; si no, se muestra la lista completa
+        st = st.filter(function (x) { return titleMatch(x, opts); });
         // Latino primero, luego el orden del addon
         var rank = { lat: 0, es: 1, sub: 2, '': 3, cast: 4 };
         st = st.map(function (x, i) { return { x: x, i: i, r: rank[MV.stLang(x)] }; }).sort(function (a, b) { return a.r - b.r || a.i - b.i; }).map(function (o) { return o.x; });
-        if (!st.length) return MV.stremioPick(type, id, title, false, true);
+        if (!st.length) return MV.stremioPick(type, id, title, false, true, opts);
         var x = st[0]; x.rest = st.slice(1).map(function (y) { return y.url; }).slice(0, 8);
         return x;
       });
@@ -288,7 +307,7 @@
         if (!lat.length) {
           return MV.confirm('Sin enlaces en español latino', 'Tus addons encontraron ' + st.length + (st.length === 1 ? ' enlace' : ' enlaces') + ' para “' + title + '”, pero ninguno dice que sea en latino. Tienes activado “Solo español latino”.', 'Ver todos los enlaces').then(function (y) {
             if (!y) throw new Error('cancelado');
-            return MV.stremioPick(type, id, title, true);
+            return MV.stremioPick(type, id, title, true, true, opts);
           });
         }
         st = lat;
@@ -300,9 +319,12 @@
         MV.modal('<h2>Sin enlaces para “' + esc(title) + '”</h2><p class="muted">Esto respondió cada addon de enlaces:</p><div class="dlist">' + names.map(function (n) { var v = dg[n]; return '<div class="line"><div class="t"><b>' + esc(n) + '</b><span>' + esc(v === 0 ? 'no encontró nada' : typeof v === 'number' ? v + ' enlaces' : v) + '</span></div></div>'; }).join('') + '</div><p class="muted">Si es un estreno reciente, puede que todavía no haya enlaces. Con “Solo títulos con enlaces” (Ajustes › Listas) estos títulos no te aparecen.</p><div class="btns"><button class="btn f" data-act="closeModal" data-autofocus>Entendido</button></div>');
         throw new Error('cancelado');
       }
+      // Los que parecen de otro título van al final, marcados
+      st.forEach(function (x) { x._other = !titleMatch(x, opts); });
+      st = st.filter(function (x) { return !x._other; }).concat(st.filter(function (x) { return x._other; }));
       // Los demás enlaces quedan de respaldo: si el elegido no es un video, el reproductor prueba el siguiente solo
-      function withRest(x) { x.rest = st.filter(function (y) { return y !== x; }).map(function (y) { return y.url; }).slice(0, 8); return x; }
-      if (st.length === 1) return withRest(st[0]);
+      function withRest(x) { x.rest = st.filter(function (y) { return y !== x && !y._other; }).map(function (y) { return y.url; }).slice(0, 8); return x; }
+      if (st.length === 1 && !st[0]._other) return withRest(st[0]);
       return new Promise(function (resolve, reject) {
         MV._stPick = function (i) { MV.closeModal(true); resolve(withRest(st[+i])); };
         MV.modal('<h2>Elige el enlace</h2><p class="muted">' + st.length + ' opciones de tus addons para “' + esc(title) + '”.</p><div class="stpick">' +
@@ -313,6 +335,7 @@
             [['2160p|4k|uhd', '4K'], ['1080p', '1080p'], ['720p', '720p'], ['480p', '480p'], ['hdr', 'HDR'], ['latino|lat\\b|\\bmx\\b', 'Latino'], ['castellano|\\bes\\b|spanish|español', 'Español'], ['dub', 'Doblado'], ['sub', 'Subtitulado']].forEach(function (t) { if (new RegExp(t[0]).test(all) && tags.indexOf(t[1]) < 0) tags.push(t[1]); });
             var ext = (s.url.toLowerCase().split('?')[0].match(/\.(mp4|mkv|m3u8|avi|webm)$/) || [])[1];
             if (ext) tags.push(ext.toUpperCase());
+            if (s._other) tags.unshift('¿Otro título?');
             return '<button class="stopt f" data-act="stPick" data-arg="' + i + '"' + (i ? '' : ' data-autofocus') + '><b>' + esc(s.src || 'Enlace ' + (i + 1)) + '</b>' + (txt ? '<span>' + esc(txt.slice(0, 140)) + '</span>' : '') + (tags.length ? '<i>' + tags.map(function (t) { return '<em>' + esc(t) + '</em>'; }).join('') + '</i>' : '') + '</button>';
           }).join('') +
           '</div><div class="btns"><button class="btn ghost f" data-act="confirmNo">Cancelar</button></div>', { onClose: function () { reject(new Error('cancelado')); } });
