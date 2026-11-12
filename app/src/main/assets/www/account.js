@@ -45,7 +45,7 @@
   }
   function payload() {
     // "allowed" y "open" no van aquí: solo se escriben al cambiarlos (así un envío automático nunca los revierte)
-    return { lists: sharedLists(), tmdbKey: P.tmdbKey || '', ytKey: P.ytKey || '', saKey: P.saKey || '', saCountry: P.saCountry || '', subKey: P.subKey || '', streamKeys: P.streamKeys || {}, navOrder: P.navOrder || [], navHidden: P.navHidden || [] };
+    return { lists: sharedLists(), listsDel: MV.listTombs ? MV.listTombs() : {}, tmdbKey: P.tmdbKey || '', ytKey: P.ytKey || '', saKey: P.saKey || '', saCountry: P.saCountry || '', subKey: P.subKey || '', streamKeys: P.streamKeys || {}, navOrder: P.navOrder || [], navHidden: P.navHidden || [] };
   }
 
   /** Guarda en la nube los cambios del superadministrador. */
@@ -81,15 +81,19 @@
       var navSig = JSON.stringify([cfg.navOrder || [], cfg.navHidden || []]);
       if (navSig !== JSON.stringify([P.navOrder || [], P.navHidden || []])) { P.navOrder = cfg.navOrder || []; P.navHidden = cfg.navHidden || []; MV.save('prefs', P); if (MV.rerender) setTimeout(MV.rerender, 0); }
       var admin = acct.isAdmin();
+      // Listas que se borraron en algún equipo: no vuelven a aparecer
+      if (MV.mergeTombs) MV.mergeTombs(cfg.listsDel);
+      var tombs = MV.listTombs ? MV.listTombs() : {};
+      var alive = function (l) { return !tombs[l.id] || (l.added || 0) > tombs[l.id]; };
       // Se conservan siempre las listas propias del cliente (y los archivos de este equipo) junto a las tuyas
-      var mine = S.lists.filter(function (l) { return l.type === 'file' || (!admin && l.own); });
-      var remote = (cfg.lists || []).map(function (rl) {
+      var mine = S.lists.filter(function (l) { return (l.type === 'file' || (!admin && l.own)) && alive(l); });
+      var remote = (cfg.lists || []).filter(alive).map(function (rl) {
         var ll = S.lists.find(function (l) { return l.id === rl.id; });
         return ll ? Object.assign({}, ll, rl) : rl;
       });
       // Superadministrador: las listas de este equipo que aún no están en la nube se conservan y se suben
       var missing = admin ? S.lists.filter(function (l) {
-        return l.type !== 'file' && !l.own && !remote.some(function (r) { return r.id === l.id || (l.url && r.url === l.url) || (l.type === 'xtream' && r.type === 'xtream' && r.host === l.host && r.user === l.user); });
+        return l.type !== 'file' && !l.own && alive(l) && !remote.some(function (r) { return r.id === l.id || (l.url && r.url === l.url) || (l.type === 'xtream' && r.type === 'xtream' && r.host === l.host && r.user === l.user); });
       }) : [];
       var next = remote.concat(missing, mine);
       var sig = function (arr) { return JSON.stringify(arr.map(function (l) { return [l.id, l.url, l.host, l.user, l.pass, l.enabled, l.epg]; })); };
@@ -98,7 +102,7 @@
       lastPushed = missing.length ? '' : JSON.stringify(payload());
       if (listsChanged) MV.reloadCatalog(false);
     } finally { applying = false; }
-    if (missing.length) setTimeout(function () { acct.push(); }, 500);
+    if (missing.length || (acct.isAdmin() && (cfg.lists || []).some(function (l) { var t = MV.listTombs ? MV.listTombs() : {}; return t[l.id] && (l.added || 0) <= t[l.id]; }))) setTimeout(function () { acct.push(); }, 500);
     MV.emit('acct');
   }
 

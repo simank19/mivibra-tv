@@ -25,6 +25,24 @@
   MV.setPref = function (k, v) { P[k] = v; MV.savePrefs(); };
   MV.savePrefs = function (silent) { P.updatedAt = Date.now(); MV.save('prefs', P); if (!silent) MV.sync.later(); if (MV.acct) MV.acct.changed(); };
   MV.saveLists = function () { MV.save('lists', S.lists); MV.sync.later(); if (MV.acct) MV.acct.changed(); };
+  /** Listas borradas: se recuerdan (id → fecha) para que se borren también en los otros equipos y no vuelvan a aparecer. */
+  MV.listTombs = function () { return MV.load('listsDel', {}) || {}; };
+  MV.addTombs = function (ids) {
+    var t = MV.listTombs(), now = Date.now();
+    ids.forEach(function (id) { if (id) t[id] = now; });
+    // Se guardan 90 días
+    Object.keys(t).forEach(function (k) { if (now - t[k] > 90 * 864e5) delete t[k]; });
+    MV.save('listsDel', t);
+  };
+  MV.mergeTombs = function (remote) {
+    if (!remote || typeof remote !== 'object') return false;
+    var t = MV.listTombs(), changed = false;
+    Object.keys(remote).forEach(function (k) { if (!t[k] || t[k] < remote[k]) { t[k] = remote[k]; changed = true; } });
+    if (changed) MV.save('listsDel', t);
+    return changed;
+  };
+  /** Ajustes que cambian qué contenido se ve: viajan con la cuenta para que todos los equipos muestren lo mismo. */
+  MV.CONTENT_PREFS = ['latOnly', 'stOnlyLinked', 'hideUnreleased', 'dedupe', 'pruneEmpty', 'stPref', 'stAutoRefresh', 'xtFormat'];
   MV.saveProfiles = function () { MV.save('profiles', S.profiles); MV.sync.later(); };
 
   // ---------- Perfiles y datos por perfil ----------
@@ -1137,12 +1155,15 @@
     })).then(function (all) {
       // Listas con 0 elementos: se eliminan solas (si nunca trajeron nada, de una; si antes funcionaban, tras 2 cargas vacías seguidas)
       if (P.pruneEmpty !== false && MV.acct && MV.acct.canEditList) {
-        var gone = lists.filter(function (l, i) { return l.type !== 'stremio' && MV.acct.canEditList(l) && !(all[i] || []).length && !l.count && l.zeroLoads >= (l.hadItems ? 2 : 1); });
+        // Solo las recién agregadas en este equipo: si una lista falla aquí pero funciona en otro equipo, no se borra de todos
+        var gone = lists.filter(function (l, i) { return l.type !== 'stremio' && MV.acct.canEditList(l) && !(all[i] || []).length && !l.count && !l.hadItems && l.zeroLoads >= 1 && Date.now() - (l.added || 0) < 15 * 60e3; });
         if (gone.length) {
           var ids = gone.map(function (l) { return l.id; });
           all = all.filter(function (_, i) { return ids.indexOf(lists[i].id) < 0; });
+          MV.addTombs(ids);
           S.lists = S.lists.filter(function (l) { return ids.indexOf(l.id) < 0; });
           ids.forEach(function (id) { MV.idbDel('list:' + id); MV.idbDel('raw:' + id); });
+          MV.saveLists();
           failed = failed.filter(function (f) { return !gone.some(function (l) { return f.indexOf(l.name + ':') === 0; }); });
           MV.toast(gone.length === 1 ? 'Se eliminó “' + gone[0].name + '” porque quedó con 0 elementos' : 'Se eliminaron ' + gone.length + ' listas que quedaron con 0 elementos', 5000);
         }
@@ -1485,6 +1506,7 @@
   };
   /** Borra varias listas de una vez (una sola recarga del contenido). */
   MV.removeLists = function (ids) {
+    MV.addTombs(ids);
     S.lists = S.lists.filter(function (l) { return ids.indexOf(l.id) < 0; });
     ids.forEach(function (id) { MV.idbDel('list:' + id); MV.idbDel('raw:' + id); });
     MV.saveLists(); return MV.reloadCatalog(false);
@@ -1495,6 +1517,7 @@
     MV.reloadCatalog(false);
   }, 3600e3 + 30e3);
   MV.removeList = function (id) {
+    MV.addTombs([id]);
     S.lists = S.lists.filter(function (l) { return l.id !== id; });
     MV.idbDel('list:' + id); MV.idbDel('raw:' + id);
     MV.saveLists(); return MV.reloadCatalog(false);
@@ -1904,7 +1927,8 @@
       S.profiles.forEach(function (p) { pdata[p.id] = MV.pdata(p.id); });
       var managed = MV.acct && MV.acct.managed();
       var prefs = { theme: P.theme, autoTheme: P.autoTheme, glass: P.glass, anim: P.anim, bgAnim: P.bgAnim, tmdbKey: managed ? '' : P.tmdbKey, ytKey: managed ? '' : P.ytKey, subKey: managed ? '' : P.subKey, streamKeys: managed ? {} : P.streamKeys, covers: P.covers, kidsLimit: P.kidsLimit, parentPin: P.parentPin, adult: P.adult, audioLang: P.audioLang, subLang: P.subLang, updatedAt: P.updatedAt };
-      return { v: 1, updatedAt: Date.now(), device: P.deviceName, profiles: S.profiles, pdata: pdata, prefs: prefs, lists: managed ? S.lists.filter(function (l) { return l.own; }).map(function (l) { var c = Object.assign({}, l); delete c.error; return c; }) : P.syncLists ? S.lists.map(function (l) { var c = Object.assign({}, l); delete c.error; return c; }) : null };
+      MV.CONTENT_PREFS.forEach(function (k) { if (P[k] !== undefined) prefs[k] = P[k]; });
+      return { v: 1, updatedAt: Date.now(), device: P.deviceName, profiles: S.profiles, pdata: pdata, prefs: prefs, listsDel: MV.listTombs(), lists: managed ? S.lists.filter(function (l) { return l.own; }).map(function (l) { var c = Object.assign({}, l); delete c.error; return c; }) : P.syncLists ? S.lists.map(function (l) { var c = Object.assign({}, l); delete c.error; return c; }) : null };
     },
     push: function () {
       if (!fb || !MV.sync.user || applying) return Promise.resolve();
@@ -1944,9 +1968,16 @@
       });
       var managed = MV.acct && MV.acct.managed();
       if (managed) { if (r.prefs) { delete r.prefs.tmdbKey; delete r.prefs.ytKey; delete r.prefs.subKey; delete r.prefs.streamKeys; } r.lists = MV.acct.isAdmin() ? null : (r.lists || []).filter(function (l) { return l.own; }); }
+      var contentSig = function () { return JSON.stringify(MV.CONTENT_PREFS.map(function (k) { return P[k]; })); }, before = contentSig();
       if (r.prefs && (r.prefs.updatedAt || 0) > (P.updatedAt || 0)) { Object.assign(P, r.prefs); MV.save('prefs', P); MV.applyLook && MV.applyLook(); }
-      var listsChanged = false;
+      var listsChanged = contentSig() !== before;
+      // Listas borradas en otro equipo: se quitan aquí también
+      MV.mergeTombs(r.listsDel);
+      var tombs = MV.listTombs();
+      var kept = S.lists.filter(function (l) { return !tombs[l.id] || (l.added || 0) > tombs[l.id]; });
+      if (kept.length !== S.lists.length) { S.lists = kept; listsChanged = true; }
       (r.lists || []).forEach(function (rl) {
+        if (tombs[rl.id] && (rl.added || 0) <= tombs[rl.id]) return;
         var ll = S.lists.find(function (l) { return l.id === rl.id; });
         if (!ll) { S.lists.push(rl); listsChanged = true; }
         else if ((rl.updatedAt || 0) > (ll.updatedAt || 0)) { Object.assign(ll, rl); listsChanged = true; }
