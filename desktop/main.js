@@ -13,6 +13,7 @@ const server = require('./lib/server');
 const epg = require('./lib/epg');
 const stalker = require('./lib/stalker');
 const storage = require('./lib/storage');
+const gdrive = require('./lib/drive');
 const archives = require('./lib/archives');
 const remoteLib = require('./lib/remote');
 
@@ -38,6 +39,7 @@ const DIRS = {
 const DATA = app.getPath('userData');
 const NET = path.join(DATA, 'cache', 'net');
 fs.mkdirSync(NET, { recursive: true });
+gdrive.init(DATA);
 storage.init({ roms: path.join(DATA, 'roms'), system: path.join(DATA, 'system'), unzip: path.join(DATA, 'cache', 'unzip'), arcade: path.join(DATA, 'arcade'), neogeoJson: DIRS.neogeoJson });
 
 let win = null, playerWin = null, gameWin = null, srv = null;
@@ -401,6 +403,12 @@ const ASYNC = {
     reply(id, true, {});
   },
   // Consolas modernas: abre el juego en el emulador de esa consola instalado en Windows (PCSX2, RPCS3, Dolphin, Cemu, xemu, Xenia…)
+  // Google Drive: el permiso llega desde la cuenta MiVibra (se conecta en la TV o el celular)
+  async driveConnect(id) { reply(id, false, gdrive.connected() ? 'Ya está conectado' : 'Conecta Google Drive desde tu TV o celular con esta misma cuenta MiVibra: en el PC aparece solo.'); },
+  async driveFolders(id, parent, search) { try { reply(id, true, await gdrive.folders(parent || '', search || '')); } catch (e) { reply(id, false, errMsg(e)); } },
+  async driveGames(id, folder) { try { reply(id, true, await gdrive.games(folder)); } catch (e) { reply(id, false, errMsg(e)); } },
+  async driveFetch(id, fileId, name) { try { reply(id, true, await gdrive.download(fileId, name, (p) => progress(id, p))); } catch (e) { reply(id, false, 'No se pudo bajar el juego de Drive: ' + errMsg(e)); } },
+  async driveSync(id) { reply(id, true, { up: 0, down: 0 }); },
   async playExternal(id, json) {
     const o = JSON.parse(json), pc = o.pc || {};
     const exe = findEmulator(o.sys, pc);
@@ -500,6 +508,12 @@ async function openSupportPc() {
 
 // ---------------- Puente: métodos directos ----------------
 const SYNC = {
+  driveConnected() { return gdrive.connected(); },
+  driveKeys(a, b) { gdrive.setKeys(a, b); },
+  driveExport() { return gdrive.exportRt(); },
+  driveImport(rt) { gdrive.importRt(rt); },
+  driveDisconnect() { gdrive.disconnect(); },
+  driveClear() { gdrive.clearCache(); },
   openBrowser(url) { openBrowser(url || 'https://www.google.com'); },
   openDiag() { openSupportPc(); },
   setPip() {}, publishHome() {}, setInicio() {},

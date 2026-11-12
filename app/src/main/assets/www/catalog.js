@@ -1913,6 +1913,7 @@
         if (/^mv:(pdata:|profiles$|pid$|kidsUsage|recentSearch$|radioFavs$|recentGames$)/.test(k)) localStorage.removeItem(k);
       });
     } catch (e) {}
+    if (MV.driveForget) MV.driveForget();
     S.profiles = []; S.pid = null; S.adultUntil = 0;
     P.parentPin = ''; P.adult = null; P.covers = {}; P.updatedAt = 0;
     MV.save('prefs', P);
@@ -1954,7 +1955,7 @@
       }).then(function () { return MV.sync.push(); });
     },
     relisten: function () { if (unsub) { unsub(); unsub = null; } if (MV.sync.user) MV.sync.listen(); },
-    signOut: function () { if (unsub) unsub(); unsub = null; return fb ? fb.auth().signOut() : Promise.resolve(); },
+    signOut: function () { if (unsub) unsub(); unsub = null; if (MV.driveForget && MV.load('driveShared', null)) MV.driveForget(); return fb ? fb.auth().signOut() : Promise.resolve(); },
     doc: function () { return fb.firestore().collection('mivibra').doc(MV.sync.user.uid); },
     snapshot: function () {
       var pdata = {};
@@ -1962,12 +1963,15 @@
       var managed = MV.acct && MV.acct.managed();
       var prefs = { theme: P.theme, autoTheme: P.autoTheme, glass: P.glass, anim: P.anim, bgAnim: P.bgAnim, tmdbKey: managed ? '' : P.tmdbKey, ytKey: managed ? '' : P.ytKey, sgdbKey: managed ? '' : P.sgdbKey, subKey: managed ? '' : P.subKey, streamKeys: managed ? {} : P.streamKeys, covers: P.covers, kidsLimit: P.kidsLimit, parentPin: P.parentPin, adult: P.adult, audioLang: P.audioLang, subLang: P.subLang, updatedAt: P.updatedAt };
       MV.CONTENT_PREFS.forEach(function (k) { if (P[k] !== undefined) prefs[k] = P[k]; });
-      return { v: 1, updatedAt: Date.now(), device: P.deviceName, profiles: S.profiles, pdata: pdata, prefs: prefs, listsDel: MV.listTombs(), lists: managed ? S.lists.filter(function (l) { return l.own; }).map(function (l) { var c = Object.assign({}, l); delete c.error; return c; }) : P.syncLists ? S.lists.map(function (l) { var c = Object.assign({}, l); delete c.error; return c; }) : null };
+      return { v: 1, updatedAt: Date.now(), device: P.deviceName, drive: MV.load('driveShared', null), profiles: S.profiles, pdata: pdata, prefs: prefs, listsDel: MV.listTombs(), lists: managed ? S.lists.filter(function (l) { return l.own; }).map(function (l) { var c = Object.assign({}, l); delete c.error; return c; }) : P.syncLists ? S.lists.map(function (l) { var c = Object.assign({}, l); delete c.error; return c; }) : null };
     },
     push: function () {
       if (!fb || !MV.sync.user || applying) return Promise.resolve();
       pushing = true;
-      return MV.sync.doc().set(JSON.parse(JSON.stringify(MV.sync.snapshot()))).then(function () { pushing = false; }).catch(function (e) { pushing = false; console.warn(e); });
+      var snap = JSON.parse(JSON.stringify(MV.sync.snapshot()));
+      if (snap.drive == null) delete snap.drive;     // sin datos de Drive en este equipo: no se toca lo que tenga la cuenta
+      // Cada campo se reemplaza completo (como antes), pero los que no van aquí se conservan
+      return MV.sync.doc().set(snap, { mergeFields: Object.keys(snap) }).then(function () { pushing = false; }).catch(function (e) { pushing = false; console.warn(e); });
     },
     later: MV.debounce(function () { MV.sync.push(); }, 3000),
     listen: function () {
@@ -2017,6 +2021,9 @@
         else if ((rl.updatedAt || 0) > (ll.updatedAt || 0)) { Object.assign(ll, rl); listsChanged = true; }
       });
       if (listsChanged) { MV.save('lists', S.lists); MV.reloadCatalog(false); }
+      // Google Drive de la cuenta (permiso y carpeta de juegos): lo más reciente gana
+      var ld = MV.load('driveShared', null);
+      if (r.drive && (!ld || (r.drive.at || 0) > (ld.at || 0))) { MV.save('driveShared', r.drive); if (MV.driveApply) setTimeout(function () { MV.driveApply(r.drive); }, 0); }
     } finally { applying = false; }
     MV.emit('synced');
   }

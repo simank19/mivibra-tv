@@ -195,6 +195,13 @@ object Drive {
         done(token, null)
     }
     fun connected(c: Context) = prefs(c).getBoolean("on", false)
+    /** Permiso permanente para compartirlo con los demás equipos de la misma cuenta MiVibra ("" si se conectó de otra forma). */
+    fun exportRt(c: Context): String = if (connected(c)) prefs(c).getString("rt", "") ?: "" else ""
+    /** Recibe el permiso que guardó otro equipo de la misma cuenta. */
+    fun importRt(c: Context, rt: String) {
+        if (rt.isBlank()) return
+        prefs(c).edit().putString("rt", rt.trim()).remove("at").remove("atExp").remove("acct").putBoolean("on", true).apply()
+    }
     fun disconnect(c: Context) {
         // Se olvida la cuenta pero no las claves de la app (Client ID / secreto)
         val p = prefs(c); val id = p.getString("cid", null); val sec = p.getString("csec", null)

@@ -6,6 +6,42 @@
   var esc = MV.esc;
   function cfg() { return MV.load('driveGames', {}) || {}; }
   function setCfg(c) { MV.save('driveGames', c); }
+  // ---------- Igual en todos los equipos de la misma cuenta MiVibra ----------
+  // Lo que se conecta o elige en un equipo (permiso de Drive y carpeta) viaja en el documento de la cuenta (solo lo lee su dueño);
+  // los demás equipos con esa cuenta lo toman solos y muestran los mismos juegos. Sin cuenta, cada equipo va por su lado.
+  function share(off) {
+    var c = cfg(), rt = ''; try { rt = A.driveExport ? A.driveExport() : ''; } catch (e) {}
+    var prev = MV.load('driveShared', null) || {};
+    MV.save('driveShared', off ? { off: true, at: Date.now() } : { folder: c.folder || '', folderName: c.folderName || '', rt: rt || prev.rt || '', at: Date.now() });
+    if (MV.sync && MV.sync.user && MV.sync.later) MV.sync.later();
+  }
+  /** Llega de la cuenta (o al abrir): se aplica si es distinto de lo que tiene este equipo. */
+  /** Otra cuenta (o se cerró sesión): el Drive de la anterior no se queda en este equipo. */
+  MV.driveForget = function () {
+    try { if (A.driveConnected()) A.driveDisconnect(); } catch (e) {}
+    setCfg({}); MV.save('driveShared', null);
+    MV.save('roms', (MV.load('roms', []) || []).filter(function (r) { return !/^gdrive:/.test(r.path || ''); }));
+  };
+  MV.driveApply = function (d) {
+    d = d || MV.load('driveShared', null);
+    if (!MV.sync || !MV.sync.user) return;
+    // Este equipo ya tenía Drive conectado y la cuenta todavía no: se comparte con los demás
+    if (!d) { if (MV.driveOn()) share(); return; }
+    var c = cfg();
+    if (d.off) {
+      if (c.folder || A.driveConnected()) {
+        A.driveDisconnect(); setCfg({});
+        MV.save('roms', (MV.load('roms', []) || []).filter(function (r) { return !/^gdrive:/.test(r.path || ''); }));
+        if (MV.console && MV.console.refresh) MV.console.refresh();
+      }
+      return;
+    }
+    if (!A.driveConnected() && d.rt && A.driveImport) { pushKeys(); A.driveImport(d.rt); }
+    if (A.driveConnected() && d.folder && (c.folder !== d.folder || !c.count)) {
+      c.folder = d.folder; c.folderName = d.folderName || 'tu carpeta'; setCfg(c);
+      scan(true).then(function (n) { if (n) MV.toast(n + ' juegos de tu Google Drive en este equipo', 5000); });
+    }
+  };
   MV.driveOn = function () { try { return A.driveConnected() && !!cfg().folder; } catch (e) { return false; } };
   MV.driveStatus = function () { var c = cfg(); return MV.driveOn() ? 'Conectado · ' + (c.count || 0) + ' juegos en “' + (c.folderName || 'tu carpeta') + '”' : 'Tus juegos y partidas en la nube'; };
 
@@ -129,7 +165,7 @@
   MV.ACT.drvFind = function () { var q = ((document.getElementById('drvQ') || {}).value || '').trim(); if (!q) return; var d = MV._drv; MV.closeModal(true); browse('', d.name, d.trail.concat([{ id: d.parent, name: d.name }]), q); };
   MV.ACT.drvUse = function () {
     var d = MV._drv; MV.closeModal(true);
-    var c = cfg(); c.folder = d.parent || 'root'; c.folderName = d.name || 'Mi unidad'; setCfg(c);
+    var c = cfg(); c.folder = d.parent || 'root'; c.folderName = d.name || 'Mi unidad'; setCfg(c); share();
     scan(false).then(function () { MV.call('driveSync', []).catch(function () {}); });
   };
   MV.ACT.driveRescan = function () { MV.closeModal(true); scan(false); };
@@ -138,10 +174,14 @@
     MV.call('driveSync', []).then(function (r) { MV.toast('Partidas al día · subidas ' + (r.up || 0) + ', bajadas ' + (r.down || 0), 5000); }).catch(function (e) { MV.toast(e.message, 7000); });
   };
   MV.ACT.driveOff = function () {
-    MV.closeModal(true); A.driveDisconnect(); setCfg({});
+    MV.closeModal(true); A.driveDisconnect(); setCfg({}); share(true);
     MV.save('roms', (MV.load('roms', []) || []).filter(function (r) { return !/^gdrive:/.test(r.path || ''); }));
     MV.toast('Google Drive desconectado'); if (MV.console && MV.console.refresh) MV.console.refresh();
   };
   // Al entrar a Juegos se revisa la carpeta (como mucho cada 10 minutos)
   MV.driveAuto = function () { var c = cfg(); if (MV.driveOn() && Date.now() - (c.scanAt || 0) > 600e3) scan(true); };
+  // Lo nuevo que subas a la carpeta aparece solo: al abrir la app y cada 10 minutos
+  setTimeout(function () { MV.driveApply(); MV.driveAuto(); }, 15000);
+  setInterval(function () { if (!document.hidden) MV.driveAuto(); }, 600e3);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) MV.driveAuto(); });
 })();

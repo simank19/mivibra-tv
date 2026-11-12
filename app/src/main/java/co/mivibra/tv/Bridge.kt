@@ -832,6 +832,8 @@ class Bridge(private val a: MainActivity) {
     @JavascriptInterface fun driveKeys(id: String, secret: String) { Drive.setKeys(a, id, secret) }
     @JavascriptInterface fun driveConnect(id: String) = withDrive(id, true) { true }
     @JavascriptInterface fun driveDisconnect() { Drive.disconnect(a) }
+    @JavascriptInterface fun driveExport(): String = Drive.exportRt(a)
+    @JavascriptInterface fun driveImport(rt: String) { Drive.importRt(a, rt) }
     @JavascriptInterface fun driveFolders(id: String, parent: String?, search: String?) = withDrive(id, false) { Drive.folders(it, parent?.ifBlank { null }, search) }
     @JavascriptInterface fun driveGames(id: String, folder: String) = withDrive(id, false) { Drive.games(it, folder) }
     @JavascriptInterface fun driveFetch(id: String, fileId: String, name: String) = withDrive(id, false) { Drive.download(a, it, fileId, name) { p -> progress(id, p) } }
