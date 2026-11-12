@@ -396,17 +396,37 @@
     var srcs = (own ? [own] : []).concat(ls.filter(function (l) { return l !== own && res(l.man || {}, 'meta') && prefixOk(l.man || {}, 'meta', st.id); }));
     var urls = srcs.filter(function (l) { return !l.man || res(l.man, 'meta'); }).map(function (l) { return base(l.url); });
     if (/^tt\d+/.test(st.id)) urls.push(base(CINEMETA));
-    var chain = Promise.resolve(null);
-    var tys = /^(kitsu|mal|anilist|anidb)[:_]/i.test(st.id) ? ['series', 'anime'] : ['series'];
-    urls.forEach(function (b) { tys.forEach(function (ty) { chain = chain.then(function (m) { return m || MV.getJSON(b + '/meta/' + ty + '/' + encodeURIComponent(st.id) + '.json').then(function (j) { return j && j.meta && (j.meta.videos || []).length ? j.meta : null; }).catch(function () { return null; }); }); }); });
-    return chain.then(function (meta) {
-      if (!meta) return [];
-      var imdb = meta.imdb_id || (/^tt\d+$/.test(meta.id) ? meta.id : '') || (item._meta && item._meta.imdb) || '';
+    var anim = /^(kitsu|mal|anilist|anidb)[:_]/i.test(st.id);
+    var tys = anim ? ['series', 'anime'] : ['series'];
+    function fetchMeta(b, ty, id) {
+      return withTimeout(MV.getJSON(b + '/meta/' + ty + '/' + encodeURIComponent(id) + '.json'), 12000).then(function (j) { return j && j.meta && (j.meta.videos || []).length ? j.meta : null; }).catch(function () { return null; });
+    }
+    function eps(meta) {
+      return (meta.videos || []).filter(function (v) { return (v.season || 0) > 0 || v.episode || v.number; }).map(function (v) {
+        return { season: +v.season || 1, ep: +(v.episode || v.number) || 0, title: v.title || v.name || ('Episodio ' + (v.episode || v.number)), url: '', stId: v.id, img: v.thumbnail || '', plot: v.overview || v.description || '' };
+      });
+    }
+    // Se le pide la lista de capítulos a todos los que la dan (no solo al primero): algunos addons solo listan los capítulos que tienen
+    var jobs = [];
+    urls.forEach(function (b) { tys.forEach(function (ty) { jobs.push(fetchMeta(b, ty, st.id)); }); });
+    return Promise.all(jobs).then(function (metas) {
+      metas = metas.filter(Boolean);
+      if (!metas.length) return [];
+      var meta = metas[0];
+      var imdb = metas.map(function (m) { return m.imdb_id || (/^tt\d+$/.test(m.id) ? m.id : ''); }).filter(Boolean)[0] || (item._meta && item._meta.imdb) || '';
       if (imdb) MV.stAlt(st.id, imdb);
       // Kitsu trae imdbSeason/imdbEpisode: el capítulo equivalente en IMDb (para addons que solo entienden tt…)
       if (imdb) (meta.videos || []).forEach(function (v) { var se = v.imdbSeason || v.season, ep = v.imdbEpisode || v.episode; if (v.id && !/^tt/.test(v.id) && se && ep) MV.stAlt(v.id, (v.imdb_id || imdb) + ':' + se + ':' + ep); });
-      return (meta.videos || []).filter(function (v) { return (v.season || 0) > 0 || v.episode || v.number; }).map(function (v) {
-        return { season: +v.season || 1, ep: +(v.episode || v.number) || 0, title: v.title || v.name || ('Episodio ' + (v.episode || v.number)), url: '', stId: v.id, img: v.thumbnail || '', plot: v.overview || v.description || '' };
+      // Si el catálogo no es de IMDb (tmdb:, etc.), también se mira la lista completa de Cinemeta
+      var extra = !anim && imdb && !/^tt/.test(st.id) ? fetchMeta(base(CINEMETA), 'series', imdb) : Promise.resolve(null);
+      return extra.then(function (cm) {
+        if (cm) metas.push(cm);
+        var out = eps(meta);
+        // Anime (numeración propia) no se mezcla con otras listas
+        if (anim) return out;
+        var have = {}; out.forEach(function (e) { have[e.season + ':' + e.ep] = 1; });
+        metas.slice(1).forEach(function (m) { eps(m).forEach(function (e) { var k = e.season + ':' + e.ep; if (!have[k] && e.ep) { have[k] = 1; out.push(e); } }); });
+        return out;
       });
     });
   };
