@@ -32,5 +32,17 @@ service cloud.firestore {
         && str(request.resource.data, 'portal', 500) && str(request.resource.data, 'mac', 40) && str(request.resource.data, 'text', 100000);
       allow get, list, delete: if true;
     }
+    // Celular como control por internet (TV Samsung/LG): cada tecla es un documento que la TV lee y borra al instante.
+    // La TV solo obedece las teclas que traen su clave (k).
+    match /rc/{code}/e/{id} {
+      allow create: if code.matches('^[A-HJKMNP-Z2-9]{8}$')
+        && request.resource.data.keys().hasOnly(['t', 'c', 'v', 'k', 'at', 'n'])
+        && request.resource.data.t in ['k', 'go', 'text', 'hello']
+        && request.resource.data.at is number
+        && request.resource.data.at > request.time.toMillis() - 600000
+        && request.resource.data.at < request.time.toMillis() + 600000
+        && str(request.resource.data, 'c', 20) && str(request.resource.data, 'v', 200) && str(request.resource.data, 'k', 10);
+      allow get, list, delete: if true;
+    }
   }
 }

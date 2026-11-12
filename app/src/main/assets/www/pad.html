@@ -95,12 +95,15 @@ body.local button.k{opacity:.8}
 .getapp{display:block;margin:10px auto 0;width:min(420px,100%);padding:12px;border-radius:14px;text-align:center;background:rgba(255,105,0,.18);border:1px solid rgba(255,105,0,.5);color:#FFD2B0;font:600 14px system-ui;text-decoration:none}
 body.inapp .getapp{display:none}
 body.local .tools,body.local .toolsh,body.local .getapp{display:none}
+/* Control por internet (Samsung / LG): solo control remoto */
+body.cloud .tabs,body.cloud [data-link="/roms/"],body.cloud [data-link="/drive"],body.cloud [data-go="games"],body.cloud .getapp{display:none}
 </style>
+<script src="config.js" onerror="0"></script>
 </head>
 <body>
 <div class="bg"><i></i><i></i></div>
 <header>
-  <img src="/isotipo.svg" alt="">
+  <img src="isotipo.svg" alt="">
   <b>MiVibra TV</b>
   <span class="st glass" id="st"><span class="dot"></span><span id="stt">Conectando…</span></span>
 </header>
@@ -189,7 +192,9 @@ function mvAskKey(msg) {
   try { localStorage.setItem('mvk:' + location.host, k); } catch (e) {}
   var u = new URL(location.href); u.searchParams.set('k', k); location.replace(u.toString());
 }
+var MVCLOUD = (function () { var c = new URLSearchParams(location.search).get('c') || ''; return /^[A-HJKMNP-Z2-9]{8}$/.test(c) ? c : ''; })();
 function mvCheckKey(ok) {
+  if (MVCLOUD) { if (ok) ok(); return; }
   fetch('/auth?k=' + encodeURIComponent(MVK), { cache: 'no-store' }).then(function (r) {
     if (r.status === 401) mvAskKey(MVK ? 'La clave no coincide con la de la TV.' : 'Para conectar este celular con la TV hace falta su clave.'); else if (ok) ok();
   }).catch(function () { if (ok) ok(); });
@@ -210,7 +215,33 @@ function mvCheckKey(ok) {
       else if (o.t === 'a') bridge.axis(o.s, o.x, o.y);
       return;
     }
+    if (MVCLOUD) { cloudSend(o); return; }
     if (ws && ws.readyState === 1) ws.send(JSON.stringify(o));
+  }
+
+  // ---- Control por internet (TV Samsung / LG): cada tecla va a Firebase y la TV la lee ----
+  var cloudCol = null, cloudSeq = 0;
+  function cloudSend(o) {
+    if (!cloudCol || o.t === 'ping' || o.t === 'name' || o.t === 'a') return;
+    if (o.t === 'k' && !o.d) return;
+    var d = { t: o.t, k: MVK, at: Date.now(), n: ++cloudSeq };
+    if (o.c) d.c = String(o.c).slice(0, 20);
+    if (o.v != null) d.v = String(o.v).slice(0, 200);
+    cloudCol.add(d).then(function () { if (!connected) { connected = true; setStatus(true, 'Conectado'); } }, function () { connected = false; setStatus(false, 'Sin conexión'); });
+  }
+  function cloudConnect() {
+    var C = window.MV_CONFIG || {}, cfg = C.firebase;
+    try { if (typeof cfg === 'string') cfg = (new Function('return (' + cfg.slice(cfg.indexOf('{'), cfg.lastIndexOf('}') + 1) + ');'))(); } catch (e) { cfg = null; }
+    if (!cfg || !cfg.projectId) { setStatus(false, 'Falta configurar'); return; }
+    if (!MVK) { var k = prompt('Escribe la clave de 6 números que aparece en la TV:'); MVK = (k || '').replace(/\D/g, ''); }
+    function load(src) { return new Promise(function (res, rej) { var x = document.createElement('script'); x.src = src; x.onload = res; x.onerror = rej; document.head.appendChild(x); }); }
+    var base = 'https://www.gstatic.com/firebasejs/10.12.2/';
+    setStatus(false, 'Conectando…');
+    load(base + 'firebase-app-compat.js').then(function () { return load(base + 'firebase-firestore-compat.js'); }).then(function () {
+      if (!firebase.apps.length) firebase.initializeApp(cfg);
+      cloudCol = firebase.firestore().collection('rc').doc(MVCLOUD).collection('e');
+      cloudSend({ t: 'hello' });
+    }).catch(function () { setStatus(false, 'Sin internet'); setTimeout(cloudConnect, 4000); });
   }
 
   // ---- Conexión con la TV ----
@@ -283,7 +314,7 @@ function mvCheckKey(ok) {
     var repeat = /UP|DOWN|LEFT|RIGHT/.test(key);
     bindPress(el, function () {
       send({ t: 'k', c: key, d: 1 });
-      if (repeat) t1 = setTimeout(function () { t2 = setInterval(function () { send({ t: 'k', c: key, d: 1 }); }, 130); }, 420);
+      if (repeat) t1 = setTimeout(function () { t2 = setInterval(function () { send({ t: 'k', c: key, d: 1 }); }, MVCLOUD ? 260 : 130); }, 420);
     }, function () { clearTimeout(t1); clearInterval(t2); });
   });
 
@@ -343,6 +374,11 @@ function mvCheckKey(ok) {
   });
 
   if (local) { show('game'); }
+  else if (MVCLOUD) {
+    document.body.classList.add('cloud'); show('remote');
+    var lk = document.querySelector('[data-link="/listas/"]'); if (lk) { lk.removeAttribute('data-link'); lk.href = '../panel/'; }
+    cloudConnect();
+  }
   else { show('remote'); connect(); }
 })();
 </script>

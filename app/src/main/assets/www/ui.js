@@ -2124,6 +2124,13 @@
     if (!box) return;
     if (!A) { box.innerHTML = '<p class="muted">Disponible en la app instalada.</p>'; return; }
     var r = JSON.parse(A.remoteStart());
+    if ((!r.ok || !r.url) && MV.cloudRemote && MV.cloudRemote.ok()) {
+      // Samsung / LG: el control funciona por internet (no hace falta estar en el mismo Wi-Fi)
+      MV.cloudRemote.start();
+      var cq = window.qrcode(0, 'M'); cq.addData(MV.cloudRemote.link()); cq.make();
+      box.innerHTML = '<div class="qr">' + cq.createSvgTag({ cellSize: 6, margin: 2, scalable: true }) + '</div><div><p style="margin:0 0 6px">Escanea el código con la cámara del celular: se abre el control en el navegador, sin instalar nada.</p><p style="margin:0 0 10px">Código de esta TV: <b style="font:800 22px var(--brand);letter-spacing:2px">' + esc(MV.deviceCodePretty()) + '</b> · clave <b style="font:800 22px var(--brand);letter-spacing:3px">' + esc(MV.cloudRemote.key()) + '</b></p><p class="muted" id="remoteCount">Funciona por internet: cruceta, OK, Atrás, Inicio, reproducir, canales, accesos directos y escribir en el buscador.</p></div>';
+      return;
+    }
     if (!r.ok || !r.url) { box.innerHTML = '<p>Conecta este equipo a una red Wi-Fi para usar el celular como mando.</p>'; return; }
     var qr = window.qrcode(0, 'M'); qr.addData(MV.remoteLink(r, '')); qr.make();
     box.innerHTML = '<div class="qr">' + qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true }) + '</div><div><p style="margin:0 0 6px">O abre en el navegador del celular:</p><h2 style="font:800 26px var(--brand);margin:0 0 10px">' + esc(r.url.replace(/^http:\/\//, '').replace(/\/$/, '')) + '</h2>' + keyLine(r) + '<p class="muted" id="remoteCount">' + countText(remoteClients) + '</p></div>';

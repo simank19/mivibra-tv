@@ -53,6 +53,11 @@ jobs:
               cfg = json.loads(body)
           open('site/panel/config.js', 'w').write('window.MV_CONFIG = ' + json.dumps({'firebase': cfg, 'whatsapp': '' if os.path.exists('.github/SIN_CONTACTO') else os.environ.get('MV_WHATSAPP', '').strip()}) + ';\n')
           PY
+          # Control del celular por internet (para los TV Samsung y LG)
+          mkdir -p site/mando
+          cp app/src/main/assets/www/pad.html site/mando/index.html
+          cp app/src/main/assets/www/img/isotipo.svg site/mando/isotipo.svg
+          cp site/panel/config.js site/mando/config.js
           printf '<!doctype html><meta http-equiv="refresh" content="0;url=panel/">' > site/index.html
           # Página de regreso de Google al conectar Drive desde el celular
           cp docs/drive.html site/drive.html
