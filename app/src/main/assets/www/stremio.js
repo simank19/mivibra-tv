@@ -133,20 +133,26 @@
         if (!req.length) { cats.push(c); return; }
         if (req.length === 1 && req[0] === 'genre') {
           var g = ((c.extra || []).filter(function (e) { return e && e.name === 'genre'; })[0] || {}).options || c.genres || [];
-          g.slice(0, 4).forEach(function (o) { cats.push(Object.assign({}, c, { _genre: o, name: (c.name ? c.name + ' · ' : '') + o })); });
+          g.slice(0, 30).forEach(function (o) { cats.push(Object.assign({}, c, { _genre: o, name: (c.name ? c.name + ' · ' : '') + o })); });
         }
       });
-      cats = cats.slice(0, 14);
+      cats = cats.slice(0, 60);
       var out = [], seen = {};
-      return Promise.all(cats.map(function (c) {
+      // De a 6 catálogos a la vez (con muchos a la vez algunos servidores cortan)
+      var queue = cats.slice(), workers = [];
+      function runOne(c) {
         // Páginas seguidas según lo que trae cada una (Kitsu da 20 por página, Cinemeta 100); solo si el catálogo acepta "skip"
         var canSkip = (c.extra || []).some(function (e) { return e && e.name === 'skip'; }) || (c.extraSupported || []).indexOf('skip') >= 0;
         var pp = [];
         function page(skip, n) {
           var ex = [c._genre ? 'genre=' + encodeURIComponent(c._genre) : '', skip ? 'skip=' + skip : ''].filter(Boolean).join('&');
           return MV.getJSON(b + '/catalog/' + c.type + '/' + encodeURIComponent(c.id) + (ex ? '/' + ex : '') + '.json').then(function (j) { return (j && j.metas) || []; }).catch(function () { return []; }).then(function (metas) {
+            // Si el addon ignora "skip" y repite la misma página, se para
+            var prev = pp[pp.length - 1];
+            if (prev && prev.length && metas.length && prev[0].id === metas[0].id) return;
             pp.push(metas);
-            if (canSkip && metas.length && n < 6 && skip + metas.length < 300) return page(skip + metas.length, n + 1);
+            // Se siguen pidiendo páginas mientras traigan títulos (hasta unos 1000 por catálogo)
+            if (canSkip && metas.length && n < 25 && skip + metas.length < 1000) return page(skip + metas.length, n + 1);
           });
         }
         return page(0, 1).then(function () {
@@ -175,7 +181,10 @@
             });
           });
         });
-      })).then(function () { return out; });
+      }
+      function worker() { var c = queue.shift(); return c ? runOne(c).catch(function () {}).then(worker) : Promise.resolve(); }
+      for (var w = 0; w < 6; w++) workers.push(worker());
+      return Promise.all(workers).then(function () { return out; });
     });
   };
 
