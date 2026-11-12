@@ -113,6 +113,11 @@ function fsGet(path as String, auth as Dynamic, query = "" as String) as Object
     return httpJson("GET", u, "", h)
 end function
 
+function idpSignIn(cfg as Object, postBody as String) as Object
+    body = FormatJson({ postBody: postBody, requestUri: "http://localhost", returnSecureToken: true, returnIdpCredential: true })
+    return httpJson("POST", "https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=" + cfg.apiKey, body, jsonHdr())
+end function
+
 ' Inicio con código: se aprueba desde el celular en google.com/device
 function cmdLogin(r as Object) as Object
     cfg = mvConfig()
@@ -132,9 +137,17 @@ function cmdLogin(r as Object) as Object
         if m.top.cancel = true then return { error: "cancel" }
         t = httpJson("POST", "https://oauth2.googleapis.com/token", "client_id=" + enc(cfg.tvClientId) + "&client_secret=" + enc(cfg.tvClientSecret) + "&device_code=" + enc(d.j.device_code) + "&grant_type=" + enc("urn:ietf:params:oauth:grant-type:device_code"), formHdr())
         if t.j <> invalid and t.j.id_token <> invalid then
-            body = FormatJson({ postBody: "id_token=" + t.j.id_token + "&providerId=google.com", requestUri: "http://localhost", returnSecureToken: true, returnIdpCredential: true })
-            f = httpJson("POST", "https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=" + cfg.apiKey, body, jsonHdr())
-            if f.j = invalid or f.j.idToken = invalid then return { error: "Firebase no aceptó la cuenta. Revisa la configuración de MiVibra." }
+            ' Igual que la app web: se entregan el id_token y el access_token. Firebase rechaza el id_token solo cuando
+            ' es de otro cliente (el de TV), pero acepta el access_token; si aun así falla, se prueba solo con el access_token.
+            at = ""
+            if t.j.access_token <> invalid then at = t.j.access_token
+            f = idpSignIn(cfg, "id_token=" + t.j.id_token + "&access_token=" + at + "&providerId=google.com")
+            if (f.j = invalid or f.j.idToken = invalid) and at <> "" then f = idpSignIn(cfg, "access_token=" + at + "&providerId=google.com")
+            if f.j = invalid or f.j.idToken = invalid then
+                why = ""
+                if f.j <> invalid and f.j.error <> invalid and f.j.error.message <> invalid then why = " (" + f.j.error.message + ")"
+                return { error: "Firebase no aceptó la cuenta" + why + ". Revisa la configuración de MiVibra." }
+            end if
             return { auth: { id: f.j.idToken, refresh: f.j.refreshToken, uid: f.j.localId, email: f.j.email, exp: nowSec() + Val(toS(f.j.expiresIn)) } }
         end if
         e = ""
