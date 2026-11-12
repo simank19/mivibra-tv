@@ -67,6 +67,7 @@
     if (d && d.n) o.name = d.n + (o.year && !/\(\d{4}\)/.test(d.n) ? ' (' + o.year + ')' : '');
     if (d && d.p) o.plot = d.p;
     if (d && d.g) o.genre = d.g;
+    if (d && d.ol) o.olang = d.ol;
     o.group = catFor(o.genre || '', an, o.type);
   };
   var trRunning = false;
@@ -75,7 +76,7 @@
     if (trRunning || !(S.prefs.tmdbKey || '').trim()) return;
     var es = ES(), seen = {};
     // Las series se revisan otra vez si se guardaron antes de reconocer novelas (v 2)
-    var todo = (S.items || []).filter(function (i) { if (!i.st || (es[i.st.id] && (i.type !== 'series' || es[i.st.id].v === 2)) || seen[i.st.id]) return false; seen[i.st.id] = 1; return true; });
+    var todo = (S.items || []).filter(function (i) { if (!i.st || (es[i.st.id] && es[i.st.id].v === 3) || seen[i.st.id]) return false; seen[i.st.id] = 1; return true; });
     if (!todo.length) return;
     trRunning = true;
     var n = 0, changed = 0;
@@ -100,13 +101,9 @@
           return isAnimeIt(it) ? (rs.filter(function (x) { return x.original_language === 'ja' || (x.genre_ids || []).indexOf(16) >= 0; })[0] || null) : rs[0] || null;
         });
       q.then(function (x) {
-        var d = x ? { v: 2, n: x.title || x.name || '', p: x.overview || '', g: (x.genre_ids || []).map(function (g) { return TMDB_G[g]; }).filter(Boolean).join(', ') } : { v: 2, n: '' };
-        // Telenovela: género "Soap" de TMDB, o serie de Latinoamérica/Brasil/Turquía de drama, romance o comedia (no animación, documental, reality ni infantil)
-        if (x && it.type === 'series') {
-          var gi = x.genre_ids || [], oc = (x.origin_country || []).join(',');
-          var nv = gi.indexOf(10766) >= 0 || (/\b(CO|MX|VE|AR|PE|CL|EC|BR|TR|DO|PR|CU|UY|BO|PY|GT|HN|SV|NI|CR|PA)\b/.test(oc) && (gi.indexOf(18) >= 0 || gi.indexOf(10749) >= 0 || gi.indexOf(35) >= 0) && !gi.some(function (g) { return [16, 99, 10764, 10762, 10767].indexOf(g) >= 0; }));
-          if (nv && !/telenovela/i.test(d.g)) d.g = 'Telenovela' + (d.g ? ', ' + d.g : '');
-        }
+        var d = x ? { v: 3, ol: x.original_language || '', n: x.title || x.name || '', p: x.overview || '', g: (x.genre_ids || []).map(function (g) { return TMDB_G[g]; }).filter(Boolean).join(', ') } : { v: 3, n: '' };
+        // Telenovela solo si TMDB la marca como tal (género "Soap"): nada de adivinar por país
+        if (x && it.type === 'series' && (x.genre_ids || []).indexOf(10766) >= 0 && !/telenovela/i.test(d.g)) d.g = 'Telenovela' + (d.g ? ', ' + d.g : '');
         es[id] = d; if (d.n || d.p) { apply(id, d); changed++; }
       }).catch(function () {}).then(function () {
         n++;
@@ -213,7 +210,7 @@
   MV.stremioStreams = function (type, id, only) {
     return rawStreams(type, id, only).then(function (st) {
       if (st.length) return st;
-      return altId(type, id).then(function (a) { return a && a !== id ? rawStreams(type, a, only) : st; });
+      return altId(type, id).then(function (a) { return a && a !== id ? rawStreams(type, a, only).then(function (r) { if (!r.length) r.failed = (r.failed || 0) + (st.failed || 0); return r; }) : st; });
     });
   };
   /** Un addon que tarda demasiado no frena a los demás: a los 12 s se sigue sin él. */
@@ -228,6 +225,7 @@
     var ok = ls.filter(function (l) { var m = l.man || {}; return !m.resources || (res(m, 'stream') && tyFor(m) && prefixOk(m, 'stream', id)); });
     // Para explicar el resultado: qué addon respondió qué
     ls.forEach(function (l) { var m = l.man || {}; if (m.resources && res(m, 'stream') && ok.indexOf(l) < 0 && D[l.name] === undefined) D[l.name] = 'no tiene este tipo de contenido'; });
+    var failed = 0;   // addons que no respondieron (caídos o lentos): un "sin enlaces" así no es definitivo
     var jobs = ok.map(function (l) {
       return withTimeout(MV.getJSON(base(l.url) + '/stream/' + tyFor(l.man || {}) + '/' + encodeURIComponent(id) + '.json'), 12000).then(function (j) {
         var all = (j && j.streams) || [];
@@ -238,11 +236,11 @@
           var h = (s.behaviorHints && s.behaviorHints.proxyHeaders && s.behaviorHints.proxyHeaders.request) || {};
           return { url: s.url, title: String(s.title || s.description || s.name || '').replace(/\s+/g, ' ').trim(), src: s.name || l.name || '', lid: l.id, ua: h['User-Agent'] || h['user-agent'] || '', ref: h.Referer || h.referer || '' };
         });
-      }).catch(function (e) { if (typeof D[l.name] !== 'number') D[l.name] = 'no respondió' + (e && /40[13]/.test(e.message || '') ? ' (acceso denegado: revisa su configuración)' : ''); return []; });
+      }).catch(function (e) { failed++; if (typeof D[l.name] !== 'number') D[l.name] = 'no respondió' + (e && /40[13]/.test(e.message || '') ? ' (acceso denegado: revisa su configuración)' : ''); return []; });
     });
     // Primero los que se ven como video (mp4, mkv, m3u8…); al final los que pueden ser páginas web
     function score(x) { var u = x.url.toLowerCase().split('?')[0]; return /\.(mp4|mkv|m3u8|webm|avi|mov|ts|mpd)$/.test(u) ? 0 : /\/(hls|stream|video|playlist|manifest)/.test(u) ? 1 : 2; }
-    return Promise.all(jobs).then(function (all) { return all.reduce(function (a, b) { return a.concat(b); }, []).sort(function (a, b) { return score(a) - score(b); }); });
+    return Promise.all(jobs).then(function (all) { var r = all.reduce(function (a, b) { return a.concat(b); }, []).sort(function (a, b) { return score(a) - score(b); }); r.failed = failed; return r; });
   };
 
   /** Elige el enlace: si hay varios, se muestra la lista para escoger (calidad, idioma, fuente). */
@@ -257,7 +255,7 @@
     return '';
   };
   /** ¿Sirve con "Solo español latino"? Latino, o español sin decir cuál; en anime también subtitulado. */
-  function latLink(x, anime) { var l = MV.stLang(x); return l === 'lat' || l === 'es' || (anime && (l === 'sub' || l === '')); }
+  function latLink(x, anime, spanishOrig) { var l = MV.stLang(x); return l === 'lat' || l === 'es' || (spanishOrig && l === '') || (anime && (l === 'sub' || l === '')); }
   MV.stLatLink = latLink;
 
   /** Addon preferido para reproducir: se le pregunta primero y, si tiene enlace, se reproduce de una sin esperar a los demás. */
@@ -287,7 +285,7 @@
     var anime = /^(kitsu|mal|anilist|anidb)[:_]/i.test(id);
     if (pref) {
       return MV.stremioStreams(type, id, pref.id).then(function (st) {
-        if (S.prefs.latOnly) st = st.filter(function (x) { return latLink(x, anime); });
+        if (S.prefs.latOnly) st = st.filter(function (x) { return latLink(x, anime, opts && opts.olang === 'es'); });
         // Solo se reproduce de una si el enlace es de este título; si no, se muestra la lista completa
         st = st.filter(function (x) { return titleMatch(x, opts); });
         // Latino primero, luego el orden del addon
@@ -303,7 +301,7 @@
       var rank = { lat: 0, es: 1, sub: 2, '': 3, cast: 4 };
       st = st.map(function (x, i) { return { x: x, i: i, r: rank[MV.stLang(x)] }; }).sort(function (a, b) { return a.r - b.r || a.i - b.i; }).map(function (o) { return o.x; });
       if (S.prefs.latOnly && !showAll && st.length) {
-        var lat = st.filter(function (x) { return latLink(x, anime); });
+        var lat = st.filter(function (x) { return latLink(x, anime, opts && opts.olang === 'es'); });
         if (!lat.length) {
           return MV.confirm('Sin enlaces en español latino', 'Tus addons encontraron ' + st.length + (st.length === 1 ? ' enlace' : ' enlaces') + ' para “' + title + '”, pero ninguno dice que sea en latino. Tienes activado “Solo español latino”.', 'Ver todos los enlaces').then(function (y) {
             if (!y) throw new Error('cancelado');
@@ -347,7 +345,7 @@
   // ---------- "Solo con enlaces": se revisa en segundo plano qué títulos de los catálogos tienen enlaces ----------
   var LK = null;
   function lk() { if (!LK) { LK = MV.load('stLinks', {}) || {}; var now = Date.now(); Object.keys(LK).forEach(function (k) { if (now - LK[k].t > 2 * 86400e3) delete LK[k]; }); } return LK; }
-  MV.stLinked = function (it) { var c = lk()[it.st.type + ':' + it.st.id]; if (!c || (!c.ok && c.v !== 2)) return undefined; return S.prefs.latOnly && c.lat !== undefined ? c.lat : c.ok; };
+  MV.stLinked = function (it) { var c = lk()[it.st.type + ':' + it.st.id]; if (!c || (!c.ok && c.v !== 2)) return undefined; return S.prefs.latOnly && c.lat !== undefined && it.olang !== 'es' ? c.lat : c.ok; };
   var running = false, saveT = 0;
   MV.stCheckLinks = function () {
     if (running || !MV.S.prefs.stOnlyLinked) return;
@@ -374,7 +372,9 @@
       idP.then(function (sid) { return MV.stremioStreams(it.st.type === 'series' ? 'series' : 'movie', sid); }).then(function (st) {
         var anime = /^(kitsu|mal|anilist|anidb)[:_]/i.test(it.st.id);
         // Se guarda si hay enlaces y si alguno es en latino (para cuando está activo "Solo español latino")
-        lk()[it.st.type + ':' + it.st.id] = { v: 2, ok: st.length > 0, lat: st.some(function (x) { return latLink(x, anime); }), t: Date.now() };
+        // Si algún addon no respondió y no hubo enlaces, no se marca "sin enlaces": se vuelve a revisar después
+        if (!st.length && st.failed) return;
+        lk()[it.st.type + ':' + it.st.id] = { v: 2, ok: st.length > 0, lat: st.some(function (x) { return latLink(x, anime, it.olang === 'es'); }), t: Date.now() };
         if (st.length) found++;
       }).catch(function () {}).then(function () {
         n++;

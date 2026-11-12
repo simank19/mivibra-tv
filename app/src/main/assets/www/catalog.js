@@ -215,7 +215,10 @@
     if (TIDS[o.key]) o.tid = TIDS[o.key];
     o.kdrama = RX.kdrama.test(gs);
     // Novela: por la categoría, el addon o el género (no por el título); los canales en vivo no
-    o.novela = o.type !== 'live' && !o.adult && RX.novela.test((o.group || '') + ' ' + (o.st ? (o.src || '') + ' ' + (o.genre || '') : (o.genre || '')));
+    // Novela segura: lo dice la categoría de la lista o el addon. Si solo lo dice el género (TMDB), sale en Novelas y también sigue en Series
+    var nvCat = RX.novela.test((o.group || '') + ' ' + (o.st ? (o.src || '') : ''));
+    o.novela = o.type !== 'live' && !o.adult && (nvCat || RX.novela.test(o.genre || ''));
+    o.novelaAuto = o.novela && !nvCat;
     o.anime = RX.anime.test(gs) && !(o.st && o.kdrama && !/^Anime/.test(o.group || ''));
     o.platform = D.platformOf(o.group || '') || (o.st && o.src ? D.platformOf(o.src) : '') || (o.type !== 'live' ? D.platformOf(o.name || '') : '');
     if (o.platform === 'viki' && !o.anime) o.kdrama = o.kdrama || /drama|corea|korea/i.test(g);
@@ -1371,8 +1374,8 @@
     S.live = items.filter(function (i) { return i.type === 'live'; });
     S.live.forEach(function (i) { if (i.cands) applyProbe(i); });
     // Las novelas van en su propia sección (no se mezclan con Películas ni Series)
-    S.movies = items.filter(function (i) { return i.type === 'movie' && !i.novela; }).sort(function (a, b) { return (b.added || 0) - (a.added || 0); });
-    S.series = items.filter(function (i) { return i.type === 'series' && !i.novela; });
+    S.movies = items.filter(function (i) { return i.type === 'movie' && (!i.novela || i.novelaAuto); }).sort(function (a, b) { return (b.added || 0) - (a.added || 0); });
+    S.series = items.filter(function (i) { return i.type === 'series' && (!i.novela || i.novelaAuto); });
     S.novelas = items.filter(function (i) { return i.novela && (i.type === 'series' || i.type === 'movie'); });
   }
 
