@@ -299,10 +299,70 @@ object Drive {
         val safe = name.replace(Regex("[\\\\/:*?\"<>|]"), "_").ifBlank { id }
         val dir = File(cacheDir(c), id).apply { mkdirs() }
         val out = File(dir, safe)
-        val conn = open("$API/files/$id?alt=media&supportsAllDrives=true", token)
-        val code = conn.responseCode
+        var conn = open("$API/files/$id?alt=media&supportsAllDrives=true", token)
+        var code = conn.responseCode
         if (code == 401) throw IllegalStateException("AUTH")
-        if (code !in 200..299) throw IllegalStateException("Drive no entregó el juego ($code)")
+        var copyId: String? = null
+        if (code == 403) {
+            val why = errorReason(conn)
+            if (why.contains("abus", true) || why.contains("malware", true)) {
+                // Google marca muchas ROMs/zip como "posible riesgo" y no las entrega sin confirmar: se confirma y se pide otra vez
+                conn = open("$API/files/$id?alt=media&acknowledgeAbuse=true&supportsAllDrives=true", token)
+                code = conn.responseCode
+            } else if (why.contains("quota", true) || why.contains("limit", true)) {
+                // Archivo compartido que ya bajó mucha gente hoy: se hace una copia en tu Drive (tiene su propio límite) y se baja esa
+                copyId = copyToMyDrive(token, id, safe)
+                conn = open("$API/files/$copyId?alt=media&acknowledgeAbuse=true", token)
+                code = conn.responseCode
+            } else if (why.contains("appNotAuthorized", true) || why.contains("insufficientPermissions", true) || why.contains("insufficient authentication scopes", true)) {
+                throw IllegalStateException("Falta permiso para leer ese archivo: desconecta Google Drive en Juegos y vuelve a conectarlo marcando la casilla \"Ver todos tus archivos de Google Drive\".")
+            } else if (why.contains("cannotDownload", true) || why.contains("copyRequiresWriterPermission", true) || why.contains("insufficient", true)) {
+                throw IllegalStateException("El dueño de ese archivo no permite descargarlo. Pídele que active \"Permitir que los lectores descarguen\" o súbelo a tu propio Drive.")
+            } else {
+                throw IllegalStateException("Drive no entregó el juego: " + why.ifBlank { "403" })
+            }
+        }
+        if (code == 401) throw IllegalStateException("AUTH")
+        if (code !in 200..299) {
+            val why = errorReason(conn)
+            copyId?.let { deleteQuiet(token, it) }
+            throw IllegalStateException("Drive no entregó el juego ($code" + (if (why.isNotBlank()) ": $why" else "") + ")")
+        }
+        try {
+            return save(c, token, id, conn, dir, out, safe, onPct)
+        } finally {
+            copyId?.let { deleteQuiet(token, it) }
+        }
+    }
+
+    /** Motivo del error que da Drive (cannotDownloadAbusiveFile, downloadQuotaExceeded…) y su mensaje. */
+    private fun errorReason(conn: HttpURLConnection): String {
+        val body = try { conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "" } catch (_: Exception) { "" }
+        return try {
+            val e = JSONObject(body).getJSONObject("error")
+            val r = e.optJSONArray("errors")?.optJSONObject(0)?.optString("reason") ?: ""
+            (r + " " + e.optString("message")).trim()
+        } catch (_: Exception) { body.take(200) }
+    }
+
+    /** Copia temporal del juego en tu Drive (en la carpeta de MiVibra), que se borra al terminar de bajarla. */
+    private fun copyToMyDrive(token: String, id: String, name: String): String {
+        val c = open("$API/files/$id/copy?supportsAllDrives=true&fields=id", token, "POST")
+        c.doOutput = true
+        c.setRequestProperty("Content-Type", "application/json")
+        c.outputStream.use { it.write(JSONObject().put("name", "MiVibra (temporal) $name").toString().toByteArray()) }
+        val nid = try { json(c).optString("id") } catch (e: Exception) {
+            throw IllegalStateException("Google limitó las descargas de ese archivo por hoy (lo bajó mucha gente). Haz una copia en tu Drive (clic derecho › Hacer una copia) y juega con la copia.")
+        }
+        if (nid.isBlank()) throw IllegalStateException("No se pudo copiar el juego a tu Drive")
+        return nid
+    }
+
+    private fun deleteQuiet(token: String, id: String) {
+        try { val c = open("$API/files/$id", token, "DELETE"); c.responseCode; c.disconnect() } catch (_: Exception) {}
+    }
+
+    private fun save(c: Context, token: String, id: String, conn: HttpURLConnection, dir: File, out: File, safe: String, onPct: (Int) -> Unit): String {
         // Drive a veces no manda el tamaño (descarga por partes): se pregunta aparte
         var total = conn.contentLengthLong
         if (total <= 0) total = try { json(open("$API/files/$id?fields=size&supportsAllDrives=true", token)).optString("size").toLongOrNull() ?: 0L } catch (_: Exception) { 0L }
