@@ -44,5 +44,16 @@ service cloud.firestore {
         && str(request.resource.data, 'c', 20) && str(request.resource.data, 'v', 200) && str(request.resource.data, 'k', 10);
       allow get, list, delete: if true;
     }
+    // Conexión directa celular ↔ TV (enviar juegos y mando de juego en Samsung/LG): solo se intercambian los datos para conectarse.
+    match /rtc/{code}/s/{id} {
+      allow create: if code.matches('^[A-HJKMNP-Z2-9]{8}$')
+        && request.resource.data.keys().hasOnly(['t', 'sid', 'sdp', 'k', 'at'])
+        && request.resource.data.t in ['offer', 'answer']
+        && request.resource.data.at is number
+        && request.resource.data.at > request.time.toMillis() - 600000
+        && request.resource.data.at < request.time.toMillis() + 600000
+        && str(request.resource.data, 'sid', 40) && str(request.resource.data, 'sdp', 30000) && str(request.resource.data, 'k', 10);
+      allow get, list, delete: if true;
+    }
   }
 }

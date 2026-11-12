@@ -49,8 +49,15 @@ Listo: **MiVibra TV** aparece en las apps del TV.
 - Entra con **"Entrar con el celular (código)"**: escaneas el código con el celular y quedas con tu misma cuenta. Tus listas, perfiles, favoritos, historial y avances se sincronizan solos con el celular, el TV Android y el PC.
 - Las mejoras nuevas llegan solas: la app usa la versión más reciente publicada cada vez que se abre con internet. Solo hay que reinstalar si cambia algo del propio TV (te avisaremos).
 
+## Control y juegos desde el celular
+- **Control:** en la TV entra a *Ajustes › Mando con celular* y escanea el código QR con la cámara del celular. Se abre el control en el navegador (no hay que instalar nada) y funciona por internet.
+- **Enviar juegos:** con el celular en el **mismo Wi-Fi** que la TV, en el control toca **Enviar juegos** (o **Enviar BIOS**) y elige los archivos. Van directo a la TV por tu Wi-Fi y aparecen en *Juegos*. Usa tus propias copias de seguridad o juegos libres; hasta unos 200 MB por juego.
+- **Mando de juego:** al abrir un juego, el control del celular cambia solo a mando de juego (cada celular es un jugador). También se puede jugar con el control del TV: cruceta, OK = A, rojo = B, reproducir = START; **Atrás** abre el menú del juego (continuar, guardar y salir, reiniciar).
+- **Consolas que funcionan:** NES, Super Nintendo, Game Boy / Color / Advance, Sega Genesis, Master System, Game Gear, Atari, PC Engine, Neo Geo Pocket, WonderSwan y arcade (Neo Geo necesita la BIOS neogeo.zip). PlayStation 1, N64 y DS pueden ir lentas según el TV. PSP, Dreamcast, GameCube y los ports (Doom, Quake) no.
+- El emulador (EmulatorJS) se descarga solo la primera vez que juegas cada consola.
+
 ## Qué no tiene en Samsung
-Juegos y emuladores, descargas para ver sin internet, reproductor externo, juegos de Google Drive y los portales MAC (Stalker). Todo lo demás funciona igual.
+Descargas para ver sin internet, reproductor externo, juegos de Google Drive, las consolas pesadas (PSP, Dreamcast, GameCube) y los portales MAC (Stalker). Todo lo demás funciona igual.
 
 ## Problemas comunes
 - **"Install failed: certificate"** → el certificado no tiene el DUID de ese TV: vuelve a crearlo con el TV conectado.

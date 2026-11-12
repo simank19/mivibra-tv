@@ -22,7 +22,8 @@
     ok: function () { return !!(MV.sync && MV.sync.configured && MV.sync.configured() && MV.deviceCode); },
     link: function () { return MANDO_URL + '?c=' + MV.deviceCode() + '&k=' + key(); },
     key: key,
-    start: start
+    start: start,
+    run: function (d) { run(d); }
   };
 
   // ---------- Teclas ----------
@@ -42,6 +43,7 @@
     }
   }
   function nav(name) {
+    if (MV.webEmu && MV.webEmu.isOpen() && MV.webEmu.nav(name)) return;
     var pw = playerWin();
     if (name === 'HOME') { if (pw) fire(pw, 'Escape'); setTimeout(function () { if (MV.modalOpen && MV.modalOpen()) MV.closeModal(true); MV.go && MV.go('home'); }, pw ? 400 : 0); return; }
     if (name === 'BACK') {
