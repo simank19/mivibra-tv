@@ -16,7 +16,7 @@
   var P = S.prefs;
   var defaults = {
     theme: 'mv', glass: 'mid', anim: true, bgAnim: true, autoTheme: true, audioLang: 'es', subLang: '', xtFormat: 'm3u8',
-    tmdbKey: '', ytKey: '', subKey: '', streamKeys: {}, dedupe: true, pruneEmpty: true, latOnly: false, navOrder: [], navHidden: [], covers: {}, kidsLimit: 60, parentPin: '', adult: null, romRoots: [], romSystem: {}, shader: 'default',
+    tmdbKey: '', ytKey: '', subKey: '', streamKeys: {}, dedupe: true, pruneEmpty: true, latOnly: false, hideUnreleased: true, navOrder: [], navHidden: [], covers: {}, kidsLimit: 60, parentPin: '', adult: null, romRoots: [], romSystem: {}, shader: 'default',
     firebase: '', syncLists: true, updatedAt: 0, deviceName: ''
   };
   Object.keys(defaults).forEach(function (k) { if (P[k] === undefined) P[k] = defaults[k]; });
@@ -1382,12 +1382,22 @@
   /** Lo que el perfil actual puede ver. El +18 nunca sale en las secciones normales:
       solo en Utilidades › +18, desbloqueado con el PIN (MV.adultOnly lo pide esa pantalla). */
   /** Cuántos títulos están ocultos solo por "Solo español latino" o "Solo títulos con enlaces". */
+  /** Película o serie que todavía no se estrena (fecha de TMDB o del addon en el futuro, o año que aún no llega).
+      Lo que tus listas ya traen con enlace se deja: si está en la lista es porque se puede ver. */
+  MV.unreleased = function (i) {
+    if (!i || i.type === 'live' || i.url || i.xt) return false;
+    var now = new Date(), today = now.toISOString().slice(0, 10);
+    if (i.rdate && /^\d{4}-\d{2}-\d{2}/.test(i.rdate)) return i.rdate.slice(0, 10) > today;
+    var y = +String(i.year || '').slice(0, 4);
+    return y > now.getFullYear();
+  };
+  function hideUnrel(i) { return P.hideUnreleased !== false && MV.unreleased(i); }
   MV.hiddenByFilters = function (arr) {
-    if (MV._showHidden || (!P.latOnly && !P.stOnlyLinked)) return 0;
+    if (MV._showHidden || (!P.latOnly && !P.stOnlyLinked && P.hideUnreleased === false)) return 0;
     var kids = MV.isKids(), n = 0;
     arr.forEach(function (i) {
       if (i.adult || (kids && !MV.kidsOk(i))) return;
-      if ((P.latOnly && !D.latOk(i)) || (P.stOnlyLinked && i.st && !i.url && !i.xt && MV.stLinked && MV.stLinked(i) !== true)) n++;
+      if (hideUnrel(i) || (P.latOnly && !D.latOk(i)) || (P.stOnlyLinked && i.st && !i.url && !i.xt && MV.stLinked && MV.stLinked(i) !== true)) n++;
     });
     return n;
   };
@@ -1398,6 +1408,7 @@
       if (kids && !MV.kidsOk(i)) return false;
       // "Ver también los ocultos" (por esta sesión) quita los dos filtros automáticos
       if (MV._showHidden) return true;
+      if (hideUnrel(i)) return false;
       if (P.latOnly && !D.latOk(i)) return false;
       // Títulos de catálogos de addons: con "Solo con enlaces" se muestran únicamente los que ya se comprobó que tienen enlaces
       if (P.stOnlyLinked && i.st && !i.url && !i.xt && MV.stLinked && MV.stLinked(i) !== true) return false;

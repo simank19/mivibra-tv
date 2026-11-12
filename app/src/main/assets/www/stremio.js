@@ -180,6 +180,7 @@
                 // La clave sigue siendo la del nombre original: así no se pierde el avance al traducirse
                 key: (t === 'series' ? 'series:' : 'movie:') + MV.norm(m.name + (t === 'movie' && year ? ' ' + year : '')),
                 type: t, name: name, year: /^\d{4}$/.test(year) ? year : '', orig: m.name,
+                rdate: /^\d{4}-\d{2}-\d{2}/.test(String(m.released || '')) ? String(m.released).slice(0, 10) : undefined,
                 // Si el addon no trae carátula se usa su fondo o logo
                 poster: m.poster || m.background || m.logo || '', plot: (es && es.p) || m.description || '', genre: gtxt, rating: m.imdbRating || '',
                 // Se organiza en las categorías de la app (Acción, Comedia, Terror…) en vez de "Cinemeta · Popular"
