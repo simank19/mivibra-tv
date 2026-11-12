@@ -59,6 +59,7 @@
   }
   /** Aplica a un título de addon la traducción guardada y la categoría de la app (también a listas guardadas con versiones anteriores). */
   MV.stFix = function (o) {
+    if (o.st.ty && MV._stTyHint) MV._stTyHint[o.st.id] = o.st.ty;
     var an = isAnimeIt(o);
     if (!o.src) o.src = o.group || '';
     if (!o.orig) o.orig = String(o.name || '').replace(/\s*\(\d{4}\)$/, '');
@@ -118,23 +119,32 @@
   setInterval(function () { MV.stTranslate(); }, 3 * 60e3);
 
   /** Catálogos del addon → películas y series de MiVibra (hasta 300 por catálogo). */
+  var TYH = MV._stTyHint = {};
   MV.buildFromStremio = function (list) {
     var b = base(list.url);
     return MV.stremioManifest(list.url).then(function (man) {
       list.man = { name: man.name, resources: man.resources, types: man.types, idPrefixes: man.idPrefixes, logo: man.logo || '' };
-      var cats = (man.catalogs || []).filter(function (c) {
-        // Anime Kitsu y otros usan el tipo "anime": se muestran como series o películas según cada título
-        if (c.type !== 'movie' && c.type !== 'series' && c.type !== 'anime') return false;
-        // Catálogos que exigen búsqueda o género obligatorio no se pueden listar completos
-        return !(c.extra || []).some(function (e) { return e.isRequired; }) && !(c.extraRequired || []).length;
-      }).slice(0, 12);
+      // Catálogos que se pueden listar: cualquier tipo (algunos addons usan tipos propios, como los +18) menos canales en vivo.
+      // Si el catálogo exige un género, se piden sus primeros géneros por separado; los que exigen búsqueda no se pueden listar.
+      var cats = [];
+      (man.catalogs || []).forEach(function (c) {
+        if (!c || !c.id || /^(tv|channel|channels|events?|radio)$/i.test(c.type || '')) return;
+        var req = (c.extra || []).filter(function (e) { return e && e.isRequired; }).map(function (e) { return e.name; }).concat(c.extraRequired || []);
+        if (!req.length) { cats.push(c); return; }
+        if (req.length === 1 && req[0] === 'genre') {
+          var g = ((c.extra || []).filter(function (e) { return e && e.name === 'genre'; })[0] || {}).options || c.genres || [];
+          g.slice(0, 4).forEach(function (o) { cats.push(Object.assign({}, c, { _genre: o, name: (c.name ? c.name + ' · ' : '') + o })); });
+        }
+      });
+      cats = cats.slice(0, 14);
       var out = [], seen = {};
       return Promise.all(cats.map(function (c) {
         // Páginas seguidas según lo que trae cada una (Kitsu da 20 por página, Cinemeta 100); solo si el catálogo acepta "skip"
         var canSkip = (c.extra || []).some(function (e) { return e && e.name === 'skip'; }) || (c.extraSupported || []).indexOf('skip') >= 0;
         var pp = [];
         function page(skip, n) {
-          return MV.getJSON(b + '/catalog/' + c.type + '/' + encodeURIComponent(c.id) + (skip ? '/skip=' + skip : '') + '.json').then(function (j) { return (j && j.metas) || []; }).catch(function () { return []; }).then(function (metas) {
+          var ex = [c._genre ? 'genre=' + encodeURIComponent(c._genre) : '', skip ? 'skip=' + skip : ''].filter(Boolean).join('&');
+          return MV.getJSON(b + '/catalog/' + c.type + '/' + encodeURIComponent(c.id) + (ex ? '/' + ex : '') + '.json').then(function (j) { return (j && j.metas) || []; }).catch(function () { return []; }).then(function (metas) {
             pp.push(metas);
             if (canSkip && metas.length && n < 6 && skip + metas.length < 300) return page(skip + metas.length, n + 1);
           });
@@ -144,7 +154,9 @@
             metas.forEach(function (m) {
               if (!m || !m.id || seen[c.type + m.id]) return; seen[c.type + m.id] = 1;
               var year = String(m.releaseInfo || m.year || '').slice(0, 4);
-              var t = m.type === 'movie' || m.type === 'series' ? m.type : c.type === 'movie' ? 'movie' : 'series';
+              var t = m.type === 'movie' || m.type === 'series' ? m.type : /^(series|anime|tv ?shows?|shows?)$/i.test(c.type) ? 'series' : 'movie';
+              // Tipo propio del addon (por ejemplo "Porn"): se recuerda para pedirle los enlaces con ese tipo
+              if (c.type !== 'movie' && c.type !== 'series') TYH[m.id] = m.type || c.type;
               var isAnime = c.type === 'anime' || /^(kitsu|mal|anilist|anidb)[:_]/i.test(m.id);
               var es = ES()[m.id];   // título, sinopsis y géneros en español (de TMDB), si ya se tradujo
               var nm = (es && es.n) || m.name;
@@ -158,7 +170,7 @@
                 poster: m.poster || m.background || m.logo || '', plot: (es && es.p) || m.description || '', genre: gtxt, rating: m.imdbRating || '',
                 // Se organiza en las categorías de la app (Acción, Comedia, Terror…) en vez de "Cinemeta · Popular"
                 group: catFor(gtxt, isAnime, t), src: (list.name || man.name) + ' · ' + (c.name || ''),
-                st: { id: m.id, type: t, list: list.id }, list: list.id, url: ''
+                st: TYH[m.id] ? { id: m.id, type: t, list: list.id, ty: TYH[m.id] } : { id: m.id, type: t, list: list.id }, list: list.id, url: ''
               });
             });
           });
@@ -192,7 +204,8 @@
     var ls = lists();
     var animeId = /^(kitsu|mal|anilist|anidb)[:_]/i.test(id);
     // Tipo que entiende cada addon: algunos de anime solo aceptan "anime"
-    function tyFor(m) { if (!m.resources) return type; var ts = resTypes(m, 'stream'); return ts.indexOf(type) >= 0 ? type : animeId && ts.indexOf('anime') >= 0 ? 'anime' : ''; }
+    var hint = TYH[id] || TYH[String(id).split(':')[0]];
+    function tyFor(m) { if (!m.resources) return hint || type; var ts = resTypes(m, 'stream'); return hint && ts.indexOf(hint) >= 0 ? hint : ts.indexOf(type) >= 0 ? type : animeId && ts.indexOf('anime') >= 0 ? 'anime' : ''; }
     var D = MV._stDiag = MV._stDiag || {};
     var ok = ls.filter(function (l) { var m = l.man || {}; return !m.resources || (res(m, 'stream') && tyFor(m) && prefixOk(m, 'stream', id)); });
     // Para explicar el resultado: qué addon respondió qué

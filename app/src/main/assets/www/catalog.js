@@ -1084,7 +1084,7 @@
 
   // ---------- Carga y combinación de todas las listas ----------
   function retag(o) { if (o.type === 'book') return o; try { return tags(o); } catch (e) { return o; } }
-  var ST_V = 3; // sube cuando cambia la forma de leer los addons (fuerza recargarlos)
+  var ST_V = 4; // sube cuando cambia la forma de leer los addons (fuerza recargarlos)
   function loadList(list, force) {
     var ck = 'list:' + list.id;
     return MV.idbGet(ck).then(function (cached) {
