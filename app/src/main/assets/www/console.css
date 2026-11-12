@@ -282,3 +282,6 @@ html.tv #console, html.tv #console * { animation: none !important; transition: n
   .gx-dcover { width: 11em; height: 15.4em; }
 }
 #console .gx-card .gx-ic:not(:has(svg)):not(:has(img)) { font-size: 4.6em; width: auto; height: auto; }
+/* Las filas con scroll horizontal no se encogen en la columna de inicio (en TV la columna es baja y el navegador
+   las achicaba por debajo de su alto: la tarjeta enfocada quedaba cortada arriba y abajo) */
+.chome > .crow, .gx-cards, .gx-recent, .gx-covers { flex-shrink: 0; }
