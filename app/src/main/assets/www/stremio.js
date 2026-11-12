@@ -41,7 +41,7 @@
   // ---------- Contenido de addons en español y en las categorías de la app ----------
   var ESC = null;
   function ES() { if (!ESC) ESC = MV.load('stEs', {}) || {}; return ESC; }
-  var TMDB_G = { 28: 'Acción', 12: 'Aventura', 16: 'Animación', 35: 'Comedia', 80: 'Crimen', 99: 'Documental', 18: 'Drama', 10751: 'Familia', 14: 'Fantasía', 36: 'Historia', 27: 'Terror', 10402: 'Música', 9648: 'Misterio', 10749: 'Romance', 878: 'Ciencia ficción', 53: 'Suspenso', 10752: 'Bélica', 37: 'Western', 10759: 'Acción, Aventura', 10762: 'Infantil', 10764: 'Reality', 10765: 'Ciencia ficción, Fantasía', 10768: 'Bélica', 10766: 'Drama', 10767: 'Talk show' };
+  var TMDB_G = { 28: 'Acción', 12: 'Aventura', 16: 'Animación', 35: 'Comedia', 80: 'Crimen', 99: 'Documental', 18: 'Drama', 10751: 'Familia', 14: 'Fantasía', 36: 'Historia', 27: 'Terror', 10402: 'Música', 9648: 'Misterio', 10749: 'Romance', 878: 'Ciencia ficción', 53: 'Suspenso', 10752: 'Bélica', 37: 'Western', 10759: 'Acción, Aventura', 10762: 'Infantil', 10764: 'Reality', 10765: 'Ciencia ficción, Fantasía', 10768: 'Bélica', 10766: 'Telenovela, Drama', 10767: 'Talk show' };
   /** Categoría según el género principal (en español). Animación sola no cuenta como infantil. */
   function catFor(gtxt, isAnime, t) {
     var D = window.MVD, ids = D.classifyGenres(String(gtxt || ''));

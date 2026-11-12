@@ -108,7 +108,7 @@
   function allNavItems() {
     return [
       ['home', 'Inicio', IC.home], ['live', 'En vivo', IC.live],
-      ['movies', 'Películas', IC.movie], ['series', 'Series', IC.series], ['platforms', 'Plataformas', IC.platforms], ['anime', 'Anime', IC.anime], ['kdrama', 'K-Drama', IC.kdrama], ['infantil', 'Infantil', IC.kids],
+      ['movies', 'Películas', IC.movie], ['series', 'Series', IC.series], ['platforms', 'Plataformas', IC.platforms], ['anime', 'Anime', IC.anime], ['kdrama', 'K-Drama', IC.kdrama], ['novelas', 'Novelas', IC.novela], ['infantil', 'Infantil', IC.kids],
       ['docs', 'Documentales', IC.doc],
       ['settings', 'Ajustes', IC.settings]
     ];
@@ -220,7 +220,7 @@
     var sub = '';
     if (it.type === 'live') { var nn = MV.nowNext(it); sub = nn.now ? nn.now.t : (it.group || ''); }
     else sub = [it.year, it.type === 'series' ? 'Serie' : '', it.type === 'tmdb' ? it.group : catOf(it)].filter(Boolean).join(' · ');
-    var prog = MV.progressOf(it.key), tag = it.type === 'tmdb' ? (it.have ? 'EN TUS LISTAS' : '') : it.platform ? D.platformName(it.platform).toUpperCase() : it.kdrama ? 'K-DRAMA' : it.anime ? 'ANIME' : it.ia ? 'CLÁSICO' : '';
+    var prog = MV.progressOf(it.key), tag = it.type === 'tmdb' ? (it.have ? 'EN TUS LISTAS' : '') : it.platform ? D.platformName(it.platform).toUpperCase() : it.kdrama ? 'K-DRAMA' : it.novela ? 'NOVELA' : it.anime ? 'ANIME' : it.ia ? 'CLÁSICO' : '';
     return '<button class="card ' + kind + (it.adult ? ' adult' : '') + ' f" style="--h:' + MV.hue(it.name) + ';animation-delay:' + Math.min(i || 0, 12) * 0.04 + 's" data-act="open" data-key="' + esc(it.key) + '" data-fid="c-' + MV.hash(it.key) + '">' +
       '<div class="th">' + thumbInner(it) + (it.num ? '<span class="num">' + esc(it.num) + '</span>' : '') + (tag ? '<span class="tag">' + tag + '</span>' : '') + '<div class="shine"></div></div>' +
       '<div class="meta"><b>' + esc(it.name) + '</b><span>' + esc(sub) + '</span>' + (prog ? '<div class="prog"><i style="width:' + Math.round(prog.pos / prog.dur * 100) + '%"></i></div>' : '') + '</div></button>';
@@ -565,6 +565,7 @@
     html += row('Anime', anime.slice(0, 30), 'poster', '', 'anime');
     var kd = MV.visible(S.items.filter(function (i) { return i.kdrama && i.type !== 'live'; }));
     html += row('K-Drama', kd.slice(0, 30), 'poster', '', 'kdrama');
+    html += row('Novelas', MV.visible(S.novelas || []).slice(0, 30), 'poster', '', 'novelas');
     var docs = MV.visible(S.items.filter(function (i) { return i.doc && i.type !== 'live'; }));
     html += row('Documentales', docs.slice(0, 30), 'poster', '', 'docs');
     var bks = visibleBooks();
@@ -1092,6 +1093,8 @@
     if (years.length > lim) html += '<button class="btn ghost more f" data-act="moreRows" data-arg="anime-y">Ver más años (' + (years.length - lim) + ')</button>';
     return html;
   };
+  VIEWS.novelas = function () { return catalogView('novelas', 'Novelas', S.novelas || []); };
+  VIEWS.novelas.after = function () { setTimeout(function () { tmdbClassify(S.novelas || []); }, 1500); };
   VIEWS.kdrama = function () { return catalogView('kdrama', 'K-Drama', S.items.filter(function (i) { return i.kdrama && i.type !== 'live'; })); };
   /** Infantil (perfiles de adultos): películas y series para niños, sin anime. */
   VIEWS.infantil = function () {
@@ -1472,11 +1475,12 @@
     if (r.it.type !== 'live' && r.it.poster) sc += 3;
     return sc;
   }
-  var STYPES = [['all', 'Todo'], ['live', 'Canales'], ['movie', 'Películas'], ['series', 'Series'], ['anime', 'Anime'], ['kdrama', 'K-Drama'], ['games', 'Juegos']];
+  var STYPES = [['all', 'Todo'], ['live', 'Canales'], ['movie', 'Películas'], ['series', 'Series'], ['anime', 'Anime'], ['kdrama', 'K-Drama'], ['novelas', 'Novelas'], ['games', 'Juegos']];
   function typeOk(i, t) {
     if (t === 'all') return true;
     if (t === 'anime') return i.anime && i.type !== 'live';
     if (t === 'kdrama') return i.kdrama && i.type !== 'live';
+    if (t === 'novelas') return i.novela && i.type !== 'live';
     return i.type === t;
   }
   function recentSearches() { return MV.load('recentSearch', []); }
@@ -4393,8 +4397,8 @@
     tour = { view: view.name, steps: steps, i: 0, back: document.activeElement };
     tourShow();
   };
-  ['movies', 'series', 'anime', 'kdrama', 'infantil', 'docs', 'platforms'].forEach(function (k) { TOUR[k] = TOUR.catalog; });
-  var TOUR_KEY = { movies: 'catalog', series: 'catalog', anime: 'catalog', kdrama: 'catalog', infantil: 'catalog', docs: 'catalog', platforms: 'catalog' };
+  ['movies', 'series', 'anime', 'kdrama', 'novelas', 'infantil', 'docs', 'platforms'].forEach(function (k) { TOUR[k] = TOUR.catalog; });
+  var TOUR_KEY = { movies: 'catalog', series: 'catalog', anime: 'catalog', kdrama: 'catalog', novelas: 'catalog', infantil: 'catalog', docs: 'catalog', platforms: 'catalog' };
   function tourSeen() { return MV.load('tour:' + (S.pid || 'default'), {}); }
   function tourMark(k) { var t = tourSeen(); t[k] = 1; MV.save('tour:' + (S.pid || 'default'), t); }
   MV.tourReset = function () { MV.save('tour:' + (S.pid || 'default'), {}); };

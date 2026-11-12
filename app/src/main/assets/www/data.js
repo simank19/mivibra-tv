@@ -147,6 +147,8 @@
     doc: /\b(docu|docus|documental(es)?|documentar(y|ies)|docuseries?|docu-?series|nat ?geo|national geographic|discovery|animal planet|vida salvaje|wildlife|naturaleza|nature doc)\b/i,
     notDoc: /ficci[oó]n|fiction|sci-?fi|ciencia ?ficci|fantas|acci[oó]n|action|terror|horror|comedia|comedy|drama|thriller|suspenso|infantil|kids|anime/i,
     kdrama: /(k-?dramas?|doramas?|coreanas?|coreanos?|korean|korea|asian drama|c-?drama|j-?drama)/i,
+    // Telenovelas (latinas, turcas, brasileñas…): sección propia, aparte de Series
+    novela: /(tele-?novelas?|\bnovelas?\b|culebr[oó]n(es)?|teleseries?|series? turcas?|dizis?\b|soap ?operas?|\bsoap\b)/i,
     adult: /(xxx|\+18|18\+|\badult|porn|erotic|er[oó]tico|hentai|playboy|sexy)/i,
     movie: /\b(pel[ií]culas?|movies?|vod|cine|films?)\b/i,
     series: /\b(series?|temporadas?|tv shows?|novelas?|telenovelas?)\b/i,
@@ -339,6 +341,7 @@
     { id: 'kids', name: 'Infantil', test: function (i) { return i.kids; } },
     { id: 'anime', name: 'Anime', test: function (i) { return i.anime; } },
     { id: 'kdrama', name: 'K-Drama', test: function (i) { return i.kdrama; } },
+    { id: 'novelas', name: 'Novelas', test: function (i) { return i.novela; } },
     { id: 'docs', name: 'Documentales', test: function (i) { return i.doc; } },
     { id: 'music', name: 'Música', test: function (i, g) { return D.RX.music.test(g); } }
   ];
@@ -356,6 +359,7 @@
     anime: I('<path d="M11 3l1.8 4.7 4.7 1.8-4.7 1.8L11 16l-1.8-4.7L4.5 9.5l4.7-1.8z"/><path d="M18.5 14l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/>'),
     platforms: I('<rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/>'),
     kdrama: I('<path d="M12 21s-7-4.4-9.3-9A5 5 0 0 1 12 6.4 5 5 0 0 1 21.3 12C19 16.6 12 21 12 21z"/>'),
+    novela: I('<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M12 14s-3.2-1.9-3.2-3.8A1.7 1.7 0 0 1 12 9.3a1.7 1.7 0 0 1 3.2.9c0 1.9-3.2 3.8-3.2 3.8z"/>'),
     port: I('<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/><path d="M8 10h3M9.5 8.5v3M15 9.5h.01M17 11h.01"/>'),
     doc: I('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/>'),
     star: I('<path d="M12 3l2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.3 6.4 20.3l1.1-6.2L3 9.7l6.2-.9z"/>'),
