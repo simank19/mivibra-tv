@@ -101,7 +101,8 @@
   var UTILS = [['youtube', 'YouTube', 'yt', 'Videos, tendencias y búsqueda'], ['music', 'Música', 'music', 'Tu música y música libre'], ['radio', 'Radio', 'radio', 'Emisoras de Colombia y el mundo'], ['browser', 'Navegador', 'globe', 'Con bloqueador de anuncios'], ['games', 'Juegos', 'games', 'Consolas clásicas y ports'], ['books', 'Lectura', 'book', 'Mangas, cómics, libros y revistas']];
   function navOwner(name) {
     if (name === 'guide') return 'live';
-    if (name === 'adult' || name === 'streams' || name === 'webvids' || name === 'webseries') return 'utils';
+    if (name === 'adult') return MV.adultOk() ? 'adult' : 'utils';
+    if (name === 'streams' || name === 'webvids' || name === 'webseries') return 'utils';
     if (UTILS.some(function (u) { return u[0] === name; })) return 'utils';
     return name;
   }
@@ -124,8 +125,17 @@
       return ia - ib;
     });
     mid = mid.filter(function (n) { return hidden.indexOf(n[0]) < 0; });
+    // Adultos: solo aparece en el menú mientras el control parental está desbloqueado
+    if (MV.adultOk()) mid.push(['adult', 'Adultos', IC.adult]);
     return [all[0]].concat(mid);   // Ajustes ya no va en el menú: está arriba, en el botón del perfil
   }
+  // Al vencerse los 30 minutos, Adultos desaparece del menú (y si estabas ahí, vuelves a Inicio)
+  var adultWas = false;
+  setInterval(function () {
+    var ok = MV.adultOk();
+    if (adultWas && !ok) { if (view.name === 'adult') MV.go('home', null, { replace: true }); else MV.rerender(); }
+    adultWas = ok;
+  }, 20000);
   function navOrderIds() { return navItems().map(function (n) { return n[0]; }).filter(function (id) { return id !== 'home' && id !== 'settings'; }); }
 
   // ---------- Render ----------
@@ -1183,9 +1193,9 @@
   });
   function adultItems() { return MV.adultOk() ? S.items.filter(function (i) { return i.adult; }) : []; }
   VIEWS.adult = function () {
-    if (!MV.adultOk()) return top('+18') + '<div class="empty glass"><h2>Contenido bloqueado</h2><p class="muted">Ábrelo desde Utilidades con el PIN.</p><div class="btns" style="justify-content:center"><button class="btn f" data-act="adultOpen" data-autofocus>Ingresar PIN</button></div></div>';
+    if (!MV.adultOk()) return top('Adultos') + '<div class="empty glass"><h2>Contenido bloqueado</h2><p class="muted">Ábrelo desde Utilidades con el PIN.</p><div class="btns" style="justify-content:center"><button class="btn f" data-act="adultOpen" data-autofocus>Ingresar PIN</button></div></div>';
     var all = adultItems(), live = all.filter(function (i) { return i.type === 'live'; }), vod = all.filter(function (i) { return i.type !== 'live'; });
-    var head = top('+18', '<button class="pill f" data-act="adultLock">' + IC.lock.replace('<svg', '<svg width="18" height="18"') + 'Bloquear</button>') +
+    var head = top('Adultos', '<button class="pill f" data-act="adultLock">' + IC.lock.replace('<svg', '<svg width="18" height="18"') + 'Bloquear</button>') +
       '<p class="muted" style="margin:0 0 12px">Se bloquea solo a los 30 minutos o al tocar Bloquear.</p>';
     if (!all.length) return head + '<div class="empty glass"><h2>No hay contenido +18 en tus listas</h2></div>';
     return head + (live.length ? '<h3 style="margin:8px 0">Canales <small class="muted">' + live.length + '</small></h3>' + grid(live, 'ch', 'adult-live') : '') +
@@ -3067,7 +3077,7 @@
         S.adultUntil = Date.now() + 30 * 60e3; MV.closeModal(true); MV.go('adult'); return true;
       });
     },
-    adultLock: function () { S.adultUntil = 0; MV.toast('Contenido +18 bloqueado'); MV.go('utils', null, { replace: true }); },
+    adultLock: function () { S.adultUntil = 0; MV.toast('Contenido +18 bloqueado'); MV.go('home', null, { replace: true }); },
     adultPass: function () { var v = document.getElementById('adIn').value; MV.sha256(v).then(function (h) { if (h === P.adult.pass) MV._adultUnlock(); else MV.toast('Contraseña incorrecta'); }); },
     adultPin: function () { MV.closeModal(true); pinPad('PIN +18', function (h) { if (h === P.adult.pin) { MV._adultUnlock(); return true; } return false; }); },
     syncIn: function () {
