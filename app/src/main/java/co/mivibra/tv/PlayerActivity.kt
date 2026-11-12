@@ -447,8 +447,8 @@ class PlayerActivity : ComponentActivity() {
         Thread {
             val res = try { Subtitles.fromAddons(addons, type, id) } catch (_: Exception) { emptyList() }
             // Primero el idioma preferido
-            val pref = when (subLang) { "en" -> setOf("eng", "en"); "pt" -> setOf("por", "pob", "pt", "pt-br"); else -> setOf("spa", "es", "spn", "esp", "ea", "es-419", "es-mx", "lat") }
-            val sorted = res.sortedBy { if (it.lang.lowercase() in pref) 0 else if (it.lang.lowercase() in setOf("eng", "en")) 1 else 2 }
+            val want = when (subLang) { "en" -> "Inglés"; "pt" -> "Portugués"; else -> "Español" }
+            val sorted = res.sortedBy { val l = Subtitles.langLabel(it.lang); if (l.startsWith(want)) 0 else if (l == "Inglés") 1 else 2 }
             ui.post { if (addonSubsFor == key) addonSubs = sorted }
         }.start()
     }
@@ -503,7 +503,7 @@ class PlayerActivity : ComponentActivity() {
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
         val p = ExoPlayer.Builder(this, renderers)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(this).setDataSourceFactory(http))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(this).setDataSourceFactory(androidx.media3.datasource.DefaultDataSource.Factory(this, http)))
             .setLoadControl(load)
             .build()
         p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
@@ -520,7 +520,7 @@ class PlayerActivity : ComponentActivity() {
         p.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) { onFail(error) }
             override fun onIsPlayingChanged(isPlaying: Boolean) { updateCenterPlay(); WatchNext.update(this@PlayerActivity, current(), p, live) }
-            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) { logTracks(tracks) }
+            override fun onTracksChanged(tracks: androidx.media3.common.Tracks) { logTracks(tracks); selectExternalIfPending(tracks) }
 
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_READY) {
@@ -671,6 +671,7 @@ class PlayerActivity : ComponentActivity() {
                 listOf(
                     MediaItem.SubtitleConfiguration.Builder(Uri.parse(sub))
                         .setMimeType(mime)
+                        .setId("mv-ext").setLabel(EXT_LABEL)
                         .setLanguage(subLang.ifBlank { "es" })
                         .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
                         .build()
@@ -913,6 +914,27 @@ class PlayerActivity : ComponentActivity() {
     private val hideInfoRun = Runnable { info.animate().alpha(0f).setDuration(300).withEndAction { info.visibility = View.GONE }.start() }
     private fun hideInfo(delay: Long) { ui.removeCallbacks(hideInfoRun); ui.postDelayed(hideInfoRun, delay) }
 
+    /** Al cargar un subtítulo descargado, se elige esa pista (si no, el reproductor podía dejar otra o ninguna). */
+    private var extPending = false
+    private val EXT_LABEL = "Subtítulo descargado"
+    private fun selectExternalIfPending(tracks: androidx.media3.common.Tracks) {
+        if (!extPending || extSub == null) return
+        val p = player ?: return
+        for (g in tracks.groups) {
+            if (g.type != C.TRACK_TYPE_TEXT) continue
+            for (i in 0 until g.length) {
+                val f = g.getTrackFormat(i)
+                if (f.label == EXT_LABEL || (f.id ?: "").contains("mv-ext")) {
+                    extPending = false
+                    p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
+                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                        .setOverrideForType(TrackSelectionOverride(g.mediaTrackGroup, i)).build()
+                    return
+                }
+            }
+        }
+    }
+
     private fun offText() = if (extOffset == 0L) "sincronizados como vienen" else String.format(Locale("es"), "%+.1f s", extOffset / 1000.0)
     private fun offLabel() = if (extOffset != 0L) "   [ahora " + offText() + "]" else ""
 
@@ -920,7 +942,8 @@ class PlayerActivity : ComponentActivity() {
     private fun reloadExternal(msg: String) {
         val p = player ?: return
         startPosition = p.currentPosition
-        p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, extSub == null).build()
+        p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, extSub == null).clearOverridesOfType(C.TRACK_TYPE_TEXT).build()
+        extPending = extSub != null
         startAttempt()
         toastInfo(msg)
     }

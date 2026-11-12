@@ -139,8 +139,14 @@ object Subtitles {
 
     /** Nombre del idioma en español para códigos como spa, eng, pob, es-419. */
     fun langLabel(code: String): String {
-        val c = code.lowercase()
+        val c = code.lowercase().trim()
         return when {
+            // Algunos addons mandan el nombre del idioma en vez del código
+            c.contains("latin") && (c.contains("spa") || c.contains("esp")) -> "Español latino"
+            c.startsWith("spanish") || c.startsWith("español") || c.startsWith("espanol") -> "Español"
+            c.startsWith("english") -> "Inglés"
+            c.startsWith("portuguese") && c.contains("br") -> "Portugués (Brasil)"
+            c.startsWith("portuguese") -> "Portugués"
             c in setOf("spa", "es", "esp", "spn", "ea", "es-419", "es-mx", "es-la", "lat") -> if (c in setOf("spn", "ea", "es-419", "es-mx", "es-la", "lat")) "Español latino" else "Español"
             c in setOf("eng", "en") -> "Inglés"
             c in setOf("pob", "pt-br") -> "Portugués (Brasil)"
