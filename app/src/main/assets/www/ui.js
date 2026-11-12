@@ -886,6 +886,14 @@
   function catalogView(vkey, title, items, kind) {
     if (!S.lists.length) return top(title) + emptyLists();
     var all = MV.visible(items);
+    // "Solo títulos con enlaces": los de esta sección se revisan primero; mientras tanto se avisa cuántos faltan
+    var stPend = 0;
+    if (P.stOnlyLinked && MV.stLinked) {
+      var prio = {};
+      items.forEach(function (i) { if (i.st && !i.url && MV.stLinked(i) === undefined) { stPend++; prio[i.key] = 1; } });
+      MV._stPrio = stPend ? prio : null;
+      if (stPend && MV.stCheckLinks) setTimeout(MV.stCheckLinks, 300);
+    }
     var cats = groupsClean(all);
     var nEst = vkey === 'anime' ? 0 : all.filter(isEstreno).length;
     if (nEst) cats = [{ name: 'Estrenos', count: nEst }].concat(cats.filter(function (c) { return c.name !== 'Estrenos'; }));
@@ -930,7 +938,7 @@
       (active.length ? '<button class="fbtn f" data-act="clearFilters" data-arg="' + vkey + '">✕ Limpiar</button>' : '') + '</div>';
     MV._fbarPre = '';
     return top(title) + loadingBlock() + bar + (active.length || cur || mode !== 'rows' ? summary : '') +
-      (list.length ? (mode === 'rows' && !cur && !ysel ? catRows(vkey, list, kind) : grid(list, kind, vkey)) : '<div class="empty glass"><h2>' + (active.length ? 'Nada con esos filtros' : 'No hay contenido aquí todavía') + '</h2><p class="muted">' + (active.length ? 'Prueba quitando algún filtro.' : 'Se llena con lo que traen tus listas M3U o tu cuenta Xtream.') + '</p>' + (active.length ? '<div class="btns" style="justify-content:center"><button class="btn f" data-act="clearFilters" data-arg="' + vkey + '">Limpiar filtros</button></div>' : '') + '</div>');
+      (list.length ? (mode === 'rows' && !cur && !ysel ? catRows(vkey, list, kind) : grid(list, kind, vkey)) : stPend && !active.length ? '<div class="empty glass"><h2>Revisando qué títulos tienen enlaces…</h2><p class="muted">Tienes activado “Solo títulos con enlaces”. Faltan ' + stPend + ' por revisar en esta sección; van apareciendo solos a medida que se confirman.</p><div class="btns" style="justify-content:center"><button class="btn f" data-act="stLinkToggle">Mostrar todo mientras tanto</button></div></div>' : '<div class="empty glass"><h2>' + (active.length ? 'Nada con esos filtros' : 'No hay contenido aquí todavía') + '</h2><p class="muted">' + (active.length ? 'Prueba quitando algún filtro.' : 'Se llena con lo que traen tus listas M3U o tu cuenta Xtream.') + '</p>' + (active.length ? '<div class="btns" style="justify-content:center"><button class="btn f" data-act="clearFilters" data-arg="' + vkey + '">Limpiar filtros</button></div>' : '') + '</div>');
   }
   function catMoreModal(vkey, filter) {
     var cats = (MV._catAll || {})[vkey] || [], q = MV.norm(filter || '');
@@ -2537,7 +2545,7 @@
       }
       MV.playWebVideo({ key: s.key + '#' + i, name: s.name + ' · ' + e.title, yt: e.yt, embed: e.embed, url: e.url, poster: e.img || s.poster, group: s.group, type: 'video' });
     },
-    stLinkToggle: function (_, el) { P.stOnlyLinked = !P.stOnlyLinked; MV.savePrefs(); if (el) el.classList.toggle('on', P.stOnlyLinked); MV.toast(P.stOnlyLinked ? 'Revisando qué títulos tienen enlaces… irán apareciendo' : 'Mostrando todos los títulos de los catálogos'); if (P.stOnlyLinked && MV.stCheckLinks) MV.stCheckLinks(); },
+    stLinkToggle: function (_, el) { P.stOnlyLinked = !P.stOnlyLinked; MV.savePrefs(); if (el) el.classList.toggle('on', P.stOnlyLinked); MV.toast(P.stOnlyLinked ? 'Revisando qué títulos tienen enlaces… irán apareciendo' : 'Mostrando todos los títulos de los catálogos'); if (P.stOnlyLinked && MV.stCheckLinks) MV.stCheckLinks(); if (view.name !== 'settings') MV.rerender(); },
     latToggle: function (_, el) { P.latOnly = !P.latOnly; MV.savePrefs(); if (el) el.classList.toggle('on', P.latOnly); MV.toast(P.latOnly ? 'Mostrando solo español latino (K-Drama y Anime con subtitulado)' : 'Mostrando todos los idiomas'); MV.reloadCatalog(false).then(function () { if (view.name === 'settings') MV.rerender(); }); },
     pruneToggle: function (_, el) { P.pruneEmpty = P.pruneEmpty === false; MV.savePrefs(); if (el) el.classList.toggle('on', P.pruneEmpty !== false); MV.toast(P.pruneEmpty !== false ? 'Las listas con 0 elementos se eliminarán solas' : 'Las listas vacías ya no se eliminan solas'); if (P.pruneEmpty !== false) MV.reloadCatalog(false).then(function () { if (view.name === 'settings') MV.rerender(); }); },
     dedupeToggle: function () { P.dedupe = P.dedupe === false; MV.savePrefs(); MV.toast(P.dedupe ? 'Mostrando solo la mejor versión de cada título' : 'Mostrando todas las versiones'); MV.reloadCatalog(false).then(MV.rerender); },

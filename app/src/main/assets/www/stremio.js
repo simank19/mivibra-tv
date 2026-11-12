@@ -288,8 +288,12 @@
     running = true;
     var n = 0, found = 0;
     function next() {
-      var it = todo.shift();
-      if (!it) { running = false; MV.save('stLinks', lk()); MV._stLinkV = (MV._stLinkV || 0) + 1; if (found && MV.rerender) MV.rerender(); return; }
+      // Primero los de la sección que estás viendo
+      var pr = MV._stPrio, pi = -1;
+      if (pr) for (var q = 0; q < todo.length; q++) if (pr[todo[q].key]) { pi = q; break; }
+      var it = pi >= 0 ? todo.splice(pi, 1)[0] : todo.shift();
+      if (it && MV.stLinked(it) !== undefined) return next();
+      if (!it) { if (--active > 0) return; running = false; MV.save('stLinks', lk()); MV._stLinkV = (MV._stLinkV || 0) + 1; if (found && MV.rerender) MV.rerender(); return; }
       MV._stTorrents = 0;
       MV.stremioStreams(it.st.type === 'series' ? 'series' : 'movie', it.st.type === 'series' ? it.st.id + (/^(kitsu|mal|anilist|anidb)[:_]/i.test(it.st.id) ? ':1' : ':1:1') : it.st.id).then(function (st) {
         var anime = /^(kitsu|mal|anilist|anidb)[:_]/i.test(it.st.id);
@@ -299,11 +303,12 @@
       }).catch(function () {}).then(function () {
         n++;
         // Cada 25 revisados se guarda y se muestra lo nuevo
-        if (n % 25 === 0) { MV.save('stLinks', lk()); MV._stLinkV = (MV._stLinkV || 0) + 1; if (found && MV.rerender) { found = 0; MV.rerender(); } }
+        if (n % (n < 100 ? 10 : 25) === 0) { MV.save('stLinks', lk()); MV._stLinkV = (MV._stLinkV || 0) + 1; if (found && MV.rerender) { found = 0; MV.rerender(); } }
         setTimeout(next, 150);
       });
     }
-    for (var w = 0; w < 3; w++) next();
+    var active = 4;
+    for (var w = 0; w < 4; w++) next();
   };
   setTimeout(function () { MV.stCheckLinks(); }, 8000);
   setInterval(function () { MV.stCheckLinks(); }, 5 * 60e3);
