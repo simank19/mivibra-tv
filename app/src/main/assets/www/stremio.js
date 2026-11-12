@@ -161,7 +161,27 @@
   };
 
   /** Enlaces para ver: se piden a todos los addons que ofrecen "stream" para ese tipo e id. */
+  // Ids alternos: si el catálogo usa ids propios (tmdb:, de AnimeStream, etc.) y los addons de enlaces solo entienden IMDb (tt…)
+  var ALT = {};
+  MV.stAlt = function (id, alt) { if (id && alt && id !== alt && /^tt\d+/.test(alt)) ALT[id] = alt; };
+  function altId(type, id) {
+    if (ALT[id]) return Promise.resolve(ALT[id]);
+    var m = String(id).match(/^tmdb:(\d+)(?::(\d+):(\d+))?$/);
+    if (m && (S.prefs.tmdbKey || '').trim()) {
+      return MV.tmdb('/' + (type === 'movie' ? 'movie' : 'tv') + '/' + m[1] + '/external_ids').then(function (r) {
+        var a = r && r.imdb_id ? r.imdb_id + (m[2] ? ':' + m[2] + ':' + m[3] : '') : null;
+        if (a) ALT[id] = a; return a;
+      }).catch(function () { return null; });
+    }
+    return Promise.resolve(null);
+  }
   MV.stremioStreams = function (type, id) {
+    return rawStreams(type, id).then(function (st) {
+      if (st.length) return st;
+      return altId(type, id).then(function (a) { return a && a !== id ? rawStreams(type, a) : st; });
+    });
+  };
+  function rawStreams(type, id) {
     var ls = lists();
     var animeId = /^(kitsu|mal|anilist|anidb)[:_]/i.test(id);
     // Tipo que entiende cada addon: algunos de anime solo aceptan "anime"
@@ -282,6 +302,10 @@
     urls.forEach(function (b) { tys.forEach(function (ty) { chain = chain.then(function (m) { return m || MV.getJSON(b + '/meta/' + ty + '/' + encodeURIComponent(st.id) + '.json').then(function (j) { return j && j.meta && (j.meta.videos || []).length ? j.meta : null; }).catch(function () { return null; }); }); }); });
     return chain.then(function (meta) {
       if (!meta) return [];
+      var imdb = meta.imdb_id || (/^tt\d+$/.test(meta.id) ? meta.id : '') || (item._meta && item._meta.imdb) || '';
+      if (imdb) MV.stAlt(st.id, imdb);
+      // Kitsu trae imdbSeason/imdbEpisode: el capítulo equivalente en IMDb (para addons que solo entienden tt…)
+      if (imdb) (meta.videos || []).forEach(function (v) { var se = v.imdbSeason || v.season, ep = v.imdbEpisode || v.episode; if (v.id && !/^tt/.test(v.id) && se && ep) MV.stAlt(v.id, (v.imdb_id || imdb) + ':' + se + ':' + ep); });
       return (meta.videos || []).filter(function (v) { return (v.season || 0) > 0 || v.episode || v.number; }).map(function (v) {
         return { season: +v.season || 1, ep: +(v.episode || v.number) || 0, title: v.title || v.name || ('Episodio ' + (v.episode || v.number)), url: '', stId: v.id, img: v.thumbnail || '', plot: v.overview || v.description || '' };
       });

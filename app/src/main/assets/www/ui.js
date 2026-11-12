@@ -2124,13 +2124,14 @@
     };
     if (it.ia) { MV.toast('Preparando película…'); MV.archiveUrl(it).then(go).catch(function (e) { MV.toast(e.message); }); }
     else if (it.url) go(it.url);
-    else if (it.st && MV.stremioPick) MV.stremioPick(it.st.type, it.st.id, MV.cleanTitle(it.name) || it.name).then(function (s) { if (s.ua) it.ua = s.ua; if (s.ref) it.ref = s.ref; it.alts = s.rest || []; go(s.url); }).catch(function (e) { if (e.message !== 'cancelado') MV.toast(e.message, 6000); });
+    else if (it.st && MV.stremioPick && (MV.stAlt(it.st.id, it._meta && it._meta.imdb), true)) MV.stremioPick(it.st.type, it.st.id, MV.cleanTitle(it.name) || it.name).then(function (s) { if (s.ua) it.ua = s.ua; if (s.ref) it.ref = s.ref; it.alts = s.rest || []; go(s.url); }).catch(function (e) { if (e.message !== 'cancelado') MV.toast(e.message, 6000); });
     else MV.toast('Este contenido ya no está disponible en tus listas');
   };
   MV.playEpisode = function (series, i, resume) {
     var eps = series.episodes || []; var e = eps[i]; if (!e) return;
     // Capítulo de un addon de Stremio: primero se pide el enlace (y se elige si hay varios)
     if (!e.url && e.stId && MV.stremioPick && !MV.dlLocal(series.key + '#' + e.season + 'x' + e.ep)) {
+      if (series._meta && series._meta.imdb && !/^tt/.test(e.stId)) MV.stAlt(e.stId, series._meta.imdb + ':' + e.season + ':' + e.ep);
       MV.stremioPick('series', e.stId, (MV.cleanTitle(series.name) || series.name) + ' T' + e.season + ' E' + e.ep).then(function (s) { e.url = s.url; e.ua = s.ua; e.ref = s.ref; MV.playEpisode(series, i, resume); }).catch(function (er) { if (er.message !== 'cancelado') MV.toast(er.message, 6000); });
       return;
     }
