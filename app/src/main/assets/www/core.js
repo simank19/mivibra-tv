@@ -116,6 +116,30 @@
   MV.getJSON = function (url, headers, big) {
     return (big ? MV.getBig : MV.getText)(url, headers).then(function (t) { return JSON.parse(t); });
   };
+  // ---------- Traducción al español (sinopsis que llegan en inglés) ----------
+  var TRC = null;
+  function trCache() { if (!TRC) { try { TRC = JSON.parse(localStorage.getItem('mv:trEs') || '{}'); } catch (e) { TRC = {}; } } return TRC; }
+  var trSave = null;
+  /** ¿Parece inglés? (para no traducir lo que ya está en español). short: títulos de capítulos. */
+  MV.looksEnglish = function (t, short) {
+    t = String(t || ''); if (t.length < (short ? 6 : 25)) return false;
+    var en = (t.match(/\b(the|and|of|to|in|is|are|with|his|her|their|from|for|on|as|who|when|after|but|they|this|that|a)\b/gi) || []).length;
+    var es = (t.match(/\b(el|la|los|las|de|del|que|y|en|con|su|sus|por|para|una?|se|es|al|lo)\b/gi) || []).length;
+    return short ? en >= 1 && es === 0 : en >= 3 && en > es * 1.5;
+  };
+  MV.trEs = function (text) {
+    text = String(text || '').slice(0, 4500);
+    var k = text.length + ':' + text.slice(0, 60), c = trCache();
+    if (c[k]) return Promise.resolve(c[k]);
+    return MV.getJSON('https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=es&dt=t&q=' + encodeURIComponent(text)).then(function (r) {
+      var out = ((r && r[0]) || []).map(function (x) { return x && x[0] || ''; }).join('').trim();
+      if (!out) return '';
+      c[k] = out;
+      var keys = Object.keys(c); if (keys.length > 3000) keys.slice(0, keys.length - 3000).forEach(function (x) { delete c[x]; });
+      clearTimeout(trSave); trSave = setTimeout(function () { try { localStorage.setItem('mv:trEs', JSON.stringify(c)); } catch (e) {} }, 1500);
+      return out;
+    }).catch(function () { return ''; });
+  };
   MV.device = (function () { try { return A ? JSON.parse(A.deviceInfo()) : { tv: false, touch: true, model: 'Navegador', version: 'web' }; } catch (e) { return { tv: false }; } })();
   MV.A = A;
   // En TV la interfaz se compacta (html.tv)

@@ -1195,7 +1195,7 @@
       '<div class="info"><span class="badge" id="metaSrc">' + (it.ia ? 'DOMINIO PÚBLICO · INTERNET ARCHIVE' : 'BUSCANDO FICHA…') + '</span>' +
       '<h1 id="mtitle">' + esc(MV.cleanTitle(it.name) || it.name) + '</h1>' +
       '<div class="facts" id="facts">' + facts.map(function (f) { return '<span class="pill">' + esc(f) + '</span>'; }).join('') + '</div>' +
-      '<p id="plot">' + esc(it.plot || '') + '</p>' + rateHtml(it) + '<div id="where"></div><div id="cast"></div>' +
+      '<p id="plot" class="clamp">' + esc(it.plot || '') + '</p><button class="more f" id="plotMore" data-act="plotMore" hidden>Leer más</button>' + rateHtml(it) + '<div id="where"></div><div id="cast"></div>' +
       '<div class="btns">' + (it.type === 'series' ? '<span id="splay" style="display:contents"><button class="btn f" disabled>' + IC.play + 'Cargando capítulos…</button></span>' :
         (prog ? '<button class="btn f" data-act="resume" data-key="' + esc(it.key) + '" data-autofocus>' + IC.play + 'Continuar · ' + MV.fmtDur(prog.pos) + '</button><button class="btn ghost f" data-act="play" data-key="' + esc(it.key) + '">Desde el inicio</button>'
           : '<button class="btn f" data-act="play" data-key="' + esc(it.key) + '" data-autofocus>' + IC.play + 'Reproducir</button>')) +
@@ -1238,8 +1238,21 @@
     var rel = relatedOf(it);
     return rel.length ? row(it.type === 'series' ? 'Series relacionadas' : 'Películas relacionadas', rel, 'poster') : '';
   }
+  /** Sinopsis: más compacta, con "Leer más"; si viene en inglés se traduce al español. */
+  function setPlot(txt) {
+    var el = document.getElementById('plot'); if (!el) return;
+    el.textContent = txt || '';
+    plotMoreCheck();
+    if (MV.looksEnglish(txt)) MV.trEs(txt).then(function (t) { if (t && el.isConnected && el.textContent === txt) { el.textContent = t; plotMoreCheck(); } });
+  }
+  function plotMoreCheck() {
+    var el = document.getElementById('plot'), b = document.getElementById('plotMore'); if (!el || !b) return;
+    requestAnimationFrame(function () { var open = !el.classList.contains('clamp'); b.hidden = !open && el.scrollHeight <= el.clientHeight + 2; b.textContent = open ? 'Leer menos' : 'Leer más'; });
+  }
+  function plotMore() { var el = document.getElementById('plot'); if (el) { el.classList.toggle('clamp'); plotMoreCheck(); } }
   VIEWS.detail.after = function (key) {
     var it = S.byKey[key] || MV.reg[key]; if (!it) return;
+    setPlot(it.plot || '');
     MV.meta(it).then(function (m) {
       var src = document.getElementById('metaSrc'); if (!src) return;
       if (!m) {
@@ -1251,7 +1264,7 @@
       // Con los géneros de la ficha, las relacionadas salen más precisas
       var rb = document.getElementById('related'); if (rb) rb.innerHTML = relatedHtml(it);
       document.getElementById('mtitle').textContent = m.title || it.name;
-      if (m.overview) document.getElementById('plot').textContent = m.overview;
+      if (m.overview) setPlot(m.overview);
       var facts = [m.year, m.runtime, m.rating ? '★ ' + m.rating : ''].concat(m.genres || []).filter(Boolean);
       document.getElementById('facts').innerHTML = facts.map(function (f) { return '<span class="pill">' + esc(f) + '</span>'; }).join('');
       var cb = document.getElementById('cast');
@@ -1322,6 +1335,14 @@
                 (canDl ? '<button class="epdl f' + (dl ? ' on' : '') + '" data-act="dlEp" data-key="' + esc(it.key) + '" data-arg="' + eps.indexOf(e) + '" aria-label="Descargar" title="' + (dl ? esc(dlLabel(dl)) : 'Descargar para ver sin internet') + '">' + (dl && dl.status === 'done' ? '✓' : IC.download) + '</button>' : '') + '</div>';
             }).join('');
           if (focusChip) { var c = box.querySelector('.seasons .chip.on'); if (c) c.focus(); }
+          // Sinopsis de capítulos en inglés (anime, addons): se traducen de a una, con caché
+          var spans = Array.prototype.slice.call(box.querySelectorAll('.ep2 .tx > span, .ep2 .tx > b'));
+          (function trNext() {
+            var sp = spans.shift(); if (!sp || !sp.isConnected) return;
+            var node = sp.tagName === 'B' ? sp.firstChild : sp, txt = node && node.textContent;
+            if (!txt || !MV.looksEnglish(txt, sp.tagName === 'B')) return trNext();
+            MV.trEs(txt).then(function (t) { if (t && node.isConnected && node.textContent === txt) node.textContent = t; trNext(); });
+          })();
         }
         function rerender() {
           if (document.getElementById('eps') !== box) return;
@@ -2575,6 +2596,7 @@
     },
     season: function (k) { if (MV._epsSeason) MV._epsSeason(k); },
     castFind: function (name) { ACT.voiceGo(name); },
+    plotMore: function () { plotMore(); },
     resumeEp: function (i, el) { var s = S.byKey[el.dataset.key] || MV.reg[el.dataset.key]; MV.playEpisode(s, +i, true); },
     playEp: function (i, el) { var s = S.byKey[el.dataset.key] || MV.reg[el.dataset.key]; MV.playEpisode(s, +i); },
     fav: function (_, el) { var it = S.byKey[el.dataset.key] || MV.reg[el.dataset.key]; var on = MV.toggleFav(it); MV.toast(on ? 'Agregado a favoritos' : 'Quitado de favoritos'); MV.rerender(); },

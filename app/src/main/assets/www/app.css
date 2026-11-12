@@ -187,6 +187,13 @@ input.f:focus { box-shadow: 0 0 0 3px var(--accent); transform: none; }
 .detail .info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
 .detail h1 { margin: 0; font: 800 46px/1 var(--brand); letter-spacing: -1px; }
 .detail p { margin: 0; font-size: 16px; line-height: 1.55; color: var(--text2); max-width: 760px; }
+/* Sinopsis compacta: 4 líneas y "Leer más" */
+.detail #plot { font-size: 14.5px; line-height: 1.5; }
+.detail #plot.clamp { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.detail .more { margin: 6px 0 2px; padding: 4px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.06); color: var(--text, #fff); font: 600 13px var(--font, inherit); cursor: pointer; }
+.detail .more:focus, .detail .more:hover { border-color: var(--accent, #FF6900); outline: none; background: rgba(255,105,0,.18); }
+.detail .more[hidden] { display: none; }
+.ep2 .tx > span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .facts { display: flex; gap: 8px; flex-wrap: wrap; }
 .eps { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 .ep { display: flex; gap: 12px; align-items: center; padding: 10px 14px; border-radius: 14px; border: 1px solid var(--line); background: var(--glass); text-align: left; }
