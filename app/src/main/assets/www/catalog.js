@@ -1926,7 +1926,7 @@
       var pdata = {};
       S.profiles.forEach(function (p) { pdata[p.id] = MV.pdata(p.id); });
       var managed = MV.acct && MV.acct.managed();
-      var prefs = { theme: P.theme, autoTheme: P.autoTheme, glass: P.glass, anim: P.anim, bgAnim: P.bgAnim, tmdbKey: managed ? '' : P.tmdbKey, ytKey: managed ? '' : P.ytKey, subKey: managed ? '' : P.subKey, streamKeys: managed ? {} : P.streamKeys, covers: P.covers, kidsLimit: P.kidsLimit, parentPin: P.parentPin, adult: P.adult, audioLang: P.audioLang, subLang: P.subLang, updatedAt: P.updatedAt };
+      var prefs = { theme: P.theme, autoTheme: P.autoTheme, glass: P.glass, anim: P.anim, bgAnim: P.bgAnim, tmdbKey: managed ? '' : P.tmdbKey, ytKey: managed ? '' : P.ytKey, sgdbKey: managed ? '' : P.sgdbKey, subKey: managed ? '' : P.subKey, streamKeys: managed ? {} : P.streamKeys, covers: P.covers, kidsLimit: P.kidsLimit, parentPin: P.parentPin, adult: P.adult, audioLang: P.audioLang, subLang: P.subLang, updatedAt: P.updatedAt };
       MV.CONTENT_PREFS.forEach(function (k) { if (P[k] !== undefined) prefs[k] = P[k]; });
       return { v: 1, updatedAt: Date.now(), device: P.deviceName, profiles: S.profiles, pdata: pdata, prefs: prefs, listsDel: MV.listTombs(), lists: managed ? S.lists.filter(function (l) { return l.own; }).map(function (l) { var c = Object.assign({}, l); delete c.error; return c; }) : P.syncLists ? S.lists.map(function (l) { var c = Object.assign({}, l); delete c.error; return c; }) : null };
     },
@@ -1967,7 +1967,7 @@
         MV.save('pdata:' + pid, ld);
       });
       var managed = MV.acct && MV.acct.managed();
-      if (managed) { if (r.prefs) { delete r.prefs.tmdbKey; delete r.prefs.ytKey; delete r.prefs.subKey; delete r.prefs.streamKeys; } r.lists = MV.acct.isAdmin() ? null : (r.lists || []).filter(function (l) { return l.own; }); }
+      if (managed) { if (r.prefs) { delete r.prefs.tmdbKey; delete r.prefs.ytKey; delete r.prefs.sgdbKey; delete r.prefs.subKey; delete r.prefs.streamKeys; } r.lists = MV.acct.isAdmin() ? null : (r.lists || []).filter(function (l) { return l.own; }); }
       var contentSig = function () { return JSON.stringify(MV.CONTENT_PREFS.map(function (k) { return P[k]; })); }, before = contentSig();
       if (r.prefs && (r.prefs.updatedAt || 0) > (P.updatedAt || 0)) { Object.assign(P, r.prefs); MV.save('prefs', P); MV.applyLook && MV.applyLook(); }
       var listsChanged = contentSig() !== before;

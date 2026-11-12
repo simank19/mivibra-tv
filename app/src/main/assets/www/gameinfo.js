@@ -170,3 +170,44 @@
     MV.ACT.infoRefresh = function () { var r = MV._infoRom, s = MV._infoSys; delete all()[r.path]; persist(); MV.closeModal(true); MV.gameInfo(r, s); };
   }
 })();
+
+/* SteamGridDB (opcional, con la clave en Ajustes › Sinopsis y carátulas): fondos grandes y el logo de cada juego para la sección Juegos. */
+(function () {
+  var MV = window.MV; if (!MV) return;
+  var API = 'https://www.steamgriddb.com/api/v2', mem = null, busy = {};
+  function P() { return (window.MV && MV.prefs) || (MV.S && MV.S.prefs) || {}; }
+  function key() { try { return (MV.load('prefs', {}) || {}).sgdbKey || ''; } catch (e) { return ''; } }
+  function store() { if (!mem) mem = MV.load('sgdbArt', {}) || {}; return mem; }
+  function name(r) {
+    var t = (MV.romTitle && MV.romTitle(r)) || (MV.cleanRomName && MV.cleanRomName(r.name)) || String(r.name || '').replace(/\.[^.]+$/, '');
+    return t.replace(/\s*[\(\[][^\)\]]*[\)\]]/g, '').replace(/_/g, ' ').trim();
+  }
+  function ck(r, s) { return (s ? s.id : '?') + '|' + name(r).toLowerCase(); }
+  function get(path) {
+    return MV.getText(API + path, { Authorization: 'Bearer ' + key() }).then(function (t) { var j = JSON.parse(t); if (!j.success) throw new Error('sgdb'); return j.data || []; });
+  }
+  MV.gameArtCached = function (r, s) { var c = store()[ck(r, s)]; return c && !c.none ? c : null; };
+  MV.gameArt = function (r, s) {
+    if (!key()) return Promise.resolve(null);
+    var k = ck(r, s), c = store()[k];
+    if (c && (c.none ? Date.now() - c.ts < 7 * 864e5 : true)) return Promise.resolve(c.none ? null : c);
+    if (busy[k]) return busy[k];
+    var q = name(r);
+    busy[k] = get('/search/autocomplete/' + encodeURIComponent(q)).then(function (list) {
+      var g = list[0]; if (!g) throw new Error('none');
+      return Promise.all([
+        get('/heroes/game/' + g.id + '?types=static&nsfw=false&humor=false').catch(function () { return []; }),
+        get('/logos/game/' + g.id + '?types=static&nsfw=false&humor=false').catch(function () { return []; })
+      ]).then(function (x) {
+        var heroes = x[0].slice(0, 6).map(function (h) { return h.url; }).filter(Boolean);
+        var logo = (x[1][0] || {}).url || '';
+        return { id: g.id, heroes: heroes, logo: logo, ts: Date.now(), none: !heroes.length && !logo };
+      });
+    }).catch(function () { return { none: true, ts: Date.now() }; }).then(function (v) {
+      var st = store(); st[k] = v; var ks = Object.keys(st); if (ks.length > 3000) delete st[ks[0]];
+      MV.save('sgdbArt', st); delete busy[k];
+      return v.none ? null : v;
+    });
+    return busy[k];
+  };
+})();

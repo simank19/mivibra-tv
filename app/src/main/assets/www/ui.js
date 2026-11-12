@@ -2103,6 +2103,9 @@
       '<div class="panel glass"><h2>YouTube dentro de la app</h2><p>Con una clave gratuita de la API de YouTube (Google Cloud › APIs y servicios › YouTube Data API v3) puedes buscar y ver videos sin salir de MiVibra TV. El cupo gratis alcanza para unas 100 búsquedas al día entre todos los usuarios; las tendencias casi no gastan cupo.</p>' +
       (MV.acct.canEdit() ? '<label class="field">Clave de la API de YouTube' + (MV.acct.isAdmin() ? ' · se comparte con todos los usuarios' : '') + '<input class="in f" id="ytKey" value="' + esc(P.ytKey || '') + '" autocomplete="off" placeholder="AIza…"></label><div class="btns"><button class="btn f" data-act="saveYtKey">Guardar</button></div>'
         : '<div class="line"><div class="t"><b>' + (P.ytKey ? 'Clave configurada por el administrador' : 'El administrador aún no ha puesto la clave') + '</b></div></div>') + '</div>' +
+      '<div class="panel glass"><h2>Imágenes de los juegos (SteamGridDB)</h2><p>Con una clave gratis de SteamGridDB (crea tu cuenta en steamgriddb.com › Preferencias › API) la sección Juegos muestra fondos grandes y el logo de cada juego, como en las consolas modernas.</p>' +
+      (MV.acct.canEdit() ? '<label class="field">Clave de SteamGridDB' + (MV.acct.isAdmin() ? ' · se comparte con todos los usuarios' : '') + '<input class="in f" id="sgdbKey" value="' + esc(P.sgdbKey || '') + '" autocomplete="off"></label><div class="btns"><button class="btn f" data-act="saveSgdbKey">Guardar</button></div>'
+        : '<div class="line"><div class="t"><b>' + (P.sgdbKey ? 'Clave configurada por el administrador' : 'El administrador aún no ha puesto la clave') + '</b></div></div>') + '</div>' +
       (function () {
         var k = P.streamKeys || {}, fld = function (id, label, v) { return '<label class="field">' + label + '<input class="in f" id="' + id + '" value="' + esc(v || '') + '" autocomplete="off"></label>'; };
         return '<div class="panel glass"><h2>Canales en vivo de Twitch y Kick</h2><p>Para ver la lista de canales que están transmitiendo ahora, registra una aplicación gratis: en dev.twitch.tv › Console › Register Your Application (URL de redirección: http://localhost), y en kick.com › Ajustes › Developer › Crear aplicación. Copia aquí el Client ID y el Client Secret de cada una.' + (MV.acct.isAdmin() ? ' Se comparten con todos los usuarios.' : '') + '</p>' +
@@ -3134,6 +3137,7 @@
       P.streamKeys = { twitchId: g('twId'), twitchSecret: g('twSec'), kickId: g('kkId'), kickSecret: g('kkSec') };
       MV.savePrefs(); MV.streamReset(); MV.toast('Claves de Twitch y Kick guardadas');
     },
+    saveSgdbKey: function () { P.sgdbKey = document.getElementById('sgdbKey').value.trim(); MV.savePrefs(); MV.save('sgdbArt', {}); MV.toast(P.sgdbKey ? 'Clave de SteamGridDB guardada: los juegos tendrán fondos y logos' : 'Clave quitada'); },
     saveYtKey: function () { P.ytKey = document.getElementById('ytKey').value.trim(); MV.savePrefs(); YT.key = ''; YT.list = null; MV.toast('Clave de YouTube guardada'); },
     saveSaKey: function () { P.saKey = document.getElementById('saKey').value.trim(); P.saCountry = (document.getElementById('saCountry').value.trim() || 'co').toLowerCase().slice(0, 2); MV.savePrefs(); MV.toast('Clave guardada: las fichas mostrarán dónde verlo'); },
     openSa: function (u) { if (!u) return; if (A && A.openExternal) A.openExternal(u); else window.open(u, '_blank'); },
@@ -4645,11 +4649,10 @@
   };
   // Juegos estilo consola (pantalla propia sobre la sección Juegos)
   TOUR.console = [
-    ['#console .cgames', 'Tus juegos', 'Los últimos que jugaste, con su carátula. OK juega; deja presionado OK para renombrar, cambiar la carátula y más opciones.', 4],
-    ['#console .cconsoles', 'Consolas', 'Tus juegos agrupados por consola. Entra a una para ver todos sus juegos.', 4],
-    ['#console .ctabs', 'Inicio, Biblioteca y Opciones', 'Cambia de pestaña con los botones L y R del mando, o sube hasta aquí con ▲. En Biblioteca están todos tus juegos por consola.', 5],
-    ['#console .ctab[data-arg="opts"]', 'Opciones', 'Aquí está todo lo demás: buscar juegos, enviarlos desde el celular, carátulas, BIOS, emuladores, editar y borrar. El botón ☰ también la abre.', 5],
-    ['#console .chint', 'Controles', 'OK juega. Mantén OK sobre un juego para renombrarlo, cambiar su carátula o su consola. Atrás regresa.', 5]
+    ['#console .gx-cards', 'Tus consolas', 'Cada tarjeta es una consola con cuántos juegos tienes. OK abre sus juegos; “Todos” y “Favoritos” también están aquí.', 6],
+    ['#console .ctabs', 'Consolas, Juegos y Opciones', 'Cambia de pestaña con los botones L y R del mando, o sube hasta aquí con ▲. En Juegos ves las carátulas con el fondo de cada juego.', 6],
+    ['#console .ctab[data-arg="opts"]', 'Opciones', 'Buscar juegos, enviarlos desde el celular, carátulas, BIOS, emuladores, Google Drive, editar y borrar. El botón ☰ también la abre.', 6],
+    ['#console .chint', 'Controles', 'OK abre la ficha del juego (y ahí Jugar). Mantén OK sobre un juego para renombrarlo, cambiar su carátula o su consola. Atrás regresa.', 6]
   ];
   /** Tutorial de una pantalla que no es una sección (por ejemplo, los juegos estilo consola). */
   MV.tourRun = function (key) {
