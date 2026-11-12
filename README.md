@@ -14,6 +14,10 @@
   &nbsp;·&nbsp;
   <a href="https://github.com/simank19/mivibra-tv/releases/latest"><b>💻 PC Windows (.exe)</b></a>
   &nbsp;·&nbsp;
+  <a href="docs/INSTALAR-SAMSUNG.md"><b>📺 TV Samsung (Tizen)</b></a>
+  &nbsp;·&nbsp;
+  <a href="docs/INSTALAR-LG.md"><b>📺 TV LG (webOS)</b></a>
+  &nbsp;·&nbsp;
   <a href="https://simank19.github.io/mivibra-tv/panel/"><b>📺 Agregar mi lista a la TV (panel web)</b></a>
 </p>
 
@@ -136,6 +140,11 @@ Cada usuario monta **su propia lista** y, si tiene un servicio con MiVibra, la s
 3. Cada versión nueva sale con el mismo número que la de Android: la campana la descarga e instala sola y la app se vuelve a abrir.
 
 En el PC: **Esc** o el botón Atrás del mouse = Atrás, **F11** = pantalla completa, flechas y Enter para moverte como con el control. En el reproductor: Espacio pausa, ← → adelantan o retroceden (en vivo abren la lista de canales), ▲ ▼ cambian de canal y **L** abre la lista. Los juegos usan EmulatorJS (incluido en el instalador, funciona sin internet) con el teclado, cualquier mando USB/Bluetooth o el celular como control; Dreamcast y GameCube se abren con RetroArch para Windows.
+
+**TV Samsung (Tizen) y LG (webOS)**
+- Samsung: descarga **[MiVibraTV-Samsung.wgt](https://github.com/simank19/mivibra-tv/releases/latest/download/MiVibraTV-Samsung.wgt)** y sigue la **[guía de instalación para Samsung](docs/INSTALAR-SAMSUNG.md)** (modo desarrollador + Tizen Studio).
+- LG: descarga **[MiVibraTV-LG.ipk](https://github.com/simank19/mivibra-tv/releases/latest/download/MiVibraTV-LG.ipk)** y sigue la **[guía de instalación para LG](docs/INSTALAR-LG.md)** (modo desarrollador + webOS Dev Manager).
+- Es la misma interfaz que en Android TV y se actualiza sola al abrirla con internet. El celular sirve como control, para enviar juegos y como mando de juego.
 
 ## Configuración opcional
 
