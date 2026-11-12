@@ -4193,21 +4193,22 @@
 
   // ---------- Ecualizador (Mi música y Música libre: YouTube Music no deja modificar su sonido) ----------
   var EQ_BANDS = [60, 230, 910, 3600, 14000];
-  var EQ_NAMES = ['Graves', 'Medio-graves', 'Medios', 'Presencia', 'Agudos'];
+  var EQ_NAMES = ['Graves', 'Bajos', 'Medios', 'Altos', 'Agudos'];
   var EQ_PRESETS = [['normal', 'Normal', [0, 0, 0, 0, 0]], ['bajos', 'Más bajos', [6, 4, 0, -1, -1]], ['voces', 'Voces', [-2, 0, 4, 3, 0]], ['rock', 'Rock', [4, 2, -1, 2, 4]], ['pop', 'Pop', [-1, 2, 4, 2, -1]], ['electro', 'Electrónica', [5, 3, 0, 2, 4]], ['clasica', 'Clásica', [3, 1, 0, 1, 3]], ['agudos', 'Más agudos', [-1, -1, 0, 3, 6]], ['noche', 'Volumen bajo', [5, 2, 0, 2, 4]]];
   function eqState() { if (!P.eq) P.eq = { on: false, preset: 'normal', g: [0, 0, 0, 0, 0] }; return P.eq; }
   function eqHtml() {
-    var e = eqState();
-    return '<h2>Ecualizador</h2><p class="muted" style="margin-top:-4px">Para Mi música y Música libre. YouTube Music no permite cambiar su sonido.</p>' +
-      '<div class="line"><div class="t"><b>Ecualizador</b><span>' + (e.on ? 'Encendido' : 'Apagado') + '</span></div><button class="toggle f' + (e.on ? ' on' : '') + '" data-act="eqToggle" aria-label="Ecualizador" data-autofocus></button></div>' +
-      '<div class="chips" style="margin:10px 0 14px">' + EQ_PRESETS.map(function (p) { return '<button class="chip f' + (e.preset === p[0] ? ' on' : '') + '" data-act="eqPreset" data-arg="' + p[0] + '">' + p[1] + '</button>'; }).join('') + '</div>' +
-      '<div class="eqbands">' + EQ_BANDS.map(function (f, i) {
-        var v = +e.g[i] || 0, pct = (v + 12) / 24 * 100;
-        return '<div class="eqb"><b>' + EQ_NAMES[i] + '</b><small>' + (f >= 1000 ? (f / 1000) + ' kHz' : f + ' Hz') + '</small>' +
-          '<button class="iconbtn f" data-act="eqBand" data-arg="' + i + ':1" aria-label="Subir ' + EQ_NAMES[i] + '">+</button>' +
-          '<div class="eqbar"><i style="height:' + pct + '%"></i></div><span>' + (v > 0 ? '+' : '') + v + ' dB</span>' +
-          '<button class="iconbtn f" data-act="eqBand" data-arg="' + i + ':-1" aria-label="Bajar ' + EQ_NAMES[i] + '">−</button></div>';
-      }).join('') + '</div><div class="btns"><button class="btn ghost f" data-act="closeModal">Listo</button></div>';
+    var e = eqState(), flat = (e.g || []).every(function (v) { return !+v; });
+    return '<h2 style="margin-bottom:2px">Ecualizador</h2><p class="muted" style="margin:0 0 12px;font-size:13px">Mi música y Música libre (YouTube Music no lo permite).</p>' +
+      '<div class="eqtop"><button class="toggle f' + (e.on ? ' on' : '') + '" data-act="eqToggle" aria-label="Encender ecualizador" data-autofocus></button><b>' + (e.on ? 'Encendido' : 'Apagado') + '</b>' +
+      '<button class="btn ghost sm f" data-act="eqReset"' + (flat ? ' disabled' : '') + '>Restablecer</button></div>' +
+      '<div class="chips eqpre">' + EQ_PRESETS.map(function (p) { return '<button class="chip f' + (e.preset === p[0] ? ' on' : '') + '" data-act="eqPreset" data-arg="' + p[0] + '">' + p[1] + '</button>'; }).join('') + '</div>' +
+      '<div class="eqbands' + (e.on ? '' : ' off') + '">' + EQ_BANDS.map(function (f, i) {
+        var v = +e.g[i] || 0, h = Math.abs(v) / 12 * 50;
+        return '<div class="eqb"><button class="eqbtn f" data-act="eqBand" data-arg="' + i + ':1" aria-label="Subir ' + EQ_NAMES[i] + '">+</button>' +
+          '<div class="eqbar"><i style="height:' + h + '%;' + (v >= 0 ? 'bottom:50%' : 'top:50%') + '"></i><u></u></div>' +
+          '<button class="eqbtn f" data-act="eqBand" data-arg="' + i + ':-1" aria-label="Bajar ' + EQ_NAMES[i] + '">−</button>' +
+          '<span>' + (v > 0 ? '+' : '') + v + '</span><b>' + EQ_NAMES[i] + '</b><small>' + (f >= 1000 ? (f / 1000) + 'k' : f) + ' Hz</small></div>';
+      }).join('') + '</div><div class="btns" style="margin-top:6px"><button class="btn f" data-act="closeModal">Listo</button></div>';
   }
   function eqRefresh(focusArg) {
     MV.savePrefs(); AU.eqChanged();
@@ -4219,6 +4220,7 @@
   }
   Object.assign(ACT_EXTRA, {
     eqOpen: function () { eqState(); MV.modal(eqHtml()); },
+    eqReset: function () { var e = eqState(); e.g = [0, 0, 0, 0, 0]; e.preset = 'normal'; eqRefresh(); MV.toast('Ecualizador restablecido'); var t = document.querySelector('#modal [data-act="eqToggle"]'); if (t) t.focus(); },
     eqToggle: function () { var e = eqState(); e.on = !e.on; eqRefresh(); MV.toast(e.on ? 'Ecualizador encendido' : 'Ecualizador apagado'); },
     eqPreset: function (id) { var e = eqState(), p = EQ_PRESETS.filter(function (x) { return x[0] === id; })[0]; if (!p) return; e.preset = id; e.g = p[2].slice(); e.on = true; eqRefresh(); },
     eqBand: function (a) { var e = eqState(), i = +a.split(':')[0], d = +a.split(':')[1] * 2; e.g = (e.g || [0, 0, 0, 0, 0]).slice(); e.g[i] = Math.max(-12, Math.min(12, (+e.g[i] || 0) + d)); e.preset = ''; e.on = true; eqRefresh(); },
