@@ -1084,7 +1084,7 @@
 
   // ---------- Carga y combinación de todas las listas ----------
   function retag(o) { if (o.type === 'book') return o; try { return tags(o); } catch (e) { return o; } }
-  var ST_V = 4; // sube cuando cambia la forma de leer los addons (fuerza recargarlos)
+  var ST_V = 4, ST_SESSION = {}; // sube cuando cambia la forma de leer los addons (fuerza recargarlos)
   function loadList(list, force) {
     var ck = 'list:' + list.id;
     return MV.idbGet(ck).then(function (cached) {
@@ -1092,6 +1092,9 @@
       var fresh = cached && cached.ts > Date.now() - (list.type === 'web' || list.type === 'fb' ? 3600e3 : 12 * 3600e3) && cached.v === 8;
       // Addons: si quedaron vacíos o se guardaron con una versión anterior de la app, se vuelven a pedir
       if (fresh && (list.type === 'stremio' || list.type === 'mvplugin') && (!cached.items.length || cached.sv !== ST_V)) fresh = false;
+      // "Actualizar addons al abrir la app": la primera carga de cada sesión se pide de nuevo
+      if (fresh && (list.type === 'stremio' || list.type === 'mvplugin') && P.stAutoRefresh && !ST_SESSION[list.id]) fresh = false;
+      if (list.type === 'stremio' || list.type === 'mvplugin') ST_SESSION[list.id] = 1;
       // Lo guardado se vuelve a clasificar con las reglas actuales (+18, infantil, géneros, sin emojis)
       if (cached && !force && fresh) return cached.items.map(retag);
       var job;
@@ -1127,7 +1130,7 @@
     var lists = S.lists.filter(function (l) { return l.enabled !== false; });
     var failed = [];
     return Promise.all(lists.map(function (l) {
-      return loadList(l, force).catch(function (e) { failed.push(l.name + ': ' + e.message); if (!l.count) l.zeroLoads = (l.zeroLoads || 0) + 1; return []; });
+      return loadList(l, typeof force === 'function' ? force(l) : force).catch(function (e) { failed.push(l.name + ': ' + e.message); if (!l.count) l.zeroLoads = (l.zeroLoads || 0) + 1; return []; });
     })).then(function (all) {
       // Listas con 0 elementos: se eliminan solas (si nunca trajeron nada, de una; si antes funcionaban, tras 2 cargas vacías seguidas)
       if (P.pruneEmpty !== false && MV.acct && MV.acct.canEditList) {
