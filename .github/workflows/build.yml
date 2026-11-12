@@ -140,3 +140,60 @@ jobs:
         with:
           tag_name: build-${{ github.run_number }}
           files: desktop/dist/*.exe
+
+  # Televisores Samsung (Tizen) y LG (webOS): la misma interfaz con el reproductor web. Se actualizan solos desde GitHub Pages
+  tv:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Configurar cuenta MiVibra
+        env:
+          MV_FIREBASE: ${{ secrets.MV_FIREBASE }}
+          MV_ADMIN_EMAIL: ${{ secrets.MV_ADMIN_EMAIL }}
+          MV_GOOGLE_WEB_CLIENT: ${{ secrets.MV_GOOGLE_WEB_CLIENT }}
+          MV_GOOGLE_TV_CLIENT: ${{ secrets.MV_GOOGLE_TV_CLIENT }}
+          MV_GOOGLE_TV_SECRET: ${{ secrets.MV_GOOGLE_TV_SECRET }}
+        run: python3 .github/scripts/config.py
+
+      - name: Prueba gratuita (sin datos del dueño)
+        run: |
+          if [ -f .github/PRUEBA_GRATIS ]; then rm -rf app/src/main/assets/www/mibiblioteca; fi
+
+      - name: Librerías del reproductor
+        run: |
+          mkdir -p /tmp/tvv && cd /tmp/tvv && npm init -y >/dev/null && npm i --no-audit --no-fund hls.js@1 mpegts.js@1 pako@2
+          mkdir -p "$GITHUB_WORKSPACE/build-tv-vendor"
+          cp node_modules/hls.js/dist/hls.min.js node_modules/mpegts.js/dist/mpegts.js node_modules/pako/dist/pako_inflate.min.js "$GITHUB_WORKSPACE/build-tv-vendor/"
+          pip install --quiet pillow
+
+      - name: Armar Samsung (.wgt) y LG (.ipk)
+        run: |
+          N=${{ github.run_number }}
+          python3 .github/scripts/tvpack.py app build-tv/samsung $N
+          python3 .github/scripts/tvpack.py app build-tv/lg $N
+          python3 - <<'PY'
+          from PIL import Image
+          im = Image.open('desktop/assets/icon.png').convert('RGBA')
+          im.resize((512, 512)).save('build-tv/samsung/icon.png')
+          im.resize((80, 80)).save('build-tv/lg/icon.png')
+          im.resize((130, 130)).save('build-tv/lg/largeIcon.png')
+          PY
+          sed "s/__VER__/1.0.$N/" tvweb/config.xml > build-tv/samsung/config.xml
+          sed "s/__VER__/1.0.$N/" tvweb/appinfo.json > build-tv/lg/appinfo.json
+          (cd build-tv/samsung && zip -qr ../MiVibraTV-Samsung.wgt .)
+          npx -y -p @webos-tools/cli ares-package -n build-tv/lg -o build-tv
+          mv build-tv/co.mivibra.tv_*.ipk build-tv/MiVibraTV-LG.ipk
+          ls -la build-tv
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          files: |
+            build-tv/MiVibraTV-Samsung.wgt
+            build-tv/MiVibraTV-LG.ipk

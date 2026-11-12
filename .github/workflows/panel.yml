@@ -10,6 +10,10 @@ on:
       - ".github/workflows/panel.yml"
       - ".github/SIN_CONTACTO"
       - "docs/drive.html"
+      - "app/src/main/assets/www/**"
+      - "tvweb/**"
+      - "desktop/web/player.*"
+      - ".github/scripts/tvpack.py"
   workflow_dispatch:
 
 permissions:
@@ -52,6 +56,12 @@ jobs:
           printf '<!doctype html><meta http-equiv="refresh" content="0;url=panel/">' > site/index.html
           # Página de regreso de Google al conectar Drive desde el celular
           cp docs/drive.html site/drive.html
+      - name: Versión para televisores Samsung y LG (se actualizan solos desde aquí)
+        run: |
+          mkdir -p /tmp/tvv && cd /tmp/tvv && npm init -y >/dev/null && npm i --no-audit --no-fund hls.js@1 mpegts.js@1 pako@2
+          mkdir -p "$GITHUB_WORKSPACE/build-tv-vendor"
+          cp node_modules/hls.js/dist/hls.min.js node_modules/mpegts.js/dist/mpegts.js node_modules/pako/dist/pako_inflate.min.js "$GITHUB_WORKSPACE/build-tv-vendor/"
+          cd "$GITHUB_WORKSPACE" && python3 .github/scripts/tvpack.py site site/tv ${{ github.run_number }}
       - uses: actions/configure-pages@v5
         with:
           enablement: true
