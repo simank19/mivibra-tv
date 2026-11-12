@@ -50,7 +50,12 @@
     return isAnime ? 'Anime · ' + g : g;
   }
   MV.stCatFor = catFor;
-  function isAnimeIt(o) { return /^(kitsu|mal|anilist|anidb)[:_]/i.test(o.st.id) || /anime/i.test((o.src || '') + ' ' + (o.group || '')); }
+  function isAnimeIt(o) {
+    var t = (o.src || '') + ' ' + (o.group || '');
+    // Addons de K-Drama/doramas no son anime aunque su catálogo sea de tipo "anime"
+    if (/k-?drama|dorama|korea|corea|asian drama|c-?drama/i.test(o.src || '')) return false;
+    return /^(kitsu|mal|anilist|anidb)[:_]/i.test(o.st.id) || /anime/i.test(t);
+  }
   /** Aplica a un título de addon la traducción guardada y la categoría de la app (también a listas guardadas con versiones anteriores). */
   MV.stFix = function (o) {
     var an = isAnimeIt(o);

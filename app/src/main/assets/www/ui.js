@@ -2921,7 +2921,7 @@
       MV.addList({ type: 'url', name: p.name, url: p.url, preset: true }).then(function () { MV.rerender(); MV.toast('Lista agregada'); }).catch(function (e) { MV.toast(e.message); });
     },
     listToggle: function (id) {
-      var l = S.lists.find(function (x) { return x.id === id; }); if (!MV.acct.canEditList(l)) return; l.enabled = l.enabled === false; l.updatedAt = Date.now(); MV.saveLists(); MV.reloadCatalog(false).then(MV.rerender); MV.rerender(); },
+      var l = S.lists.find(function (x) { return x.id === id; }); if (!MV.acct.canEditList(l)) return; l.enabled = l.enabled === false; if (l.enabled === false) l.error = ''; l.updatedAt = Date.now(); MV.saveLists(); MV.reloadCatalog(false).then(MV.rerender); MV.rerender(); },
     lselStart: function () { LSEL = {}; MV.rerender(); var r = document.querySelector('.selrow'); if (r) r.focus(); },
     lselCancel: function () { LSEL = null; MV.rerender(); },
     lselToggle: function (id, el) {

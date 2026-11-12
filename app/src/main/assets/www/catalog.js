@@ -207,13 +207,15 @@
     if (o.group) o.group = MV.noEmoji(o.group);
     if (o.genre) o.genre = MV.noEmoji(o.genre);
     var g = (o.group || '') + ' ' + (o.name || '');
+    // Addons: el nombre del addon y su catálogo también cuentan (K-Drama, anime, Netflix…), aunque la categoría sea el género
+    var gs = o.st && o.src ? g + ' ' + o.src : g;
     o.kids = !RX.notKids.test(g) && !RX.adult.test(g) && (RX.kids.test(o.group || '') || RX.kidsName.test(o.name || ''));
     if (AGES[o.key] != null) o.age = AGES[o.key];
     if (ANIM[o.key]) o.animated = true;
     if (TIDS[o.key]) o.tid = TIDS[o.key];
-    o.anime = RX.anime.test(g);
-    o.kdrama = RX.kdrama.test(g);
-    o.platform = D.platformOf(o.group || '') || (o.type !== 'live' ? D.platformOf(o.name || '') : '');
+    o.kdrama = RX.kdrama.test(gs);
+    o.anime = RX.anime.test(gs) && !(o.st && o.kdrama && !/^Anime/.test(o.group || ''));
+    o.platform = D.platformOf(o.group || '') || (o.st && o.src ? D.platformOf(o.src) : '') || (o.type !== 'live' ? D.platformOf(o.name || '') : '');
     if (o.platform === 'viki' && !o.anime) o.kdrama = o.kdrama || /drama|corea|korea/i.test(g);
     // Documental solo si la categoría lo dice claramente (no "Ciencia ficción", "Historia" o "Animales fantásticos")
     o.doc = (RX.doc.test(o.group || '') && !RX.notDoc.test(o.group || '')) || /\bdocumental\b|\bdocumentary\b/i.test(o.name || '');
