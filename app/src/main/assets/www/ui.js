@@ -1978,6 +1978,14 @@
       }).join('') : '<p class="muted">' + (provBlock ? 'Aún no has agregado listas propias.' : 'No has agregado listas.') + '</p>') +
       '<div class="line"><div class="t"><b>Actualizar addons al abrir la app</b><span>Vuelve a pedir los catálogos de tus addons cada vez que abres MiVibra (si está apagado, se guardan 12 horas).</span></div><button class="toggle f' + (P.stAutoRefresh ? ' on' : '') + '" data-act="stAutoToggle" aria-label="Actualizar addons al abrir la app"></button></div>' +
       '<div class="line"><div class="t"><b>Actualizar addons ahora</b><span>Vuelve a cargar todos los addons y plugins (catálogos nuevos, cambios de configuración).</span></div><button class="btn ghost f" data-act="stRefreshNow">Actualizar</button></div>' +
+      (function () {
+        // Addon preferido para reproducir (solo los que dan enlaces)
+        var sl = S.lists.filter(function (l) { return l.type === 'stremio' && l.enabled !== false && (!l.man || !l.man.resources || (l.man.resources || []).some(function (r) { return r === 'stream' || (r && r.name === 'stream'); })); });
+        if (!sl.length) return '';
+        return '<div class="line" style="flex-wrap:wrap"><div class="t"><b>Addon preferido para reproducir</b><span>Al darle Reproducir se busca primero en este y, si tiene enlace, empieza de una sin mostrar la lista. Si no tiene, se buscan todos como siempre.</span></div><div class="chips" style="margin-top:8px">' +
+          '<button class="chip f' + (!P.stPref ? ' on' : '') + '" data-act="stPrefSet" data-arg="">Ninguno (elegir siempre)</button>' +
+          sl.map(function (l) { return '<button class="chip f' + (P.stPref === l.id ? ' on' : '') + '" data-act="stPrefSet" data-arg="' + esc(l.id) + '">' + esc(l.name || 'Addon') + '</button>'; }).join('') + '</div></div>';
+      })() +
       '<div class="line"><div class="t"><b>Solo títulos con enlaces</b><span>En los catálogos de addons (Cinemeta, TMDB, anime…) oculta lo que tus addons de enlaces no pueden reproducir. Se revisa poco a poco en segundo plano, así que al activarlo los títulos van apareciendo a medida que se confirman.</span></div><button class="toggle f' + (P.stOnlyLinked ? ' on' : '') + '" data-act="stLinkToggle" aria-label="Solo títulos con enlaces"></button></div>' +
       '<div class="line"><div class="t"><b>Solo español latino</b><span>Muestra únicamente contenido en español latino (o sin idioma indicado). En K-Drama y Anime también deja el subtitulado con idioma original. Oculta castellano, inglés y otros idiomas; en TV en vivo deja canales de Latinoamérica e hispanos de EE. UU.</span></div><button class="toggle f' + (P.latOnly ? ' on' : '') + '" data-act="latToggle" aria-label="Solo español latino"></button></div>' +
       '<div class="line"><div class="t"><b>Eliminar listas vacías</b><span>Si una lista carga con 0 elementos (vencida, MAC rechazada o enlace caído) se borra sola. Si antes funcionaba, espera a que llegue vacía dos veces seguidas para no borrarla por una falla pasajera.</span></div><button class="toggle f' + (P.pruneEmpty !== false ? ' on' : '') + '" data-act="pruneToggle" aria-label="Eliminar listas vacías"></button></div>' +
@@ -2583,6 +2591,7 @@
       }
       MV.playWebVideo({ key: s.key + '#' + i, name: s.name + ' · ' + e.title, yt: e.yt, embed: e.embed, url: e.url, poster: e.img || s.poster, group: s.group, type: 'video' });
     },
+    stPrefSet: function (id) { P.stPref = id || ''; MV.savePrefs(); var l = MV.stPrefList && MV.stPrefList(); MV.toast(l ? 'Se reproducirá primero desde ' + l.name : 'Se mostrará la lista de enlaces para elegir'); MV.rerender(); },
     stAutoToggle: function (_, el) { P.stAutoRefresh = !P.stAutoRefresh; MV.savePrefs(); if (el) el.classList.toggle('on', P.stAutoRefresh); MV.toast(P.stAutoRefresh ? 'Los addons se actualizarán al abrir la app' : 'Los addons se guardan 12 horas'); },
     stRefreshNow: function () {
       MV.toast('Actualizando tus addons…', 3000);

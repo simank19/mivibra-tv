@@ -194,14 +194,16 @@
     }
     return Promise.resolve(null);
   }
-  MV.stremioStreams = function (type, id) {
-    return rawStreams(type, id).then(function (st) {
+  MV.stremioStreams = function (type, id, only) {
+    return rawStreams(type, id, only).then(function (st) {
       if (st.length) return st;
-      return altId(type, id).then(function (a) { return a && a !== id ? rawStreams(type, a) : st; });
+      return altId(type, id).then(function (a) { return a && a !== id ? rawStreams(type, a, only) : st; });
     });
   };
-  function rawStreams(type, id) {
-    var ls = lists();
+  /** Un addon que tarda demasiado no frena a los demás: a los 12 s se sigue sin él. */
+  function withTimeout(p, ms) { return Promise.race([p, new Promise(function (_, rej) { setTimeout(function () { rej(new Error('tardó demasiado')); }, ms); })]); }
+  function rawStreams(type, id, only) {
+    var ls = lists().filter(function (l) { return !only || l.id === only; });
     var animeId = /^(kitsu|mal|anilist|anidb)[:_]/i.test(id);
     // Tipo que entiende cada addon: algunos de anime solo aceptan "anime"
     var hint = TYH[id] || TYH[String(id).split(':')[0]];
@@ -211,14 +213,14 @@
     // Para explicar el resultado: qué addon respondió qué
     ls.forEach(function (l) { var m = l.man || {}; if (m.resources && res(m, 'stream') && ok.indexOf(l) < 0 && D[l.name] === undefined) D[l.name] = 'no tiene este tipo de contenido'; });
     var jobs = ok.map(function (l) {
-      return MV.getJSON(base(l.url) + '/stream/' + tyFor(l.man || {}) + '/' + encodeURIComponent(id) + '.json').then(function (j) {
+      return withTimeout(MV.getJSON(base(l.url) + '/stream/' + tyFor(l.man || {}) + '/' + encodeURIComponent(id) + '.json'), 12000).then(function (j) {
         var all = (j && j.streams) || [];
         MV._stTorrents = (MV._stTorrents || 0) + all.filter(function (s) { return s.infoHash && !s.url; }).length;
         var nd = all.filter(function (s) { return s.url && /^https?:/i.test(s.url); }).length, nt = all.length - nd;
         if (typeof D[l.name] !== 'number' || nd > D[l.name]) D[l.name] = nd || (nt ? nt + ' torrents (sin debrid no sirven)' : 0);
         return all.filter(function (s) { return s.url && /^https?:/i.test(s.url); }).map(function (s) {
           var h = (s.behaviorHints && s.behaviorHints.proxyHeaders && s.behaviorHints.proxyHeaders.request) || {};
-          return { url: s.url, title: String(s.title || s.description || s.name || '').replace(/\s+/g, ' ').trim(), src: s.name || l.name || '', ua: h['User-Agent'] || h['user-agent'] || '', ref: h.Referer || h.referer || '' };
+          return { url: s.url, title: String(s.title || s.description || s.name || '').replace(/\s+/g, ' ').trim(), src: s.name || l.name || '', lid: l.id, ua: h['User-Agent'] || h['user-agent'] || '', ref: h.Referer || h.referer || '' };
         });
       }).catch(function (e) { if (typeof D[l.name] !== 'number') D[l.name] = 'no respondió' + (e && /40[13]/.test(e.message || '') ? ' (acceso denegado: revisa su configuración)' : ''); return []; });
     });
@@ -242,11 +244,25 @@
   function latLink(x, anime) { var l = MV.stLang(x); return l === 'lat' || l === 'es' || (anime && (l === 'sub' || l === '')); }
   MV.stLatLink = latLink;
 
-  MV.stremioPick = function (type, id, title, showAll) {
-    MV.toast('Buscando enlaces en tus addons…', 3000);
+  /** Addon preferido para reproducir: se le pregunta primero y, si tiene enlace, se reproduce de una sin esperar a los demás. */
+  MV.stPrefList = function () { var id = S.prefs.stPref; return id ? lists().filter(function (l) { return l.id === id; })[0] || null : null; };
+  MV.stremioPick = function (type, id, title, showAll, skipPref) {
+    var pref = !showAll && !skipPref && MV.stPrefList();
+    MV.toast(pref ? 'Buscando en ' + (pref.name || 'tu addon preferido') + '…' : 'Buscando enlaces en tus addons…', 3000);
     MV._stTorrents = 0;
     MV._stDiag = {};
     var anime = /^(kitsu|mal|anilist|anidb)[:_]/i.test(id);
+    if (pref) {
+      return MV.stremioStreams(type, id, pref.id).then(function (st) {
+        if (S.prefs.latOnly) st = st.filter(function (x) { return latLink(x, anime); });
+        // Latino primero, luego el orden del addon
+        var rank = { lat: 0, es: 1, sub: 2, '': 3, cast: 4 };
+        st = st.map(function (x, i) { return { x: x, i: i, r: rank[MV.stLang(x)] }; }).sort(function (a, b) { return a.r - b.r || a.i - b.i; }).map(function (o) { return o.x; });
+        if (!st.length) return MV.stremioPick(type, id, title, false, true);
+        var x = st[0]; x.rest = st.slice(1).map(function (y) { return y.url; }).slice(0, 8);
+        return x;
+      });
+    }
     return MV.stremioStreams(type, id).then(function (st) {
       // Latino primero; con "Solo español latino" solo se ofrecen enlaces en latino (o español sin especificar)
       var rank = { lat: 0, es: 1, sub: 2, '': 3, cast: 4 };
