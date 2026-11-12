@@ -196,7 +196,7 @@
       if (r.left < b.left + pad) row.scrollLeft -= (b.left + pad - r.left);
       else if (r.right > b.right - pad) row.scrollLeft += (r.right - (b.right - pad));
     }
-    var home = el.closest('.chome');
+    var home = el.closest('.chome') || el.closest('.gx-home');
     if (home && row) { var hr = row.getBoundingClientRect(), hb = home.getBoundingClientRect(); if (hr.bottom > hb.bottom) home.scrollTop += hr.bottom - hb.bottom + 20; else if (hr.top < hb.top + 120) home.scrollTop -= (hb.top + 120 - hr.top); }
     var lib = el.closest('.clib');
     if (lib) { var sh = el.closest('.cshelf'); if (sh) lib.scrollTop += sh.getBoundingClientRect().top - lib.getBoundingClientRect().top - lib.clientHeight * 0.18; }

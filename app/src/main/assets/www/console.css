@@ -285,3 +285,16 @@ html.tv #console, html.tv #console * { animation: none !important; transition: n
 /* Las filas con scroll horizontal no se encogen en la columna de inicio (en TV la columna es baja y el navegador
    las achicaba por debajo de su alto: la tarjeta enfocada quedaba cortada arriba y abajo) */
 .chome > .crow, .gx-cards, .gx-recent, .gx-covers { flex-shrink: 0; }
+/* Inicio de Juegos que cabe en pantallas de TV (960×540): menos aire arriba, nombre de la consola más compacto,
+   y si aun así no cabe, la sección baja con el control en vez de recortar las tarjetas */
+.gx-home { justify-content: flex-start; overflow-y: auto; scrollbar-width: none; }
+.gx-home::-webkit-scrollbar { display: none; }
+.gx-home > .gx-cards { margin-top: auto; padding-top: 3em; }
+.gx-home > .gx-recent { margin-bottom: auto; }
+.gx-home .gx-sysname { margin: .8em 0 .2em; min-height: 0; }
+.gx-home .gx-sysname .gx-sysic { width: 2.6em; height: 2.6em; }
+.gx-home .gx-sysname b { font-size: 2.2em; }
+.gx-home .clabel { margin-top: .4em; }
+.gx-home .gx-recent { padding-top: 1.6em; padding-bottom: 1.8em; }
+.gx-home .gx-recent .ctile { width: 8.6em; height: 12em; }
+#cdesc[hidden] { display: none !important; }
