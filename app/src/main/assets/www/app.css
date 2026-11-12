@@ -843,3 +843,22 @@ html:not(.tv) .fbar::-webkit-scrollbar { display: none; }
 html:not(.tv) .fbar > * { flex: 0 0 auto; }
 .fbtn.on { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
 .fsum.hidn { padding: 10px 14px; border-radius: 16px; background: rgba(255,105,0,.08); border: 1px solid rgba(255,105,0,.3); color: var(--text2); }
+
+/* Inicio: recuadro del canal en vivo sin el fondo de color chillón; el logo limpio sobre un brillo suave */
+.hero .prev .in.livebg { background: radial-gradient(circle at 50% 45%, hsl(var(--h, 20) 40% 22% / .9), #121110 72%); }
+.hero .prev .in.livebg img { object-fit: contain; padding: 18% 22%; filter: drop-shadow(0 10px 24px rgba(0,0,0,.45)); }
+.card.ch .th img.logo { padding: 14px 18px; filter: drop-shadow(0 4px 10px rgba(0,0,0,.4)); }
+.card.ch .th { background: radial-gradient(circle at 50% 40%, rgba(255,255,255,.07), transparent 70%), #151311; }
+/* Deportes en vivo */
+.spcard { flex: 0 0 auto; width: 250px; display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: 20px; border: 1px solid var(--line); background: linear-gradient(160deg, rgba(255,255,255,.08), rgba(255,255,255,.02)); color: var(--text); text-align: left; transition: transform .2s var(--ease), box-shadow .2s; }
+.spcard:focus, .spcard.kf, .spcard:hover { outline: none; transform: scale(1.04); box-shadow: 0 0 0 3px var(--accent), 0 16px 40px var(--glow); }
+.sp-h { display: flex; align-items: center; gap: 8px; } .sp-h small { color: var(--muted); font: 600 12px var(--ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sp-live { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; background: rgba(255,59,48,.18); color: #FF8A80; font: 800 11px var(--ui); letter-spacing: .06em; }
+.sp-st { padding: 3px 9px; border-radius: 999px; background: rgba(255,255,255,.1); font: 800 11px var(--ui); letter-spacing: .06em; }
+.sp-t { display: flex; align-items: center; gap: 10px; }
+.sp-t img, .sp-t i { width: 28px; height: 28px; object-fit: contain; flex: 0 0 auto; }
+.sp-t b { flex: 1; font: 700 15px var(--ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sp-t span { font: 800 20px var(--brand); min-width: 22px; text-align: right; }
+.spcard p { margin: 2px 0 0; font: 600 13px var(--ui); color: var(--accent-text); }
+.sp-ch { display: flex; align-items: center; gap: 8px; padding-top: 8px; border-top: 1px solid var(--line); font: 600 13px var(--ui); min-height: 30px; }
+.sp-ch img { height: 24px; max-width: 60px; object-fit: contain; }

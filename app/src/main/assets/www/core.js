@@ -106,6 +106,11 @@
     if (!A) return webFetch(url, headers);
     return call('httpGet', [url, JSON.stringify(headers || {}), 'text']).then(function (d) { return d.text; });
   };
+  /** Logo de canal sin su fondo (blanco, negro o de un color): la app lo limpia y lo guarda (solo en la app instalada). */
+  MV.logoUrl = function (u) {
+    if (!A || !/^https?:\/\//i.test(u || '') || /appassets\.androidplatform\.net/.test(u)) return u;
+    try { return 'https://appassets.androidplatform.net/logo/' + btoa(unescape(encodeURIComponent(u))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') + '.png'; } catch (e) { return u; }
+  };
   /** Archivos grandes (listas M3U, JSON de Xtream): se guardan en disco y se leen con fetch. */
   MV.getBig = function (url, headers) {
     if (!A) return webFetch(url, headers);

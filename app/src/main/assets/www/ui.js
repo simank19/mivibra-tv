@@ -224,7 +224,9 @@
     if (it.adult) return '<img class="' + (isLogo ? 'logo' : '') + '" referrerpolicy="no-referrer" loading="lazy" decoding="async" src="' + esc(img) + '" alt="" data-k="' + esc(it.key) + '" onerror="MV.adultImgFail(this)">';
     // En tarjetas basta una carátula pequeña de TMDB (carga y decodifica mucho más rápido en TV box)
     if (!big) img = img.replace(/(image\.tmdb\.org\/t\/p\/)(w\d+|original)\//, '$1' + (MV.lite ? 'w154' : 'w185') + '/');
-    return '<img class="' + (isLogo ? 'logo' : '') + '"' + (it.st ? ' referrerpolicy="no-referrer"' : '') + ' loading="lazy" decoding="async" src="' + esc(img) + '" alt=""" onerror="this.outerHTML=\'' + mono.replace(/'/g, "\\'").replace(/"/g, '&quot;') + '\'">';
+    // Logos de canales: se piden ya sin el fondo blanco o negro que traen (si falla, el original)
+    var src = isLogo && MV.logoUrl ? MV.logoUrl(img) : img;
+    return '<img class="' + (isLogo ? 'logo' : '') + '"' + (it.st ? ' referrerpolicy="no-referrer"' : '') + (src !== img ? ' data-o="' + esc(img) + '"' : '') + ' loading="lazy" decoding="async" src="' + esc(src) + '" alt="" onerror="if(this.dataset.o){this.src=this.dataset.o;this.removeAttribute(\'data-o\');return}this.outerHTML=\'' + mono.replace(/'/g, "\\'").replace(/"/g, '&quot;') + '\'">';
   }
   function card(it, kind, i) {
     reg(it);
@@ -554,13 +556,14 @@
       var img = MV.poster(heroIt);
       html += '<section class="hero"><div class="txt">' +
         (heroIt.type === 'live' ? '<div style="display:flex;gap:10px;align-items:center"><span class="badge"><span class="live-dot"></span>EN VIVO</span><span class="muted">' + esc(heroIt.group || '') + '</span></div>' : '<span class="badge">DESTACADO</span>') +
-        '<h2>' + esc(heroIt.name) + '</h2><p>' + esc(nn.now ? nn.now.t + (nn.now.d ? ' — ' + nn.now.d : '') : (heroIt.plot || '')) + '</p>' +
+        (heroIt.type === 'live' && nn.now ? '<h2>' + esc(nn.now.t) + '</h2><p><b>' + esc(MV.cleanTitle(heroIt.name) || heroIt.name) + '</b>' + (nn.now.d ? ' · ' + esc(nn.now.d) : '') + '</p>' : '<h2>' + esc(heroIt.type === 'live' ? (MV.cleanTitle(heroIt.name) || heroIt.name) : heroIt.name) + '</h2><p>' + esc(heroIt.plot || '') + '</p>') +
         (nn.now ? '<div style="display:flex;gap:12px;align-items:center" class="muted"><span>' + MV.fmtTime(nn.now.s) + ' – ' + MV.fmtTime(nn.now.e) + '</span><div class="prog" style="width:200px"><i style="width:' + Math.round((Date.now() - nn.now.s) / (nn.now.e - nn.now.s) * 100) + '%"></i></div>' + (nn.next ? '<span>Después: ' + esc(nn.next.t) + '</span>' : '') + '</div>' : '') +
         '<div class="btns" style="margin-top:6px"><button class="btn f" data-act="play" data-key="' + esc(heroIt.key) + '" data-autofocus>' + IC.play + 'Ver en pantalla completa</button>' +
         (heroIt.type === 'live' ? '<button class="btn ghost f" data-act="nav" data-arg="guide">Guía</button>' : '<button class="btn ghost f" data-act="open" data-key="' + esc(heroIt.key) + '">Ficha</button>') + '</div></div>' +
-        '<div class="prev glass"><div class="in" style="background:linear-gradient(140deg,' + MV.hue(heroIt.name) + ',#17140F 80%)">' + (img ? '<img src="' + esc(img) + '" alt="" style="' + (heroIt.type === 'live' ? 'object-fit:contain;padding:30px' : '') + '">' : '<span class="mono" style="font:800 80px var(--brand)">' + esc(MV.mono(heroIt.name)) + '</span>') +
+        '<div class="prev glass"><div class="in' + (heroIt.type === 'live' ? ' livebg' : '') + '" style="' + (heroIt.type === 'live' ? '--h:' + MV.hue(heroIt.name) : 'background:linear-gradient(140deg,' + MV.hue(heroIt.name) + ',#17140F 80%)') + '">' + (img ? '<img src="' + esc(heroIt.type === 'live' && MV.logoUrl ? MV.logoUrl(img) : img) + '"' + (heroIt.type === 'live' && MV.logoUrl && MV.logoUrl(img) !== img ? ' data-o="' + esc(img) + '" onerror="if(this.dataset.o){this.src=this.dataset.o;this.removeAttribute(\'data-o\')}"' : '') + ' alt="" style="' + (heroIt.type === 'live' ? 'object-fit:contain;padding:30px' : '') + '">' : '<span class="mono" style="font:800 80px var(--brand)">' + esc(MV.mono(heroIt.name)) + '</span>') +
         (heroIt.type === 'live' ? '<video id="heroVid" muted playsinline preload="none"></video><span class="herolive" id="heroLive"><span class="live-dot"></span>EN VIVO · sin sonido</span>' : '') + '</div></div></section>';
     }
+    if (MV.sportsRow) html += MV.sportsRow();
     html += row('Continuar viendo', cont.map(function (c) { return MV.resolve(c); }), 'wide');
     html += row('Favoritos', favs.slice(0, 30));
     var saved = MV.savedList ? MV.savedList().map(MV.resolve) : [];
