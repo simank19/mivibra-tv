@@ -277,7 +277,7 @@
   // ---------- "Solo con enlaces": se revisa en segundo plano qué títulos de los catálogos tienen enlaces ----------
   var LK = null;
   function lk() { if (!LK) { LK = MV.load('stLinks', {}) || {}; var now = Date.now(); Object.keys(LK).forEach(function (k) { if (now - LK[k].t > 2 * 86400e3) delete LK[k]; }); } return LK; }
-  MV.stLinked = function (it) { var c = lk()[it.st.type + ':' + it.st.id]; if (!c) return undefined; return S.prefs.latOnly && c.lat !== undefined ? c.lat : c.ok; };
+  MV.stLinked = function (it) { var c = lk()[it.st.type + ':' + it.st.id]; if (!c || (!c.ok && c.v !== 2)) return undefined; return S.prefs.latOnly && c.lat !== undefined ? c.lat : c.ok; };
   var running = false, saveT = 0;
   MV.stCheckLinks = function () {
     if (running || !MV.S.prefs.stOnlyLinked) return;
@@ -295,10 +295,16 @@
       if (it && MV.stLinked(it) !== undefined) return next();
       if (!it) { if (--active > 0) return; running = false; MV.save('stLinks', lk()); MV._stLinkV = (MV._stLinkV || 0) + 1; if (found && MV.rerender) MV.rerender(); return; }
       MV._stTorrents = 0;
-      MV.stremioStreams(it.st.type === 'series' ? 'series' : 'movie', it.st.type === 'series' ? it.st.id + (/^(kitsu|mal|anilist|anidb)[:_]/i.test(it.st.id) ? ':1' : ':1:1') : it.st.id).then(function (st) {
+      // Series: se usa el id real del primer capítulo que da el addon (y así se aprende su equivalente en IMDb)
+      var idP = it.st.type !== 'series' ? Promise.resolve(it.st.id)
+        : (it.episodes && it.episodes.length ? Promise.resolve(it.episodes) : MV.stremioEpisodes(it).then(function (eps) { if (eps.length) it.episodes = eps; return eps; }).catch(function () { return []; })).then(function (eps) {
+          var e = (eps || []).filter(function (x) { return x.stId; }).sort(function (a, b) { return a.season - b.season || a.ep - b.ep; })[0];
+          return e ? e.stId : it.st.id + (/^(kitsu|mal|anilist|anidb)[:_]/i.test(it.st.id) ? ':1' : ':1:1');
+        });
+      idP.then(function (sid) { return MV.stremioStreams(it.st.type === 'series' ? 'series' : 'movie', sid); }).then(function (st) {
         var anime = /^(kitsu|mal|anilist|anidb)[:_]/i.test(it.st.id);
         // Se guarda si hay enlaces y si alguno es en latino (para cuando está activo "Solo español latino")
-        lk()[it.st.type + ':' + it.st.id] = { ok: st.length > 0, lat: st.some(function (x) { return latLink(x, anime); }), t: Date.now() };
+        lk()[it.st.type + ':' + it.st.id] = { v: 2, ok: st.length > 0, lat: st.some(function (x) { return latLink(x, anime); }), t: Date.now() };
         if (st.length) found++;
       }).catch(function () {}).then(function () {
         n++;
