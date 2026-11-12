@@ -164,10 +164,37 @@
   };
 
   /** Elige el enlace: si hay varios, se muestra la lista para escoger (calidad, idioma, fuente). */
-  MV.stremioPick = function (type, id, title) {
+  /** Idioma de un enlace según lo que dice el addon (nombre, detalle, banderas): lat, cast, es, sub o ''. */
+  MV.stLang = function (x) {
+    var t = (x.src + ' ' + x.title + ' ' + decodeURIComponent(String(x.url || '').split('?')[0].replace(/%(?![0-9a-f]{2})/gi, ''))).toLowerCase();
+    if (/latino|latam|\blat\b|\uD83C\uDDF2\uD83C\uDDFD|es[-_ ]?mx|es[-_ ]?419|spanish ?\(?latin/.test(t)) return 'lat';
+    if (/castellano|\uD83C\uDDEA\uD83C\uDDF8|espa[nñ]a|\bspain\b|es[-_ ]es\b/.test(t)) return 'cast';
+    if (/subtitulad|\bvose\b|\bsub(s|bed)?\b/.test(t)) return 'sub';
+    if (/espa[nñ]ol|spanish|\besp\b|\bspa\b/.test(t)) return 'es';
+    return '';
+  };
+  /** ¿Sirve con "Solo español latino"? Latino, o español sin decir cuál; en anime también subtitulado. */
+  function latLink(x, anime) { var l = MV.stLang(x); return l === 'lat' || l === 'es' || (anime && (l === 'sub' || l === '')); }
+  MV.stLatLink = latLink;
+
+  MV.stremioPick = function (type, id, title, showAll) {
     MV.toast('Buscando enlaces en tus addons…', 3000);
     MV._stTorrents = 0;
+    var anime = /^(kitsu|mal|anilist|anidb)[:_]/i.test(id);
     return MV.stremioStreams(type, id).then(function (st) {
+      // Latino primero; con "Solo español latino" solo se ofrecen enlaces en latino (o español sin especificar)
+      var rank = { lat: 0, es: 1, sub: 2, '': 3, cast: 4 };
+      st = st.map(function (x, i) { return { x: x, i: i, r: rank[MV.stLang(x)] }; }).sort(function (a, b) { return a.r - b.r || a.i - b.i; }).map(function (o) { return o.x; });
+      if (S.prefs.latOnly && !showAll && st.length) {
+        var lat = st.filter(function (x) { return latLink(x, anime); });
+        if (!lat.length) {
+          return MV.confirm('Sin enlaces en español latino', 'Tus addons encontraron ' + st.length + (st.length === 1 ? ' enlace' : ' enlaces') + ' para “' + title + '”, pero ninguno dice que sea en latino. Tienes activado “Solo español latino”.', 'Ver todos los enlaces').then(function (y) {
+            if (!y) throw new Error('cancelado');
+            return MV.stremioPick(type, id, title, true);
+          });
+        }
+        st = lat;
+      }
       if (!st.length && MV._stTorrents) throw new Error('Tus addons solo encontraron torrents (' + MV._stTorrents + '). MiVibra reproduce enlaces directos: en la configuración de Torrentio agrega un servicio debrid (Real-Debrid, AllDebrid, Premiumize…) y vuelve a instalarlo con el enlace nuevo.');
       if (!st.length) throw new Error('Ningún addon instalado tiene enlaces directos para “' + title + '”');
       // Los demás enlaces quedan de respaldo: si el elegido no es un video, el reproductor prueba el siguiente solo
@@ -194,7 +221,7 @@
   // ---------- "Solo con enlaces": se revisa en segundo plano qué títulos de los catálogos tienen enlaces ----------
   var LK = null;
   function lk() { if (!LK) { LK = MV.load('stLinks', {}) || {}; var now = Date.now(); Object.keys(LK).forEach(function (k) { if (now - LK[k].t > 2 * 86400e3) delete LK[k]; }); } return LK; }
-  MV.stLinked = function (it) { var c = lk()[it.st.type + ':' + it.st.id]; return c ? c.ok : undefined; };
+  MV.stLinked = function (it) { var c = lk()[it.st.type + ':' + it.st.id]; if (!c) return undefined; return S.prefs.latOnly && c.lat !== undefined ? c.lat : c.ok; };
   var running = false, saveT = 0;
   MV.stCheckLinks = function () {
     if (running || !MV.S.prefs.stOnlyLinked) return;
@@ -209,7 +236,9 @@
       if (!it) { running = false; MV.save('stLinks', lk()); MV._stLinkV = (MV._stLinkV || 0) + 1; if (found && MV.rerender) MV.rerender(); return; }
       MV._stTorrents = 0;
       MV.stremioStreams(it.st.type === 'series' ? 'series' : 'movie', it.st.type === 'series' ? it.st.id + (/^(kitsu|mal|anilist|anidb)[:_]/i.test(it.st.id) ? ':1' : ':1:1') : it.st.id).then(function (st) {
-        lk()[it.st.type + ':' + it.st.id] = { ok: st.length > 0, t: Date.now() };
+        var anime = /^(kitsu|mal|anilist|anidb)[:_]/i.test(it.st.id);
+        // Se guarda si hay enlaces y si alguno es en latino (para cuando está activo "Solo español latino")
+        lk()[it.st.type + ':' + it.st.id] = { ok: st.length > 0, lat: st.some(function (x) { return latLink(x, anime); }), t: Date.now() };
         if (st.length) found++;
       }).catch(function () {}).then(function () {
         n++;
