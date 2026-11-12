@@ -222,7 +222,8 @@
     // Documental solo si la categoría lo dice claramente (no "Ciencia ficción", "Historia" o "Animales fantásticos")
     o.doc = (RX.doc.test(o.group || '') && !RX.notDoc.test(o.group || '')) || /\bdocumental\b|\bdocumentary\b/i.test(o.name || '');
     // +18: en películas y series solo cuenta la CATEGORÍA (títulos como "xXx", "Vida adulta" o "MaXXXine" no son +18)
-    o.adult = o.type === 'live' ? RX.adult.test(g) : RX.adult.test(o.group || '');
+    // Addons: el nombre del addon/catálogo también cuenta (su categoría ahora es el género y ya no dice "+18")
+    o.adult = o.type === 'live' ? RX.adult.test(g) : RX.adult.test((o.group || '') + (o.st ? ' ' + (o.src || '') : ''));
     if (o.type === 'live') o.country = D.countryOf(o);
     o.lang = o.langFixed || D.langOf(o);
     if (o.type !== 'live' || o.doc || o.kids) {
