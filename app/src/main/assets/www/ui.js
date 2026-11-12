@@ -1443,12 +1443,23 @@
   }
   function searchIndex() {
     if (SIDX.size === S.items.length && SIDX.ref === S.items) return SIDX.rows;
-    SIDX.rows = S.items.map(function (i) {
-      var title = MV.norm(MV.cleanTitle(i.name) || i.name);
-      return { it: i, title: title, words: title.split(' '), extra: MV.norm([i.name, i.group, i.year, (i.genres || []).map(D.genreName).join(' '), i.platform ? D.platformName(i.platform) : ''].join(' ')) };
-    });
+    SIDX.rows = S.items.map(idxRow);
     SIDX.size = S.items.length; SIDX.ref = S.items;
     return SIDX.rows;
+  }
+  function idxRow(i) {
+    var title = MV.norm(MV.cleanTitle(i.name) || i.name);
+    return { it: i, title: title, words: title.split(' '), extra: MV.norm([i.name, i.group, i.year, (i.genres || []).map(D.genreName).join(' '), i.platform ? D.platformName(i.platform) : ''].join(' ')) };
+  }
+  /** El mismo índice, armado en pedazos para no trabar el control en TV box. */
+  function searchIndexBg() {
+    var items = S.items, rows = new Array(items.length);
+    if (SIDX.ref === items && SIDX.size === items.length) return;
+    MV.chunked([items], function (it, i) { rows[i] = idxRow(it); }).then(function () {
+      if (S.items !== items || SIDX.ref === items) return;
+      SIDX.rows = rows; SIDX.size = items.length; SIDX.ref = items;
+      visibleMap();
+    });
   }
   /** ¿Se parecen dos palabras con un error de tipeo? (una letra de más, de menos o cambiada) */
   function near(a, b) {
@@ -4502,7 +4513,7 @@
   MV.on('catalog', function () { if (!S.loading && MV.purgeAdult) MV.purgeAdult(); });
   // El índice del buscador se arma en segundo plano apenas cargan las listas (la primera búsqueda ya no espera)
   var idxT = null;
-  function buildIdx() { if (Date.now() - (MV._lastKey || 0) < 1500) { idxT = setTimeout(buildIdx, 2000); return; } searchIndex(); visibleMap(); }
+  function buildIdx() { if (Date.now() - (MV._lastKey || 0) < 1500) { idxT = setTimeout(buildIdx, 2000); return; } searchIndexBg(); }
   MV.on('catalog', function () { if (S.loading) return; clearTimeout(idxT); idxT = setTimeout(buildIdx, 2500); });
   MV.on('catalog', function () { if (['boot', 'profiles', 'profileEdit', 'settings', 'games'].indexOf(view.name) < 0) MV.rerender(); });
   MV.on('epg', function () { if (view.name === 'guide' || view.name === 'live' || view.name === 'home') MV.rerender(); });

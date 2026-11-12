@@ -228,7 +228,7 @@ html.tv #console, html.tv #console * { animation: none !important; transition: n
 .gx-sysname .gx-sysic { width: 3.4em; height: 3.4em; } .gx-sysname .gx-sysic svg, .gx-sysname .gx-sysic img { width: 100%; height: 100%; }
 .gx-sysname b { font-family: var(--brand); font-weight: 900; font-size: 2.6em; letter-spacing: .04em; text-transform: uppercase; }
 .gx-sysname span { color: #A39C94; font-weight: 700; }
-.gx-recent { position: relative; z-index: 1; padding: 1em 3.6em 1.4em; }
+.gx-recent { position: relative; z-index: 1; padding: 2.2em 3.6em 2em; overflow-y: hidden; }
 .gx-recent .ctile, .gx-covers .ctile { width: 9.6em; height: 13.6em; border-radius: .9em; }
 
 /* ---------- Juegos ---------- */
@@ -238,10 +238,10 @@ html.tv #console, html.tv #console * { animation: none !important; transition: n
 #console .gx-chip.on { background: rgba(255,255,255,.16) !important; color: #fff; border-color: rgba(255,255,255,.5) !important; }
 #console .gx-chip:focus { background: var(--accent) !important; color: #0E0D0C; border-color: var(--accent) !important; transform: scale(1.08); }
 .gx-games { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; position: relative; z-index: 1; }
-.gx-covers { padding: 2.2em 3.6em 1.4em; gap: 1.3em; align-items: flex-end; }
+.gx-covers { padding: 2.4em 3.6em 2em; overflow-y: hidden; gap: 1.3em; align-items: flex-end; }
 .gx-covers .ctile { width: 10.4em; height: 14.6em; }
 .gx-covers .ctile:focus, .gx-recent .ctile:focus { transform: scale(1.16) translateY(-.4em); box-shadow: 0 0 0 .22em #0E0D0C, 0 0 0 .5em #F3EFEA, 0 2em 4em rgba(0,0,0,.7); }
-.gx-covers .cv img, .gx-recent .cv img { object-fit: cover; }
+.gx-covers .cv img, .gx-recent .cv img { object-fit: contain; background: #0E0D0C; }
 .gx-info { padding: 0 3.6em; display: flex; flex-direction: column; align-items: center; text-align: center; min-height: 7.2em; }
 .gx-info b { font-family: var(--brand); font-size: 2.4em; font-weight: 900; line-height: 1.05; max-width: 80%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 .1em .6em rgba(0,0,0,.6); }
 .gx-info span { color: #FFB98A; font-weight: 700; margin-top: .3em; }
@@ -258,7 +258,7 @@ html.tv #console, html.tv #console * { animation: none !important; transition: n
 /* ---------- Ficha ---------- */
 .gx-detail { flex: 1; min-height: 0; display: flex; gap: 3em; align-items: flex-end; padding: 2em 3.6em 1em; position: relative; z-index: 1; }
 .gx-dcover { flex: none; width: 15em; height: 21em; position: relative; border-radius: 1em; box-shadow: 0 2em 4em rgba(0,0,0,.6); }
-.gx-dcover .cv img { object-fit: cover; }
+.gx-dcover .cv img { object-fit: contain; background: #0E0D0C; }
 .gx-dinfo { flex: 1; min-width: 0; padding-bottom: .4em; }
 .gx-dinfo .gx-logo { justify-content: flex-start; }
 .gx-dinfo h1 { font-family: var(--brand); font-weight: 900; font-size: 3.4em; line-height: 1; margin: 0 0 .3em; text-shadow: 0 .1em .6em rgba(0,0,0,.6); }

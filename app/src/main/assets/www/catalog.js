@@ -1193,8 +1193,12 @@
       return MV.idbGet('list:' + l.id).then(function (c) { return c && c.v >= 7 && c.items ? c : null; }).catch(function () { return null; });
     })).then(function (caches) {
       if (!caches.some(function (c) { return c && c.items.length; })) return MV.reloadCatalog(false);
-      var all = caches.map(function (c) { return c ? c.items.map(retag) : []; });
-      lastAll = all; combine(all);
+      var all = caches.map(function (c) { return c ? c.items : []; });
+      S.loading = true; S.loadMsg = 'Preparando tu contenido…';
+      return chunked(all, function (it, i, arr) { arr[i] = retag(it); }).then(function () {
+        lastAll = all; return combine(all, true);
+      }).then(function (ok) {
+      if (ok === false) return;
       S.loading = false; MV.emit('catalog');
       MV.loadEpg(false);
       setTimeout(function () { MV.checkDupes(false); }, 6000);
@@ -1204,6 +1208,7 @@
         return !c || c.ts < Date.now() - age ? i : -1;
       }).filter(function (i) { return i >= 0; });
       if (stale.length) setTimeout(function () { refreshInBackground(lists, stale); }, 5000);
+      });
     });
   };
   function refreshInBackground(lists, idxs) {
@@ -1225,7 +1230,7 @@
       (function apply() {
         if (S.loading) return;
         if (Date.now() - (MV._lastKey || 0) < 4000 || (MV.modalOpen && MV.modalOpen())) { setTimeout(apply, 3000); return; }
-        combine(lastAll); MV.emit('catalog');
+        combine(lastAll, true).then(function (ok) { if (ok !== false) MV.emit('catalog'); });
       })();
     });
   }
@@ -1309,7 +1314,29 @@
       combine(lastAll); MV.emit('catalog');
     }, 8000);
   };
-  function combine(all) {
+  /** Recorre listas grandes en pedazos de ~24 ms y cede el control entre uno y otro: la app sigue respondiendo al control
+      mientras arma el catálogo (antes, con listas de cientos de miles de títulos, el TV box se congelaba casi un minuto). */
+  function chunked(arrs, fn) {
+    return new Promise(function (res) {
+      var a = 0, i = 0;
+      (function run() {
+        var t = Date.now();
+        while (a < arrs.length) {
+          var arr = arrs[a];
+          while (i < arr.length) {
+            fn(arr[i], i, arr); i++;
+            if ((i & 127) === 0 && Date.now() - t > 24) { setTimeout(run, 0); return; }
+          }
+          a++; i = 0;
+        }
+        res();
+      })();
+    });
+  }
+  MV.chunked = chunked;
+  var combineSeq = 0;
+  function combine(all, async) {
+    var mySeq = ++combineSeq;
     // Libros y mangas van aparte (sección Lectura); no se mezclan con películas ni canales
     var books = [], seenBook = {};
     all = all.map(function (arr) { return arr.filter(function (it) { if (it.type !== 'book') return true; if (!seenBook[it.url]) { seenBook[it.url] = 1; books.push(it); } return false; }); });
@@ -1317,7 +1344,7 @@
     var byKey = {}, byName = {}, byId = {}, byTid = {}, items = [], dedupe = P.dedupe !== false, hidden = {}, pairs = [];
     // Carátulas que se repiten mucho (genéricas del proveedor) no sirven para reconocer duplicados
     var posterUse = {};
-    if (dedupe) all.forEach(function (arr) { arr.forEach(function (it) { if (it.type !== 'live' && it.poster) posterUse[it.poster] = (posterUse[it.poster] || 0) + 1; }); });
+    function countPoster(it) { if (it.type !== 'live' && it.poster) posterUse[it.poster] = (posterUse[it.poster] || 0) + 1; }
     function yearOf(it) { return String(it.year || (String(it.name || '').match(/\((19|20)\d{2}\)/) || [''])[0].replace(/[()]/g, '') || ''); }
     function idents(it) {
       if (!dedupe || it.type === 'live' || it.type === 'video') return [];
@@ -1338,8 +1365,7 @@
       if (it.episodes && it.episodes.length) ex.episodes = it.episodes.slice();
       ex.q = qScore(it);
     }
-    all.forEach(function (arr) {
-      arr.forEach(function (it) {
+    function each(it) {
         var ln = it.type === 'live' ? liveName(it.name) : '', nk = ln ? 'n:' + (it.country || '') + ':' + ln : '';
         var ids = idents(it), q = qScore(it);
         var ex = byKey[it.key] || (nk ? byName[nk] : null);
@@ -1387,8 +1413,15 @@
         if (nk && !byName[nk]) byName[nk] = copy;
         ids.forEach(function (x) { if (!byId[x]) byId[x] = copy; });
         if (it.tid) byTid[it.tid] = copy;
-      });
-    });
+    }
+    if (async) {
+      return (dedupe ? chunked(all, countPoster) : Promise.resolve()).then(function () { return chunked(all, each); }).then(finish);
+    }
+    if (dedupe) all.forEach(function (arr) { arr.forEach(countPoster); });
+    all.forEach(function (arr) { arr.forEach(each); });
+    finish();
+    function finish() {
+    if (mySeq !== combineSeq) return false;   // llegó una combinación más nueva mientras esta iba en pedazos
     // Cuántos títulos de cada lista quedaron ocultos porque otra lista tiene una versión mejor
     pairs.forEach(function (pr) { if (pr[0].type !== 'live' && (pr[1].url !== pr[0].url || pr[1].list !== pr[0].list) && !(pr[0].type === 'series' && pr[1].list === pr[0].list)) hidden[pr[0].list] = (hidden[pr[0].list] || 0) + 1; });
     S.items = items; S.byKey = byKey; S.byTid = byTid; S.hiddenDupes = hidden;
@@ -1398,6 +1431,7 @@
     S.movies = items.filter(function (i) { return i.type === 'movie' && (!i.novela || i.novelaAuto); }).sort(function (a, b) { return (b.added || 0) - (a.added || 0); });
     S.series = items.filter(function (i) { return i.type === 'series' && (!i.novela || i.novelaAuto); });
     S.novelas = items.filter(function (i) { return i.novela && (i.type === 'series' || i.type === 'movie'); });
+    }
   }
 
   /** Lo que el perfil actual puede ver. El +18 nunca sale en las secciones normales:
