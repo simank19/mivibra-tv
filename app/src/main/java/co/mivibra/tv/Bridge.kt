@@ -915,7 +915,28 @@ class Bridge(private val a: MainActivity) {
             .put("version", BuildConfig.VERSION_NAME)
             .put("versionCode", BuildConfig.VERSION_CODE)
             .put("external", Environment.getExternalStorageDirectory().absolutePath)
+            .put("cores", Runtime.getRuntime().availableProcessors())
+            .put("soc", try { if (Build.VERSION.SDK_INT >= 31) (Build.SOC_MANUFACTURER + " " + Build.SOC_MODEL).trim() else Build.HARDWARE } catch (_: Throwable) { Build.HARDWARE })
+            .put("hw", Build.HARDWARE ?: "")
+            .put("maxMhz", maxCpuMhz())
+            .put("screenW", a.resources.displayMetrics.widthPixels)
+            .put("screenH", a.resources.displayMetrics.heightPixels)
+            .put("density", a.resources.displayMetrics.density.toDouble())
+            .put("heapMb", try { (a.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager).memoryClass } catch (_: Exception) { 0 })
             .toString()
+    }
+
+    /** Frecuencia máxima de CPU (MHz) leyendo cpufreq; 0 si no se puede. */
+    private fun maxCpuMhz(): Int {
+        var best = 0
+        try {
+            val n = Runtime.getRuntime().availableProcessors()
+            for (i in 0 until n) {
+                val f = File("/sys/devices/system/cpu/cpu$i/cpufreq/cpuinfo_max_freq")
+                if (f.canRead()) { val v = f.readText().trim().toIntOrNull() ?: 0; if (v / 1000 > best) best = v / 1000 }
+            }
+        } catch (_: Throwable) {}
+        return best
     }
 
     // ---------------- Otras apps (YouTube, música) ----------------

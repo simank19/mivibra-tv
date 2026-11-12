@@ -2053,8 +2053,16 @@
     }).join('') + '</div></div><div class="panel glass"><h2>Efecto vidrio y animaciones</h2>' +
       '<div class="line"><div class="t"><b>Intensidad del vidrio</b></div><div class="seg">' + [['low', 'Suave'], ['mid', 'Media'], ['high', 'Intensa']].map(function (g) { return '<button class="chip f' + (P.glass === g[0] ? ' on' : '') + '" data-act="glass" data-arg="' + g[0] + '">' + g[1] + '</button>'; }).join('') + '</div></div>' +
       '<div class="line"><div class="t"><b>Animaciones y transiciones</b><span>Apágalas en TV box lentos</span></div><button class="toggle f' + (P.anim !== false ? ' on' : '') + '" data-act="prefToggle" data-arg="anim"></button></div>' +
-      '<div class="line"><div class="t"><b>Fondo con luces en movimiento</b></div><button class="toggle f' + (P.bgAnim !== false ? ' on' : '') + '" data-act="prefToggle" data-arg="bgAnim"></button></div></div>';
+      '<div class="line"><div class="t"><b>Fondo con luces en movimiento</b></div><button class="toggle f' + (P.bgAnim !== false ? ' on' : '') + '" data-act="prefToggle" data-arg="bgAnim"></button></div></div>' + perfPanel();
   };
+  function perfPanel() {
+    var d = MV.device || {}, names = { low: 'Liviano', mid: 'Equilibrado', high: 'Completo' };
+    var spec = [d.model, d.soc && d.soc !== d.model ? d.soc : '', d.ramMb ? (Math.round(d.ramMb / 102.4) / 10) + ' GB RAM' : '', d.cores ? d.cores + ' núcleos' : '', d.maxMhz ? (d.maxMhz / 1000).toFixed(1) + ' GHz' : ''].filter(Boolean).join(' · ');
+    return '<div class="panel glass"><h2>Rendimiento</h2><p class="muted">La app detecta tu equipo y se ajusta sola: en TV box modestos quita el vidrio, el fondo animado y las transiciones para que vaya fluida.</p>' +
+      '<p class="muted" style="font-size:13px">' + esc(spec) + '<br>Detectado: <b>' + names[MV.perfAuto] + '</b> · Ahora: <b>' + names[MV.perf] + '</b>' + (MV.perfFps ? ' · ' + MV.perfFps + ' fps' : '') + '</p>' +
+      '<div class="chips">' + [['auto', 'Automático'], ['max', 'Máximo rendimiento'], ['quality', 'Máxima calidad']].map(function (o) { return '<button class="chip f' + (MV.perfMode === o[0] ? ' on' : '') + '" data-act="perfMode" data-arg="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>' +
+      (A && A.openDiag && !MV.device.webtv ? '<div class="btns"><button class="btn sm ghost f" data-act="openDiag">' + (MV.device.desktop ? 'Abrir Soporte MiVibra PC' : 'Optimizar el equipo (Soporte MiVibra)') + '</button></div>' : '') + '</div>';
+  }
   SETTINGS.playback = function () {
     var langs = [['es', 'Español'], ['en', 'Inglés'], ['pt', 'Portugués'], ['ja', 'Japonés'], ['ko', 'Coreano']];
     return '<div class="panel glass"><h2>Reproductor</h2><p>Puedes abrir canales, películas y series en otra app (VLC, MX Player, Just Player…). La primera vez Android pregunta cuál usar: elige <b>Siempre</b> para no volver a preguntar. Con MX Player y VLC se recuerda dónde quedaste.</p>' +
@@ -3082,6 +3090,11 @@
     introMode: function (m) { P.introMode = m; MV.savePrefs(); MV.rerender(); },
     introSound: function (_, el) { P.introSound = P.introSound === false; MV.savePrefs(); if (el) el.classList.toggle('on', P.introSound !== false); },
     introNow: function () { if (MV.playIntro) MV.playIntro(true); },
+    perfMode: function (m) {
+      MV.setPerfMode(m);
+      MV.toast('Aplicando…');
+      setTimeout(function () { location.reload(); }, 500);
+    },
     prefToggle: function (k, el) {
       P[k] = P[k] === false ? true : !P[k]; MV.savePrefs();
       if (el) el.classList.toggle('on', P[k] !== false);
@@ -3979,7 +3992,7 @@
       '<button class="utile glass f" data-act="openApp" data-arg="viki" data-fid="u-viki"><span class="uic">' + IC.kdrama + '</span><b>Rakuten Viki</b><span>K-Dramas y doramas con subtítulos · ' + (!A || hasApp('viki') ? 'abre su app' : 'instalar app') + '</span></button>' +
       '<button class="utile glass f" data-act="nav" data-arg="webvids" data-fid="u-webvids"><span class="uic">' + IC.globe + '</span><b>Mis páginas</b><span>Videos de tus páginas web</span></button>' +
       '<button class="utile glass f" data-act="nav" data-arg="streams" data-fid="u-streams"><span class="uic">' + IC.play + '</span><b>Twitch y Kick</b><span>Transmisiones en vivo aquí mismo</span></button>' +
-      '<button class="utile glass f" data-act="openDiag" data-fid="u-diag"><span class="uic">' + IC.settings + '</span><b>Diagnóstico MiVibra</b><span>Revisa y optimiza este equipo</span></button>' +
+      '<button class="utile glass f" data-act="openDiag" data-fid="u-diag"><span class="uic">' + IC.settings + '</span><b>' + (MV.device.desktop ? 'Soporte MiVibra PC' : MV.device.tv ? 'Soporte MiVibra · TV box' : 'Diagnóstico MiVibra') + '</b><span>' + (MV.device.desktop ? 'Diagnóstico, limpieza y optimización de Windows' : 'Revisa y optimiza este equipo') + '</span></button>' +
       '<button class="utile glass f" data-act="adultOpen" data-fid="u-adult"><span class="uic">' + IC.lock + '</span><b>+18</b><span>' + (MV.adultOk() ? 'Desbloqueado' : 'Protegido con PIN') + '</span></button>' +
       (A && A.remoteFind && !(MV.device && MV.device.tv) ? '<button class="utile glass f" data-act="nav" data-arg="phoneRemote" data-fid="u-phremote"><span class="uic">' + IC.phone + '</span><b>Control de la TV</b><span>Usa este celular como control de tu TV</span></button>' : '') +
       '<button class="utile glass f" data-act="go" data-arg="settings" data-fid="u-remote" onclick="MV.remoteTab&&MV.remoteTab()"><span class="uic">' + IC.phone + '</span><b>Celular como control</b><span>Control remoto y mando de juegos</span></button></div>';
@@ -4529,6 +4542,7 @@
   function boot() {
     MV.applyLook();
     render();
+    setTimeout(function () { if (MV.perfProbe) MV.perfProbe(); }, 9000);
     if (MV.acct.managed()) {
       MV.acct.start().then(function (u) {
         if (!u) { MV.go('login', null, { replace: true }); return; }

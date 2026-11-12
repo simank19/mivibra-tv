@@ -189,6 +189,8 @@
   function focus(el, quiet) {
     el.focus({ preventScroll: true });
     var row = el.closest('.crow');
+    // Algunos WebView de TV ignoran preventScroll y bajan la fila: la tarjeta agrandada quedaba cortada arriba
+    if (row) { row.scrollTop = 0; }
     if (row) {
       var r = el.getBoundingClientRect(), b = row.getBoundingClientRect(), pad = b.width * 0.12;
       if (r.left < b.left + pad) row.scrollLeft -= (b.left + pad - r.left);

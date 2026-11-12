@@ -862,3 +862,21 @@ html:not(.tv) .fbar > * { flex: 0 0 auto; }
 .spcard p { margin: 2px 0 0; font: 600 13px var(--ui); color: var(--accent-text); }
 .sp-ch { display: flex; align-items: center; gap: 8px; padding-top: 8px; border-top: 1px solid var(--line); font: 600 13px var(--ui); min-height: 30px; }
 .sp-ch img { height: 24px; max-width: 60px; object-fit: contain; }
+
+/* ---------- Rendimiento automático (core.js › MV.perf) ----------
+   perf-mid: TV box de gama media. Sin vidrio en ningún lado (también el menú lateral), sin fondo desenfocado,
+   transiciones cortas y sombras más simples. lite: además sin transiciones ni fondos. */
+html.perf-mid *, html.perf-mid *::before, html.perf-mid *::after { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+html.perf-mid .glass, html.lite .glass { background: rgba(28,25,22,.9); }
+html.perf-mid .side.glass, html.lite .side.glass { background: rgba(14,12,11,.94); }
+html.perf-mid #bg i { filter: none; animation: none; opacity: .55; }
+html.perf-mid #deco { display: none; }
+html.perf-mid .f { transition-duration: .12s !important; }
+html.perf-mid .card, html.perf-mid .btn, html.perf-mid .chip, html.perf-mid .qbtn { box-shadow: none; }
+html.perf-mid .card .shine { display: none !important; }
+html.perf-mid .detail .bd, html.lite .detail .bd { filter: none; opacity: .22; }
+html.perf-mid .side:focus-within + .main, html.lite .side:focus-within + .main { filter: none; }
+html.lite *, html.lite *::before, html.lite *::after { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+html.lite .main, html.lite .strip, html.lite .row { scroll-behavior: auto !important; }
+/* Filas largas: el navegador no pinta lo que está fuera de pantalla */
+html.perf-mid .chrow, html.lite .chrow { content-visibility: auto; contain-intrinsic-size: auto 60px; }

@@ -386,10 +386,65 @@ const ASYNC = {
   }
 };
 
+// ---------------- Soporte MiVibra PC ----------------
+// "Diagnóstico / Soporte MiVibra" en PC abre MiVibra PC (simank19/mivibra-pc): un .exe portable de diagnóstico y optimización.
+// Se busca la última versión en GitHub, se descarga con verificación TLS y SHA-256 y se guarda en los datos de la app;
+// si ya está al día se abre directo. Sin internet se abre la copia guardada.
+const SUPPORT_DIR = path.join(DATA, 'soporte');
+const SUPPORT_EXE = path.join(SUPPORT_DIR, 'MiVibra-PC.exe');
+let supportBusy = false;
+function pcToast(msg, ms) { js('window.MV&&MV.toast(' + JSON.stringify(msg) + ',' + (ms || 3000) + ')'); }
+async function openSupportPc() {
+  if (supportBusy) return pcToast('Abriendo MiVibra PC…');
+  supportBusy = true;
+  const efetch = require('electron').net.fetch;
+  const verFile = path.join(SUPPORT_DIR, 'version.txt');
+  const have = fs.existsSync(SUPPORT_EXE) ? (() => { try { return fs.readFileSync(verFile, 'utf8').trim(); } catch (e) { return ''; } })() : '';
+  const launch = async () => {
+    const err = await shell.openPath(SUPPORT_EXE);   // ShellExecute: pide permisos de administrador si el programa los necesita
+    if (err) pcToast('No se pudo abrir MiVibra PC: ' + err, 5000);
+  };
+  try {
+    if (process.platform !== 'win32') { shell.openExternal('https://github.com/simank19/mivibra-pc/releases/latest'); return; }
+    pcToast('Buscando MiVibra PC…');
+    let rel = null;
+    try {
+      const r = await efetch('https://api.github.com/repos/simank19/mivibra-pc/releases/latest', { headers: { 'Accept': 'application/vnd.github+json', 'User-Agent': 'MiVibra-TV' } });
+      if (r.ok) rel = await r.json();
+    } catch (e) {}
+    if (!rel) { if (have) return launch(); pcToast('Sin conexión con GitHub: no se pudo descargar MiVibra PC', 5000); return; }
+    const exe = (rel.assets || []).find((a) => /^MiVibra-PC\.exe$/i.test(a.name));
+    const sum = (rel.assets || []).find((a) => /^MiVibra-PC\.exe\.sha256$/i.test(a.name));
+    if (!exe) { if (have) return launch(); shell.openExternal(rel.html_url || 'https://github.com/simank19/mivibra-pc/releases/latest'); return; }
+    if (have && have === rel.tag_name) return launch();
+    pcToast('Descargando MiVibra PC ' + (rel.tag_name || '') + '…', 6000);
+    fs.mkdirSync(SUPPORT_DIR, { recursive: true });
+    const res = await efetch(exe.browser_download_url);
+    if (!res.ok) throw new Error('descarga ' + res.status);
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length < 500000 || buf[0] !== 0x4d || buf[1] !== 0x5a) throw new Error('el archivo descargado no es un programa válido');
+    if (sum) {
+      const rs = await efetch(sum.browser_download_url);
+      const want = rs.ok ? ((await rs.text()).match(/[a-f0-9]{64}/i) || [''])[0].toLowerCase() : '';
+      const got = crypto.createHash('sha256').update(buf).digest('hex');
+      if (!want || want !== got) throw new Error('la huella SHA-256 no coincide');
+    }
+    const tmp = SUPPORT_EXE + '.part';
+    fs.writeFileSync(tmp, buf);
+    try { fs.unlinkSync(SUPPORT_EXE); } catch (e) {}
+    fs.renameSync(tmp, SUPPORT_EXE);
+    fs.writeFileSync(verFile, String(rel.tag_name || ''));
+    await launch();
+  } catch (e) {
+    if (have) { pcToast('No se pudo actualizar MiVibra PC; se abre la versión guardada'); await launch(); }
+    else { pcToast('No se pudo descargar MiVibra PC (' + e.message + '). Abrimos la página de descarga.', 6000); shell.openExternal('https://github.com/simank19/mivibra-pc/releases/latest'); }
+  } finally { supportBusy = false; }
+}
+
 // ---------------- Puente: métodos directos ----------------
 const SYNC = {
   openBrowser(url) { openBrowser(url || 'https://www.google.com'); },
-  openDiag() { shell.openExternal('https://github.com/simank19/mivibra-pc/releases/latest'); },
+  openDiag() { openSupportPc(); },
   setPip() {}, publishHome() {}, setInicio() {},
   play(json) { openPlayer(JSON.parse(json)); },
   hasStorageAccess() { return true; },
@@ -414,7 +469,7 @@ const SYNC = {
   },
   remoteStop() {},
   deviceInfo() {
-    return JSON.stringify({ tv: false, touch: false, desktop: true, ramMb: Math.round(os.totalmem() / 1048576), lowRam: false, model: 'PC ' + (process.platform === 'win32' ? 'Windows' : process.platform), sdk: 0, abi: process.arch, version: VERSION, versionCode: VERSION_CODE, external: os.homedir() });
+    return JSON.stringify({ tv: false, touch: false, desktop: true, ramMb: Math.round(os.totalmem() / 1048576), lowRam: false, model: 'PC ' + (process.platform === 'win32' ? 'Windows' : process.platform), sdk: 0, abi: process.arch, version: VERSION, versionCode: VERSION_CODE, external: os.homedir(), cores: os.cpus().length, maxMhz: Math.max(0, ...os.cpus().map((c) => c.speed || 0)) });
   },
   appsInstalled() { return '{}'; },
   canInstallUpdates() { return process.platform === 'win32'; },

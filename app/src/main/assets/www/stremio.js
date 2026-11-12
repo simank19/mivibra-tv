@@ -160,7 +160,7 @@
             // Muchos addons (como TMDB) aceptan "skip" aunque no lo declaren: se intenta igual mientras sigan llegando títulos nuevos
             total += metas.length;
             // Tope por catálogo (~500) y por addon (~8000) para que la app no se ponga lenta en TV
-            if (metas.length >= (canSkip ? 1 : 10) && n < 25 && skip + metas.length < 500 && total < 8000) return page(skip + metas.length, n + 1);
+            if (metas.length >= (canSkip ? 1 : 10) && n < 25 && skip + metas.length < (MV.perf === 'low' ? 200 : MV.perf === 'mid' ? 320 : 500) && total < (MV.perf === 'low' ? 3000 : MV.perf === 'mid' ? 5000 : 8000)) return page(skip + metas.length, n + 1);
           });
         }
         return page(0, 1).then(function () {

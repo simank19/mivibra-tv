@@ -150,6 +150,11 @@ video{width:100%;max-height:44vh;background:#000;border-radius:18px;margin-top:1
 .warn{display:inline-flex;gap:6px;align-items:center;font-family:var(--fm);font-size:11.5px;color:#FBBF24;border:1px solid rgba(251,191,36,.35);border-radius:999px;padding:4px 10px;margin-top:10px}
 input{width:100%;background:var(--card2);border:1px solid var(--line);border-radius:14px;color:var(--txt);padding:13px 14px;font-size:16px;margin-top:6px;font-family:var(--fm)}
 input:focus{outline:2px solid var(--or);border-color:transparent}
+html.tv .wrap{max-width:860px}
+html.tv button:focus,html.tv input:focus,html.tv [tabindex]:focus{outline:3px solid var(--or);outline-offset:3px;border-radius:14px}
+html.tv .tvgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tvchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.tvchips span{font-size:12.5px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);color:var(--txt2)}.tvchips span.on{border-color:#34D399;color:#34D399}.tvchips span.off{opacity:.55;text-decoration:line-through}
+
 label{display:block;font-size:12.5px;color:var(--mut);margin-top:12px}
 
 /* resultado */
@@ -1167,7 +1172,11 @@ function home(){
   setPage('home');
   const i = S.info, b = S.bat || {}, h = hist();
   let ring, specs;
-  if (APP) {
+  if (APP && isTv()) {
+    const tier = tvTier(), pl = PERF_LBL[tier], t = tvI();
+    ring = ringSvg(tier === 'high' ? 100 : tier === 'mid' ? 66 : 33, 104, 8, pl[1], '<span class="n" style="font-size:17px">' + pl[0] + '</span>', '');
+    specs = [['Android', i.release], ['RAM', ramLabel(i.ramTotal)], ['Salida', t.modeW ? t.modeW + '×' + t.modeH : '—'], ['Chip', shortSoc(i)]];
+  } else if (APP) {
     const hp = b.healthPct, val = hp || b.level || 0;
     ring = ringSvg(val, 104, 8, val < 80 && hp ? '#FF9A4D' : '#FF6900', '<span class="n" style="font-size:28px">' + (hp && b.healthSrc === 'estimate' ? '~' : '') + (val || '—') + '<small style="font-size:15px">%</small></span><span class="l">' + (hp ? 'salud batería' : 'batería') + '</span>', 'Batería ' + val + ' por ciento');
     specs = [['Android', i.release], ['RAM', ramLabel(i.ramTotal)], ['Almacenamiento', storLabel(i.storTotal)], ['Chip', shortSoc(i)]];
@@ -1184,6 +1193,7 @@ function home(){
     '<div class="card devcard">' + ring + '<div class="specs">' + specs.map(s => '<div><span>' + s[0] + '</span><b>' + esc(s[1]) + '</b></div>').join('') + '</div></div>' +
     (!APP ? '<label for="model">Marca y modelo</label><input id="model" placeholder="Ej: Samsung A54" value="' + esc(S.model) + '">' : '') +
     '<button class="cta" id="full"><span><b>Iniciar diagnóstico</b><small>' + T.length + ' pruebas · unos ' + estMin() + ' minutos</small></span><i>' + icon('arrow', '#FF6900', 22, 2.4) + '</i></button>' +
+    (isTv() ? '<button class="cta" id="tvb"><span><b>Soporte TV box</b><small>Revisión, velocidad de internet, video 4K/HDR y optimización</small></span><i>' + icon('gauge', '#FF6900', 22, 2.4) + '</i></button>' : '') +
     (APP ? optCard() : '') +
     '<nav class="list">' +
       '<button class="row" id="pick"><span class="ic">' + icon('grid', '#FF9A4D') + '</span><span class="tx"><b>Pruebas individuales</b><span>Elige solo lo que quieres revisar</span></span>' + icon('chev', '#A39C94', 18) + '</button>' +
@@ -1197,6 +1207,7 @@ function home(){
   $('#full').onclick = () => { keep(); runFull(); };
   $('#pick').onclick = () => { keep(); grid(); };
   const oc = q('#optc'); if (oc) oc.onclick = optimize;
+  const tb = q('#tvb'); if (tb) tb.onclick = toolTvbox;
   $('#spec').onclick = specs_;
   $('#hist').onclick = history;
   const r = q('#res'); if (r) r.onclick = results;
@@ -1339,6 +1350,7 @@ function optimize(){
   const tp = tempOf(s), ts = tempState(tp);
   const col = p => p >= 90 ? '#F87171' : p >= 75 ? '#FBBF24' : '#FF6900';
   const tools = [
+    ...(isTv() ? [['tvbox', 'Soporte TV box', 'Revisión completa y optimización del TV box', 'gauge']] : []),
     ['ram', 'Liberar memoria RAM', fmtB(s.ramAvail) + ' libres de ' + ramLabel(s.ramTotal), 'chip'],
     ['cache', 'Limpiar caché de apps', 'Archivos temporales que las apps vuelven a crear', 'broom'],
     ['junk', 'Archivos basura', 'Temporales, registros, miniaturas e instaladores', 'trash'],
@@ -1597,7 +1609,135 @@ function toolTips(){
   });
 }
 
-const TOOLS = { ram: toolRam, cache: toolCache, junk: toolJunk, large: toolLarge, apps: toolApps, cool: toolCool, tips: toolTips };
+
+/* ---------- Soporte TV box (Android TV, Google TV, TV box genéricos) ---------- */
+function tvI(){ if (!S.tv) S.tv = callJ('tvInfo') || {}; return S.tv; }
+const isTv = () => APP && !!tvI().tv;
+const PERF_LBL = { low: ['Liviano', '#FBBF24'], mid: ['Equilibrado', '#FF9A4D'], high: ['Completo', '#34D399'] };
+/* Mismo criterio que la app (core.js › MV.perfScore) para decir cómo se va a ver MiVibra en este equipo */
+function tvTier(){
+  const t = tvI(), i = S.info, ram = (i.ramTotal || 0) / 1048576, cores = t.cores || i.cores || 0, mhz = t.maxMhz || 0;
+  if (t.lowRamDevice || (ram && ram < 3000) || (cores && cores <= 2) || (mhz && mhz < 1500)) return 'low';
+  if ((ram && ram < 4600) || (cores && cores <= 4) || (mhz && mhz < 1900)) return 'mid';
+  return 'high';
+}
+function tvChecks(){
+  const s = callJ('sysStatus') || {}, t = tvI(), i = S.info;
+  const ramGb = (s.ramTotal || 0) / 1073741824, freeGb = (s.storFree || 0) / 1073741824;
+  const ram = s.ramTotal ? (s.ramTotal - s.ramAvail) / s.ramTotal * 100 : 0;
+  const anim = Math.max(t.anim == null ? 1 : t.anim, t.trans == null ? 1 : t.trans, t.win == null ? 1 : t.win);
+  const big4k = (t.modeW || 0) >= 3800, weak = tvTier() !== 'high';
+  const wifi24 = t.net === 'wifi' && t.freq > 0 && t.freq < 3000;
+  return [
+    [ram < 80, 'Memoria RAM', Math.round(ram) + ' % en uso' + (ram >= 80 ? ': cierra apps en segundo plano' : ''), 'ram', 'Liberar'],
+    [freeGb >= 1.5, 'Espacio libre', fmtB(s.storFree) + (freeGb < 1.5 ? ': con menos de 1,5 GB el TV box se traba y los videos se cortan' : ''), 'junk', 'Liberar espacio'],
+    [anim <= 0.5, 'Animaciones del sistema', anim <= 0.5 ? 'Escala ' + anim + 'x' : 'Escala ' + anim + 'x: en Opciones de desarrollador ponlas en 0.5x (Escala de animación de ventana, de transición y de duración)', 'dev', 'Abrir'],
+    [!(big4k && weak), 'Resolución de salida', (t.modeW ? t.modeW + '×' + t.modeH + ' a ' + t.modeHz + ' Hz' : 'Sin datos') + (big4k && weak ? ': este equipo va más fluido en 1080p; el 4K de la interfaz consume memoria' : ''), 'display', 'Pantalla'],
+    [t.net === 'ethernet' || !wifi24, 'Conexión', t.net === 'ethernet' ? 'Cable de red' : t.net === 'wifi' ? 'Wi-Fi ' + (t.freq ? (t.freq < 3000 ? '2,4 GHz' : '5 GHz') : '') + (t.rssi ? ' · señal ' + t.rssi + ' dBm' : '') + (wifi24 ? ': usa la red de 5 GHz o cable para 4K y canales en vivo' : '') : t.net === 'none' ? 'Sin internet' : 'Datos', 'wifi', 'Wi-Fi'],
+    [(i.uptimeH || 0) < 72, 'Reinicio reciente', 'Encendido hace ' + (i.uptimeH || 0) + ' h' + ((i.uptimeH || 0) >= 72 ? ': reinicia el TV box una vez por semana' : ''), null, null],
+    [tempOf(s) < 60, 'Temperatura', tempOf(s) > 0 ? tempOf(s) + ' °C' + (tempOf(s) >= 60 ? ': deja el TV box ventilado, no detrás del TV' : '') : 'Sin sensor', 'cool', 'Ver']
+  ];
+}
+function codecChips(t){
+  const c = t.codecs || {}, L = [['h264', 'H.264'], ['hevc', 'HEVC/H.265'], ['vp9', 'VP9'], ['av1', 'AV1'], ['dv', 'Dolby Vision']];
+  return '<div class="tvchips">' + L.map(x => { const v = c[x[0]] || {}; return '<span class="' + (v.has ? 'on' : 'off') + '">' + x[1] + (v.has ? (v.k4 ? ' · 4K' : '') + (v.hw ? '' : ' (software)') : '') + '</span>'; }).join('') + '</div>';
+}
+function toolTvbox(){
+  const t = tvI(), i = S.info, s = callJ('sysStatus') || {};
+  const tier = tvTier(), pl = PERF_LBL[tier];
+  const checks = tvChecks(), okN = checks.filter(c => c[0]).length;
+  const wv = (t.widevine || '').toUpperCase();
+  const hdr = (t.hdr || []).join(', ');
+  const spec = [['Chip', shortSoc(i)], ['RAM', ramLabel(s.ramTotal || i.ramTotal)], ['Procesador', (t.cores || i.cores || '—') + ' núcleos' + (t.maxMhz ? ' · ' + (t.maxMhz / 1000).toFixed(1) + ' GHz' : '')], ['Android', i.release || '—'], ['Libre', fmtB(s.storFree)], ['Salida', t.modeW ? t.modeW + '×' + t.modeH + ' · ' + t.modeHz + ' Hz' : '—']];
+  stage.innerHTML = toolPage('Soporte TV box', 'Revisa y deja listo tu TV box o Android TV para ver canales, películas y juegos sin trabas.') +
+    '<div class="card" style="display:flex;align-items:center;gap:14px"><span class="gsq ' + (okN >= 6 ? 'A' : okN >= 4 ? 'B' : 'C') + '" style="width:56px;height:56px;font-size:22px">' + okN + '/' + checks.length + '</span>' +
+      '<span><b style="display:block;font-size:17px">' + esc(S.model) + '</b><span class="mut">MiVibra se ajusta en modo <b style="color:' + pl[1] + '">' + pl[0] + '</b> en este equipo</span></span></div>' +
+    '<button class="cta" id="tvall"><span><b>Optimizar ahora</b><small>Libera memoria, limpia caché y archivos temporales</small></span><i>' + icon('bolt', '#FF6900', 22, 2.4) + '</i></button><div id="tvout"></div>' +
+    '<h3>Revisión</h3><div class="tl">' + checks.map((c, k) => '<div class="tr" style="cursor:default;align-items:flex-start"><span class="d ' + (c[0] ? 'ok' : 'fail') + '" style="margin-top:7px"></span><span class="n" style="flex:1"><b>' + c[1] + '</b><br><span class="mut" style="font-size:13px">' + esc(c[2]) + '</span></span>' + (c[3] && !c[0] ? '<button class="b sm" data-k="' + k + '" style="width:auto;padding:8px 14px">' + c[4] + '</button>' : '') + '</div>').join('') + '</div>' +
+    '<h3>Internet</h3><div class="card"><div id="spd" class="mut">Mide si tu conexión alcanza para HD, Full HD o 4K.</div><button class="b" id="spdgo" style="margin-top:12px">Probar velocidad</button></div>' +
+    '<h3>Video y pantalla</h3><div class="card"><div class="kv">' +
+      '<span>Resolución máxima</span><span>' + (t.maxW ? t.maxW + '×' + t.maxH : '—') + '</span>' +
+      '<span>HDR</span><span>' + (hdr || 'No') + '</span>' +
+      '<span>Widevine</span><span>' + (wv || 'No disponible') + (wv === 'L1' ? ' · HD/4K con DRM' : wv === 'L3' ? ' · solo calidad SD con DRM' : '') + '</span>' +
+      (t.hdcp ? '<span>HDCP</span><span>' + esc(t.hdcp) + '</span>' : '') +
+    '</div>' + codecChips(t) +
+      '<p class="mut" style="font-size:13px;margin:10px 0 0">' + ((t.codecs || {}).hevc && (t.codecs.hevc.hw) ? 'Decodifica HEVC por hardware: los canales y películas en H.265 se ven fluidos.' : 'Sin HEVC por hardware: elige versiones H.264 (x264) para evitar cortes.') + '</p></div>' +
+    '<h3>Equipo</h3><div class="card"><div class="kv">' + spec.map(x => '<span>' + x[0] + '</span><span>' + esc(x[1]) + '</span>').join('') + '</div></div>' +
+    '<h3>Consejos para TV box</h3><div class="card"><p style="font-size:14px;margin:0;line-height:21px">' +
+      '· En la app MiVibra: Ajustes › Apariencia › Rendimiento en <b>Automático</b> o <b>Máximo rendimiento</b> si aún va lento.<br>' +
+      '· Desinstala apps que no uses (los TV box genéricos traen muchas de fábrica).<br>' +
+      '· Usa cable de red o Wi-Fi de 5 GHz; el control remoto por Bluetooth responde mejor que el infrarrojo.<br>' +
+      '· Deja el TV box ventilado y reinícialo una vez por semana.<br>' +
+      '· Para videos 4K usa un reproductor externo (Just Player, VLC) desde Ajustes › Reproductor.</p></div>' +
+    '<nav class="list" style="margin-top:12px">' +
+      '<button class="row" data-set="apps"><span class="ic">' + icon('grid', '#FF9A4D') + '</span><span class="tx"><b>Apps instaladas</b><span>Desinstala o fuerza la detención de apps</span></span>' + icon('chev', '#A39C94', 18) + '</button>' +
+      '<button class="row" data-set="display"><span class="ic">' + icon('Pantalla', '#FF9A4D') + '</span><span class="tx"><b>Pantalla y resolución</b><span>Resolución, frecuencia y HDR</span></span>' + icon('chev', '#A39C94', 18) + '</button>' +
+      '<button class="row" data-set="dev"><span class="ic">' + icon('gauge', '#FF9A4D') + '</span><span class="tx"><b>Opciones de desarrollador</b><span>Si no aparece: Ajustes › Información › toca 7 veces "Compilación"</span></span>' + icon('chev', '#A39C94', 18) + '</button>' +
+      '<button class="row" data-set="date"><span class="ic">' + icon('clock', '#FF9A4D') + '</span><span class="tx"><b>Fecha y hora</b><span>Una hora equivocada impide cargar canales y la guía</span></span>' + icon('chev', '#A39C94', 18) + '</button>' +
+    '</nav></div>';
+  bindBack();
+  stage.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { const a = checks[+b.dataset.k][3]; if (TOOLS[a]) TOOLS[a](); else call('openSettings', a); });
+  stage.querySelectorAll('[data-set]').forEach(b => b.onclick = () => call('openSettings', b.dataset.set));
+  $('#tvall').onclick = () => {
+    const out = $('#tvout'); $('#tvall').disabled = true;
+    out.innerHTML = '<div class="spin"></div>';
+    call('ramBoost');
+    const st = callJ('sysStatus') || {};
+    if (!(st.sdk >= 30 && !st.allFiles)) { try { call('clearCache'); } catch (e) {} }
+    S.offs.push(on('boost', d => {
+      $('#tvall').disabled = false;
+      const freed = d && !d.err ? Math.max(0, d.after - d.before) : 0;
+      out.innerHTML = '<div class="verdict ok fade"><span class="vi">' + icon('check', '#06210F', 16, 3) + '</span><span><b>Listo</b><small>' + (freed > 20971520 ? fmtB(freed) + ' de memoria liberados' : 'La memoria ya estaba en orden') + (st.sdk >= 30 && !st.allFiles ? ' · para limpiar la caché de otras apps da el permiso en "Caché de apps"' : '') + '</small></span></div>';
+    }));
+  };
+  $('#spdgo').onclick = () => {
+    const b = $('#spdgo'); b.disabled = true; b.textContent = 'Midiendo…';
+    $('#spd').innerHTML = '<span class="mono">0 Mbps</span>';
+    call('speedTest', 'https://speed.cloudflare.com/__down?bytes=40000000');
+    const off = on('speed', d => {
+      if (d.prog) { $('#spd').innerHTML = '<span class="mono" style="font-size:28px;color:var(--txt)">' + d.mbps.toFixed(1) + '</span> <span class="mut">Mbps</span>'; return; }
+      off(); b.disabled = false; b.textContent = 'Probar otra vez';
+      if (d.err) { $('#spd').innerHTML = '<span style="color:#F87171">No se pudo medir: ' + esc(d.err) + '</span>'; return; }
+      const m = d.mbps, lvl = m >= 25 ? '4K' : m >= 10 ? 'Full HD' : m >= 5 ? 'HD' : 'calidad baja';
+      $('#spd').innerHTML = '<span class="mono" style="font-size:28px;color:var(--txt)">' + m.toFixed(1) + '</span> <span class="mut">Mbps</span><br><span>Alcanza para <b>' + lvl + '</b>' + (m < 10 ? '. Si los canales se cortan, acerca el TV box al router o usa cable.' : '.') + '</span>';
+    });
+    S.offs.push(off);
+  };
+}
+
+/* Control remoto en TV: las flechas mueven el foco entre botones (navegación espacial) */
+function tvNav(){
+  document.documentElement.classList.add('tv');
+  const sel = 'button:not([disabled]),input,select,a[href],[tabindex]:not([tabindex="-1"])';
+  const vis = el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden'; };
+  document.addEventListener('keydown', e => {
+    const dir = { ArrowUp: 'u', ArrowDown: 'd', ArrowLeft: 'l', ArrowRight: 'r' }[e.key];
+    if (!dir) return;
+    const a = document.activeElement;
+    if (a && a.tagName === 'INPUT' && (dir === 'l' || dir === 'r')) return;
+    const all = [...document.querySelectorAll(sel)].filter(vis);
+    if (!all.length) return;
+    e.preventDefault();
+    if (!a || a === document.body || !all.includes(a)) { all[0].focus(); all[0].scrollIntoView({ block: 'center' }); return; }
+    const r = a.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    let best = null, bd = 1e9;
+    all.forEach(el => {
+      if (el === a) return;
+      const q2 = el.getBoundingClientRect(), x = q2.left + q2.width / 2, y = q2.top + q2.height / 2, dx = x - cx, dy = y - cy;
+      const ok = dir === 'd' ? q2.top >= r.bottom - 4 : dir === 'u' ? q2.bottom <= r.top + 4 : dir === 'r' ? q2.left >= r.right - 4 : q2.right <= r.left + 4;
+      if (!ok) return;
+      const main = (dir === 'u' || dir === 'd') ? Math.abs(dy) : Math.abs(dx), side = (dir === 'u' || dir === 'd') ? Math.abs(dx) : Math.abs(dy);
+      const dist = main + side * 2.2;
+      if (dist < bd) { bd = dist; best = el; }
+    });
+    if (best) { best.focus(); best.scrollIntoView({ block: 'nearest' }); const b2 = best.getBoundingClientRect(); if (b2.top < 60 || b2.bottom > innerHeight - 40) best.scrollIntoView({ block: 'center' }); }
+    else if (dir === 'u') window.scrollBy(0, -200); else if (dir === 'd') window.scrollBy(0, 200);
+  }, true);
+  // Al cambiar de pantalla se enfoca el primer botón útil
+  new MutationObserver(() => { const a = document.activeElement; if (!a || a === document.body || !document.body.contains(a)) { const f = document.querySelector('#tvb, #tvall, .cta, #stage button'); if (f) f.focus({ preventScroll: true }); } }).observe(stage, { childList: true });
+}
+
+const TOOLS = { ram: toolRam, cache: toolCache, junk: toolJunk, large: toolLarge, apps: toolApps, cool: toolCool, tips: toolTips, tvbox: toolTvbox };
 
 /* ---------- botón atrás de Android ---------- */
 window.__back = () => {
@@ -1612,7 +1752,7 @@ window.__back = () => {
 };
 
 on('app', d => { if (d.s === 'resume' && S.onResume) S.onResume(); });
-loadDevice().then(home);
+loadDevice().then(() => { if (isTv()) tvNav(); home(); });
 </script>
 </body>
 </html>

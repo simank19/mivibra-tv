@@ -149,9 +149,65 @@
   MV.A = A;
   // En TV la interfaz se compacta (html.tv)
   try { if (MV.device.tv) document.documentElement.classList.add('tv'); } catch (e) {}
-  // Equipos modestos (TV box de 2 GB como onn, Chromecast, Fire TV Lite): modo liviano
-  MV.lite = !!(MV.device.tv && (MV.device.lowRam || (MV.device.ramMb && MV.device.ramMb < 3000)));
-  try { if (MV.lite) document.documentElement.classList.add('lite'); } catch (e) {}
+  // ---------- Rendimiento automático según el equipo ----------
+  // Nivel 'low' (liviano: sin fondos, sombras ni transiciones), 'mid' (sin vidrio ni fondo animado) o 'high'.
+  // Se calcula con RAM, núcleos, frecuencia y resolución; luego una medición de cuadros por segundo lo baja si el equipo se arrastra.
+  // El usuario puede fijarlo en Ajustes › Apariencia › Rendimiento (auto / max = máximo rendimiento / quality = calidad).
+  MV.perfScore = function (d) {
+    d = d || MV.device || {};
+    var ram = +d.ramMb || (navigator.deviceMemory ? navigator.deviceMemory * 1024 : 0);
+    var cores = +d.cores || navigator.hardwareConcurrency || 0;
+    var mhz = +d.maxMhz || 0, px = (+d.screenW || 0) * (+d.screenH || 0);
+    if (d.lowRam || (ram && ram < 3000)) return 'low';
+    if (cores && cores <= 2) return 'low';
+    if (mhz && mhz < 1500) return 'low';
+    if (!d.tv) return (ram && ram < 2500) ? 'mid' : 'high';
+    if (d.webtv) return 'low';                          // Samsung/LG: el navegador del TV es modesto
+    if ((ram && ram < 4600) || (cores && cores <= 4) || (mhz && mhz < 1900)) return 'mid';
+    if (px && px > 3840 * 2160 * 0.9 && ram < 6000) return 'mid'; // 4K nativo con poca memoria
+    return 'high';
+  };
+  (function () {
+    var mode = MV.load('perfMode', 'auto');            // se guarda aparte de las preferencias: es de este equipo, no se sincroniza
+    var auto = MV.perfScore(MV.device), measured = MV.load('perfMeasured', null);
+    var rank = { low: 0, mid: 1, high: 2 };
+    if (measured && rank[measured] < rank[auto]) auto = measured;
+    MV.perfAuto = auto; MV.perfMode = mode;
+    MV.perf = mode === 'max' ? 'low' : mode === 'quality' ? 'high' : auto;
+    MV.lite = MV.perf === 'low';
+    try {
+      var h = document.documentElement;
+      h.classList.toggle('lite', MV.lite);
+      h.classList.toggle('perf-mid', MV.perf === 'mid');
+      h.dataset.perf = MV.perf;
+    } catch (e) {}
+  })();
+  /** Cambia el modo de rendimiento (auto / max / quality). Necesita recargar la interfaz para aplicarse completo. */
+  MV.setPerfMode = function (m) { MV.save('perfMode', m); if (m === 'auto') MV.save('perfMeasured', null); };
+  // Medición real: en los primeros segundos (y al moverse por la app) se cuentan cuadros por segundo.
+  // Si el equipo no llega a ~24 fps en modo automático, baja un nivel y lo recuerda para la próxima vez.
+  MV.perfProbe = function () {
+    if (MV.perfMode !== 'auto' || MV.perf === 'low' || !window.requestAnimationFrame) return;
+    var frames = 0, slow = 0, start = 0, last = 0;
+    function tick(t) {
+      if (!start) { start = last = t; }
+      var dt = t - last; last = t; frames++;
+      if (dt > 70) slow++;                              // cuadros de más de 70 ms = tirones visibles
+      if (t - start < 4000) return requestAnimationFrame(tick);
+      var fps = frames * 1000 / (t - start);
+      MV.perfFps = Math.round(fps);
+      if (document.hidden) return;
+      if (fps < 24 || slow > 12) {
+        var next = MV.perf === 'high' ? 'mid' : 'low';
+        MV.save('perfMeasured', next);
+        MV.perf = next; MV.lite = next === 'low';
+        var h = document.documentElement;
+        h.classList.toggle('lite', MV.lite); h.classList.toggle('perf-mid', next === 'mid'); h.dataset.perf = next;
+        try { if (MV.toast) MV.toast('Ajustamos la app para que vaya más rápida en este equipo'); } catch (e) {}
+      }
+    }
+    requestAnimationFrame(tick);
+  };
 
   // Celular: mientras se escribe se esconde la barra inferior (quedaba encima del teclado y tapaba los resultados)
   document.addEventListener('focusin', function (e) { var t = e.target; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') && t.getAttribute('inputmode') !== 'none') document.documentElement.classList.add('typing'); });

@@ -1488,6 +1488,131 @@ public class DiagActivity extends Activity {
             });
         }
 
+        /** Datos de TV / TV box: si es TV, modos de pantalla (resolución, Hz), HDR, códecs de video, Widevine, red y memoria para la app. */
+        @JavascriptInterface
+        public String tvInfo() {
+            JSONObject o = new JSONObject();
+            try {
+                android.app.UiModeManager ui = (android.app.UiModeManager) getSystemService(UI_MODE_SERVICE);
+                PackageManager pm = getPackageManager();
+                boolean tv = (ui != null && ui.getCurrentModeType() == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION) || pm.hasSystemFeature("android.software.leanback");
+                o.put("tv", tv);
+                o.put("leanback", pm.hasSystemFeature("android.software.leanback"));
+                o.put("touch", pm.hasSystemFeature("android.hardware.touchscreen"));
+                Display d = getWindowManager().getDefaultDisplay();
+                Display.Mode cur = d.getMode();
+                o.put("modeW", cur.getPhysicalWidth()); o.put("modeH", cur.getPhysicalHeight()); o.put("modeHz", Math.round(cur.getRefreshRate()));
+                int maxW = 0, maxH = 0; JSONArray modes = new JSONArray();
+                for (Display.Mode m : d.getSupportedModes()) {
+                    if (m.getPhysicalWidth() * m.getPhysicalHeight() > maxW * maxH) { maxW = m.getPhysicalWidth(); maxH = m.getPhysicalHeight(); }
+                    String lbl = m.getPhysicalWidth() + "x" + m.getPhysicalHeight() + "@" + Math.round(m.getRefreshRate());
+                    boolean dup = false; for (int k = 0; k < modes.length(); k++) if (lbl.equals(modes.optString(k))) dup = true;
+                    if (!dup && modes.length() < 24) modes.put(lbl);
+                }
+                o.put("maxW", maxW); o.put("maxH", maxH); o.put("modes", modes);
+                JSONArray hdr = new JSONArray();
+                Display.HdrCapabilities hc = d.getHdrCapabilities();
+                if (hc != null) for (int t : hc.getSupportedHdrTypes()) hdr.put(t == 1 ? "Dolby Vision" : t == 2 ? "HDR10" : t == 3 ? "HLG" : t == 4 ? "HDR10+" : "HDR " + t);
+                o.put("hdr", hdr);
+                // Códecs de video por hardware (y si decodifican 4K)
+                JSONObject codecs = new JSONObject();
+                String[][] types = { {"h264", "video/avc"}, {"hevc", "video/hevc"}, {"vp9", "video/x-vnd.on2.vp9"}, {"av1", "video/av01"}, {"dv", "video/dolby-vision"} };
+                android.media.MediaCodecList list = new android.media.MediaCodecList(android.media.MediaCodecList.ALL_CODECS);
+                for (String[] t : types) {
+                    boolean has = false, hw = false, k4 = false;
+                    for (android.media.MediaCodecInfo ci : list.getCodecInfos()) {
+                        if (ci.isEncoder()) continue;
+                        boolean match = false; for (String ty : ci.getSupportedTypes()) if (ty.equalsIgnoreCase(t[1])) match = true;
+                        if (!match) continue;
+                        has = true;
+                        boolean isHw = Build.VERSION.SDK_INT >= 29 ? ci.isHardwareAccelerated() : !(ci.getName().startsWith("OMX.google.") || ci.getName().startsWith("c2.android."));
+                        if (isHw) hw = true;
+                        try {
+                            android.media.MediaCodecInfo.VideoCapabilities vc = ci.getCapabilitiesForType(t[1]).getVideoCapabilities();
+                            if (vc != null && vc.isSizeSupported(3840, 2160)) k4 = true;
+                        } catch (Exception ignored) {}
+                    }
+                    codecs.put(t[0], new JSONObject().put("has", has).put("hw", hw).put("k4", k4));
+                }
+                o.put("codecs", codecs);
+                // Nivel de Widevine (L1 = HD/4K en servicios con DRM; L3 = solo SD)
+                try {
+                    android.media.MediaDrm drm = new android.media.MediaDrm(new java.util.UUID(0xEDEF8BA979D64ACEL, 0xA3C827DCD51D21EDL));
+                    o.put("widevine", drm.getPropertyString("securityLevel"));
+                    try { o.put("hdcp", drm.getPropertyString("maxHdcpLevel")); } catch (Exception ignored) {}
+                    if (Build.VERSION.SDK_INT >= 28) drm.close(); else drm.release();
+                } catch (Exception e) { o.put("widevine", ""); }
+                // Red: cable, Wi-Fi (banda y señal)
+                ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+                Network n = cm == null ? null : cm.getActiveNetwork();
+                NetworkCapabilities nc = n == null ? null : cm.getNetworkCapabilities(n);
+                String net = nc == null ? "none" : nc.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) ? "ethernet" : nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ? "wifi" : nc.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ? "cell" : "other";
+                o.put("net", net);
+                if (nc != null) { o.put("downKbps", nc.getLinkDownstreamBandwidthKbps()); }
+                if ("wifi".equals(net)) {
+                    try {
+                        WifiManager wm = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+                        WifiInfo wi = wm.getConnectionInfo();
+                        o.put("rssi", wi.getRssi()); o.put("freq", wi.getFrequency()); o.put("link", wi.getLinkSpeed());
+                    } catch (Exception ignored) {}
+                }
+                ActivityManager am = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+                o.put("heapMb", am.getMemoryClass());
+                o.put("lowRamDevice", am.isLowRamDevice());
+                o.put("cores", Runtime.getRuntime().availableProcessors());
+                o.put("maxMhz", maxMhz());
+                try {
+                    o.put("anim", Settings.Global.getFloat(getContentResolver(), Settings.Global.ANIMATOR_DURATION_SCALE, 1f));
+                    o.put("trans", Settings.Global.getFloat(getContentResolver(), Settings.Global.TRANSITION_ANIMATION_SCALE, 1f));
+                    o.put("win", Settings.Global.getFloat(getContentResolver(), Settings.Global.WINDOW_ANIMATION_SCALE, 1f));
+                } catch (Exception ignored) {}
+                o.put("unknownSources", Build.VERSION.SDK_INT >= 26 ? pm.canRequestPackageInstalls() : true);
+            } catch (Exception e) {
+                try { o.put("err", e.toString()); } catch (Exception ignored) {}
+            }
+            return o.toString();
+        }
+
+        private int maxMhz() {
+            int best = 0;
+            for (int i = 0; i < Runtime.getRuntime().availableProcessors(); i++) {
+                try {
+                    BufferedReader r = new BufferedReader(new FileReader("/sys/devices/system/cpu/cpu" + i + "/cpufreq/cpuinfo_max_freq"));
+                    int v = Integer.parseInt(r.readLine().trim()) / 1000; r.close();
+                    if (v > best) best = v;
+                } catch (Exception ignored) {}
+            }
+            return best;
+        }
+
+        /** Prueba de velocidad de descarga (en segundo plano). Emite "speed" con {mbps, bytes, ms} o {err}. */
+        @JavascriptInterface
+        public void speedTest(final String url) {
+            new Thread(new Runnable() { public void run() {
+                long t0 = System.currentTimeMillis(), got = 0;
+                java.net.HttpURLConnection c = null;
+                try {
+                    c = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                    c.setConnectTimeout(8000); c.setReadTimeout(10000);
+                    c.setRequestProperty("User-Agent", "MiVibra-Diag");
+                    InputStream in = c.getInputStream();
+                    byte[] buf = new byte[65536]; int r; long last = 0;
+                    t0 = System.currentTimeMillis();
+                    while ((r = in.read(buf)) > 0) {
+                        got += r;
+                        long now = System.currentTimeMillis();
+                        if (now - last > 400) { last = now; emit("speed", "{\"prog\":1,\"mbps\":" + (got * 8.0 / 1e6 / Math.max(0.001, (now - t0) / 1000.0)) + ",\"bytes\":" + got + "}"); }
+                        if (now - t0 > 12000) break;
+                    }
+                    in.close();
+                    long ms = Math.max(1, System.currentTimeMillis() - t0);
+                    emit("speed", "{\"mbps\":" + (got * 8.0 / 1e6 / (ms / 1000.0)) + ",\"bytes\":" + got + ",\"ms\":" + ms + "}");
+                } catch (Exception e) {
+                    emit("speed", "{\"err\":" + JSONObject.quote(e.getMessage() == null ? e.toString() : e.getMessage()) + "}");
+                } finally { if (c != null) c.disconnect(); }
+            } }).start();
+        }
+
         @JavascriptInterface
         public void openSettings(String which) {
             String a;
@@ -1501,6 +1626,10 @@ public class DiagActivity extends Activity {
             else if ("storage".equals(which)) a = Settings.ACTION_INTERNAL_STORAGE_SETTINGS;
             else if ("saver".equals(which)) a = Settings.ACTION_BATTERY_SAVER_SETTINGS;
             else if ("dev".equals(which)) a = Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS;
+            else if ("display".equals(which)) a = Settings.ACTION_DISPLAY_SETTINGS;
+            else if ("apps".equals(which)) a = Settings.ACTION_APPLICATION_SETTINGS;
+            else if ("about".equals(which)) a = Settings.ACTION_DEVICE_INFO_SETTINGS;
+            else if ("date".equals(which)) a = Settings.ACTION_DATE_SETTINGS;
             else if ("usage".equals(which)) a = Settings.ACTION_USAGE_ACCESS_SETTINGS;
             else if ("write".equals(which)) a = Settings.ACTION_MANAGE_WRITE_SETTINGS;
             else if ("battery".equals(which)) a = Intent.ACTION_POWER_USAGE_SUMMARY;
