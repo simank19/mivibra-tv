@@ -191,9 +191,13 @@ jobs:
           mv build-tv/co.mivibra.tv_*.ipk build-tv/MiVibraTV-LG.ipk
           ls -la build-tv
 
+      - name: Armar Roku (.zip)
+        run: python3 .github/scripts/rokupack.py build-tv/MiVibraTV-Roku.zip ${{ github.run_number }}
+
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
           files: |
             build-tv/MiVibraTV-Samsung.wgt
             build-tv/MiVibraTV-LG.ipk
+            build-tv/MiVibraTV-Roku.zip

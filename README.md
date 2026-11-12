@@ -18,6 +18,8 @@
   &nbsp;·&nbsp;
   <a href="docs/INSTALAR-LG.md"><b>📺 TV LG (webOS)</b></a>
   &nbsp;·&nbsp;
+  <a href="docs/INSTALAR-ROKU.md"><b>📺 Roku</b></a>
+  &nbsp;·&nbsp;
   <a href="https://simank19.github.io/mivibra-tv/panel/"><b>📺 Agregar mi lista a la TV (panel web)</b></a>
 </p>
 
@@ -145,6 +147,10 @@ En el PC: **Esc** o el botón Atrás del mouse = Atrás, **F11** = pantalla comp
 - Samsung: descarga **[MiVibraTV-Samsung.wgt](https://github.com/simank19/mivibra-tv/releases/latest/download/MiVibraTV-Samsung.wgt)** y sigue la **[guía de instalación para Samsung](docs/INSTALAR-SAMSUNG.md)** (modo desarrollador + Tizen Studio).
 - LG: descarga **[MiVibraTV-LG.ipk](https://github.com/simank19/mivibra-tv/releases/latest/download/MiVibraTV-LG.ipk)** y sigue la **[guía de instalación para LG](docs/INSTALAR-LG.md)** (modo desarrollador + webOS Dev Manager).
 - Es la misma interfaz que en Android TV y se actualiza sola al abrirla con internet. El celular sirve como control, para enviar juegos y como mando de juego.
+
+**Roku**
+- Descarga **[MiVibraTV-Roku.zip](https://github.com/simank19/mivibra-tv/releases/latest/download/MiVibraTV-Roku.zip)** y sigue la **[guía de instalación para Roku](docs/INSTALAR-ROKU.md)** (modo desarrollador y subir el archivo desde el computador).
+- Versión sencilla hecha para Roku: TV en vivo, películas y series de tus listas M3U y Xtream, búsqueda, favoritos y "Continuar viendo" con tu misma cuenta y el panel web.
 
 ## Configuración opcional
 

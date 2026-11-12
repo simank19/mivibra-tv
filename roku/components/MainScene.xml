@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- MiVibra TV para Roku: menú a la izquierda, categorías en el centro y carátulas a la derecha. -->
+<component name="MainScene" extends="Scene">
+  <interface>
+    <field id="exitApp" type="boolean" value="false"/>
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/Config.brs"/>
+  <script type="text/brightscript" uri="pkg:/components/Util.brs"/>
+  <script type="text/brightscript" uri="pkg:/components/MainScene.brs"/>
+  <children>
+    <Rectangle id="bg" width="1920" height="1080" color="0x0D0C0BFF"/>
+    <Poster id="glow" uri="pkg:/images/glow.png" width="1920" height="1080" opacity="0.9"/>
+    <Rectangle id="side" width="400" height="1080" color="0xFFFFFF0C"/>
+
+    <Poster id="logo" uri="pkg:/images/logo.png" translation="[50,46]" width="64" height="64"/>
+    <Label id="brand" text="MiVibra TV" translation="[128,58]" font="font:MediumBoldSystemFont" color="0xF3EFEAFF"/>
+    <Label id="title" translation="[440,52]" width="900" font="font:LargeBoldSystemFont" color="0xF3EFEAFF"/>
+    <Label id="status" translation="[1060,64]" width="800" horizAlign="right" font="font:SmallSystemFont" color="0xA39C94FF"/>
+
+    <LabelList id="nav" translation="[30,170]" itemSize="[340,76]" numRows="9" itemSpacing="[0,8]"
+      color="0xF3EFEAFF" focusedColor="0x0D0C0BFF" focusBitmapBlendColor="0xFF6900FF"
+      font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont" vertFocusAnimationStyle="floatingFocus"/>
+
+    <LabelList id="groups" translation="[430,170]" itemSize="[420,62]" numRows="13" itemSpacing="[0,4]"
+      color="0xD9D2CAFF" focusedColor="0x0D0C0BFF" focusBitmapBlendColor="0xFF6900FF"
+      font="font:SmallSystemFont" focusedFont="font:SmallBoldSystemFont" vertFocusAnimationStyle="floatingFocus"/>
+
+    <PosterGrid id="grid" translation="[890,170]" basePosterSize="[290,163]" numColumns="3" numRows="3"
+      itemSpacing="[26,74]" caption1NumLines="1" posterDisplayMode="scaleToFit"
+      loadingBitmapUri="pkg:/images/tile.png" failedBitmapUri="pkg:/images/tile.png"/>
+
+    <LabelList id="eps" translation="[890,170]" itemSize="[980,62]" numRows="13" itemSpacing="[0,4]" visible="false"
+      color="0xD9D2CAFF" focusedColor="0x0D0C0BFF" focusBitmapBlendColor="0xFF6900FF"
+      font="font:SmallSystemFont" focusedFont="font:SmallBoldSystemFont"/>
+
+    <Label id="info" translation="[890,180]" width="960" height="820" wrap="true" visible="false"
+      font="font:MediumSystemFont" color="0xF3EFEAFF" lineSpacing="10"/>
+
+    <Group id="kbd" visible="false">
+      <Rectangle width="1920" height="1080" color="0x0D0C0BFF"/>
+      <Label text="Buscar canales, películas y series" translation="[460,180]" font="font:LargeBoldSystemFont" color="0xF3EFEAFF"/>
+      <Keyboard id="keyboard" translation="[460,280]"/>
+      <Button id="searchBtn" text="Buscar" translation="[460,860]" minWidth="300"/>
+      <Label text="Escribe y baja hasta “Buscar” (o presiona ▶)" translation="[800,880]" font="font:SmallSystemFont" color="0xA39C94FF"/>
+    </Group>
+
+    <Rectangle id="vbg" width="1920" height="1080" color="0x000000FF" visible="false"/>
+    <Video id="video" width="1920" height="1080" translation="[0,0]" visible="false" enableUI="true"/>
+
+    <Group id="osd" visible="false">
+      <Rectangle width="1920" height="170" translation="[0,910]" color="0x000000B0"/>
+      <Label id="osdText" translation="[80,950]" width="1760" font="font:LargeBoldSystemFont" color="0xF3EFEAFF"/>
+      <Label id="osdHint" translation="[80,1010]" width="1760" font="font:SmallSystemFont" color="0xA39C94FF"/>
+    </Group>
+
+    <Group id="toastG" visible="false">
+      <Rectangle id="toastBg" width="1200" height="84" translation="[360,950]" color="0x181614F0"/>
+      <Label id="toast" translation="[380,950]" width="1160" height="84" horizAlign="center" vertAlign="center" font="font:SmallBoldSystemFont" color="0xF3EFEAFF" wrap="true"/>
+    </Group>
+
+    <Timer id="pollT" repeat="true" duration="60"/>
+    <Timer id="osdT" repeat="false" duration="4"/>
+    <Timer id="toastT" repeat="false" duration="4"/>
+  </children>
+</component>
