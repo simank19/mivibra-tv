@@ -1,6 +1,6 @@
 # Instalar MiVibra TV en un Roku
 
-MiVibra TV para Roku es una versión más sencilla, hecha especialmente para Roku: tiene TV en vivo, películas y series de tus listas, y usa tu misma cuenta MiVibra.
+MiVibra TV para Roku es una versión hecha especialmente para Roku: TV en vivo con guía de programación, películas y series de tus listas, addons de Stremio, Plex y Jellyfin, YouTube, música libre y radio, con tu misma cuenta MiVibra.
 
 ## Lo que necesitas
 - Un Roku (TV Roku, Roku Express, Streaming Stick…) y un computador conectados al mismo Wi-Fi.
@@ -26,15 +26,23 @@ Tienes dos formas, desde **Ajustes** dentro de la app:
 ## Cómo se usa
 - **Izquierda / derecha:** te mueves entre el menú, las categorías y las carátulas.
 - **OK:** abre el canal, la película o los capítulos de la serie.
-- **\* (asterisco):** agrega o quita de Favoritos.
-- **Viendo TV en vivo:** ▲ ▼ cambian de canal y OK muestra el nombre del canal.
+- **✱ (asterisco):** agrega o quita de Favoritos.
+- **Viendo TV en vivo:** ▲ ▼ cambian de canal y OK muestra qué están dando.
+- **Música:** OK pausa, ◀ ▶ cambian de canción, Atrás vuelve (sigue sonando) y ✱ la detiene.
 - **Atrás:** vuelve; en el menú, presiónalo dos veces para salir.
 - Lo que ves queda en **Continuar viendo** y se guarda en tu cuenta: puedes seguirlo en el celular, el TV Android o el PC, y al revés.
 
 ## Qué tiene y qué no
-- **Tiene:** listas M3U y Xtream, TV en vivo, películas, series con temporadas y capítulos, búsqueda, favoritos, Continuar viendo con tu cuenta, perfiles y el panel web.
-- **No tiene (por ahora):** addons de Stremio, guía de programación, YouTube, música, juegos, portales MAC (Stalker), Jellyfin y Plex.
+- **Listas:** M3U y Xtream (TV en vivo, películas y series con temporadas y capítulos).
+- **Guía de programación:** al pararte sobre un canal (y con OK mientras lo ves) muestra qué están dando ahora y qué sigue. Funciona con listas de servidores Xtream (la mayoría de proveedores).
+- **Addons de Stremio:** sus catálogos aparecen en Películas y Series, ordenados por género en español. Al abrir un título busca los enlaces en todos tus addons y muestra primero los que dicen latino o español; tú eliges cuál ver.
+- **Plex y Jellyfin:** tus películas y series de tu servidor, con capítulos.
+- **YouTube:** tendencias de Colombia por categoría y búsqueda. Los videos se abren en la app oficial de YouTube del Roku (tiene que estar instalada). Necesita la clave de YouTube que el administrador pone en la app.
+- **Música y radio:** música libre de Audius (tendencias, géneros y búsqueda) y emisoras de radio de Colombia, México, Argentina, España y EE. UU. o la que busques. Sigue sonando mientras navegas; ✱ la detiene.
+- **Con tu cuenta:** favoritos, Continuar viendo, perfiles y el panel web.
+- **No tiene:** juegos, portales MAC (Stalker) ni descargas.
 - Algunos canales que solo vienen en formato `.ts` pueden no abrir en Roku. Si la lista es Xtream, la app los pide en `.m3u8` automáticamente.
+- Los addons que solo dan torrents (sin servicio de debrid) no sirven en Roku: se muestran solo los enlaces directos.
 
 ## Actualizar
 Tus listas, favoritos y "Continuar viendo" se actualizan solos. Para tener una **versión nueva de la app**, descarga otra vez `MiVibraTV-Roku.zip` y súbela igual que la primera vez (paso 2): se reemplaza y conserva tus datos.
@@ -42,5 +50,6 @@ Tus listas, favoritos y "Continuar viendo" se actualizan solos. Para tener una *
 ## Problemas comunes
 - **No abre la página del Roku en el computador:** revisa que estén en el mismo Wi-Fi y que escribiste `http://` y la dirección exacta.
 - **Pide usuario y contraseña:** el usuario es `rokudev`; la contraseña es la que creaste al activar el modo desarrollador.
+- **YouTube no abre:** instala la app YouTube en el Roku. Si aun así no abre, en el Roku ve a Configuración › Sistema › Configuración avanzada del sistema › Control por aplicaciones móviles › Acceso a la red y elige *Predeterminado*.
 - **"No se pudo reproducir":** ese enlace no funciona en Roku o está caído. Prueba otro canal o el mismo en otra calidad.
 - **Solo se puede tener una app en modo desarrollador:** si subes otra, MiVibra TV se reemplaza.

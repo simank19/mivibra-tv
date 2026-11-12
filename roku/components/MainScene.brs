@@ -18,6 +18,8 @@ sub init()
         { id: "live", t: "TV en vivo" }
         { id: "movie", t: "Películas" }
         { id: "series", t: "Series" }
+        { id: "youtube", t: "YouTube" }
+        { id: "music", t: "Música y radio" }
         { id: "favs", t: "Favoritos" }
         { id: "recent", t: "Continuar viendo" }
         { id: "search", t: "Buscar" }
@@ -42,6 +44,10 @@ sub init()
     m.top.FindNode("pollT").ObserveField("fire", "onPoll")
     m.top.FindNode("osdT").ObserveField("fire", "onOsdHide")
     m.top.FindNode("toastT").ObserveField("fire", "onToastHide")
+    m.top.FindNode("epgT").ObserveField("fire", "onEpgTimer")
+    m.audio = m.top.FindNode("audio")
+    m.mus = m.top.FindNode("mus")
+    m.audio.ObserveField("state", "onAudioState")
 
     m.tasks = {}
     m.reqN = 0
@@ -62,6 +68,13 @@ sub init()
     m.playing = invalid
     m.loginTask = invalid
     m.counts = invalid
+    m.addons = regGet("addons", [])
+    m.ytKey = regGet("ytKey", "")
+    m.epgCache = {}
+    m.lazy = {}
+    m.listMode = "eps"
+    m.kbdMode = "all"
+    m.aList = invalid
 
     m.nav.SetFocus(true)
     load()
@@ -145,6 +158,14 @@ sub onLoad(ev as Object)
     end if
     m.denied = (r.denied = true)
     if r.catalog <> invalid then m.cat = r.catalog
+    if r.addons <> invalid then
+        m.addons = r.addons
+        regSet("addons", m.addons)
+    end if
+    if r.ytKey <> invalid and r.ytKey <> "" then
+        m.ytKey = r.ytKey
+        regSet("ytKey", m.ytKey)
+    end if
     nl = countAll(m.cat.live)
     nm = countAll(m.cat.movie)
     ns = countAll(m.cat.series)
@@ -156,8 +177,8 @@ sub onLoad(ev as Object)
         toast(r.errors[0])
     end if
     if nl + nm + ns = 0 then
-        m.nav.jumpToItem = 6
-        showSection(6)
+        m.nav.jumpToItem = secIndex("settings")
+        showSection(secIndex("settings"))
     else
         showSection(m.secIdx)
     end if
@@ -220,9 +241,12 @@ function fromMini(x as Object) as Object
     p = toS(x.poster)
     if p = "" then p = toS(x.logo)
     it = { t: t, n: toS(x.name), u: toS(x.url), p: p, tvg: toS(x.tvg), key: toS(x.key) }
+    for each extra in ["st", "sty", "sb", "xs", "h", "us", "pw", "px", "pxs", "pxk", "jf", "jfs", "jfk", "jfu"]
+        if x[extra] <> invalid then it[extra] = x[extra]
+    end for
     if x.pos <> invalid then it.pos = x.pos
     if x.dur <> invalid then it.dur = x.dur
-    if t = "series" and it.u = "" then
+    if t = "series" and it.u = "" and it.st = invalid and it.xs = invalid and it.px = invalid and it.jf = invalid then
         s = findByName(m.cat.series, it.n)
         if s <> invalid then return s
     end if
@@ -334,6 +358,46 @@ function recentGroups() as Object
 end function
 
 ' ---------- Secciones ----------
+function secIndex(id as String) as Integer
+    for i = 0 to m.sections.Count() - 1
+        if m.sections[i].id = id then return i
+    end for
+    return 0
+end function
+
+' YouTube y música se cargan al abrir cada categoría
+function ytGroups() as Object
+    return [
+        { g: "Tendencias en Colombia", n: [], lz: { cmd: "yt", cat: "" } }
+        { g: "Música", n: [], lz: { cmd: "yt", cat: "10" } }
+        { g: "Deportes", n: [], lz: { cmd: "yt", cat: "17" } }
+        { g: "Entretenimiento", n: [], lz: { cmd: "yt", cat: "24" } }
+        { g: "Comedia", n: [], lz: { cmd: "yt", cat: "23" } }
+        { g: "Videojuegos", n: [], lz: { cmd: "yt", cat: "20" } }
+        { g: "Noticias", n: [], lz: { cmd: "yt", cat: "25" } }
+        { g: "🔍 Buscar en YouTube…", n: [], kb: "yt" }
+    ]
+end function
+
+function musicGroups() as Object
+    return [
+        { g: "Música libre · Tendencias", n: [], lz: { cmd: "music", kind: "aud" } }
+        { g: "Música libre · Latina", n: [], lz: { cmd: "music", kind: "aud", genre: "Latin" } }
+        { g: "Música libre · Electrónica", n: [], lz: { cmd: "music", kind: "aud", genre: "Electronic" } }
+        { g: "Música libre · Hip-Hop", n: [], lz: { cmd: "music", kind: "aud", genre: "Hip-Hop/Rap" } }
+        { g: "Música libre · Pop", n: [], lz: { cmd: "music", kind: "aud", genre: "Pop" } }
+        { g: "Música libre · Rock", n: [], lz: { cmd: "music", kind: "aud", genre: "Rock" } }
+        { g: "Música libre · Reggae", n: [], lz: { cmd: "music", kind: "aud", genre: "Reggae" } }
+        { g: "🔍 Buscar música…", n: [], kb: "music" }
+        { g: "Radio · Colombia", n: [], lz: { cmd: "music", kind: "radio", cc: "CO" } }
+        { g: "Radio · México", n: [], lz: { cmd: "music", kind: "radio", cc: "MX" } }
+        { g: "Radio · Argentina", n: [], lz: { cmd: "music", kind: "radio", cc: "AR" } }
+        { g: "Radio · España", n: [], lz: { cmd: "music", kind: "radio", cc: "ES" } }
+        { g: "Radio · Estados Unidos", n: [], lz: { cmd: "music", kind: "radio", cc: "US" } }
+        { g: "🔍 Buscar emisora…", n: [], kb: "radio" }
+    ]
+end function
+
 sub onNavFocus()
     showSection(m.nav.itemFocused)
 end sub
@@ -341,7 +405,7 @@ end sub
 sub onNavSelect()
     i = m.nav.itemSelected
     if m.sections[i].id = "search" then
-        openKbd()
+        openKbd("all")
         return
     end if
     if m.groups.content <> invalid and m.groups.content.GetChildCount() > 0 then m.groups.SetFocus(true)
@@ -360,6 +424,12 @@ sub showSection(i as Integer)
     if s.id = "live" or s.id = "movie" or s.id = "series" then
         m.groupsData = m.cat[s.id]
         if m.groupsData = invalid then m.groupsData = []
+    else if s.id = "youtube" then
+        if m.ytGroups = invalid then m.ytGroups = ytGroups()
+        m.groupsData = m.ytGroups
+    else if s.id = "music" then
+        if m.musGroups = invalid then m.musGroups = musicGroups()
+        m.groupsData = m.musGroups
     else if s.id = "favs" then
         m.groupsData = favGroups()
     else if s.id = "recent" then
@@ -374,10 +444,18 @@ sub showSection(i as Integer)
     gc = CreateObject("roSGNode", "ContentNode")
     for each g in m.groupsData
         c = gc.CreateChild("ContentNode")
-        c.title = g.g + "  ·  " + fmtNum(g.n.Count())
+        if g.lz <> invalid or g.kb <> invalid then
+            c.title = g.g
+        else
+            c.title = g.g + "  ·  " + fmtNum(g.n.Count())
+        end if
     end for
     m.groups.content = gc
-    if m.groupsData.Count() > 0 then
+    if s.id = "youtube" and m.ytKey = "" then
+        m.grid.visible = false
+        m.info.visible = true
+        m.info.text = "YouTube necesita la clave de YouTube Data API." + Chr(10) + Chr(10) + "Quien administra tu servicio MiVibra la pone en la app (Ajustes › Sinopsis y carátulas) y llega sola a este Roku al entrar con tu cuenta." + Chr(10) + Chr(10) + "Los videos se abren en la app oficial de YouTube del Roku."
+    else if m.groupsData.Count() > 0 then
         fillGrid(0)
     else
         m.grid.content = CreateObject("roSGNode", "ContentNode")
@@ -409,6 +487,11 @@ sub onGroupSelect()
         settingsAct(m.groups.itemSelected)
         return
     end if
+    gi = m.groups.itemSelected
+    if gi >= 0 and gi < m.groupsData.Count() and m.groupsData[gi].kb <> invalid then
+        openKbd(m.groupsData[gi].kb)
+        return
+    end if
     if m.grid.visible and m.gridItems.Count() > 0 then m.grid.SetFocus(true)
 end sub
 
@@ -417,14 +500,43 @@ sub fillGrid(gi as Integer)
     m.eps.visible = false
     m.info.visible = false
     m.grid.visible = true
-    m.gridItems = m.groupsData[gi].n
+    grp = m.groupsData[gi]
+    m.curGroup = grp
+    if grp.kb <> invalid and grp.n.Count() = 0 then
+        m.grid.visible = false
+        m.info.visible = true
+        m.info.text = "Presiona OK para escribir lo que buscas."
+        m.gridItems = []
+        return
+    end if
+    if grp.lz <> invalid and grp.n.Count() = 0 and grp.loaded <> true then
+        m.grid.visible = false
+        m.info.visible = true
+        m.info.text = "Cargando…"
+        m.gridItems = []
+        if grp.busy <> true then
+            grp.busy = true
+            req = {}
+            req.Append(grp.lz)
+            req.key = m.ytKey
+            req.rk = grp.g
+            api(req, "onLazy")
+        end if
+        return
+    end if
+    m.gridItems = grp.n
     m.gridBuilt = 0
     ' Canales: logos anchos · películas y series: carátulas verticales
-    wide = (m.gridItems.Count() > 0 and m.gridItems[0].t = "live")
-    if wide then
+    t0 = ""
+    if m.gridItems.Count() > 0 then t0 = m.gridItems[0].t
+    if t0 = "live" or t0 = "yt" then
         m.grid.basePosterSize = [290, 163]
         m.grid.numColumns = 3
         m.grid.numRows = 3
+    else if t0 = "audio" then
+        m.grid.basePosterSize = [210, 210]
+        m.grid.numColumns = 4
+        m.grid.numRows = 2
     else
         m.grid.basePosterSize = [200, 300]
         m.grid.numColumns = 4
@@ -454,7 +566,17 @@ end sub
 sub onGridFocus()
     if m.grid.itemFocused > m.gridBuilt - 40 then appendGrid(240)
     i = m.grid.itemFocused
-    if i >= 0 and i < m.gridItems.Count() then m.status.text = toS(m.gridItems[i].n)
+    if i >= 0 and i < m.gridItems.Count() then
+        it = m.gridItems[i]
+        m.status.text = toS(it.n)
+        if it.t = "live" then
+            c = m.epgCache[toS(it.u)]
+            if c <> invalid and nowSec() - c.at < 300 and c.progs.Count() > 0 then m.status.text = epgText(c.progs)
+            tm = m.top.FindNode("epgT")
+            tm.control = "stop"
+            tm.control = "start"
+        end if
+    end if
 end sub
 
 sub onGridSelect()
@@ -466,6 +588,13 @@ end sub
 sub activate(it as Object, idx as Integer)
     if it.t = "series" then
         openSeries(it)
+    else if it.t = "yt" then
+        toast("Abriendo en YouTube…")
+        api({ cmd: "ytplay", vid: it.vid }, "onYtPlay")
+    else if it.t = "audio" then
+        playAudio(m.gridItems, idx)
+    else if toS(it.u) = "" and it.st <> invalid then
+        askStreams(it, toS(it.sty), toS(it.st))
     else if toS(it.u) = "" then
         toast("Este título no tiene enlace en tus listas de este Roku.")
     else
@@ -473,14 +602,208 @@ sub activate(it as Object, idx as Integer)
     end if
 end sub
 
+sub onLazy(ev as Object)
+    r = done(ev)
+    if r = invalid then return
+    for each arr in [m.ytGroups, m.musGroups]
+        if arr <> invalid then
+            for each g in arr
+                if g.g = r.key then
+                    g.busy = false
+                    g.loaded = (r.error = invalid)
+                    if r.items <> invalid then g.n = r.items
+                end if
+            end for
+        end if
+    end for
+    if r.error <> invalid and r.error <> "nokey" then toast(r.error)
+    ' Si sigue abierta esa categoría, se muestran sus carátulas
+    if m.curGroup <> invalid and m.curGroup.g = r.key then
+        gi = m.groups.itemFocused
+        if gi >= 0 and gi < m.groupsData.Count() and m.groupsData[gi].g = r.key then
+            if m.groupsData[gi].n.Count() = 0 then
+                m.info.text = "No llegó nada. Intenta otra vez en un momento."
+            else
+                hadFocus = m.groups.HasFocus()
+                fillGrid(gi)
+                if not hadFocus and m.grid.visible then m.grid.SetFocus(true)
+            end if
+        end if
+    end if
+end sub
+
+' ---------- Guía de programación ----------
+sub onEpgTimer()
+    i = m.grid.itemFocused
+    if i < 0 or i >= m.gridItems.Count() then return
+    it = m.gridItems[i]
+    if it.t <> "live" then return
+    askEpg(toS(it.u))
+end sub
+
+sub askEpg(u as String)
+    c = m.epgCache[u]
+    if c <> invalid and nowSec() - c.at < 300 then
+        showEpg(u, c.progs)
+        return
+    end if
+    api({ cmd: "epg", u: u }, "onEpg")
+end sub
+
+sub onEpg(ev as Object)
+    r = done(ev)
+    if r = invalid or r.key = invalid then return
+    progs = []
+    if r.progs <> invalid then progs = r.progs
+    m.epgCache[r.key] = { at: nowSec(), progs: progs }
+    showEpg(r.key, progs)
+end sub
+
+function epgText(progs as Object) as String
+    if progs = invalid or progs.Count() = 0 then return ""
+    t = "Ahora: " + progs[0].t + " (hasta " + progs[0].b + ")"
+    if progs.Count() > 1 then t = t + "   ·   " + progs[1].a + " " + progs[1].t
+    return t
+end function
+
+sub showEpg(u as String, progs as Object)
+    t = epgText(progs)
+    if m.video.visible and m.playing <> invalid and m.playing.it.u = u then
+        if t <> "" then showOsd(m.playing.it.n, t)
+        return
+    end if
+    i = m.grid.itemFocused
+    if m.grid.HasFocus() and i >= 0 and i < m.gridItems.Count() and m.gridItems[i].u = u then
+        if t = "" then
+            m.status.text = toS(m.gridItems[i].n)
+        else
+            m.status.text = t
+        end if
+    end if
+end sub
+
+' ---------- Música y radio ----------
+sub playAudio(list as Object, idx as Integer)
+    it = list[idx]
+    c = CreateObject("roSGNode", "ContentNode")
+    c.url = it.u
+    c.title = it.n
+    if it.radio = true then
+        if it.hls = true then c.streamFormat = "hls"
+    else
+        c.streamFormat = "mp3"
+    end if
+    m.audio.control = "stop"
+    m.audio.content = c
+    m.audio.control = "play"
+    m.aList = list
+    m.aIdx = idx
+    m.top.FindNode("musArt").uri = toS(it.p)
+    m.top.FindNode("musTitle").text = toS(it.n)
+    m.top.FindNode("musSub").text = toS(it.sub)
+    if it.radio = true then
+        m.top.FindNode("musKind").text = "RADIO EN VIVO"
+    else
+        m.top.FindNode("musKind").text = "MÚSICA LIBRE · AUDIUS"
+    end if
+    m.top.FindNode("musState").text = "Cargando…"
+    m.mus.visible = true
+    m.mus.SetFocus(true)
+end sub
+
+sub onAudioState()
+    st = m.audio.state
+    lbl = m.top.FindNode("musState")
+    if st = "playing" then
+        lbl.text = "▶ Sonando"
+    else if st = "paused" then
+        lbl.text = "❚❚ En pausa"
+    else if st = "buffering" then
+        lbl.text = "Cargando…"
+    else if st = "error" then
+        lbl.text = "No se pudo reproducir"
+        toast("No se pudo reproducir. " + toS(m.audio.errorMsg))
+    else if st = "finished" then
+        if m.aList <> invalid and m.aIdx + 1 < m.aList.Count() and m.aList[m.aIdx].radio <> true then playAudio(m.aList, m.aIdx + 1)
+    end if
+end sub
+
+sub audioStep(d as Integer)
+    if m.aList = invalid then return
+    n = m.aList.Count()
+    if n < 2 then return
+    playAudio(m.aList, (m.aIdx + d + n) mod n)
+end sub
+
+sub hideMus()
+    m.mus.visible = false
+    if m.grid.visible then
+        m.grid.SetFocus(true)
+    else
+        m.nav.SetFocus(true)
+    end if
+    if m.audio.state = "playing" then toast("Sigue sonando: " + toS(m.aList[m.aIdx].n) + " · ✱ en Música para detener")
+end sub
+
+' ---------- Addons de Stremio: elegir enlace ----------
+sub askStreams(it as Object, ty as String, id as String)
+    m.streamFor = it
+    m.status.text = "Buscando enlaces…"
+    toast("Buscando enlaces en tus addons…")
+    api({ cmd: "streams", addons: m.addons, sty: ty, sid: id }, "onStreams")
+end sub
+
+sub onStreams(ev as Object)
+    r = done(ev)
+    if r = invalid then return
+    if m.counts <> invalid then m.status.text = m.counts
+    if r.streams = invalid or r.streams.Count() = 0 then
+        toast("Ningún addon tiene enlaces directos para este título.")
+        return
+    end if
+    m.streamsArr = r.streams
+    m.prevMode = invalid
+    if m.eps.visible then m.prevMode = m.listMode
+    m.listMode = "streams"
+    sc = CreateObject("roSGNode", "ContentNode")
+    for each st in r.streams
+        c = sc.CreateChild("ContentNode")
+        c.title = st.n
+    end for
+    m.eps.content = sc
+    m.title.text = "Elige un enlace · " + toS(m.streamFor.n)
+    m.grid.visible = false
+    m.info.visible = false
+    m.eps.visible = true
+    m.eps.SetFocus(true)
+end sub
+
+sub backFromList()
+    if m.listMode = "streams" and m.prevMode = "eps" and m.epsArr <> invalid then
+        m.prevMode = invalid
+        showEps(m.epsArr, true)
+        return
+    end if
+    m.listMode = "eps"
+    m.eps.visible = false
+    m.grid.visible = true
+    m.title.text = m.sections[m.secIdx].t
+    m.grid.SetFocus(true)
+end sub
+
 ' ---------- Series ----------
+sub onYtPlay(ev as Object)
+    r = done(ev)
+    if r <> invalid and r.error <> invalid then toast(r.error)
+end sub
+
 sub openSeries(it as Object)
     m.curSeries = it
     if it.eps <> invalid then
-        showEps(it.eps)
-    else if it.xs <> invalid then
+        showEps(it.eps, false)
+    else if it.xs <> invalid or it.px <> invalid or it.jf <> invalid or it.st <> invalid then
         m.status.text = "Cargando capítulos…"
-        api({ cmd: "series", item: it }, "onSeries")
+        api({ cmd: "eps", item: it }, "onSeries")
     else
         toast("No encuentro los capítulos de esta serie en tus listas.")
     end if
@@ -491,13 +814,15 @@ sub onSeries(ev as Object)
     if r = invalid then return
     m.status.text = toS(m.curSeries.n)
     if r.error <> invalid or r.eps = invalid or r.eps.Count() = 0 then
-        toast("No se pudieron cargar los capítulos.")
+        msg = "No se pudieron cargar los capítulos."
+        if r.error <> invalid then msg = r.error
+        toast(msg)
         return
     end if
-    showEps(r.eps)
+    showEps(r.eps, false)
 end sub
 
-sub showEps(eps as Object)
+sub showEps(eps as Object, keepPos as Boolean)
     ' Orden: temporada y capítulo
     arr = []
     for each e in eps
@@ -513,7 +838,9 @@ sub showEps(eps as Object)
         nm = toS(e.n)
         c.title = "T" + toS(Int(e.s)) + " · E" + toS(Int(e.e)) + "   " + nm
     end for
+    m.listMode = "eps"
     m.eps.content = ec
+    if keepPos and m.epIdx <> invalid then m.eps.jumpToItem = m.epIdx
     m.title.text = toS(m.curSeries.n)
     m.grid.visible = false
     m.info.visible = false
@@ -523,14 +850,30 @@ end sub
 
 sub onEpSelect()
     i = m.eps.itemSelected
+    if m.listMode = "streams" then
+        if i < 0 or i >= m.streamsArr.Count() then return
+        it = {}
+        it.Append(m.streamFor)
+        it.u = m.streamsArr[i].u
+        play(it, [it], 0)
+        return
+    end if
     if i < 0 or i >= m.epsArr.Count() then return
+    m.epIdx = i
     playEp(i)
 end sub
 
 sub playEp(i as Integer)
     e = m.epsArr[i]
     sn = toS(m.curSeries.n)
-    it = { t: "ep", n: sn + " · T" + toS(Int(e.s)) + " E" + toS(Int(e.e)), u: e.u, p: toS(m.curSeries.p), series: sn, s: e.s, e: e.e }
+    it = { t: "ep", n: sn + " · T" + toS(Int(e.s)) + " E" + toS(Int(e.e)), u: toS(e.u), p: toS(m.curSeries.p), series: sn, s: e.s, e: e.e }
+    if it.u = "" and e.vid <> invalid then
+        ' Capítulo de un addon: primero se buscan sus enlaces
+        sty = toS(e.sty)
+        if sty = "" then sty = "series"
+        askStreams(it, sty, e.vid)
+        return
+    end if
     play(it, m.epsArr, i)
 end sub
 
@@ -580,8 +923,10 @@ sub play(it as Object, list as Object, idx as Integer)
     m.video.control = "play"
     m.playing = { it: it, list: list, idx: idx }
     hint = "Atrás: salir"
-    if live then hint = "▲ ▼ cambiar de canal · OK: nombre del canal · Atrás: salir"
+    if live then hint = "▲ ▼ cambiar de canal · OK: qué están dando · Atrás: salir"
+    if m.audio.state = "playing" or m.audio.state = "paused" then m.audio.control = "stop"
     showOsd(it.n, hint)
+    if live then askEpg(toS(it.u))
 end sub
 
 sub showOsd(t as String, hint as String)
@@ -616,7 +961,7 @@ sub onVideoState()
         toast("No se pudo reproducir. " + msg)
     else if st = "finished" then
         p = m.playing
-        if p <> invalid and p.it.t = "ep" and p.idx + 1 < p.list.Count() then
+        if p <> invalid and p.it.t = "ep" and m.epsArr <> invalid and p.list.Count() = m.epsArr.Count() and p.idx + 1 < p.list.Count() and toS(p.list[p.idx + 1].u) <> "" then
             record(true)
             playEp(p.idx + 1)
         else
@@ -704,6 +1049,7 @@ sub toggleFav()
     i = m.grid.itemFocused
     if i < 0 or i >= m.gridItems.Count() then return
     it = m.gridItems[i]
+    if it.t = "yt" or it.t = "audio" then return
     k = itemKey(it)
     if m.myFavs.DoesExist(k) then
         m.myFavs.Delete(k)
@@ -711,14 +1057,20 @@ sub toggleFav()
     else
         t = it.t
         if t = "ep" then t = "movie"
-        m.myFavs[k] = { key: k, type: t, name: toS(it.n), poster: toS(it.p), logo: toS(it.p), url: toS(it.u), tvg: toS(it.tvg), ts: nowMs() }
+        f = { key: k, type: t, name: toS(it.n), poster: toS(it.p), logo: toS(it.p), url: toS(it.u), tvg: toS(it.tvg), ts: nowMs() }
+        ' Lo que hace falta para volver a abrirlo (addons, Plex, Jellyfin, Xtream)
+        for each extra in ["st", "sty", "sb", "xs", "h", "us", "pw", "px", "pxs", "pxk", "jf", "jfs", "jfk", "jfu"]
+            if it[extra] <> invalid then f[extra] = it[extra]
+        end for
+        m.myFavs[k] = f
         toast("Agregado a favoritos: " + toS(it.n))
     end if
     regSet("favs", m.myFavs)
 end sub
 
 ' ---------- Buscar ----------
-sub openKbd()
+sub openKbd(mode = "all" as String)
+    m.kbdMode = mode
     m.keyboard.text = ""
     m.kbd.visible = true
     m.keyboard.SetFocus(true)
@@ -732,6 +1084,31 @@ end sub
 sub onSearchGo()
     q = LCase(m.keyboard.text.Trim())
     m.kbd.visible = false
+    if m.kbdMode <> "all" then
+        if Len(q) < 2 then
+            m.groups.SetFocus(true)
+            return
+        end if
+        gi = m.groups.itemFocused
+        if gi < 0 or gi >= m.groupsData.Count() then return
+        grp = m.groupsData[gi]
+        grp.g = "🔍 " + m.keyboard.text
+        grp.n = []
+        grp.loaded = false
+        grp.busy = false
+        if m.kbdMode = "yt" then
+            grp.lz = { cmd: "yt", q: m.keyboard.text }
+        else if m.kbdMode = "radio" then
+            grp.lz = { cmd: "music", kind: "radio", q: m.keyboard.text }
+        else
+            grp.lz = { cmd: "music", kind: "aud", q: m.keyboard.text }
+        end if
+        grp.kb = invalid
+        m.groups.content.GetChild(gi).title = grp.g
+        m.groups.SetFocus(true)
+        fillGrid(gi)
+        return
+    end if
     if Len(q) < 2 then
         toast("Escribe al menos 2 letras")
         m.nav.SetFocus(true)
@@ -753,7 +1130,7 @@ sub onSearchGo()
         if found.Count() > 0 then res.Push({ g: names[kind], n: found })
     end for
     m.searchRes = res
-    showSection(5)
+    showSection(secIndex("search"))
     m.title.text = "Buscar: " + m.keyboard.text
     if res.Count() = 0 then
         m.info.text = "No encontré nada con “" + m.keyboard.text + "”." + Chr(10) + Chr(10) + "Presiona OK sobre Buscar para intentar otra vez."
@@ -891,6 +1268,27 @@ end sub
 ' ---------- Control remoto ----------
 function onKeyEvent(key as String, press as Boolean) as Boolean
     if not press then return false
+    if m.mus.visible then
+        if key = "back" then
+            hideMus()
+        else if key = "OK" or key = "play" then
+            if m.audio.state = "paused" then
+                m.audio.control = "resume"
+            else if m.audio.state = "playing" then
+                m.audio.control = "pause"
+            else
+                playAudio(m.aList, m.aIdx)
+            end if
+        else if key = "right" or key = "fastforward" or key = "down" then
+            audioStep(1)
+        else if key = "left" or key = "rewind" or key = "up" then
+            audioStep(-1)
+        else if key = "options" then
+            m.audio.control = "stop"
+            hideMus()
+        end if
+        return true
+    end if
     if m.video.visible then
         if key = "back" then
             closePlayer()
@@ -904,7 +1302,11 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
                 zap(1)
                 return true
             else if key = "OK" then
-                showOsd(m.playing.it.n, "▲ ▼ cambiar de canal · Atrás: salir")
+                c = m.epgCache[toS(m.playing.it.u)]
+                t = "▲ ▼ cambiar de canal · Atrás: salir"
+                if c <> invalid and c.progs.Count() > 0 then t = epgText(c.progs)
+                showOsd(m.playing.it.n, t)
+                askEpg(toS(m.playing.it.u))
                 return true
             end if
         end if
@@ -928,10 +1330,7 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     end if
     if m.eps.HasFocus() then
         if key = "back" or key = "left" then
-            m.eps.visible = false
-            m.grid.visible = true
-            m.title.text = m.sections[m.secIdx].t
-            m.grid.SetFocus(true)
+            backFromList()
             return true
         end if
         return false
@@ -941,7 +1340,12 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
             m.groups.SetFocus(true)
             return true
         else if key = "options" then
-            toggleFav()
+            if m.sec = "music" and m.audio.state = "playing" then
+                m.audio.control = "stop"
+                toast("Música detenida")
+            else
+                toggleFav()
+            end if
             return true
         end if
         return false

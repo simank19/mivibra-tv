@@ -150,7 +150,7 @@ En el PC: **Esc** o el botón Atrás del mouse = Atrás, **F11** = pantalla comp
 
 **Roku**
 - Descarga **[MiVibraTV-Roku.zip](https://github.com/simank19/mivibra-tv/releases/latest/download/MiVibraTV-Roku.zip)** y sigue la **[guía de instalación para Roku](docs/INSTALAR-ROKU.md)** (modo desarrollador y subir el archivo desde el computador).
-- Versión sencilla hecha para Roku: TV en vivo, películas y series de tus listas M3U y Xtream, búsqueda, favoritos y "Continuar viendo" con tu misma cuenta y el panel web.
+- Hecha para Roku: TV en vivo con guía, películas y series de tus listas M3U y Xtream, addons de Stremio, Plex y Jellyfin, YouTube (en la app oficial), música libre y radio, búsqueda, favoritos y "Continuar viendo" con tu misma cuenta y el panel web.
 
 ## Configuración opcional
 

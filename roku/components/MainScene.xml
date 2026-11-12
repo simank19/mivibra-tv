@@ -47,6 +47,18 @@
     <Rectangle id="vbg" width="1920" height="1080" color="0x000000FF" visible="false"/>
     <Video id="video" width="1920" height="1080" translation="[0,0]" visible="false" enableUI="true"/>
 
+    <Audio id="audio"/>
+    <Group id="mus" visible="false">
+      <Rectangle width="1920" height="1080" color="0x0D0C0BFF"/>
+      <Poster id="glow2" uri="pkg:/images/glow.png" width="1920" height="1080"/>
+      <Poster id="musArt" translation="[200,290]" width="500" height="500" loadDisplayMode="scaleToFit" loadingBitmapUri="pkg:/images/tile.png" failedBitmapUri="pkg:/images/tile.png"/>
+      <Label id="musKind" translation="[780,330]" width="1000" font="font:SmallBoldSystemFont" color="0xFF6900FF"/>
+      <Label id="musTitle" translation="[780,380]" width="1000" wrap="true" maxLines="3" font="font:LargeBoldSystemFont" color="0xF3EFEAFF"/>
+      <Label id="musSub" translation="[780,560]" width="1000" font="font:MediumSystemFont" color="0xA39C94FF"/>
+      <Label id="musState" translation="[780,640]" width="1000" font="font:MediumBoldSystemFont" color="0xF3EFEAFF"/>
+      <Label text="OK: pausa · ◀ ▶ anterior / siguiente · Atrás: volver (sigue sonando) · ✱: detener" translation="[780,740]" width="1000" wrap="true" font="font:SmallSystemFont" color="0xA39C94FF"/>
+    </Group>
+
     <Group id="osd" visible="false">
       <Rectangle width="1920" height="170" translation="[0,910]" color="0x000000B0"/>
       <Label id="osdText" translation="[80,950]" width="1760" font="font:LargeBoldSystemFont" color="0xF3EFEAFF"/>
@@ -61,5 +73,6 @@
     <Timer id="pollT" repeat="true" duration="60"/>
     <Timer id="osdT" repeat="false" duration="4"/>
     <Timer id="toastT" repeat="false" duration="4"/>
+    <Timer id="epgT" repeat="false" duration="0.8"/>
   </children>
 </component>
