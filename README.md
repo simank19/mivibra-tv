@@ -45,6 +45,8 @@ MiVibra TV junta en un solo lugar las listas que ya tienes (M3U, Xtream Codes, P
 | **TV LG (webOS)** | [MiVibraTV-LG.ipk](https://github.com/simank19/mivibra-tv/releases/latest/download/MiVibraTV-LG.ipk) | [Guía LG](docs/INSTALAR-LG.md) | ✅ Al abrirla | Igual que Samsung; el modo desarrollador de LG hay que extenderlo cada 50 horas |
 | **Roku** | [MiVibraTV-Roku.zip](https://github.com/simank19/mivibra-tv/releases/latest/download/MiVibraTV-Roku.zip) | [Guía Roku](docs/INSTALAR-ROKU.md) | ✅ Al abrirla | Juegos, portales MAC, descargas; YouTube se abre en la app oficial |
 
+**Enlaces directos** (siempre bajan la versión más reciente): [APK](https://simank19.github.io/mivibra-tv/descargar/apk/) · [PC](https://simank19.github.io/mivibra-tv/descargar/pc/) · [Samsung](https://simank19.github.io/mivibra-tv/descargar/samsung/) · [LG](https://simank19.github.io/mivibra-tv/descargar/lg/) · [Roku](https://simank19.github.io/mivibra-tv/descargar/roku/)
+
 En todas usas la **misma cuenta**: tus listas, perfiles, favoritos y "Continuar viendo" se sincronizan, y puedes agregar listas desde el **[panel web](https://simank19.github.io/mivibra-tv/panel/)** con el código de cada TV. El **celular sirve como control** en todas (en Samsung, LG y Roku escaneando el código QR de Ajustes).
 
 ## Cómo se ve

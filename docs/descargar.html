@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Descargar MiVibra TV</title>
+<meta property="og:title" content="Descargar MiVibra TV">
+<meta property="og:description" content="Reproductor para Android TV, celular, PC, Samsung, LG y Roku. No incluye contenido: reproduce tus listas.">
+<meta property="og:image" content="https://raw.githubusercontent.com/simank19/mivibra-tv/main/docs/capturas/plataformas.jpg">
+<style>
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0D0C0B;color:#F3EFEA;font:16px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;text-align:center;padding:24px;box-sizing:border-box}
+  .c{max-width:460px}
+  h1{font-size:24px;margin:16px 0 8px}
+  p{color:#A39C94;line-height:1.5}
+  a.b{display:inline-block;margin-top:14px;padding:14px 22px;border-radius:14px;background:#FF6900;color:#0D0C0B;font-weight:700;text-decoration:none}
+  a{color:#FFB27A}
+</style>
+</head>
+<body>
+<div class="c">
+  <img src="../../panel/isotipo.svg" width="64" height="64" alt="">
+  <h1 id="t">Preparando tu descarga…</h1>
+  <p id="d">Si no empieza sola en unos segundos, toca el botón.</p>
+  <a class="b" id="go" href="https://github.com/simank19/mivibra-tv/releases/latest">Descargar</a>
+  <p style="font-size:13px;margin-top:22px"><a href="https://github.com/simank19/mivibra-tv#dónde-funciona">Guías de instalación</a> · MiVibra TV no incluye ni vende contenido.</p>
+</div>
+<script>
+/* Enlaces cortos que siempre bajan la versión más reciente:
+   /descargar/apk/ · /descargar/pc/ · /descargar/samsung/ · /descargar/lg/ · /descargar/roku/ */
+(function () {
+  var REPO = 'simank19/mivibra-tv';
+  var kind = (location.pathname.match(/descargar\/([a-z]+)/) || [])[1] || '';
+  var names = { apk: 'Android (APK)', pc: 'PC Windows', samsung: 'TV Samsung', lg: 'TV LG', roku: 'Roku' };
+  var fixed = { samsung: 'MiVibraTV-Samsung.wgt', lg: 'MiVibraTV-LG.ipk', roku: 'MiVibraTV-Roku.zip' };
+  var guide = { samsung: 'INSTALAR-SAMSUNG.md', lg: 'INSTALAR-LG.md', roku: 'INSTALAR-ROKU.md' };
+  var go = document.getElementById('go');
+  if (names[kind]) document.getElementById('t').textContent = 'Descargando MiVibra TV para ' + names[kind] + '…';
+  if (guide[kind]) document.getElementById('d').innerHTML = 'Después sigue la <a href="https://github.com/' + REPO + '/blob/main/docs/' + guide[kind] + '">guía de instalación</a>. Si la descarga no empieza, toca el botón.';
+  function start(url) { go.href = url; setTimeout(function () { location.href = url; }, 400); }
+  if (fixed[kind]) { start('https://github.com/' + REPO + '/releases/latest/download/' + fixed[kind]); return; }
+  if (kind !== 'apk' && kind !== 'pc') return;
+  var rx = kind === 'pc' ? /^MiVibraTV-PC-\d+\.exe$/i : /^MiVibraTV-\d+\.apk$/i;
+  fetch('https://api.github.com/repos/' + REPO + '/releases/latest').then(function (r) { return r.json(); }).then(function (j) {
+    var a = (j.assets || []).filter(function (x) { return rx.test(x.name); })[0];
+    if (a) start(a.browser_download_url);
+  }).catch(function () {});
+})();
+</script>
+</body>
+</html>

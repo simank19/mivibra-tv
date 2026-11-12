@@ -10,6 +10,7 @@ on:
       - ".github/workflows/panel.yml"
       - ".github/SIN_CONTACTO"
       - "docs/drive.html"
+      - "docs/descargar.html"
       - "app/src/main/assets/www/**"
       - "tvweb/**"
       - "desktop/web/player.*"
@@ -61,6 +62,8 @@ jobs:
           cp app/src/main/assets/www/img/isotipo.svg site/mando/isotipo.svg
           cp site/panel/config.js site/mando/config.js
           printf '<!doctype html><meta http-equiv="refresh" content="0;url=panel/">' > site/index.html
+          # Enlaces cortos de descarga (siempre la versión más reciente): /descargar/apk/, /pc/, /samsung/, /lg/, /roku/
+          for k in apk pc samsung lg roku; do mkdir -p site/descargar/$k; cp docs/descargar.html site/descargar/$k/index.html; done
           # Página de regreso de Google al conectar Drive desde el celular
           cp docs/drive.html site/drive.html
       - name: Versión para televisores Samsung y LG (se actualizan solos desde aquí)
