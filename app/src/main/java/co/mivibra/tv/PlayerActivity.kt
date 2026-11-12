@@ -425,6 +425,7 @@ class PlayerActivity : ComponentActivity() {
     private var subAddons = JSONArray()
     private var addonSubs: List<Subtitles.AddonSub>? = null   // null = buscando
     private var addonSubsFor = ""
+    private var addonSubsNoId = false
 
     /** Id del video para los addons de subtítulos: el del addon de Stremio o el de IMDb (tt…:temporada:capítulo). */
     private fun addonSubId(item: JSONObject): Pair<String, String>? {
@@ -438,7 +439,8 @@ class PlayerActivity : ComponentActivity() {
 
     private fun loadAddonSubs(item: JSONObject) {
         if (live || subAddons.length() == 0) return
-        val (type, id) = addonSubId(item) ?: run { addonSubs = emptyList(); addonSubsFor = item.optString("id"); return }
+        val (type, id) = addonSubId(item) ?: run { addonSubs = emptyList(); addonSubsNoId = true; addonSubsFor = item.optString("id"); return }
+        addonSubsNoId = false
         val key = item.optString("id")
         addonSubsFor = key; addonSubs = null
         val addons = subAddons
@@ -872,6 +874,7 @@ class PlayerActivity : ComponentActivity() {
             val asubs = addonSubs
             when {
                 asubs == null -> m.note("Buscando subtítulos en tus addons…")
+                asubs.isEmpty() && addonSubsNoId -> m.note("Tus addons de subtítulos buscan por el ID de IMDb y no se sabe cuál es este video (sin ficha de TMDB).")
                 asubs.isEmpty() -> m.note("Tus addons de subtítulos no tienen para este video.")
                 else -> {
                     // Accesos rápidos: los primeros del idioma preferido; el resto en "Más subtítulos"

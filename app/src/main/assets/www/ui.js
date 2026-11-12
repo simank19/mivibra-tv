@@ -2138,6 +2138,20 @@
     playing = Object.assign({ started: Date.now() }, ctx);
     req.audioLang = P.audioLang; req.subLang = P.subLang; req.subKey = P.subKey || '';
     req.subAddons = MV.stremioSubBases ? MV.stremioSubBases() : [];
+    // Los addons de subtítulos buscan por el ID de IMDb: si aún no se conoce (no se abrió la ficha), se pide antes de abrir el reproductor
+    var q0 = (req.queue || [])[0], it0 = ctx.item;
+    if (A && req.subAddons.length && !req.live && !req.ext && q0 && !q0.sImdb && !q0.stSubId && it0 && it0.type !== 'rom' && !ctx._metaTried && MV.meta) {
+      ctx._metaTried = true;
+      var done = false, go = function (m) {
+        if (done) return; done = true;
+        if (m && m.imdb) (req.queue || []).forEach(function (x) { if (!x.sImdb) x.sImdb = m.imdb; if (!x.sTmdb && m.tmdbId) x.sTmdb = m.tmdbId; });
+        if (m && !it0._meta) it0._meta = m;
+        A.play(JSON.stringify(req));
+      };
+      setTimeout(function () { go(null); }, 2500);
+      MV.meta(it0).then(go, function () { go(null); });
+      return;
+    }
     if (A) A.play(JSON.stringify(req));
     else { window.open(req.queue[req.index || 0].url, '_blank'); MV.onPlayerClosed({ id: ctx.item.key, position: 0, duration: 0, live: !!req.live }); }
   }

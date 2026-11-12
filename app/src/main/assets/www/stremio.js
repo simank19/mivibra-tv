@@ -35,7 +35,8 @@
 
   /** Addons instalados que dan subtítulos (OpenSubtitles v3, SubDL, SubSource…): el reproductor les pide los del video. */
   MV.stremioSubBases = function () {
-    return lists().filter(function (l) { return l.man && res(l.man, 'subtitles'); }).map(function (l) { var m = l.man; return { base: base(l.url), name: l.name || m.name || 'Addon', pre: (function () { var r = (m.resources || []).filter(function (x) { return x && x.name === 'subtitles'; })[0]; return (r && r.idPrefixes) || m.idPrefixes || []; })() }; });
+    // Si aún no se leyó su manifest (por ejemplo recién abierta la app), igual se le pregunta: el que no tenga subtítulos no responde nada
+    return lists().filter(function (l) { return !l.man || !l.man.resources || res(l.man, 'subtitles'); }).map(function (l) { var m = l.man || {}; return { base: base(l.url), name: l.name || m.name || 'Addon', pre: (function () { var r = (m.resources || []).filter(function (x) { return x && x.name === 'subtitles'; })[0]; return (r && r.idPrefixes) || m.idPrefixes || []; })() }; });
   };
 
   // ---------- Contenido de addons en español y en las categorías de la app ----------
