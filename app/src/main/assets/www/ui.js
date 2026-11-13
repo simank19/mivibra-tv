@@ -2351,7 +2351,6 @@
         }).join('') + '</div><div class="btns"><button class="btn ghost f" data-act="confirmNo">Cancelar</button></div>', { onClose: function () { reject(new Error('cancelado')); } });
     });
   }
-  MV.ACT.srcPick = function (i) { if (MV._srcPick) MV._srcPick(i); };
   /** Elige el enlace que responde: primero el que ya funcionó antes, luego la mejor calidad que conteste (máx. 3 s de espera). */
   function pickWorking(it, url) {
     var alts = (it.alts || []).filter(function (u) { return u && !/^stalker:|^yt:/.test(u); });
@@ -2696,6 +2695,7 @@
     },
     stPrefSet: function (id) { P.stPref = id || ''; MV.savePrefs(); var l = MV.stPrefList && MV.stPrefList(); MV.toast(l ? 'Se reproducirá primero desde ' + l.name : 'Se mostrará la lista de enlaces para elegir'); MV.rerender(); },
     showHidden: function () { MV._showHidden = !MV._showHidden; MV.rerender(); },
+    srcPick: function (i) { if (MV._srcPick) MV._srcPick(i); },
     askSrcToggle: function (_, el) { P.askSource = P.askSource === false; MV.savePrefs(); if (el) el.classList.toggle('on', P.askSource !== false); MV.toast(P.askSource !== false ? 'Antes de reproducir podrás elegir la fuente' : 'Se reproducirá solo con el mejor enlace'); },
     stAutoToggle: function (_, el) { P.stAutoRefresh = !P.stAutoRefresh; MV.savePrefs(); if (el) el.classList.toggle('on', P.stAutoRefresh); MV.toast(P.stAutoRefresh ? 'Los addons se actualizarán al abrir la app' : 'Los addons se guardan 12 horas'); },
     stRefreshNow: function () {
