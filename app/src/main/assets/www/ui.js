@@ -1996,6 +1996,7 @@
           '<button class="iconbtn f" data-act="listEpg" data-arg="' + l.id + '" aria-label="Guía EPG">' + IC.guide + '</button>' +
           '<button class="iconbtn f" data-act="listDelete" data-arg="' + l.id + '" aria-label="Eliminar">' + IC.trash + '</button></div>';
       }).join('') : '<p class="muted">' + (provBlock ? 'Aún no has agregado listas propias.' : 'No has agregado listas.') + '</p>') +
+      '<div class="line"><div class="t"><b>Elegir de dónde reproducir</b><span>Antes de ver una película o capítulo muestra la lista de enlaces y fuentes para escoger (apagado: arranca solo con el mejor).</span></div><button class="toggle f' + (P.askSource !== false ? ' on' : '') + '" data-act="askSrcToggle" aria-label="Elegir de dónde reproducir"></button></div>' +
       '<div class="line"><div class="t"><b>Actualizar addons al abrir la app</b><span>Vuelve a pedir los catálogos de tus addons cada vez que abres MiVibra (si está apagado, se guardan 12 horas).</span></div><button class="toggle f' + (P.stAutoRefresh ? ' on' : '') + '" data-act="stAutoToggle" aria-label="Actualizar addons al abrir la app"></button></div>' +
       '<div class="line"><div class="t"><b>Actualizar addons ahora</b><span>Vuelve a cargar todos los addons y plugins (catálogos nuevos, cambios de configuración).</span></div><button class="btn ghost f" data-act="stRefreshNow">Actualizar</button></div>' +
       (function () {
@@ -2234,6 +2235,12 @@
     var local = MV.dlLocal(it.key);
     if (local) { launch({ queue: [q(it, { url: local, alts: [] })], index: 0, live: false, startMs: prog ? prog.pos : 0 }, { item: it }); return; }
     var go = function (url) {
+      // Con varias fuentes (la misma película en varias listas) se muestra la lista para elegir de dónde verla
+      var alts = (it.alts || []).filter(function (u) { return u && u !== url && !/^stalker:|^yt:/.test(u); });
+      if (P.askSource !== false && alts.length && !/^stalker:/.test(url)) {
+        sourcePick(it, [url].concat(alts)).then(function (r) { launch({ queue: [q(it, { url: r.url, alts: r.alts })], index: 0, live: false, startMs: prog ? prog.pos : 0 }, { item: it }); }).catch(function () {});
+        return;
+      }
       // Antes de abrir, se elige entre la versión principal y las de respaldo la que responde (así el video arranca de una)
       pickWorking(it, url).then(function (r) { launch({ queue: [q(it, { url: r.url, alts: r.alts })], index: 0, live: false, startMs: prog ? prog.pos : 0 }, { item: it }); });
     };
@@ -2323,6 +2330,28 @@
     MV.save('linkOk', LINKS); MV.save('hostHealth', HOSTS);
   }
   MV.hostPenalty = function (u) { var h = HOSTS[hostOf(u)]; return h && h.bad >= 3 && h.bad > h.ok * 2 ? -12 : 0; };
+  /** Lista de fuentes de un título (principal y respaldos de otras listas) para elegir antes de reproducir. */
+  function sourcePick(it, urls) {
+    var main = S.lists.find(function (l) { return l.id === it.list; });
+    function tagsOf(u) {
+      var t = [], low = u.toLowerCase();
+      [['2160|4k|uhd', '4K'], ['1080', '1080p'], ['720', '720p'], ['480', '480p'], ['latino|lat\\b', 'Latino'], ['castellano', 'Castellano'], ['\\bsub', 'Subtitulado']].forEach(function (r) { if (new RegExp(r[0]).test(low)) t.push(r[1]); });
+      var ext = (low.split('?')[0].match(/\.(mp4|mkv|m3u8|avi|ts)$/) || [])[1]; if (ext) t.push(ext.toUpperCase());
+      if (LINKS[it.key] === u) t.unshift('Funcionó la última vez');
+      if (MV.hostPenalty(u) < 0) t.push('Ha fallado antes');
+      return t;
+    }
+    return new Promise(function (resolve, reject) {
+      MV._srcPick = function (i) { MV.closeModal(true); var u = urls[+i]; resolve({ url: u, alts: urls.filter(function (x) { return x !== u; }) }); };
+      MV.modal('<h2>¿De dónde quieres verla?</h2><p class="muted">' + urls.length + ' fuentes para “' + esc(MV.cleanTitle(it.name) || it.name) + '”. Si una no arranca, el reproductor prueba sola la siguiente.</p><div class="stpick">' +
+        urls.map(function (u, i) {
+          var name = i === 0 ? (main ? main.name : 'Fuente principal') : 'Fuente ' + (i + 1) + ' · ' + (hostOf(u) || 'otra lista');
+          var tg = tagsOf(u);
+          return '<button class="stopt f" data-act="srcPick" data-arg="' + i + '"' + (i ? '' : ' data-autofocus') + '><b>' + esc(name) + '</b>' + (tg.length ? '<span>' + tg.map(esc).join(' · ') + '</span>' : '') + '</button>';
+        }).join('') + '</div><div class="btns"><button class="btn ghost f" data-act="confirmNo">Cancelar</button></div>', { onClose: function () { reject(new Error('cancelado')); } });
+    });
+  }
+  MV.ACT.srcPick = function (i) { if (MV._srcPick) MV._srcPick(i); };
   /** Elige el enlace que responde: primero el que ya funcionó antes, luego la mejor calidad que conteste (máx. 3 s de espera). */
   function pickWorking(it, url) {
     var alts = (it.alts || []).filter(function (u) { return u && !/^stalker:|^yt:/.test(u); });
@@ -2667,6 +2696,7 @@
     },
     stPrefSet: function (id) { P.stPref = id || ''; MV.savePrefs(); var l = MV.stPrefList && MV.stPrefList(); MV.toast(l ? 'Se reproducirá primero desde ' + l.name : 'Se mostrará la lista de enlaces para elegir'); MV.rerender(); },
     showHidden: function () { MV._showHidden = !MV._showHidden; MV.rerender(); },
+    askSrcToggle: function (_, el) { P.askSource = P.askSource === false; MV.savePrefs(); if (el) el.classList.toggle('on', P.askSource !== false); MV.toast(P.askSource !== false ? 'Antes de reproducir podrás elegir la fuente' : 'Se reproducirá solo con el mejor enlace'); },
     stAutoToggle: function (_, el) { P.stAutoRefresh = !P.stAutoRefresh; MV.savePrefs(); if (el) el.classList.toggle('on', P.stAutoRefresh); MV.toast(P.stAutoRefresh ? 'Los addons se actualizarán al abrir la app' : 'Los addons se guardan 12 horas'); },
     stRefreshNow: function () {
       MV.toast('Actualizando tus addons…', 3000);

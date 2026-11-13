@@ -294,7 +294,9 @@
   }
   MV.stremioPick = function (type, id, title, showAll, skipPref, opts) {
     if (opts && !opts.name) opts.name = title;
-    var pref = !showAll && !skipPref && MV.stPrefList();
+    // Por defecto se muestra siempre la lista de enlaces para elegir (Ajustes › Reproductor › Elegir de dónde reproducir)
+    var ask = S.prefs.askSource !== false;
+    var pref = !ask && !showAll && !skipPref && MV.stPrefList();
     MV.toast(pref ? 'Buscando en ' + (pref.name || 'tu addon preferido') + '…' : 'Buscando enlaces en tus addons…', 3000);
     MV._stTorrents = 0;
     MV._stDiag = {};
@@ -338,7 +340,9 @@
       st = st.filter(function (x) { return !x._other; }).concat(st.filter(function (x) { return x._other; }));
       // Los demás enlaces quedan de respaldo: si el elegido no es un video, el reproductor prueba el siguiente solo
       function withRest(x) { x.rest = st.filter(function (y) { return y !== x && !y._other; }).map(function (y) { return y.url; }).slice(0, 8); return x; }
-      if (st.length === 1 && !st[0]._other) return withRest(st[0]);
+      // El addon preferido va primero en la lista
+      if (S.prefs.stPref) st = st.filter(function (x) { return x.lid === S.prefs.stPref; }).concat(st.filter(function (x) { return x.lid !== S.prefs.stPref; }));
+      if (!ask && st.length === 1 && !st[0]._other) return withRest(st[0]);
       return new Promise(function (resolve, reject) {
         MV._stPick = function (i) { MV.closeModal(true); resolve(withRest(st[+i])); };
         MV.modal('<h2>Elige el enlace</h2><p class="muted">' + st.length + ' opciones de tus addons para “' + esc(title) + '”.</p><div class="stpick">' +
