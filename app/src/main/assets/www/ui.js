@@ -735,6 +735,7 @@
         '<button class="vall f" data-act="nav" data-arg="movies">' + IC.movie + 'Elegir una película</button></section>';
     }
     out += '</div></div>';
+    out += homeWidgets();
     out += '<div class="vchips chips" role="tablist" aria-label="Categorías">' + HCHIPS.map(function (c) {
       return '<button class="chip f' + (homeChip === c[0] ? ' on' : '') + '" role="tab" aria-selected="' + (homeChip === c[0]) + '" data-act="homeChip" data-arg="' + c[0] + '" data-fid="hc-' + c[0] + '">' + c[1] + '</button>';
     }).join('') + '<button class="chip f" data-act="nav" data-arg="utils">' + IC.grid + 'Todas las secciones</button></div>';
@@ -756,6 +757,46 @@
     return out;
   }
 
+  // ---------- Widgets del Inicio: navegador, lectura, música y radio, soporte ----------
+  function wHead(icon, title, act, arg) {
+    return '<div class="wgh"><span class="wgi">' + icon + '</span><b>' + title + '</b>' + (act ? '<button class="wgmore f" data-act="' + act + '"' + (arg ? ' data-arg="' + arg + '"' : '') + ' aria-label="Abrir ' + title + '">' + '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>' + '</button>' : '') + '</div>';
+  }
+  function musicWidget() {
+    var c = AU.current();
+    return '<section class="wg" id="wgMusic" aria-label="Música y radio">' + wHead(IC.music, 'Música y radio', 'nav', 'music') +
+
+      (c ? '<div class="wgnow"><button class="wgart f" data-act="npOpen" aria-label="Abrir el reproductor" style="--h:' + MV.hue(c.title || '') + '">' + (c.art ? '<img src="' + esc(c.art) + '" alt="" onerror="this.remove()">' : (c.kind === 'radio' ? IC.radio : IC.music)) + '</button>' +
+          '<span class="tx"><small>' + (c.kind === 'radio' ? 'Radio en vivo' : 'Sonando') + '</small><b>' + esc(c.title) + '</b><span>' + esc(c.sub || '') + '</span></span>' +
+          '<button class="wgplay f" data-act="auToggle" aria-label="' + (AU.playing && AU.playing() ? 'Pausa' : 'Reproducir') + '">' + (AU.playing && AU.playing() ? IC.pause : IC.play) + '</button></div>'
+        : '<div class="wgduo"><button class="wgbtn f" data-act="nav" data-arg="music">' + IC.music + 'Música</button><button class="wgbtn f" data-act="nav" data-arg="radio">' + IC.radio + 'Radio</button></div><p class="wgtxt">Tu música, música libre y emisoras de Colombia y el mundo.</p>') + '</section>';
+  }
+  MV.wgMusicPaint = function () { var b = document.getElementById('wgMusic'); if (!b) return; var a = document.activeElement, inside = b.contains(a), act = inside ? a.getAttribute('data-act') : ''; b.outerHTML = musicWidget(); if (act) { var n = document.querySelector('#wgMusic [data-act="' + act + '"]'); if (n) n.focus(); } };
+  function homeWidgets() {
+    if (MV.isKids()) return '';
+    var w = [];
+    // Navegador: accesos rápidos
+    w.push('<section class="wg" aria-label="Navegador">' + wHead(IC.globe, 'Navegador', 'nav', 'browser') +
+      '<div class="wgsites">' + BROWSER_SITES.slice(0, 4).map(function (x) {
+        var host = x[1].replace(/^https?:\/\/(www\.|m\.)?/, '').split('/')[0];
+        return '<button class="wgsite f" data-act="webOpen" data-arg="' + esc(x[1]) + '"><img src="https://www.google.com/s2/favicons?sz=64&domain=' + esc(host) + '" alt="" loading="lazy" onerror="this.remove()"><span>' + esc(x[0]) + '</span></button>';
+      }).join('') + '</div></section>');
+    // Lectura: seguir leyendo o ir a la biblioteca
+    var rr = MV.readRecent ? MV.readRecent() : [], last = rr[0], lb = last && ((S.bookByKey && S.bookByKey[last.key]) || last);
+    if (lb) MV.reg[lb.key] = lb;
+    w.push('<section class="wg" aria-label="Lectura">' + wHead(IC.book, 'Lectura', 'nav', 'books') +
+      (lb ? '<button class="wgbook f" data-act="openBook" data-arg="' + esc(lb.key) + '"><span class="cv" style="--h:' + MV.hue(lb.name || '') + '">' + (lb.poster ? '<img src="' + esc(lb.poster) + '" alt="" loading="lazy" onerror="this.remove()">' : IC.book) + '</span>' +
+          '<span class="tx"><small>Seguir leyendo</small><b>' + esc(lb.name || '') + '</b>' + (last.pct ? '<span class="pg"><i style="width:' + last.pct + '%"></i></span><small>' + last.pct + '% leído</small>' : '') + '</span></button>'
+        : '<p class="wgtxt">Mangas, cómics, libros y revistas en un solo lugar.</p><button class="wgbtn f" data-act="nav" data-arg="books">' + IC.book + 'Abrir la biblioteca</button>') + '</section>');
+    // Música y radio: lo que suena, o accesos
+    w.push(musicWidget());
+    // Soporte: optimizar el equipo y actualizaciones
+    var ver = MV.device && MV.device.versionCode ? 'Versión ' + MV.device.versionCode : '', upd = MV.pendingUpdate;
+    w.push('<section class="wg" aria-label="Soporte">' + wHead(IC.settings || IC.gear || IC.grid, 'Soporte') +
+      '<div class="wgduo col">' + (A && A.openDiag && !(MV.device && MV.device.webtv) ? '<button class="wgbtn f" data-act="openDiag">' + (IC.refresh || '') + (MV.device && MV.device.desktop ? 'Soporte MiVibra PC' : 'Optimizar el equipo') + '</button>' : '') +
+        '<button class="wgbtn f' + (upd ? ' hot' : '') + '" data-act="showUpdate">' + (IC.download || '') + (upd ? 'Actualizar a la ' + esc(upd.version) : 'Buscar actualizaciones') + '</button></div>' +
+      '<p class="wgtxt">' + esc([ver, MV.device && MV.device.model].filter(Boolean).join(' · ')) + '</p></section>');
+    return '<div class="wgrid">' + w.join('') + '</div>';
+  }
   // Píldora que se desliza: la orilla de adelante sale primero y la de atrás la alcanza
   var pillLast = {};
   function e3o(x) { return 1 - Math.pow(1 - x, 3); }
@@ -3966,6 +4007,7 @@
     var repeat = MV.load('auRepeat', 'off'), rate = 1;
     function draw() {
       if (MV.npDraw) MV.npDraw();
+      if (MV.wgMusicPaint) MV.wgMusicPaint();
       var b = box(); if (!b) return;
       if (!cur) { b.hidden = true; b.innerHTML = ''; document.body.classList.remove('has-mini'); return; }
       b.hidden = false; document.body.classList.add('has-mini');
