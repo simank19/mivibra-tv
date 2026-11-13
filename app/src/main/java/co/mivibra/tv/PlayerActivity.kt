@@ -211,6 +211,7 @@ class PlayerActivity : ComponentActivity() {
                 val p = player ?: return true
                 // Solo lo que de verdad es en vivo no se adelanta (una película dentro de una lista de canales sí)
                 if (liveNow(p)) { showHud("En vivo: no se puede adelantar"); return true }
+                if (!p.isCurrentMediaItemSeekable) { showHud("Este video no deja adelantar\n(el servidor no lo permite)"); return true }
                 val right = e.x > view.width / 2f
                 val d = p.duration
                 var to = p.currentPosition + if (right) 30_000 else -30_000
@@ -228,6 +229,7 @@ class PlayerActivity : ComponentActivity() {
                 if (mode == 3 || (mode == 0 && kotlin.math.abs(totalX) > dp(24) && kotlin.math.abs(totalX) > kotlin.math.abs(totalY) * 1.5)) {
                     val p = player ?: return false
                     if (liveNow(p)) { if (mode == 0) { mode = 3; seekTo = -1; showHud("En vivo: no se puede adelantar") }; return true }
+                    if (!p.isCurrentMediaItemSeekable) { if (mode == 0) { mode = 3; seekTo = -1; showHud("Este video no deja adelantar\n(el servidor no lo permite)") }; return true }
                     if (mode == 0) { mode = 3; seekFrom = p.currentPosition }
                     val dur = if (p.duration > 0 && p.duration != C.TIME_UNSET) p.duration else 0L
                     val span = if (dur > 0) (dur / 4).coerceIn(60_000L, 600_000L) else 120_000L
@@ -287,10 +289,9 @@ class PlayerActivity : ComponentActivity() {
             view.findViewById<View>(androidx.media3.ui.R.id.exo_controller)?.setPadding(dp(40), dp(18), dp(40), dp(22))
         }
         (view.findViewById<View>(androidx.media3.ui.R.id.exo_progress) as? androidx.media3.ui.DefaultTimeBar)?.apply {
-            setPlayedColor(0xFFFF6900.toInt())
             setScrubberColor(0xFFFF6900.toInt())
-            setBufferedColor(0x66FFFFFF)
-            setUnplayedColor(0x33FFFFFF)
+            if (this is MvTimeBar) setColors(0xFFFF6900.toInt(), 0x40FFFFFF, 0x66FFFFFF)
+            else { setPlayedColor(0xFFFF6900.toInt()); setBufferedColor(0x66FFFFFF); setUnplayedColor(0x33FFFFFF) }
             // Con el control: 1 segundo por cada toque (si se mantiene, acelera) y se muestra a qué minuto va
             setKeyTimeIncrement(1000)
             timeBar = this
@@ -626,7 +627,10 @@ class PlayerActivity : ComponentActivity() {
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
         val p = ExoPlayer.Builder(this, renderers)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(this).setDataSourceFactory(androidx.media3.datasource.DefaultDataSource.Factory(this, http)))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(
+                androidx.media3.datasource.DefaultDataSource.Factory(this, http),
+                // Así más archivos se pueden adelantar (los que no traen índice): sin esto, al adelantar volvían al inicio
+                androidx.media3.extractor.DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true).setConstantBitrateSeekingAlwaysEnabled(true)))
             .setLoadControl(load)
             .build()
         p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()

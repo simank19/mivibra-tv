@@ -95,7 +95,8 @@
     </LinearLayout>
   </FrameLayout>
 
-  <View android:id="@id/exo_progress_placeholder"
+  <!-- Barra propia: lo visto grueso y lo que falta delgado (MvTimeBar) -->
+  <co.mivibra.tv.MvTimeBar android:id="@id/exo_progress"
       android:layout_width="match_parent"
       android:layout_height="@dimen/exo_styled_progress_layout_height"
       android:layout_gravity="bottom"
