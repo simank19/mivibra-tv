@@ -3246,6 +3246,19 @@
       MV.toast(k === 'audioLang' ? 'Audio preferido guardado' : (val ? 'Subtítulos activados' : 'Subtítulos desactivados'));
     },
     auToggle: function () { AU.toggle(); },
+    npOpen: function () { npOpen(); },
+    npClose: function () { MV.closeModal(); },
+    npSkip: function (d) { AU.seek(AU.time() + (+d || 0)); MV.npTick(); },
+    npSpeed: function () { var r = [0.75, 1, 1.25, 1.5, 2], c = AU.rate(), i = r.indexOf(c); AU.rate(r[(i + 1) % r.length]); },
+    npRepeat: function () { var m = AU.repeat(), n = m === 'off' ? 'all' : m === 'all' ? 'one' : 'off'; AU.repeat(n); MV.toast(n === 'one' ? 'Repetir esta canción' : n === 'all' ? 'Repetir toda la lista' : 'Sin repetir'); },
+    npInfo: function () { var c = AU.current(); if (c) MV.toast([c.title, c.sub, npBadge(c)].filter(Boolean).join(' · '), 4000); },
+    npQueue: function () {
+      var q = AU.list(), i0 = AU.index();
+      MV.modal('<h2>Lista de reproducción</h2><div class="npq">' + q.map(function (t, i) {
+        return '<button class="npqi f' + (i === i0 ? ' on' : '') + '" data-act="npJump" data-arg="' + i + '"' + (i === i0 ? ' data-autofocus' : '') + '><span class="n">' + (i === i0 ? IC.music : (i + 1)) + '</span><span class="t"><b>' + esc(t.title) + '</b><small>' + esc(t.sub || '') + '</small></span></button>';
+      }).join('') + '</div>');
+    },
+    npJump: function (i) { MV.closeModal(); AU.jump(+i); },
     auNext: function () { AU.next(); },
     auPrev: function () { AU.prev(); },
     auStop: function () { AU.stop(); if (view.name === 'radio' || view.name === 'music') MV.rerender(); },
@@ -3950,13 +3963,15 @@
     function applyEq() { var g = (P.eq && P.eq.on && P.eq.g) || []; filters.forEach(function (b, i) { b.gain.value = +g[i] || 0; }); }
     function useEl(a) { if (el !== a) { try { el.pause(); el.removeAttribute('src'); el.load(); } catch (e) {} el = a; } }
     function box() { return document.getElementById('mini'); }
+    var repeat = MV.load('auRepeat', 'off'), rate = 1;
     function draw() {
+      if (MV.npDraw) MV.npDraw();
       var b = box(); if (!b) return;
       if (!cur) { b.hidden = true; b.innerHTML = ''; document.body.classList.remove('has-mini'); return; }
       b.hidden = false; document.body.classList.add('has-mini');
       var playingNow = !el.paused, music = cur.kind !== 'radio';
-      b.innerHTML = '<div class="art">' + (cur.art ? '<img src="' + esc(cur.art) + '" alt="" onerror="this.remove()">' : '') + '<span>' + (cur.kind === 'radio' ? IC.radio : IC.music) + '</span></div>' +
-        '<div class="t"><b>' + esc(cur.title) + '</b><span id="miniSub">' + esc(AU.status || cur.sub || '') + '</span></div>' +
+      b.innerHTML = '<button class="mopen f" data-act="npOpen" aria-label="Abrir el reproductor: ' + esc(cur.title) + '"><span class="art">' + (cur.art ? '<img src="' + esc(cur.art) + '" alt="" onerror="this.remove()">' : '') + '<span>' + (cur.kind === 'radio' ? IC.radio : IC.music) + '</span></span>' +
+        '<span class="t"><b>' + esc(cur.title) + '</b><span id="miniSub">' + esc(AU.status || cur.sub || '') + '</span></span></button>' +
         (music && queue.length > 1 ? '<button class="iconbtn f' + (shuffle ? ' on' : '') + '" data-act="auShuffle" aria-label="Aleatorio" title="Aleatorio">' + IC.shuffle + '</button>' : '') +
         (queue.length > 1 ? '<button class="iconbtn f" data-act="auPrev" aria-label="Anterior">' + IC.prev + '</button>' : '') +
         '<button class="iconbtn f on" data-act="auToggle" aria-label="' + (playingNow ? 'Pausa' : 'Reproducir') + '">' + (playingNow ? IC.pause : IC.play) + '</button>' +
@@ -3966,7 +3981,7 @@
         '<button class="iconbtn f' + (eqOn() ? ' on' : '') + '" data-act="eqOpen" aria-label="Ecualizador" title="Ecualizador">' + IC.eq + '</button>' +
         '<button class="iconbtn f" data-act="auStop" aria-label="Cerrar">' + IC.close + '</button>';
     }
-    function setStatus(t) { AU.status = t; var s = document.getElementById('miniSub'); if (s) s.textContent = t || (cur && cur.sub) || ''; }
+    function setStatus(t) { AU.status = t; var s = document.getElementById('miniSub'); if (s) s.textContent = t || (cur && cur.sub) || ''; var n = document.getElementById('npStat'); if (n) n.textContent = t || ''; }
     function start() {
       cur = queue[idx]; triedNative = false; if (!cur) return;
       played[idx] = 1;
@@ -3988,7 +4003,15 @@
       a.addEventListener('playing', function () { if (a === el) { setStatus(''); draw(); } });
       a.addEventListener('pause', function () { if (a === el) draw(); });
       a.addEventListener('waiting', function () { if (a === el) setStatus('Cargando…'); });
-      a.addEventListener('ended', function () { if (a !== el) return; var n = nextIdx(); if (n >= 0) { idx = n; start(); } else draw(); });
+      a.addEventListener('ended', function () {
+        if (a !== el) return;
+        if (repeat === 'one') { a.currentTime = 0; a.play().catch(function () {}); return; }
+        var n = nextIdx();
+        if (n < 0 && repeat === 'all' && queue.length) { played = {}; n = shuffle && queue.length > 2 ? Math.floor(Math.random() * queue.length) : 0; }
+        if (n >= 0) { idx = n; start(); } else draw();
+      });
+      a.addEventListener('timeupdate', function () { if (a === el && MV.npTick) MV.npTick(); });
+      a.addEventListener('loadedmetadata', function () { if (a === el) { a.playbackRate = rate; if (MV.npTick) MV.npTick(); } });
       a.addEventListener('error', function () {
         if (a !== el || !cur || !a.getAttribute('src')) return;
         // El servidor no deja pasar la canción por el ecualizador: se reproduce normal
@@ -4021,9 +4044,94 @@
         if (cur && eqOn() && el === plain && !cur._noEq && ensureEq()) { var t = el.currentTime, playing = !el.paused; useEl(eqEl); applyEq(); el.src = cur.url; el.currentTime = t; if (playing) { if (ctx.state === 'suspended') ctx.resume().catch(function () {}); el.play().catch(function () {}); } }
         draw();
       },
-      draw: draw
+      draw: draw,
+      // Para el reproductor completo
+      list: function () { return queue; }, index: function () { return idx; },
+      jump: function (i) { if (queue[i]) { idx = i; start(); } },
+      dur: function () { return isFinite(el.duration) ? el.duration : 0; },
+      seek: function (t) { try { el.currentTime = Math.max(0, Math.min(t, (isFinite(el.duration) ? el.duration : t))); } catch (e) {} },
+      playing: function () { return !el.paused; },
+      repeat: function (v) { if (v != null) { repeat = v; MV.save('auRepeat', v); draw(); } return repeat; },
+      rate: function (v) { if (v != null) { rate = v; el.playbackRate = v; draw(); } return rate; },
+      eqActive: eqOn
     };
   })();
+
+  // ---------- Reproductor de música a pantalla completa (estilo mpvRx): portada grande, barra, controles y botones de letra y ecualizador ----------
+  var NPI = {
+    down: '<path d="M6 9l6 6 6-6"/>', info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/>',
+    back10: '<path d="M11 6L5 12l6 6M19 6l-6 6 6 6"/>', fwd10: '<path d="M13 6l6 6-6 6M5 6l6 6-6 6"/>',
+    repeat: '<path d="M17 2l3 3-3 3"/><path d="M4 11V9a4 4 0 0 1 4-4h12M7 22l-3-3 3-3"/><path d="M20 13v2a4 4 0 0 1-4 4H4"/>',
+    queue: '<path d="M4 6h12M4 12h12M4 18h8"/><path d="M16 15v6l5-3z"/>', speed: '<path d="M12 14l4-4"/><path d="M3.5 18a9 9 0 1 1 17 0"/>',
+    bars: '<path d="M6 20V10M12 20V4M18 20v-7"/>'
+  };
+  function npi(n) { return '<svg viewBox="0 0 24 24" aria-hidden="true">' + NPI[n] + '</svg>'; }
+  function npFmt(t) { t = Math.max(0, Math.floor(t || 0)); var h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), s = t % 60; return (h ? h + ':' + (m < 10 ? '0' : '') : (m < 10 ? '0' : '')) + m + ':' + (s < 10 ? '0' : '') + s; }
+  function npBadge(c) {
+    if (c.kind === 'radio') return 'RADIO EN VIVO';
+    var ext = (String(c.url || '').split('?')[0].match(/\.(flac|wav|alac|aiff?|ape|mp3|m4a|aac|ogg|opus|wma)$/i) || [])[1];
+    ext = ext ? ext.toLowerCase() : '';
+    return /flac|wav|alac|aif|ape/.test(ext) ? 'SIN PÉRDIDA · ' + ext.toUpperCase() : ext ? ext.toUpperCase() : 'MÚSICA';
+  }
+  function npHtml() {
+    var c = AU.current(); if (!c) return '<p class="muted">No hay nada sonando.</p>';
+    var q = AU.list(), i = AU.index(), radio = c.kind === 'radio', rep = AU.repeat(), playing = AU.playing();
+    return '<div class="nphead"><button class="nprb f" data-act="npClose" aria-label="Cerrar el reproductor">' + npi('down') + '</button><span>Reproduciendo</span>' +
+        '<button class="nprb f" data-act="npInfo" aria-label="Información">' + npi('info') + '</button></div>' +
+      '<div class="npbadge">' + esc(npBadge(c)) + '</div>' +
+      '<div class="npart" style="--h:' + MV.hue(c.title || '') + '">' + (c.art ? '<img src="' + esc(c.art) + '" alt="" onerror="this.remove()">' : '') + '<span>' + (radio ? IC.radio : IC.music) + '</span></div>' +
+      '<div class="npinfo"><div class="t"><h2>' + esc(c.title) + '</h2><span>' + esc(c.sub || '') + '</span><small id="npStat">' + esc(AU.status || '') + '</small></div></div>' +
+      '<div class="npmeta"><span>' + (q.length > 1 ? 'Canción ' + (i + 1) + '/' + q.length : radio ? 'En vivo' : 'Canción') + '</span>' +
+        (radio ? '' : '<i></i><button class="npchip f" data-act="npSpeed" aria-label="Velocidad">' + npi('speed') + AU.rate().toFixed(2) + 'x</button>') +
+        '<span class="sp"></span>' + (!radio ? '<button class="nprb plain f" data-act="plAddCur" aria-label="Añadir a una lista">' + IC.plAdd + '</button>' : '') + '</div>' +
+      (radio ? '<div class="nplive"><span class="live-dot"></span>Transmisión en vivo</div>' :
+        '<div class="npbar"><input type="range" class="f" id="npSeek" min="0" max="1000" value="0" aria-label="Posición de la canción"><div class="npt"><span id="npCur">00:00</span><span id="npLeft">-00:00</span></div></div>') +
+      '<div class="npctl">' +
+        '<button class="nprb f" data-act="auPrev" aria-label="Anterior"' + (q.length > 1 ? '' : ' disabled') + '>' + IC.prev + '</button>' +
+        (radio ? '' : '<button class="nprb f" data-act="npSkip" data-arg="-10" aria-label="Atrás 10 segundos">' + npi('back10') + '</button>') +
+        '<button class="npplay f" data-act="auToggle" data-fid="np-play" data-autofocus aria-label="' + (playing ? 'Pausa' : 'Reproducir') + '">' + (playing ? IC.pause : IC.play) + '</button>' +
+        (radio ? '' : '<button class="nprb f" data-act="npSkip" data-arg="10" aria-label="Adelantar 10 segundos">' + npi('fwd10') + '</button>') +
+        '<button class="nprb f" data-act="auNext" aria-label="Siguiente"' + (q.length > 1 ? '' : ' disabled') + '>' + IC.next + '</button></div>' +
+      '<div class="npbot"><button class="npround f' + (AU.eqActive() ? ' on' : '') + '" data-act="eqOpen" aria-label="Ecualizador">' + npi('bars') + '</button>' +
+        '<div class="nppill">' +
+          '<button class="nprb f' + (AU.shuffle() ? ' on' : '') + '" data-act="auShuffle" aria-label="Aleatorio" aria-pressed="' + AU.shuffle() + '">' + IC.shuffle + '</button>' +
+          '<button class="nprb f' + (rep !== 'off' ? ' on' : '') + '" data-act="npRepeat" aria-label="Repetir: ' + (rep === 'one' ? 'esta canción' : rep === 'all' ? 'toda la lista' : 'no') + '">' + npi('repeat') + (rep === 'one' ? '<em>1</em>' : '') + '</button>' +
+          (radio ? '' : '<button class="nprb f" data-act="lyrics" aria-label="Letra">' + IC.lyrics + '</button>') +
+          '<button class="nprb f" data-act="auStop" aria-label="Detener y cerrar">' + IC.close + '</button>' +
+        '</div><button class="npround f" data-act="npQueue" aria-label="Lista de reproducción"' + (q.length > 1 ? '' : ' disabled') + '>' + npi('queue') + '</button></div>';
+  }
+  var npOpenNow = false;
+  MV.npDraw = function () {
+    var b = document.getElementById('npBox'); if (!b) return;
+    if (!AU.current()) { MV.closeModal(); return; }
+    var a = document.activeElement, fid = a && b.contains(a) ? (a.getAttribute('data-fid') || a.getAttribute('data-act') + ':' + (a.getAttribute('data-arg') || '')) : '';
+    b.innerHTML = npHtml();
+    var sk = document.getElementById('npSeek');
+    if (sk) {
+      sk.addEventListener('input', function () { var d = AU.dur(); if (d) { sk._drag = true; document.getElementById('npCur').textContent = npFmt(sk.value / 1000 * d); fill(sk); } });
+      sk.addEventListener('change', function () { var d = AU.dur(); if (d) AU.seek(sk.value / 1000 * d); sk._drag = false; });
+    }
+    MV.npTick();
+    if (fid) {
+      var f = b.querySelector('[data-fid="' + fid + '"]') || b.querySelector('[data-act="' + fid.split(':')[0] + '"]' + (fid.split(':')[1] ? '[data-arg="' + fid.split(':')[1] + '"]' : ''));
+      if (f) f.focus();
+    }
+  };
+  function fill(sk) { sk.style.setProperty('--p', (sk.value / 10) + '%'); }
+  MV.npTick = function () {
+    var sk = document.getElementById('npSeek'); if (!sk || sk._drag) return;
+    var d = AU.dur(), t = AU.time();
+    sk.value = d ? Math.round(t / d * 1000) : 0; fill(sk);
+    var c = document.getElementById('npCur'), l = document.getElementById('npLeft');
+    if (c) c.textContent = npFmt(t); if (l) l.textContent = d ? '-' + npFmt(d - t) : '--:--';
+  };
+  function npOpen() {
+    if (!AU.current()) return;
+    MV.modal('<div id="npBox"></div>', {
+      onOpen: function (d) { npOpenNow = true; document.body.classList.add('np-open'); d.classList.add('npdlg'); document.getElementById('modal').classList.add('np'); MV.npDraw(); var p = d.querySelector('[data-autofocus]'); if (p) p.focus(); },
+      onClose: function () { npOpenNow = false; document.body.classList.remove('np-open'); document.getElementById('modal').classList.remove('np'); }
+    });
+  }
 
   // ---------- Otras apps ----------
   var APPS = {
