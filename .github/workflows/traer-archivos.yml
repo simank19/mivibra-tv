@@ -21,6 +21,10 @@ jobs:
             curl -sSL --retry 3 -o "$i-$n" "$u" || echo "falló $u"
           done
           ls -la
+      - name: Procesar
+        if: ${{ github.event.inputs.post != '' }}
+        working-directory: out
+        run: ${{ github.event.inputs.post }}
       - name: Guardar en la rama "archivos" (no toca main)
         run: |
           cd out
