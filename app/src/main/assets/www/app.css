@@ -913,3 +913,108 @@ html.perf-mid .chrow, html.lite .chrow { content-visibility: auto; contain-intri
   .hcat b { font-size: 14px; } .hcat small, .hcat .ch { display: none; }
 }
 html.lite .hcat { transition: none; }
+
+/* ---------- Tema "Vidrio gris" (el predeterminado) ---------- */
+html[data-theme="gris"] { --accent: #F4F5F6; --accent-soft: rgba(255,255,255,.16); --accent-text: #FFFFFF; --on-accent: #2A2C2E; --base: #45484C; --glow: rgba(255,255,255,.07); --glow2: rgba(0,0,0,.2); --text: #FFFFFF; --text2: #EEF0F2; --muted: #D6D9DC; --glass: rgba(255,255,255,.07); --line: rgba(255,255,255,.15); }
+html[data-theme="gris"] body { background: #45484C radial-gradient(120% 90% at 30% 0%, #5A5E62 0%, #46494D 45%, #323538 100%) fixed; }
+html[data-theme="gris"] .glass { background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04)); box-shadow: inset 0 1px 0 rgba(255,255,255,.12); }
+html[data-theme="gris"] .side:focus-within { background: rgba(58,61,64,.97); }
+html[data-theme="gris"].perf-mid .side.glass, html[data-theme="gris"].lite .side.glass { background: rgba(70,73,77,.94); }
+html[data-theme="gris"] .nav { color: #E4E6E8; }
+html[data-theme="gris"] .qbar .qbtn, html[data-theme="gris"] .qbar .qprof { background: rgba(60,63,66,.85); }
+@media (max-width: 760px) { html[data-theme="gris"] .side.glass { background: rgba(52,55,58,.94); } }
+
+/* Píldora que se desliza en el menú y en las categorías del Inicio */
+.mvpill { position: absolute; z-index: 0; pointer-events: none; border-radius: 15px; background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+.side .nav { position: relative; z-index: 1; }
+.side .nav.on { background: transparent; box-shadow: none; }
+.side > .mvpill { left: 50%; width: 50px; transform: translateX(-50%); transition: width .25s var(--ease); }
+.side:focus-within > .mvpill { width: 166px; }
+html[data-theme="gris"] .mvpill { background: #F4F5F6; box-shadow: 0 6px 18px rgba(0,0,0,.25); }
+html[data-theme="gris"] .side .nav.on { color: #2A2C2E; }
+@media (max-width: 760px) {
+  .side > .mvpill { transform: none; transition: none; }
+  .side:focus-within > .mvpill { width: auto; }
+}
+.vchips { position: relative; }
+.vchips .chip { position: relative; z-index: 1; }
+.vchips .chip.on { background: transparent; border-color: transparent; }
+.vchips > .mvpill { border-radius: 999px; background: var(--accent); box-shadow: none; }
+
+/* ---------- Inicio "vidrio" ---------- */
+.vhead { display: flex; align-items: flex-end; gap: 16px; margin: -50px 0 18px; padding-right: 250px; min-height: 52px; }
+.vhead .t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.vhead .kick { font: 500 13px var(--ui); color: var(--muted); }
+.vhead h1 { margin: 0; font: 600 30px var(--ui); letter-spacing: -.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vhead .sub { font: 500 13px var(--ui); color: var(--muted); }
+.vall { height: 40px; padding: 0 16px; border-radius: 20px; border: 0; background: var(--accent); color: var(--on-accent); display: inline-flex; align-items: center; gap: 8px; font: 700 13px var(--ui); flex: none; }
+.vall svg { width: 16px; height: 16px; }
+.vmodes { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin: 0 0 16px; }
+.vmode { height: 56px; border-radius: 28px; border: 1px solid var(--line); background: var(--glass); display: flex; align-items: center; gap: 10px; padding: 0 10px 0 9px; text-align: left; min-width: 0; color: var(--text); }
+.vmode .ic { width: 38px; height: 38px; flex: none; border-radius: 50%; background: rgba(255,255,255,.12); display: flex; align-items: center; justify-content: center; }
+.vmode .ic svg { width: 18px; height: 18px; }
+.vmode .tx { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.vmode b { font: 700 13px var(--ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vmode small { font: 500 11.5px var(--ui); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vmain { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; margin: 0 0 14px; }
+.vlive { border-radius: 22px; padding: 10px; border: 1px solid var(--line); background: var(--glass); display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.vlive .scr { position: relative; height: clamp(220px, 36vh, 440px); border-radius: 14px; overflow: hidden; background: #1E2124; background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--h) 32%, #24272A), #17191B 75%); display: flex; align-items: center; justify-content: center; }
+.vlive .scr > img { max-width: 46%; max-height: 52%; object-fit: contain; filter: drop-shadow(0 10px 24px rgba(0,0,0,.45)); }
+.vlive .scr .mono { font: 800 80px var(--brand); color: rgba(255,255,255,.8); }
+.vlive video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .6s; background: #000; }
+.vlive video.on { opacity: 1; }
+.vbadge { position: absolute; right: 12px; top: 12px; z-index: 2; height: 24px; padding: 0 9px; border-radius: 8px; background: #DC2626; color: #fff; font: 800 11px var(--ui); letter-spacing: .06em; display: flex; align-items: center; gap: 6px; }
+.vbadge i { width: 6px; height: 6px; border-radius: 50%; background: #fff; animation: pulse 1.6s infinite; }
+.vlive .cap { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; padding: 40px 74px 14px 16px; background: linear-gradient(0deg, rgba(0,0,0,.7), transparent); display: flex; flex-direction: column; gap: 2px; }
+.vlive .cap b { font: 700 17px var(--ui); color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vlive .cap span { font: 500 12.5px var(--ui); color: #E4E6E8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vplay { position: absolute; right: 14px; bottom: 14px; z-index: 3; width: 50px; height: 50px; border-radius: 50%; border: 0; background: var(--accent); color: var(--on-accent); display: flex; align-items: center; justify-content: center; }
+.vplay svg { width: 20px; height: 20px; }
+.vlive .thumbs { display: flex; gap: 8px; }
+.vth { flex: 1; min-width: 0; height: 62px; border-radius: 12px; border: 1px solid var(--line); background: #2A2D30; background: linear-gradient(135deg, color-mix(in srgb, var(--h) 30%, #2C2F32), #1C1E20); color: #fff; position: relative; overflow: hidden; display: flex; align-items: flex-end; padding: 6px 8px; }
+.vth img { position: absolute; left: 50%; top: 8px; transform: translateX(-50%); height: 26px; max-width: 70%; object-fit: contain; }
+.vth span { position: relative; font: 600 11px var(--ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vth.all { flex: 0 0 62px; background: var(--glass); flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 0; }
+.vth.all svg { width: 18px; height: 18px; }
+.vside { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.vtiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.vtile { height: 92px; border-radius: 18px; border: 1px solid var(--line); background: var(--glass); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.vtile b { font: 500 30px var(--ui); letter-spacing: -.5px; }
+.vtile span { font: 500 12px var(--ui); color: var(--muted); }
+.vcont { flex: 1; border-radius: 18px; border: 1px solid var(--line); background: var(--glass); padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.vcont .hd { display: flex; align-items: flex-start; gap: 8px; }
+.vcont .hd > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.vcont .hd b { font: 700 14px var(--ui); }
+.vcont .hd span { font: 500 12px var(--ui); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vcont .bd { flex: 1; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.vcont .left { text-align: center; font: 500 12px var(--ui); color: var(--muted); }
+.vcont.empty { justify-content: center; align-items: flex-start; gap: 8px; }
+.vcont.empty span { font: 500 12.5px var(--ui); color: var(--muted); line-height: 1.4; }
+.vrb { width: 40px; height: 40px; flex: none; border-radius: 50%; border: 1px solid var(--line); background: rgba(255,255,255,.08); color: var(--text); display: flex; align-items: center; justify-content: center; }
+.vrb svg { width: 17px; height: 17px; }
+.vrb.solid { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.vring { position: relative; width: 126px; height: 126px; flex: none; }
+.vring svg { width: 100%; height: 100%; }
+.vring circle { fill: none; stroke-width: 7; stroke-linecap: round; }
+.vring .tr { stroke: rgba(255,255,255,.16); }
+.vring .pg { stroke: var(--accent); }
+.vring .kn { fill: #fff; stroke: none; }
+.vring .in { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.vring .in span { font: 500 11px var(--ui); color: var(--muted); }
+.vring .in b { font: 600 26px var(--ui); letter-spacing: -.5px; }
+.vchips { margin: 0 0 6px; }
+@media (max-width: 1100px) { .vmain { grid-template-columns: minmax(0, 1fr) 260px; } .vring { width: 108px; height: 108px; } }
+@media (max-width: 760px) {
+  .vhead { margin: 0 0 14px; padding-right: 0; min-height: 0; }
+  .vhead h1 { font-size: 22px; } .vhead .kick, .vhead .sub { font-size: 11.5px; } .vhead .sub { display: none; }
+  .vhead .vall { display: none; }
+  .vmodes { display: flex; overflow-x: auto; scrollbar-width: none; margin-right: -16px; padding-right: 16px; }
+  .vmodes::-webkit-scrollbar { display: none; }
+  .vmode { flex: 0 0 184px; }
+  .vmain { grid-template-columns: minmax(0, 1fr); }
+  .vlive .scr { height: 200px; }
+  .vtile { height: 76px; } .vtile b { font-size: 24px; }
+}
+html.lite .vbadge i { animation: none; }
+.vchips .chip { white-space: nowrap; }
+.vchips .chip svg { width: 15px; height: 15px; flex: none; }

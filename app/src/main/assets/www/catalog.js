@@ -15,11 +15,13 @@
   };
   var P = S.prefs;
   var defaults = {
-    theme: 'mv', glass: 'mid', anim: true, bgAnim: true, autoTheme: true, audioLang: 'es', subLang: '', xtFormat: 'm3u8',
+    theme: 'gris', glass: 'mid', anim: true, bgAnim: true, autoTheme: true, audioLang: 'es', subLang: '', xtFormat: 'm3u8',
     tmdbKey: '', ytKey: '', subKey: '', streamKeys: {}, dedupe: true, pruneEmpty: true, latOnly: false, hideUnreleased: true, navOrder: [], navHidden: [], covers: {}, kidsLimit: 60, parentPin: '', adult: null, romRoots: [], romSystem: {}, shader: 'default',
     firebase: '', syncLists: true, updatedAt: 0, deviceName: ''
   };
   Object.keys(defaults).forEach(function (k) { if (P[k] === undefined) P[k] = defaults[k]; });
+  // El nuevo predeterminado es "Vidrio gris": quien tenía el naranja de siempre pasa al nuevo una sola vez (se puede volver en Ajustes › Tema)
+  if (!P.lookV2) { if (P.theme === 'mv') P.theme = 'gris'; P.lookV2 = 1; MV.save('prefs', P); }
   if (!P.deviceName) P.deviceName = MV.device.tv ? 'TV' : (MV.device.model || 'Celular');
 
   MV.setPref = function (k, v) { P[k] = v; MV.savePrefs(); };

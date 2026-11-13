@@ -12,7 +12,7 @@
   // ---------- Apariencia ----------
   MV.applyLook = function () {
     var h = document.documentElement;
-    h.dataset.theme = P.theme || 'mv';
+    h.dataset.theme = P.theme || 'gris';
     h.dataset.glass = P.glass || 'mid';
     h.classList.toggle('no-anim', P.anim === false);
     h.classList.toggle('no-bg', P.bgAnim === false);
@@ -164,6 +164,12 @@
       app.innerHTML = '<div class="shell">' + side + '<main class="main">' + quick + '<div class="view-in' + (still ? ' still' : '') + '">' + body + '</div></main></div>';
     }
     if (VIEWS[view.name] && VIEWS[view.name].after) VIEWS[view.name].after(view.arg);
+    if (!full) {
+      var sd = document.querySelector('.side');
+      pillFx('nav', sd, sd && sd.querySelector('.nav.on'), window.innerWidth > 760);
+      var vc = document.querySelector('.vchips');
+      pillFx('chips', vc, vc && vc.querySelector('.chip.on'), false);
+    }
     if (!keepFocus) setTimeout(function () { MV.focusFirst(); }, 30);
     tourCheck();
   }
@@ -545,6 +551,7 @@
     var anime = MV.visible(S.items.filter(function (i) { return i.anime && i.type !== 'live'; }));
     var kd = MV.visible(S.items.filter(function (i) { return i.kdrama && i.type !== 'live'; }));
     var saved = MV.savedList ? MV.savedList().map(MV.resolve) : [];
+    if (P.homeStyle !== 'cards') return vidrioHome(html, live, movies, series, anime, kd, favs, saved, cont);
     html = '<div class="hhead"><span>MiVibra TV</span><h1>Inicio</h1></div>' + homeCats([
       ['live', 'En vivo', IC.live, live.length, 'canales', 'c1'], ['movies', 'Películas', IC.movie, movies.length, 'películas', 'c2'],
       ['series', 'Series', IC.series, series.length, 'series', 'c3'], ['anime', 'Anime', IC.anime, anime.length, 'títulos', 'c4'],
@@ -579,6 +586,142 @@
     html += '<div id="archiveRow"></div>';
     return html;
   };
+  // ---------- Inicio estilo "vidrio gris" (maqueta aprobada): saludo, modos, canal en vivo grande, fecha y hora, continuar y categorías ----------
+  var heroPickKey = '', homeChip = 'all';
+  var HCHIPS = [['all', 'Todo'], ['movies', 'Películas'], ['series', 'Series'], ['anime', 'Anime'], ['kdrama', 'Doramas'], ['novelas', 'Novelas'], ['infantil', 'Infantil'], ['docs', 'Documentales']];
+  var HMODES = [['sec:news', IC.news || IC.live, 'Mañana informada', 'Noticias en vivo'], ['movies', IC.movie, 'Noche de película', 'Películas para hoy'],
+    ['infantil', IC.kids, 'Hora de los niños', 'Contenido infantil'], ['sec:sports', IC.sports || IC.live, 'Deportes', 'Partidos y canales'], ['music', IC.music || IC.radio, 'Música', 'Radio y tus listas']];
+  function greet() { var h = new Date().getHours(); return h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches'; }
+  function cap(t) { return t.charAt(0).toUpperCase() + t.slice(1); }
+  function clockParts() {
+    var d = new Date(), h = d.getHours(), m = d.getMinutes();
+    return { day: d.getDate(), wd: cap(d.toLocaleDateString('es-CO', { weekday: 'long' })), hm: ((h % 12) || 12) + ':' + (m < 10 ? '0' : '') + m, ap: h < 12 ? 'AM' : 'PM' };
+  }
+  setInterval(function () {
+    var c = document.getElementById('vClock'); if (!c) return;
+    var p = clockParts(); c.firstChild.textContent = p.hm; c.lastChild.textContent = p.ap;
+    var d = document.getElementById('vDate'); if (d) { d.firstChild.textContent = p.day; d.lastChild.textContent = p.wd; }
+  }, 20000);
+  function chipItems(id, movies, series, anime, kd) {
+    var vis = function (f) { return MV.visible(S.items.filter(function (i) { return i.type !== 'live' && f(i); })); };
+    if (id === 'movies') return movies; if (id === 'series') return series; if (id === 'anime') return anime; if (id === 'kdrama') return kd;
+    if (id === 'novelas') return MV.visible(S.novelas || []);
+    if (id === 'infantil') return vis(function (i) { return !i.anime && !i.adult && !i.doc && !!(i.kids || (i.animated && i.age != null && i.age <= 13)); });
+    if (id === 'docs') return vis(function (i) { return i.doc; });
+    return suggested();
+  }
+  function ring(pct) {
+    var R = 46, C = 2 * Math.PI * R, arc = C * .75, a = (135 + 270 * pct) * Math.PI / 180;
+    return '<div class="vring"><svg viewBox="0 0 120 120" aria-hidden="true"><g transform="rotate(135 60 60)">' +
+      '<circle cx="60" cy="60" r="46" class="tr" stroke-dasharray="' + arc.toFixed(1) + ' ' + C.toFixed(1) + '"></circle>' +
+      '<circle cx="60" cy="60" r="46" class="pg" stroke-dasharray="' + (arc * pct).toFixed(1) + ' ' + C.toFixed(1) + '"></circle></g>' +
+      '<circle cx="' + (60 + R * Math.cos(a)).toFixed(1) + '" cy="' + (60 + R * Math.sin(a)).toFixed(1) + '" r="6.5" class="kn"></circle></svg>' +
+      '<div class="in"><span>Visto</span><b>' + Math.round(pct * 100) + '%</b></div></div>';
+  }
+  function vidrioHome(html, live, movies, series, anime, kd, favs, saved, cont) {
+    var p = MV.profile(), ck = clockParts();
+    var hist = MV.pdata().history || [], lastLive = null;
+    for (var hi = 0; hi < hist.length && !lastLive; hi++) {
+      if (hist[hi].type !== 'live') continue;
+      var cand = S.byKey[hist[hi].key]; if (cand && live.indexOf(cand) >= 0) lastLive = cand;
+    }
+    var picked = heroPickKey && S.byKey[heroPickKey];
+    var heroIt = (picked && live.indexOf(picked) >= 0 ? picked : null) || lastLive || favs.find(function (f) { return f.type === 'live' && live.indexOf(f) >= 0; }) ||
+      live.find(function (c) { return c.country === 'co'; }) || live[0] || null;
+    MV._heroIt = heroIt;
+    var out = '<div class="vhead"><div class="t"><span class="kick">' + esc(cap(new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' }))) + '</span>' +
+      '<h1>' + greet() + (p ? ', ' + esc(p.name) : '') + '</h1>' +
+      '<span class="sub">' + [live.length ? live.length.toLocaleString('es-CO') + ' canales en vivo' : '', movies.length ? movies.length.toLocaleString('es-CO') + ' películas' : '', series.length ? series.length.toLocaleString('es-CO') + ' series' : ''].filter(Boolean).join(' · ') + '</span></div>' +
+      '</div>';
+    out += html;   // celebración, cargando y "continúa desde otro dispositivo"
+    out += '<div class="vmodes">' + HMODES.map(function (m) {
+      return '<button class="vmode f" data-act="homeMode" data-arg="' + m[0] + '"><span class="ic">' + m[1] + '</span><span class="tx"><b>' + m[2] + '</b><small>' + m[3] + '</small></span></button>';
+    }).join('') + '</div>';
+    out += '<div class="vmain">';
+    if (heroIt) {
+      reg(heroIt);
+      var nn = MV.nowNext(heroIt) || {}, img = MV.poster(heroIt), logo = img && MV.logoUrl ? MV.logoUrl(img) : img;
+      var others = coFirst(live).filter(function (c) { return c !== heroIt; }).slice(0, 4);
+      others.forEach(reg);
+      out += '<section class="vlive" aria-label="En vivo ahora"><div class="scr livebg" style="--h:' + MV.hue(heroIt.name) + '">' +
+        (img ? '<img src="' + esc(logo) + '"' + (logo !== img ? ' data-o="' + esc(img) + '" onerror="if(this.dataset.o){this.src=this.dataset.o;this.removeAttribute(\'data-o\')}"' : '') + ' alt="">' : '<span class="mono">' + esc(MV.mono(heroIt.name)) + '</span>') +
+        '<video id="heroVid" muted playsinline preload="none"></video>' +
+        '<span class="vbadge"><i></i>EN VIVO</span>' +
+        '<div class="cap"><b>' + esc(MV.cleanTitle(heroIt.name) || heroIt.name) + '</b><span>' + esc([heroIt.group, nn.now ? nn.now.t : ''].filter(Boolean).join(' · ')) + '</span></div>' +
+        '<button class="vplay f" data-act="play" data-key="' + esc(heroIt.key) + '" aria-label="Ver en pantalla completa" data-autofocus>' + IC.play + '</button></div>' +
+        '<div class="thumbs">' + others.map(function (c) {
+          var im = MV.poster(c), lg = im && MV.logoUrl ? MV.logoUrl(im) : im;
+          return '<button class="vth f" data-act="heroPick" data-key="' + esc(c.key) + '" style="--h:' + MV.hue(c.name) + '" aria-label="Ver ' + esc(c.name) + ' aquí">' + (im ? '<img loading="lazy" src="' + esc(lg) + '" alt="">' : '') + '<span>' + esc(MV.cleanTitle(c.name) || c.name) + '</span></button>';
+        }).join('') + '<button class="vth all f" data-act="nav" data-arg="live" aria-label="Ver todos los canales">' + IC.grid + '<span>Todos</span></button></div></section>';
+    }
+    var c0 = cont.find(function (c) { return c.dur > 0; }), it0 = c0 && MV.resolve(c0);
+    out += '<div class="vside"><div class="vtiles"><div class="vtile" id="vDate"><b>' + ck.day + '</b><span>' + ck.wd + '</span></div><div class="vtile" id="vClock"><b>' + ck.hm + '</b><span>' + ck.ap + '</span></div></div>';
+    if (it0) {
+      reg(it0);
+      var pct = Math.max(0, Math.min(1, c0.pos / c0.dur)), left = Math.max(0, Math.round((c0.dur - c0.pos) / 60));
+      out += '<section class="vcont" aria-label="Continuar viendo"><div class="hd"><div><b>Continuar viendo</b><span>' + esc(it0.name || c0.name || '') + '</span></div>' +
+        '<button class="vrb f" data-act="open" data-key="' + esc(it0.key) + '" aria-label="Abrir la ficha">' + IC.info + '</button></div>' +
+        '<div class="bd"><button class="vrb f" data-act="nav" data-arg="history" aria-label="Historial">' + IC.history + '</button>' + ring(pct) +
+        '<button class="vrb solid f" data-act="resume" data-key="' + esc(it0.key) + '" aria-label="Seguir viendo">' + IC.play + '</button></div>' +
+        '<span class="left">' + (left ? 'Faltan ' + MV.fmtDur(c0.dur - c0.pos) : 'Casi terminas') + '</span></section>';
+    } else {
+      out += '<section class="vcont empty" aria-label="Continuar viendo"><b>Continuar viendo</b><span>Lo que empieces a ver aparece aquí para seguir donde lo dejaste.</span>' +
+        '<button class="vall f" data-act="nav" data-arg="movies">' + IC.movie + 'Elegir una película</button></section>';
+    }
+    out += '</div></div>';
+    out += '<div class="vchips chips" role="tablist" aria-label="Categorías">' + HCHIPS.map(function (c) {
+      return '<button class="chip f' + (homeChip === c[0] ? ' on' : '') + '" role="tab" aria-selected="' + (homeChip === c[0]) + '" data-act="homeChip" data-arg="' + c[0] + '" data-fid="hc-' + c[0] + '">' + c[1] + '</button>';
+    }).join('') + '<button class="chip f" data-act="nav" data-arg="utils">' + IC.grid + 'Todas las secciones</button></div>';
+    var ci = chipItems(homeChip, movies, series, anime, kd);
+    var cname = HCHIPS.find(function (c) { return c[0] === homeChip; });
+    out += ci.length ? row(homeChip === 'all' ? 'Sugerido para ti' : cname[1], ci.slice(0, 30), 'poster', '', homeChip === 'all' ? '' : homeChip) :
+      '<p class="muted" style="margin:4px 4px 22px">Todavía no hay ' + esc(cname[1].toLowerCase()) + ' en tus listas.</p>';
+    out += row('En vivo', coFirst(live).slice(0, 30), 'ch', live.length + ' canales', 'live');
+    out += row('Continuar viendo', cont.map(function (c) { return MV.resolve(c); }), 'wide');
+    if (MV.sportsRow) out += MV.sportsRow();
+    out += row('Favoritos', favs.slice(0, 30));
+    if (saved.length) out += row('Mi lista', saved.slice(0, 30));
+    var trendHave = (DISC.rows.trend || []).filter(function (t) { return t.have; });
+    if (trendHave.length) out += row('Tendencia esta semana', trendHave.slice(0, 20), 'poster', 'Lo más visto en el mundo que ya tienes', 'discover');
+    var pls = platformCounts();
+    if (pls.length) out += '<section class="row"><h3>Plataformas</h3><div class="strip">' + pls.map(platformTile).join('') + '</div></section>';
+    var bks = visibleBooks();
+    if (bks.length) out += '<section class="row"><h3>Mangas y libros <small>' + bks.length + ' para leer</small></h3><div class="strip">' + bks.slice(0, 24).map(bookCard).join('') +
+      '<button class="btn ghost sm f" style="align-self:center;flex:0 0 auto" data-act="nav" data-arg="books">Ver todo</button></div></section>';
+    out += '<div id="archiveRow"></div>';
+    return out;
+  }
+
+  // Píldora que se desliza: la orilla de adelante sale primero y la de atrás la alcanza
+  var pillLast = {};
+  function e3o(x) { return 1 - Math.pow(1 - x, 3); }
+  function e3io(x) { return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; }
+  function pillFx(key, box, on, vertical, tries) {
+    if (!box || !on) { delete pillLast[key]; return; }
+    // Si todavía no tiene medidas (la pantalla se está acomodando), se intenta en el siguiente cuadro
+    if (!on.offsetWidth) { if ((tries || 0) < 20) requestAnimationFrame(function () { if (on.isConnected) pillFx(key, box, on, vertical, (tries || 0) + 1); }); return; }
+    var pill = document.createElement('i'); pill.className = 'mvpill'; pill.setAttribute('aria-hidden', 'true');
+    box.insertBefore(pill, box.firstChild);
+    var to = vertical ? [on.offsetTop, on.offsetTop + on.offsetHeight] : [on.offsetLeft, on.offsetLeft + on.offsetWidth];
+    var cross = vertical ? null : [on.offsetTop, on.offsetHeight];
+    var put = function (a, b) {
+      if (vertical) { pill.style.top = a + 'px'; pill.style.height = (b - a) + 'px'; }
+      else { pill.style.left = a + 'px'; pill.style.width = (b - a) + 'px'; pill.style.top = cross[0] + 'px'; pill.style.height = cross[1] + 'px'; }
+    };
+    var from = pillLast[key]; pillLast[key] = to;
+    if (!from || (from[0] === to[0] && from[1] === to[1]) || P.anim === false) { put(to[0], to[1]); return; }
+    var fwd = to[0] > from[0], t0 = performance.now();
+    put(from[0], from[1]);
+    (function step(now) {
+      if (!pill.isConnected) return;
+      var el = now - t0, pl = e3o(Math.min(1, el / 360)), pt = e3io(Math.min(1, el / 550));
+      // fwd: la orilla final (b) va adelante; atrás: la inicial (a)
+      var a = from[0] + (to[0] - from[0]) * (fwd ? pt : pl), b = from[1] + (to[1] - from[1]) * (fwd ? pl : pt);
+      put(a, b);
+      if (el < 550) requestAnimationFrame(step);
+    })(t0);
+  }
+  MV.pillFx = pillFx;
   /** Tarjetas de categorías del Inicio (4 columnas en TV, PC y tablet; 2 en celular). */
   function homeCats(list) {
     var n = function (x) { return x ? x.toLocaleString('es-CO') : ''; };
@@ -2056,8 +2199,10 @@
       '<div class="panel glass"><h2>Temas por celebración</h2>' +
       '<div class="line"><div class="t"><b>Cambiar el tema solo en fechas especiales</b><span>Halloween, Navidad, Amor y Amistad, Día de la Madre, del Padre, del Niño, 20 de julio, Año Nuevo…' + (ss ? ' Hoy: ' + esc(ss.name) + ' ' + ss.deco[0] : '') + '</span></div><button class="toggle f' + (P.autoTheme !== false ? ' on' : '') + '" data-act="prefToggle" data-arg="autoTheme"></button></div></div>' +
       '<div class="panel glass"><h2>Tema</h2>' + (ss && P.autoTheme !== false ? '<p class="muted">Ahora se ve el tema de ' + esc(ss.name) + '; el que elijas aquí vuelve cuando termine la celebración.</p>' : '') + '<div class="themes">' + D.THEMES.map(function (t) {
-      return '<button class="theme f' + (P.theme === t.id ? ' on' : '') + '" data-act="theme" data-arg="' + t.id + '"><i style="background:linear-gradient(135deg,' + t.a + ',' + t.b + ')"></i>' + t.name + '</button>';
-    }).join('') + '</div></div><div class="panel glass"><h2>Efecto vidrio y animaciones</h2>' +
+      return '<button class="theme f' + ((P.theme || 'gris') === t.id ? ' on' : '') + '" data-act="theme" data-arg="' + t.id + '"><i style="background:linear-gradient(135deg,' + t.a + ',' + t.b + ')"></i>' + t.name + '</button>';
+    }).join('') + '</div><div class="line"><div class="t"><b>Diseño del Inicio</b><span>Vidrio: saludo, canal en vivo grande y categorías · Tarjetas: las 8 categorías de colores</span></div><div class="seg">' +
+      [['vidrio', 'Vidrio'], ['cards', 'Tarjetas de color']].map(function (o) { return '<button class="chip f' + ((P.homeStyle || 'vidrio') === o[0] ? ' on' : '') + '" data-act="homeStyle" data-arg="' + o[0] + '">' + o[1] + '</button>'; }).join('') +
+      '</div></div></div><div class="panel glass"><h2>Efecto vidrio y animaciones</h2>' +
       '<div class="line"><div class="t"><b>Intensidad del vidrio</b></div><div class="seg">' + [['low', 'Suave'], ['mid', 'Media'], ['high', 'Intensa']].map(function (g) { return '<button class="chip f' + (P.glass === g[0] ? ' on' : '') + '" data-act="glass" data-arg="' + g[0] + '">' + g[1] + '</button>'; }).join('') + '</div></div>' +
       '<div class="line"><div class="t"><b>Animaciones y transiciones</b><span>Apágalas en TV box lentos</span></div><button class="toggle f' + (P.anim !== false ? ' on' : '') + '" data-act="prefToggle" data-arg="anim"></button></div>' +
       '<div class="line"><div class="t"><b>Fondo con luces en movimiento</b></div><button class="toggle f' + (P.bgAnim !== false ? ' on' : '') + '" data-act="prefToggle" data-arg="bgAnim"></button></div></div>' + perfPanel();
@@ -2729,6 +2874,13 @@
       }
       if (it.type === 'live' || it.type === 'rom') MV.playItem(it); else MV.go('detail', it.key); },
     play: function (_, el) { MV.playItem(S.byKey[el.dataset.key] || MV.reg[el.dataset.key], false); },
+    heroPick: function (_, el) { stopHeroPreview(); heroPickKey = el.dataset.key; MV.rerender(); setTimeout(heroPreview, 300); },
+    homeChip: function (c) { homeChip = c; MV.rerender(); },
+    homeMode: function (m) {
+      if (m.indexOf('sec:') === 0) { liveSec = m.slice(4); liveCat = 'Todos'; limits.live = 150; MV.go('live'); return; }
+      MV.go(m);
+    },
+    homeStyle: function (v) { P.homeStyle = v; MV.savePrefs(); MV.rerender(); },
     resume: function (_, el) {
       var k = el.dataset.key, it = S.byKey[k] || MV.reg[k];
       if (it && it.type === 'episode' && it.parent) { var s = S.byKey[it.parent]; if (s) { MV.loadEpisodes(s).then(function (eps) { var m = k.split('#')[1].split('x'); var i = eps.findIndex(function (e) { return e.season === +m[0] && e.ep === +m[1]; }); MV.playEpisode(s, Math.max(0, i), true); }); return; } }
