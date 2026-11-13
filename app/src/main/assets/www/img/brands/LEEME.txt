@@ -1,2 +1,3 @@
 Logos: colección "Logos Apps" de Leonel Ngoya (ln-dev7), licencia MIT — https://github.com/ln-dev7/logos-apps
 Las marcas pertenecen a sus dueños; se usan solo para identificar cada plataforma.
+ViX, Discovery, Pluto TV, AMC y Viki: imágenes enviadas por el dueño de MiVibra, recortadas y con fondo transparente.

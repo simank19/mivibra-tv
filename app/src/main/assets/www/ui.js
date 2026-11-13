@@ -1197,12 +1197,14 @@
     youtube: ['#0F0F0F', 'c'], twitch: ['linear-gradient(135deg,#7C3AED,#2E1065)', 'w'], kick: ['#0B0E0F', 'c'],
     netflix: ['#000', 'c'], disney: ['linear-gradient(135deg,#0B1A4A,#0E7490)', 'w'], prime: ['linear-gradient(135deg,#00A8E1,#0F1B2D)', 'w'],
     max: ['linear-gradient(135deg,#002BE7,#0A0F3D)', 'w'], paramount: ['linear-gradient(135deg,#0064FF,#001A4D)', 'w'], apple: ['#111', 'w'],
-    hulu: ['#0B0C0F', 'c'], crunchyroll: ['#111', 'c'], peacock: ['#000', 'w'], mubi: ['#111', 'w'], starz: ['#000', 'w'], showtime: ['linear-gradient(135deg,#B10000,#3A0000)', 'w']
+    hulu: ['#0B0C0F', 'c'], crunchyroll: ['#111', 'c'], peacock: ['#000', 'w'], mubi: ['#111', 'w'], starz: ['#000', 'w'], showtime: ['linear-gradient(135deg,#B10000,#3A0000)', 'w'],
+    vix: ['#FF5A01', 'c', 'png'], discovery: ['linear-gradient(135deg,#0B4A8B,#071A33)', 'c', 'png'], pluto: ['#000', 'c', 'png'],
+    amc: ['linear-gradient(135deg,#3A3420,#14120B)', 'c', 'png'], viki: ['#0C9BFF', 'c', 'png']
   };
   function brandTh(id, name) {
     var b = BRAND[id];
     if (!b) return '<div class="th" style="height:120px"><span class="mono" style="font-size:30px;letter-spacing:-.5px">' + esc(name) + '</span></div>';
-    return '<div class="th brandth" style="height:120px;background:' + b[0] + '"><img class="' + (b[1] === 'w' ? 'wh' : '') + '" src="img/brands/' + id + '.svg" alt="' + esc(name) + '"></div>';
+    return '<div class="th brandth" style="height:120px;background:' + b[0] + '"><img class="' + (b[1] === 'w' ? 'wh' : '') + '" src="img/brands/' + id + '.' + (b[2] || 'svg') + '" alt="' + esc(name) + '"></div>';
   }
   /** Fila Plataformas del Inicio: YouTube, Twitch y Kick primero, luego las plataformas de tus listas. */
   function platRow(pls) {
