@@ -115,7 +115,9 @@ end function
 
 function idpSignIn(cfg as Object, postBody as String) as Object
     ' Claves entre comillas: sin comillas BrightScript las pasa a minúsculas y Firebase no las reconoce (MISSING_REQUEST_URI)
-    body = FormatJson({ "postBody": postBody, "requestUri": "http://localhost", "returnSecureToken": true, "returnIdpCredential": true })
+    ' Se arma como texto: así los nombres llegan exactos (con mayúsculas) en cualquier versión de Roku
+    q = Chr(34)
+    body = "{" + q + "postBody" + q + ":" + FormatJson(postBody) + "," + q + "requestUri" + q + ":" + q + "http://localhost" + q + "," + q + "returnSecureToken" + q + ":true," + q + "returnIdpCredential" + q + ":true}"
     return httpJson("POST", "https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=" + cfg.apiKey, body, jsonHdr())
 end function
 
