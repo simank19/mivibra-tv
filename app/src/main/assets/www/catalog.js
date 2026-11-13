@@ -1126,7 +1126,17 @@
       else if (list.type === 'web') job = buildFromWeb(list);
       else if (list.type === 'fb') job = buildFromFirebase(list);
       else if (list.type === 'mvplugin') job = MV.buildFromMvPlugin(list).then(function (arr) { return arr.map(retag); });
-      else if (list.type === 'stremio') job = MV.buildFromStremio(list).then(function (arr) { return arr.map(retag); });
+      else if (list.type === 'stremio') job = MV.buildFromStremio(list).then(function (arr) {
+        // Si algún catálogo del addon no respondió esta vez, se conserva lo que traía antes (así no desaparece y vuelve a aparecer)
+        var failed = list._stFailed || [];
+        var old = (cached && cached.items) || [];
+        if (old.length && (failed.length || !arr.length)) {
+          var have = {}; arr.forEach(function (o) { have[o.key] = 1; });
+          var keepAll = !arr.length || arr.length < old.length * 0.6;   // el addon casi no respondió: se deja todo lo de antes
+          old.forEach(function (o) { if (!have[o.key] && (keepAll || failed.indexOf(o.src) >= 0)) { have[o.key] = 1; arr.push(o); } });
+        }
+        return arr.map(retag);
+      });
       else if (list.type === 'file') job = MV.idbGet('raw:' + list.id).then(function (txt) { return buildFromM3U(MV.parseM3U(txt || '', list), list); });
       else job = MV.getBig(list.url).then(function (txt) {
         if (!/#EXTINF|#EXTM3U/i.test(txt.slice(0, 5000))) throw new Error('No parece una lista M3U');

@@ -142,16 +142,19 @@
       });
       // Primero todos los catálogos normales (Netflix, Apple TV+, populares…) y después los que se piden por género
       cats = cats.concat(byGenre).slice(0, 90);
-      var out = [], seen = {};
+      var out = [], seen = {}, perCat = [], failedCats = [];
       // De a 6 catálogos a la vez (con muchos a la vez algunos servidores cortan)
-      var queue = cats.slice(), workers = [];
+      var queue = cats.map(function (c, i) { return Object.assign({ _i: i }, c); }), workers = [];
+      // Una página que falla se pide otra vez (los servidores gratuitos a veces cortan); si vuelve a fallar se avisa
+      function getPage(url) { return MV.getJSON(url).catch(function () { return new Promise(function (r) { setTimeout(r, 1500); }).then(function () { return MV.getJSON(url); }); }); }
       function runOne(c) {
+        var bad = false;
         // Páginas seguidas según lo que trae cada una (Kitsu da 20 por página, Cinemeta 100); solo si el catálogo acepta "skip"
         var canSkip = (c.extra || []).some(function (e) { return e && e.name === 'skip'; }) || (c.extraSupported || []).indexOf('skip') >= 0;
         var pp = [];
         function page(skip, n) {
           var ex = [c._genre ? 'genre=' + encodeURIComponent(c._genre) : '', skip ? 'skip=' + skip : ''].filter(Boolean).join('&');
-          return MV.getJSON(b + '/catalog/' + c.type + '/' + encodeURIComponent(c.id) + (ex ? '/' + ex : '') + '.json').then(function (j) { return (j && j.metas) || []; }).catch(function () { return []; }).then(function (metas) {
+          return getPage(b + '/catalog/' + c.type + '/' + encodeURIComponent(c.id) + (ex ? '/' + ex : '') + '.json').then(function (j) { return (j && j.metas) || []; }).catch(function () { bad = true; return []; }).then(function (metas) {
             // Si el addon ignora "skip" y repite la misma página, se para
             var prev = pp[pp.length - 1];
             if (prev && prev.length && metas.length && prev[0].id === metas[0].id) return;
@@ -159,13 +162,21 @@
             // Se siguen pidiendo páginas mientras traigan títulos (hasta unos 1000 por catálogo)
             // Muchos addons (como TMDB) aceptan "skip" aunque no lo declaren: se intenta igual mientras sigan llegando títulos nuevos
             total += metas.length;
-            // Tope por catálogo (~500) y por addon (~8000) para que la app no se ponga lenta en TV
-            if (metas.length >= (canSkip ? 1 : 10) && n < 25 && skip + metas.length < (MV.perf === 'low' ? 200 : MV.perf === 'mid' ? 320 : 500) && total < (MV.perf === 'low' ? 3000 : MV.perf === 'mid' ? 5000 : 8000)) return page(skip + metas.length, n + 1);
+            // Tope por catálogo (~500); el mismo en todos los equipos para que se vea igual en el celular y en la TV
+            if (metas.length >= (canSkip ? 1 : 10) && n < 25 && skip + metas.length < 500) return page(skip + metas.length, n + 1);
           });
         }
         return page(0, 1).then(function () {
-          pp.forEach(function (metas) {
+          if (bad && !pp.some(function (x) { return x.length; })) failedCats.push((list.name || man.name) + ' · ' + (c.name || ''));
+          perCat[c._i] = pp;
+        });
+      }
+      // Se arman en el orden del addon (no en el que llegaron): así sale siempre lo mismo y en el mismo orden
+      function assemble() {
+        cats.forEach(function (c, ci) {
+          (perCat[ci] || []).forEach(function (metas) {
             metas.forEach(function (m) {
+              if (out.length >= 8000) return;
               if (!m || !m.id || seen[c.type + m.id]) return; seen[c.type + m.id] = 1;
               var year = String(m.releaseInfo || m.year || '').slice(0, 4);
               var t = m.type === 'movie' || m.type === 'series' ? m.type : /^(series|anime|tv ?shows?|shows?)$/i.test(c.type) ? 'series' : 'movie';
@@ -193,7 +204,7 @@
       }
       function worker() { var c = queue.shift(); return c ? runOne(c).catch(function () {}).then(worker) : Promise.resolve(); }
       for (var w = 0; w < 6; w++) workers.push(worker());
-      return Promise.all(workers).then(function () { return out; });
+      return Promise.all(workers).then(function () { assemble(); list._stFailed = failedCats; return out; });
     });
   };
 
