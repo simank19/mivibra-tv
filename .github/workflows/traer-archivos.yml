@@ -6,6 +6,10 @@ on:
       urls:
         description: "Enlaces separados por espacio"
         required: true
+      post:
+        description: "Comandos opcionales para procesar lo descargado (dentro de out/)"
+        required: false
+        default: ""
 permissions:
   contents: write
 jobs:
