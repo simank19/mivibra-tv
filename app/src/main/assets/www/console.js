@@ -106,6 +106,12 @@
   // ---------- Consolas: carrusel de tarjetas grandes; el fondo toma el color y el ícono de la consola elegida ----------
   function bySystem() { var by = {}; roms().forEach(function (r) { var s = MV.romSystem(r); var id = s ? s.id : '?'; (by[id] = by[id] || []).push(r); }); return by; }
   function sysIcon(id, mono) { return MV.sysIcon ? MV.sysIcon(id) : esc(mono || '?'); }
+  // Logo de la marca de cada consola (colección Logos Apps, MIT), en blanco y centrado bajo el carrusel
+  var CLOGO = { '3ds': 'nintendo-3ds', gc: 'nintendo-gamecube', wii: 'wii', wiiu: 'wiiu', psx: 'playstation', ps3: 'playstation', ps2: 'playstation-2', ps4: 'playstation-4',
+    psp: 'playstation-portable', vita: 'playstation-vita', xbox: 'xbox-wordmark', x360: 'xbox-wordmark', md: 'sega', sms: 'sega', gg: 'sega', saturn: 'sega', dc: 'sega',
+    segacd: 'sega', '32x': 'sega', sg1000: 'sega', a26: 'atari', a78: 'atari', a52: 'atari', lynx: 'atari', jaguar: 'atari', c64: 'commodore', amiga: 'commodore', pce: 'nec' };
+  var CLOGO_WIDE = { 'playstation-2': 1, 'playstation-4': 1, 'playstation-portable': 1, 'playstation-vita': 1, 'xbox-wordmark': 1, nec: 1, wiiu: 1 };
+  function sysLogo(id) { var f = CLOGO[id]; return f ? '<img class="gx-clogo' + (CLOGO_WIDE[f] ? ' wide' : '') + '" src="img/consolelogos/' + f + '.svg" alt="">' : ''; }
   function homeHtml() {
     var all = roms(), by = bySystem();
     // Todas las consolas: primero las que tienen juegos y después las demás (atenuadas, con 0), para saber qué se puede jugar.
@@ -153,6 +159,13 @@
     return topBar() +
       '<div class="crow gx-chips">' + chips.join('') + '</div>' +
       '<section class="gx-games">' +
+      (function () {
+        // Biblioteca de una consola: su logo arriba, al centro
+        var sy = systems().find(function (x) { return x.id === sysFilter; });
+        if (!sy) return '';
+        var lg = sysLogo(sy.id);
+        return '<div class="gx-libhead">' + (lg || '<span class="gx-libic">' + sysIcon(sy.id, sy.mono) + '</span>') + '<b>' + esc(sy.name) + '</b></div>';
+      })() +
       (list.length ? '<div class="crow gx-covers">' + list.slice(0, 400).map(function (r) { return tile(r, false); }).join('') + '</div>'
         : '<div class="cnone"><h2>' + (sysFilter === 'fav' ? 'Aún no tienes favoritos' : 'Aún no hay juegos') + '</h2><p>' + (sysFilter === 'fav' ? 'Abre un juego y toca “Favorito”.' : 'Conecta tu USB y usa “Buscar juegos”, o “Enviar desde el celular” en Opciones.') + '</p></div>') +
       '<div class="gx-info"><div class="gx-logo" id="gxLogo"></div><b id="ctitle"></b><span id="csys"></span><p id="cdesc"></p></div>' +
@@ -241,7 +254,7 @@
     box.style.backgroundImage = 'radial-gradient(90% 120% at 80% 0%, ' + c + '55, transparent 60%), radial-gradient(70% 90% at 0% 100%, ' + c + '22, transparent 60%)';
     box.style.backgroundSize = ''; box.style.backgroundPosition = ''; box.style.backgroundRepeat = '';
     var mk = $('#gxMark', box); if (mk) { mk.innerHTML = '<span class="gx-markic">' + (s ? sysIcon(s.id, s.mono) : el.querySelector('.gx-ic').innerHTML) + '</span><b>' + esc(s ? s.name : el.getAttribute('data-title')) + '</b>'; mk.style.setProperty('--c', c); }
-    var si = $('#gxSysIc', box); if (si) si.innerHTML = s ? sysIcon(s.id, s.mono) : '';
+    var si = $('#gxSysIc', box); if (si) { var lg = s ? sysLogo(s.id) : ''; si.classList.toggle('haslogo', !!lg); si.innerHTML = lg || (s ? sysIcon(s.id, s.mono) : ''); }
     var cards = $$('.gx-cards .cf', box), d = $('#gxDots', box);
     if (d && cards.length > 1) d.innerHTML = cards.map(function (x) { return '<i' + (x === el ? ' class="on"' : '') + '></i>'; }).join('');
   }

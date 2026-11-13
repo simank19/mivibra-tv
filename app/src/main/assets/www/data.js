@@ -385,6 +385,45 @@
   // Paleta para tarjetas sin imagen
   D.HUES = ['#FF6900', '#2F6FEB', '#14A38B', '#D9A20B', '#E0447C', '#3BA55C', '#7A3FD1', '#C2410C', '#4C8DFF', '#B34A00'];
 
+  // Telenovelas conocidas (Colombia, México, Turquía y Telemundo), en español y con su título original.
+  // Si una serie se llama así, va a Novelas aunque su lista o addon la tenga en Series.
+  D.NOVELA_TITLES = (
+    // Colombia
+    'yo soy betty la fea|betty la fea|ecomoda|cafe con aroma de mujer|pasion de gavilanes|la reina del flow|sin senos no hay paraiso|sin senos si hay paraiso|sin tetas no hay paraiso|' +
+    'el cartel de los sapos|el cartel|escobar el patron del mal|pablo escobar el patron del mal|rosario tijeras|las juanas|los reyes|la venganza de analia|diomedes el cacique de la junta|' +
+    'hasta que la plata nos separe|chepe fortuna|el final del paraiso|las munecas de la mafia|la esclava blanca|lady la vendedora de rosas|la pola|amar y vivir|en cuerpo ajeno|' +
+    'pero sigo siendo el rey|los cuervos|el faraon|gallito ramirez|la casa de las dos palmas|los tacones de eva|la hija del mariachi|el man es german|a corazon abierto|' +
+    'la viuda de la mafia|el capo|la mujer del presidente|la gata|nuevo rico nuevo pobre|pedro el escamoso|sonar no cuesta nada|oye bonita|amor de carnaval|la nieta elegida|' +
+    'enfermeras|tres milagros|la ley del corazon|la reina de indias y el conquistador|la tormenta|la costena y el cachaco|todo es prestao|la primera dama|rafael orozco el idolo|' +
+    'el joe la leyenda|la dama de troya|amor sincero|los graduados|la feria de las vanidades|la mala hora|las aguas mansas|la saga negocio de familia|bolivar|' +
+    // México
+    'maria la del barrio|marimar|maria mercedes|rubi|la usurpadora|teresa|amores verdaderos|corazon salvaje|destilando amor|soy tu duena|mi marido tiene familia|rebelde|clase 406|' +
+    'cuidado con el angel|abismo de pasion|lo que la vida me robo|amor real|alborada|la madrastra|el vuelo de la victoria|vencer el miedo|vencer el pasado|vencer la ausencia|vencer el desamor|' +
+    'si nos dejan|la desalmada|mi fortuna es amarte|los ricos tambien lloran|cuna de lobos|la fea mas bella|simplemente maria|el privilegio de amar|carrusel|mundo de juguete|quinceanera|' +
+    'el maleficio|rosa salvaje|la duena|sueno de amor|amigas y rivales|la intrusa|el manantial|pasion y poder|fuego en la sangre|la que no podia amar|triunfo del amor|la tempestad|' +
+    'la malquerida|que te perdone dios|mi corazon es tuyo|el hotel de los secretos|tierra de esperanza|el amor invencible|eternamente amandonos|la herencia|el color de la pasion|' +
+    'la candidata|papa a toda madre|amor dividido|la mexicana y el guero|te doy la vida|imperio de mentiras|corona de lagrimas|hasta el fin del mundo|la vecina|caer en tentacion|' +
+    'el bienamado|tres veces ana|sin tu mirada|me declaro culpable|la sombra del pasado|lo imperdonable|mirada de mujer|manana es para siempre|en nombre del amor|sortilegio|' +
+    'mar de amor|la fuerza del destino|una familia con suerte|por ella soy eva|un refugio para el amor|lo que la vida me robo|mi camino es amarte|el amor no tiene receta|' +
+    // Telemundo y otras
+    'la reina del sur|el senor de los cielos|la dona|celia|el chema|la piloto|pasion prohibida|el clon|la impostora|' +
+    // Turquía (en español y en turco)
+    'el sultan|muhtesem yuzyil|kosem|la sultana|que culpa tiene fatmagul|fatmagul|fatmagulun sucu ne|amor eterno|kara sevda|mujer|kadin|madre|anne|pajaro sonador|erkenci kus|' +
+    'love is in the air|sen cal kapimi|hercai|hercai amor y venganza|secretos de familia|yargi|tierra amarga|bir zamanlar cukurova|elif|mi hogar mi destino|dogdugun ev kaderindir|' +
+    'ezel|kuzey guney|golden boy|yali capkini|amor prohibido|ask i memnu|medcezir|la hija del embajador|sefirin kizi|amor de alquiler|kiralik ask|el hombre equivocado|bay yanlis|' +
+    'doctor milagro|doctor ali|mucize doktor|omer|omer suenos robados|todo por mi hija|kizim|cennet|cennetin gozyaslari|pecado original|yasak elma|hermanos|kardeslerim|infiel|' +
+    'sadakatsiz|mi vida eres tu|dunyayla benim aramda|que pasa si te enamoras|ya cok seversen|bambaska biri|kizilcik serbeti|dolunay|luna llena|afili ask|masumlar apartmani|' +
+    'benim adim melek|mi nombre es melek|gonul dagi|uzak sehir|ciudad lejana|ruzgarli tepe|siyah beyaz ask|amor en blanco y negro|cukur|dirilis ertugrul|ertugrul|' +
+    'sila|binbir gece|las mil y una noches|ask laftan anlamaz|cherry season|kiraz mevsimi|bizim hikaye|nuestra historia|cesur ve guzel|valiente y hermosa|camdaki kiz|' +
+    'la chica de la ventana|safir|zafiro|aldatmak|traicion|yalan|baba|el padre|annem|deha|bahar|kirli sepeti|her yerde sen|tu en todas partes|hayat sarkisi|la cancion de la vida'
+  ).split('|');
+  var NV_SET = {}; D.NOVELA_TITLES.forEach(function (t) { NV_SET[t] = 1; });
+  /** ¿El título es de una telenovela conocida? (exacto; los de una sola palabra solo si el género es drama o romance). */
+  D.isNovelaTitle = function (normName, genreTxt) {
+    var n = String(normName || '').replace(/\b(19|20)\d{2}\b/g, '').replace(/\b(temporada|season|parte|part|t)\s*\d+\b/g, '').replace(/\s+\d+$/, '').replace(/\s+/g, ' ').trim();
+    if (!n || !NV_SET[n]) return false;
+    return n.indexOf(' ') > 0 || /drama|romance|romant|familia|telenovela|soap|novela/i.test(genreTxt || '');
+  };
   // Íconos (trazo, sin emojis)
   var I = function (p, fill) { return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="' + (fill ? 'currentColor' : 'none') + '" stroke="' + (fill ? 'none' : 'currentColor') + '" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + p + '</svg>'; };
   D.ICON = {

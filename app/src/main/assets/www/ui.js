@@ -560,7 +560,6 @@
     ]) + html;
     html += row('En vivo', coFirst(live).slice(0, 30), 'ch', live.length + ' canales', 'live');
     html += row('Continuar viendo', cont.map(function (c) { return MV.resolve(c); }), 'wide');
-    if (MV.sportsRow) html += MV.sportsRow();
     html += row('Favoritos', favs.slice(0, 30));
     if (saved.length) html += row('Mi lista', saved.slice(0, 30));
     html += row('Sugerido para ti', suggested(), 'poster', 'Según lo que ves en este perfil');
@@ -745,7 +744,6 @@
       '<p class="muted" style="margin:4px 4px 22px">Todavía no hay ' + esc(cname[1].toLowerCase()) + ' en tus listas.</p>';
     out += row('En vivo', coFirst(live).slice(0, 30), 'ch', live.length + ' canales', 'live');
     out += row('Continuar viendo', cont.map(function (c) { return MV.resolve(c); }), 'wide');
-    if (MV.sportsRow) out += MV.sportsRow();
     out += row('Favoritos', favs.slice(0, 30));
     if (saved.length) out += row('Mi lista', saved.slice(0, 30));
     var trendHave = (DISC.rows.trend || []).filter(function (t) { return t.have; });

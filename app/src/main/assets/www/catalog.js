@@ -240,6 +240,11 @@
     o.novela = o.type !== 'live' && !o.adult && (nvCat || RX.novela.test(o.genre || ''));
     o.novelaAuto = o.novela && !nvCat;
     o.anime = RX.anime.test(gs) && !(o.st && o.kdrama && !/^Anime/.test(o.group || ''));
+    // Filtro inteligente: telenovelas conocidas (colombianas, mexicanas, turcas…) que llegan como serie se pasan a Novelas
+    if (!o.novela && o.type === 'series' && !o.adult && !o.anime && D.isNovelaTitle) {
+      var gt = (o.genre || '') + ' ' + (o.group || '');
+      if (D.isNovelaTitle(MV.norm(o.name), gt) || (o.orig && D.isNovelaTitle(MV.norm(o.orig), gt))) { o.novela = true; o.novelaAuto = false; o.novelaTitle = true; }
+    }
     o.platform = D.platformOf(o.group || '') || (o.st && o.src ? D.platformOf(o.src) : '') || (o.type !== 'live' ? D.platformOf(o.name || '') : '');
     // Todo el anime sin plataforma va a Crunchyroll
     if (o.anime && !o.platform && o.type !== 'live') o.platform = 'crunchyroll';

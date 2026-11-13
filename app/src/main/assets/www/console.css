@@ -302,3 +302,16 @@ html.tv #console, html.tv #console * { animation: none !important; transition: n
 #console .gx-card.gx-empty { filter: saturate(.35) brightness(.7); }
 #console .gx-card.gx-empty .gx-n { background: rgba(243,239,234,.55); }
 #console .gx-card.gx-empty:focus { filter: saturate(.8) brightness(.95); }
+
+/* Logo de la consola: centrado bajo el carrusel y arriba en la biblioteca de cada consola */
+.gx-sysname .gx-sysic.haslogo { width: auto; height: 3.2em; display: flex; align-items: center; justify-content: center; }
+.gx-home .gx-sysname .gx-sysic.haslogo { height: 2.8em; }
+.gx-clogo { height: 100%; width: auto; max-width: 14em; object-fit: contain; filter: brightness(0) invert(1) drop-shadow(0 4px 14px rgba(0,0,0,.45)); }
+.gx-clogo.wide { height: 1.5em; max-width: 16em; }
+.gx-sysname .gx-sysic.haslogo img { width: auto; height: 100%; }
+.gx-sysname .gx-sysic.haslogo img.wide { height: 1.5em; }
+.gx-libhead { display: flex; flex-direction: column; align-items: center; gap: .25em; margin: .2em 0 .6em; }
+.gx-libhead .gx-clogo { height: 2.6em; }
+.gx-libhead .gx-clogo.wide { height: 1.3em; }
+.gx-libhead .gx-libic { width: 2.4em; height: 2.4em; } .gx-libhead .gx-libic svg, .gx-libhead .gx-libic img { width: 100%; height: 100%; }
+.gx-libhead b { font-family: var(--brand); font-weight: 800; font-size: 1em; letter-spacing: .08em; text-transform: uppercase; color: #D6D1CB; }
