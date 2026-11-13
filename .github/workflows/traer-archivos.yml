@@ -6,6 +6,8 @@ on:
       urls:
         description: "Enlaces separados por espacio"
         required: true
+permissions:
+  contents: write
 jobs:
   traer:
     runs-on: ubuntu-latest
@@ -19,7 +21,10 @@ jobs:
             curl -sSL --retry 3 -o "$i-$n" "$u" || echo "falló $u"
           done
           ls -la
-      - uses: actions/upload-artifact@v4
-        with:
-          name: archivos
-          path: out
+      - name: Guardar en la rama "archivos" (no toca main)
+        run: |
+          cd out
+          git init -q -b archivos
+          git -c user.name=ci -c user.email=ci@local add -A
+          git -c user.name=ci -c user.email=ci@local commit -qm "archivos"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" archivos
