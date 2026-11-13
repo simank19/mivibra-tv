@@ -1251,3 +1251,35 @@ body.np-open .mini { display: none; }
 body.has-mini .main { padding-bottom: 130px; }
 @media (min-width: 761px) { .mini { width: min(760px, calc(100vw - 140px)); } .mini .mopen { min-width: 180px; } }
 .mini .mopen.f:focus-visible, .mini .mopen.f.kf { box-shadow: 0 0 0 3px var(--accent); transform: none; }
+
+/* ---------- Reproductor de música en el encabezado del Inicio (TV y PC) ---------- */
+.hdrnow { display: flex; align-items: center; gap: 6px; margin-left: auto; align-self: center; min-width: 0; max-width: 480px; padding: 6px 8px 6px 6px; border-radius: 30px; background: rgba(24,26,29,.94); border: 1px solid var(--line); box-shadow: 0 10px 28px rgba(0,0,0,.35); }
+.hdrnow[hidden] { display: none; }
+.hn-open { display: flex; align-items: center; gap: 10px; min-width: 0; border: 0; background: transparent; color: var(--text); text-align: left; padding: 0 6px 0 0; border-radius: 24px; }
+.hn-open .art { position: relative; width: 42px; height: 42px; flex: none; border-radius: 50%; overflow: hidden; background: linear-gradient(140deg, var(--h, #555), #1d1f22); display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,.85); }
+.hn-open .art svg { width: 20px; height: 20px; }
+.hn-open .art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.hn-open .t { display: flex; flex-direction: column; min-width: 0; max-width: 220px; }
+.hn-open b { font: 700 13px var(--ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hn-open small { font: 500 11px var(--ui); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hn-b { width: 40px; height: 40px; flex: none; border-radius: 50%; border: 0; background: rgba(255,255,255,.08); color: var(--text); display: flex; align-items: center; justify-content: center; padding: 0; }
+.hn-b svg { width: 18px; height: 18px; }
+.hn-b.play { background: var(--accent); color: var(--on-accent); }
+body.np-inhead .mini { display: none !important; }
+@media (max-width: 760px) { .hdrnow { display: none !important; } }
+/* Mini reproductor flotante: oscuro, no transparente */
+.mini.glass, html[data-theme="gris"] .mini.glass { background: rgba(22,24,27,.97); -webkit-backdrop-filter: none; backdrop-filter: none; border: 1px solid rgba(255,255,255,.12); }
+@media (max-width: 760px) { .mini.glass, html[data-theme="gris"] .mini.glass { background: rgba(18,19,22,.98); } }
+
+/* ---------- Widgets compactos en la columna de la derecha ---------- */
+.vside .wgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.wgc { display: flex; align-items: center; gap: 9px; min-width: 0; height: 58px; padding: 0 10px; border-radius: 16px; border: 1px solid var(--line); background: var(--glass); color: var(--text); text-align: left; }
+.wgc .wgi { width: 32px; height: 32px; flex: none; border-radius: 50%; background: rgba(255,255,255,.12); display: flex; align-items: center; justify-content: center; }
+.wgc .wgi svg { width: 16px; height: 16px; }
+.wgc .tx { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+.wgc b { font: 700 12.5px var(--ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wgc small { font: 500 10.5px var(--ui); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vlive .scr { height: auto; flex: 1; min-height: clamp(200px, 32vh, 400px); }
+.vcont { min-height: 150px; }
+@media (max-width: 760px) { .vlive .scr { min-height: 190px; flex: none; } }
+@media (min-width: 761px) { .vhead { padding-right: 320px; } }

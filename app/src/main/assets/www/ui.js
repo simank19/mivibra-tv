@@ -164,6 +164,7 @@
       app.innerHTML = '<div class="shell">' + side + '<main class="main">' + quick + '<div class="view-in' + (still ? ' still' : '') + '">' + body + '</div></main></div>';
     }
     if (VIEWS[view.name] && VIEWS[view.name].after) VIEWS[view.name].after(view.arg);
+    if (MV.headMode) MV.headMode();
     if (!full) {
       var sd = document.querySelector('.side');
       pillFx('nav', sd, sd && sd.querySelector('.nav.on'), window.innerWidth > 760);
@@ -687,7 +688,7 @@
     var out = '<div class="vhead"><div class="t"><span class="kick">' + esc(cap(new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' }))) + '</span>' +
       '<h1>' + greet() + (p ? ', ' + esc(p.name) : '') + '</h1>' +
       '<span class="sub">' + [live.length ? live.length.toLocaleString('es-CO') + ' canales en vivo' : '', movies.length ? movies.length.toLocaleString('es-CO') + ' películas' : '', series.length ? series.length.toLocaleString('es-CO') + ' series' : ''].filter(Boolean).join(' · ') + '</span></div>' +
-      '</div>';
+      hdrNow() + '</div>';
     out += html;   // celebración, cargando y "continúa desde otro dispositivo"
     out += '<div class="vmodes">' + HMODES.map(function (m) {
       return '<button class="vmode f" data-act="homeMode" data-arg="' + m[0] + '"><span class="ic">' + m[1] + '</span><span class="tx"><b>' + m[2] + '</b><small>' + m[3] + '</small></span></button>';
@@ -734,8 +735,7 @@
       out += '<section class="vcont empty" aria-label="Continuar viendo"><b>Continuar viendo</b><span>Lo que empieces a ver aparece aquí para seguir donde lo dejaste.</span>' +
         '<button class="vall f" data-act="nav" data-arg="movies">' + IC.movie + 'Elegir una película</button></section>';
     }
-    out += '</div></div>';
-    out += homeWidgets();
+    out += homeWidgets() + '</div></div>';
     out += '<div class="vchips chips" role="tablist" aria-label="Categorías">' + HCHIPS.map(function (c) {
       return '<button class="chip f' + (homeChip === c[0] ? ' on' : '') + '" role="tab" aria-selected="' + (homeChip === c[0]) + '" data-act="homeChip" data-arg="' + c[0] + '" data-fid="hc-' + c[0] + '">' + c[1] + '</button>';
     }).join('') + '<button class="chip f" data-act="nav" data-arg="utils">' + IC.grid + 'Todas las secciones</button></div>';
@@ -758,44 +758,54 @@
   }
 
   // ---------- Widgets del Inicio: navegador, lectura, música y radio, soporte ----------
-  function wHead(icon, title, act, arg) {
-    return '<div class="wgh"><span class="wgi">' + icon + '</span><b>' + title + '</b>' + (act ? '<button class="wgmore f" data-act="' + act + '"' + (arg ? ' data-arg="' + arg + '"' : '') + ' aria-label="Abrir ' + title + '">' + '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>' + '</button>' : '') + '</div>';
+  // Widgets compactos (en la columna de la derecha, junto a deportes, hora y continuar viendo)
+  function wgTile(id, icon, title, sub, act, arg, extra) {
+    return '<button class="wgc f"' + (id ? ' id="' + id + '"' : '') + ' data-act="' + act + '"' + (arg ? ' data-arg="' + esc(arg) + '"' : '') + (extra || '') + '>' +
+      '<span class="wgi">' + icon + '</span><span class="tx"><b>' + title + '</b><small>' + esc(sub) + '</small></span></button>';
   }
   function musicWidget() {
     var c = AU.current();
-    return '<section class="wg" id="wgMusic" aria-label="Música y radio">' + wHead(IC.music, 'Música y radio', 'nav', 'music') +
-
-      (c ? '<div class="wgnow"><button class="wgart f" data-act="npOpen" aria-label="Abrir el reproductor" style="--h:' + MV.hue(c.title || '') + '">' + (c.art ? '<img src="' + esc(c.art) + '" alt="" onerror="this.remove()">' : (c.kind === 'radio' ? IC.radio : IC.music)) + '</button>' +
-          '<span class="tx"><small>' + (c.kind === 'radio' ? 'Radio en vivo' : 'Sonando') + '</small><b>' + esc(c.title) + '</b><span>' + esc(c.sub || '') + '</span></span>' +
-          '<button class="wgplay f" data-act="auToggle" aria-label="' + (AU.playing && AU.playing() ? 'Pausa' : 'Reproducir') + '">' + (AU.playing && AU.playing() ? IC.pause : IC.play) + '</button></div>'
-        : '<div class="wgduo"><button class="wgbtn f" data-act="nav" data-arg="music">' + IC.music + 'Música</button><button class="wgbtn f" data-act="nav" data-arg="radio">' + IC.radio + 'Radio</button></div><p class="wgtxt">Tu música, música libre y emisoras de Colombia y el mundo.</p>') + '</section>';
+    return c ? wgTile('wgMusic', c.kind === 'radio' ? IC.radio : IC.music, AU.playing && AU.playing() ? 'Sonando' : 'En pausa', c.title, 'npOpen')
+      : wgTile('wgMusic', IC.music, 'Música y radio', 'Tu música y emisoras', 'nav', 'music');
   }
-  MV.wgMusicPaint = function () { var b = document.getElementById('wgMusic'); if (!b) return; var a = document.activeElement, inside = b.contains(a), act = inside ? a.getAttribute('data-act') : ''; b.outerHTML = musicWidget(); if (act) { var n = document.querySelector('#wgMusic [data-act="' + act + '"]'); if (n) n.focus(); } };
+  // Reproductor de música en el encabezado del Inicio (en TV y PC); en el celular sigue el flotante de abajo
+  function hdrNow() {
+    var c = AU.current();
+    if (!c) return '<div id="hdrNow" hidden></div>';
+    var playing = AU.playing && AU.playing(), many = AU.list && AU.list().length > 1;
+    return '<div id="hdrNow" class="hdrnow">' +
+      '<button class="hn-open f" data-act="npOpen" aria-label="Abrir el reproductor: ' + esc(c.title) + '"><span class="art" style="--h:' + MV.hue(c.title || '') + '">' + (c.art ? '<img src="' + esc(c.art) + '" alt="" onerror="this.remove()">' : (c.kind === 'radio' ? IC.radio : IC.music)) + '</span>' +
+        '<span class="t"><b>' + esc(c.title) + '</b><small>' + esc(AU.status || c.sub || '') + '</small></span></button>' +
+      (many ? '<button class="hn-b f" data-act="auPrev" aria-label="Anterior">' + IC.prev + '</button>' : '') +
+      '<button class="hn-b play f" data-act="auToggle" aria-label="' + (playing ? 'Pausa' : 'Reproducir') + '">' + (playing ? IC.pause : IC.play) + '</button>' +
+      (many ? '<button class="hn-b f" data-act="auNext" aria-label="Siguiente">' + IC.next + '</button>' : '') +
+      '<button class="hn-b f" data-act="auStop" aria-label="Detener">' + IC.close + '</button></div>';
+  }
+  function repaint(id, html) {
+    var b = document.getElementById(id); if (!b) return;
+    var a = document.activeElement, act = a && b.contains(a) ? a.getAttribute('data-act') : (a === b ? b.getAttribute('data-act') : '');
+    b.outerHTML = html;
+    var nb = document.getElementById(id);
+    if (act && nb) { var n = nb.getAttribute('data-act') === act ? nb : nb.querySelector('[data-act="' + act + '"]'); if (n) n.focus({ preventScroll: true }); }
+    headMode();
+  }
+  MV.wgMusicPaint = function () { repaint('wgMusic', musicWidget()); repaint('hdrNow', hdrNow()); };
+  // En pantallas anchas, si el Inicio tiene el reproductor arriba, se esconde el flotante de abajo
+  function headMode() { var h = document.getElementById('hdrNow'); document.body.classList.toggle('np-inhead', !!(h && !h.hidden && window.innerWidth > 760)); }
+  window.addEventListener('resize', headMode);
+  MV.headMode = headMode;
   function homeWidgets() {
     if (MV.isKids()) return '';
-    var w = [];
-    // Navegador: accesos rápidos
-    w.push('<section class="wg" aria-label="Navegador">' + wHead(IC.globe, 'Navegador', 'nav', 'browser') +
-      '<div class="wgsites">' + BROWSER_SITES.slice(0, 4).map(function (x) {
-        var host = x[1].replace(/^https?:\/\/(www\.|m\.)?/, '').split('/')[0];
-        return '<button class="wgsite f" data-act="webOpen" data-arg="' + esc(x[1]) + '"><img src="https://www.google.com/s2/favicons?sz=64&domain=' + esc(host) + '" alt="" loading="lazy" onerror="this.remove()"><span>' + esc(x[0]) + '</span></button>';
-      }).join('') + '</div></section>');
-    // Lectura: seguir leyendo o ir a la biblioteca
     var rr = MV.readRecent ? MV.readRecent() : [], last = rr[0], lb = last && ((S.bookByKey && S.bookByKey[last.key]) || last);
     if (lb) MV.reg[lb.key] = lb;
-    w.push('<section class="wg" aria-label="Lectura">' + wHead(IC.book, 'Lectura', 'nav', 'books') +
-      (lb ? '<button class="wgbook f" data-act="openBook" data-arg="' + esc(lb.key) + '"><span class="cv" style="--h:' + MV.hue(lb.name || '') + '">' + (lb.poster ? '<img src="' + esc(lb.poster) + '" alt="" loading="lazy" onerror="this.remove()">' : IC.book) + '</span>' +
-          '<span class="tx"><small>Seguir leyendo</small><b>' + esc(lb.name || '') + '</b>' + (last.pct ? '<span class="pg"><i style="width:' + last.pct + '%"></i></span><small>' + last.pct + '% leído</small>' : '') + '</span></button>'
-        : '<p class="wgtxt">Mangas, cómics, libros y revistas en un solo lugar.</p><button class="wgbtn f" data-act="nav" data-arg="books">' + IC.book + 'Abrir la biblioteca</button>') + '</section>');
-    // Música y radio: lo que suena, o accesos
-    w.push(musicWidget());
-    // Soporte: optimizar el equipo y actualizaciones
-    var ver = MV.device && MV.device.versionCode ? 'Versión ' + MV.device.versionCode : '', upd = MV.pendingUpdate;
-    w.push('<section class="wg" aria-label="Soporte">' + wHead(IC.settings || IC.gear || IC.grid, 'Soporte') +
-      '<div class="wgduo col">' + (A && A.openDiag && !(MV.device && MV.device.webtv) ? '<button class="wgbtn f" data-act="openDiag">' + (IC.refresh || '') + (MV.device && MV.device.desktop ? 'Soporte MiVibra PC' : 'Optimizar el equipo') + '</button>' : '') +
-        '<button class="wgbtn f' + (upd ? ' hot' : '') + '" data-act="showUpdate">' + (IC.download || '') + (upd ? 'Actualizar a la ' + esc(upd.version) : 'Buscar actualizaciones') + '</button></div>' +
-      '<p class="wgtxt">' + esc([ver, MV.device && MV.device.model].filter(Boolean).join(' · ')) + '</p></section>');
-    return '<div class="wgrid">' + w.join('') + '</div>';
+    var upd = MV.pendingUpdate, diag = A && A.openDiag && !(MV.device && MV.device.webtv);
+    return '<div class="wgrid">' +
+      wgTile('', IC.globe, 'Navegador', 'Google, YouTube y más', 'nav', 'browser') +
+      (lb ? wgTile('', IC.book, 'Seguir leyendo', (lb.name || '') + (last.pct ? ' · ' + last.pct + '%' : ''), 'openBook', lb.key) : wgTile('', IC.book, 'Lectura', 'Mangas, cómics y libros', 'nav', 'books')) +
+      musicWidget() +
+      (upd ? wgTile('', IC.download, 'Actualizar', 'Versión ' + upd.version + ' lista', 'showUpdate') :
+        diag ? wgTile('', IC.refresh, 'Soporte', MV.device && MV.device.desktop ? 'Soporte MiVibra PC' : 'Optimizar el equipo', 'openDiag') : wgTile('', IC.download, 'Soporte', 'Buscar actualizaciones', 'showUpdate')) +
+      '</div>';
   }
   // Píldora que se desliza: la orilla de adelante sale primero y la de atrás la alcanza
   var pillLast = {};
