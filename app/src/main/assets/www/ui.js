@@ -567,7 +567,7 @@
     var trendHave = (DISC.rows.trend || []).filter(function (t) { return t.have; });
     if (trendHave.length) html += row('Tendencia esta semana', trendHave.slice(0, 20), 'poster', 'Lo más visto en el mundo que ya tienes', 'discover');
     var pls = platformCounts();
-    if (pls.length) html += '<section class="row"><h3>Plataformas</h3><div class="strip">' + pls.map(platformTile).join('') + '</div></section>';
+    html += platRow(pls);
     html += row('Películas', movies.slice(0, 30), 'poster', '', 'movies');
     html += row('Series', series.slice(0, 30), 'poster', '', 'series');
     html += row('Anime', anime.slice(0, 30), 'poster', '', 'anime');
@@ -631,6 +631,9 @@
     var lastTs = 0; for (var hj = 0; hj < hist.length; hj++) if (hist[hj].type === 'live' && S.byKey[hist[hj].key] === lastLive) { lastTs = hist[hj].ts || 0; break; }
     var heroIt = (picked && (!lastLive || hp.ts >= lastTs) ? picked : null) || lastLive || picked || favs.find(function (f) { return f.type === 'live' && live.indexOf(f) >= 0; }) ||
       live.find(function (c) { return c.country === 'co'; }) || live[0] || null;
+    // Si lo último que viste fue un canal de Twitch o Kick, ese va en el recuadro
+    var sl = MV.load('streamLast', null), tvTs = Math.max(lastLive ? lastTs : 0, picked && hp ? hp.ts : 0);
+    if (sl && sl.ch && sl.ts > tvTs) heroIt = { stream: true, tab: sl.tab, ch: sl.ch, key: 'st:' + sl.tab + ':' + sl.ch, name: sl.ch, type: 'stream' };
     MV._heroIt = heroIt;
     var out = '<div class="vhead"><div class="t"><span class="kick">' + esc(cap(new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' }))) + '</span>' +
       '<h1>' + greet() + (p ? ', ' + esc(p.name) : '') + '</h1>' +
@@ -641,7 +644,19 @@
       return '<button class="vmode f" data-act="homeMode" data-arg="' + m[0] + '"><span class="ic">' + m[1] + '</span><span class="tx"><b>' + m[2] + '</b><small>' + m[3] + '</small></span></button>';
     }).join('') + '</div>';
     out += '<div class="vmain">';
-    if (heroIt) {
+    if (heroIt && heroIt.stream) {
+      var sname = heroIt.tab === 'kick' ? 'Kick' : 'Twitch';
+      var othersS = coFirst(live).slice(0, 4); othersS.forEach(reg);
+      out += '<section class="vlive" aria-label="Último canal de ' + sname + '"><div class="scr stream ' + heroIt.tab + '">' +
+        '<span class="mono">' + esc(heroIt.ch) + '</span>' +
+        '<button class="scrbtn f" data-act="streamGo" data-arg="' + esc(heroIt.tab + ':' + heroIt.ch) + '" data-autofocus aria-label="Ver ' + esc(heroIt.ch) + ' de ' + sname + ' en pantalla completa"></button></div>' +
+        '<div class="vinfo"><span class="vbadge ' + heroIt.tab + '">' + sname.toUpperCase() + '</span><div class="t"><b>' + esc(heroIt.ch) + '</b><span>Último canal que viste en ' + sname + '</span></div>' +
+        '<button class="vsound f" data-act="heroSound" aria-pressed="' + !PV.mute + '">' + soundInner() + '</button></div>' +
+        '<div class="thumbs">' + othersS.map(function (c) {
+          var im = MV.poster(c), lg = im && MV.logoUrl ? MV.logoUrl(im) : im;
+          return '<button class="vth f" data-act="heroPick" data-key="' + esc(c.key) + '" style="--h:' + MV.hue(c.name) + '" aria-label="Ver ' + esc(c.name) + ' aquí">' + (im ? '<img loading="lazy" src="' + esc(lg) + '" alt="">' : '') + '<span>' + esc(MV.cleanTitle(c.name) || c.name) + '</span></button>';
+        }).join('') + '<button class="vth all f" data-act="openStreams" data-arg="' + heroIt.tab + '" aria-label="Más canales de ' + sname + '">' + IC.grid + '<span>' + sname + '</span></button></div></section>';
+    } else if (heroIt) {
       reg(heroIt);
       var nn = MV.nowNext(heroIt) || {}, img = MV.poster(heroIt), logo = img && MV.logoUrl ? MV.logoUrl(img) : img;
       var others = coFirst(live).filter(function (c) { return c !== heroIt; }).slice(0, 4);
@@ -686,7 +701,7 @@
     var trendHave = (DISC.rows.trend || []).filter(function (t) { return t.have; });
     if (trendHave.length) out += row('Tendencia esta semana', trendHave.slice(0, 20), 'poster', 'Lo más visto en el mundo que ya tienes', 'discover');
     var pls = platformCounts();
-    if (pls.length) out += '<section class="row"><h3>Plataformas</h3><div class="strip">' + pls.map(platformTile).join('') + '</div></section>';
+    out += platRow(pls);
     var bks = visibleBooks();
     if (bks.length) out += '<section class="row"><h3>Mangas y libros <small>' + bks.length + ' para leer</small></h3><div class="strip">' + bks.slice(0, 24).map(bookCard).join('') +
       '<button class="btn ghost sm f" style="align-self:center;flex:0 0 auto" data-act="nav" data-arg="books">Ver todo</button></div></section>';
@@ -761,25 +776,47 @@
     var sig = [v, Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height), window.innerWidth].join();
     if (sig === PV.sig) return;
     PV.sig = sig;
+    if (PV.mode === 'web') {
+      if (!HL) return;
+      HL.style.cssText = 'left:' + r.left + 'px;top:' + r.top + 'px;width:' + r.width + 'px;height:' + r.height + 'px;display:' + (v ? 'block' : 'none');
+      return;
+    }
     A.previewMove(r.left, r.top, r.width, r.height, window.innerWidth, v);
   }
   var pvRaf = 0;
   document.addEventListener('scroll', function () { if (PV.on && !pvRaf) pvRaf = requestAnimationFrame(function () { pvRaf = 0; pvSync(); }); }, true);
   window.addEventListener('resize', function () { PV.sig = ''; pvSync(); });
-  function pvStop() { if (PV.on && A && A.previewHide) A.previewHide(); PV.on = false; PV.key = ''; PV.sig = ''; clearInterval(PV.t); }
+  function pvStop() {
+    if (PV.on && PV.mode !== 'web' && A && A.previewHide) A.previewHide();
+    if (HL) { HL.remove(); HL = null; }
+    PV.on = false; PV.mode = ''; PV.key = ''; PV.sig = ''; clearInterval(PV.t);
+  }
   MV.onPreview = function (st) {
     if (st === 'on') { var b = heroBox(); if (b) b.classList.add('playing'); }
     else if (st === 'fail') { PV.fail[PV.key] = Date.now(); PV.on = false; PV.key = ''; clearInterval(PV.t); }
     else if (st === 'stopped') { PV.on = false; PV.key = ''; PV.sig = ''; clearInterval(PV.t); }
   };
+  // Twitch y Kick: su reproductor oficial (iframe) en una capa encima del recuadro; así no se recarga cada vez que se redibuja el Inicio
+  var HL = null;
+  function hlShow(it) {
+    if (PV.on && PV.mode === 'native') pvStop();
+    if (!HL) { HL = document.createElement('div'); HL.id = 'heroLayer'; HL.setAttribute('aria-hidden', 'true'); document.body.appendChild(HL); }
+    var src = streamUrl(it.tab, it.ch).replace('muted=false', 'muted=' + PV.mute);
+    if (HL.dataset.src !== src) { HL.innerHTML = '<iframe src="' + esc(src) + '" allow="autoplay; encrypted-media" tabindex="-1"></iframe>'; HL.dataset.src = src; }
+    PV.on = true; PV.mode = 'web'; PV.key = it.key; PV.sig = '';
+    clearInterval(PV.t); PV.t = setInterval(pvSync, 150); pvSync();
+  }
   function heroPreview() {
     var it = MV._heroIt, box = heroBox();
-    if (!box || !it || it.type !== 'live' || !it.url || it.stk || document.hidden) return;
+    if (!box || !it || document.hidden) return;
+    if (it.stream) { hlShow(it); return; }
+    if (PV.on && PV.mode === 'web') pvStop();
+    if (it.type !== 'live' || !it.url || it.stk) return;
     if (A && A.previewShow) {
       if (PV.on && PV.key === it.key) { PV.sig = ''; pvSync(); return; }
       if (PV.fail[it.key] && Date.now() - PV.fail[it.key] < 10 * 60e3) return;
       var r = box.getBoundingClientRect();
-      PV.on = true; PV.key = it.key; PV.sig = '';
+      PV.on = true; PV.mode = 'native'; PV.key = it.key; PV.sig = '';
       A.previewShow(it.url, it.ua || '', it.ref || '', r.left, r.top, r.width, r.height, window.innerWidth, 14, PV.mute);
       clearInterval(PV.t); PV.t = setInterval(pvSync, 150);
       setTimeout(pvSync, 50);
@@ -1154,6 +1191,16 @@
     var m = {};
     MV.visible(S.items).forEach(function (i) { if (i.platform && i.type !== 'live') m[i.platform] = (m[i.platform] || 0) + 1; });
     return D.PLATFORMS.filter(function (p) { return m[p.id]; }).map(function (p) { return { id: p.id, name: p.name, count: m[p.id] }; });
+  }
+  /** Fila Plataformas del Inicio: YouTube, Twitch y Kick primero, luego las plataformas de tus listas. */
+  function platRow(pls) {
+    var apps = (MV.isKids() ? [] : [['youtube', 'YouTube', '#B91C1C', 'Videos y tendencias'], ['twitch', 'Twitch', '#6D28D9', 'Canales en vivo'], ['kick', 'Kick', '#15803D', 'Canales en vivo']]);
+    var tiles = apps.map(function (a, i) {
+      return '<button class="card wide f" style="--h:' + a[2] + ';animation-delay:' + i * 0.04 + 's" data-act="' + (a[0] === 'youtube' ? 'nav' : 'openStreams') + '" data-arg="' + a[0] + '" data-fid="pl-' + a[0] + '">' +
+        '<div class="th" style="height:120px"><span class="mono" style="font-size:30px;letter-spacing:-.5px">' + a[1] + '</span></div>' +
+        '<div class="meta"><b>' + a[1] + '</b><span>' + a[3] + '</span></div></button>';
+    }).join('') + pls.map(function (p, i) { return platformTile(p, i + apps.length); }).join('');
+    return tiles ? '<section class="row"><h3>Plataformas</h3><div class="strip">' + tiles + '</div></section>' : '';
   }
   function platformTile(p, i) {
     return '<button class="card wide f" style="--h:' + MV.hue(p.id + 'mv') + ';animation-delay:' + Math.min(i, 12) * 0.04 + 's" data-act="platform" data-arg="' + p.id + '" data-fid="pl-' + p.id + '">' +
@@ -2922,7 +2969,8 @@
     heroPick: function (_, el) { MV.save('heroPick', { k: el.dataset.key, ts: Date.now() }); MV.rerender(); },
     heroSound: function () {
       PV.mute = !PV.mute; MV.save('heroMute', PV.mute);
-      if (PV.on && A && A.previewMute) A.previewMute(PV.mute);
+      if (PV.on && PV.mode === 'web') { var hi = MV._heroIt; if (hi && hi.stream) hlShow(hi); }
+      else if (PV.on && A && A.previewMute) A.previewMute(PV.mute);
       var v = document.querySelector('.vlive .scr video'); if (v) v.muted = PV.mute;
       var b = document.querySelector('.vsound'); if (b) { b.innerHTML = soundInner(); b.setAttribute('aria-pressed', String(!PV.mute)); }
     },
@@ -3151,6 +3199,7 @@
     },
     musicTab: function (t) { MUSIC.tab = t; MV.rerender(); },
     streamTab: function (t) { STREAM.tab = t; MV.rerender(); },
+    openStreams: function (t) { STREAM.tab = t === 'kick' ? 'kick' : 'twitch'; MV.go('streams'); },
     liveLang: function (a) { LIVE.lang = a; MV.rerender(); },
     streamGo: function (a) { var i = a.indexOf(':'); streamPlay(a.slice(0, i), a.slice(i + 1)); },
     streamOpenIn: function () { var v = ((document.getElementById('streamIn') || {}).value || '').trim(); if (!v) { MV.toast('Escribe el nombre del canal'); return; } streamPlay(STREAM.tab, v); },
@@ -4304,9 +4353,11 @@
     barT = setTimeout(function () { if (streamBox) streamBox.classList.add('hidebar'); }, 3500);
   }
   MV.streamKey = function () { if (!MV.streamOpen()) return false; var hidden = streamBox.classList.contains('hidebar'); streamBarShow(); return hidden; };
-  MV.streamClose = function () { clearTimeout(barT); if (streamBox) { streamBox.remove(); streamBox = null; } pipSet(); MV.focusFirst(); };
+  MV.streamClose = function () { clearTimeout(barT); if (streamBox) { streamBox.remove(); streamBox = null; } pipSet(); if (view.name === 'home') MV.rerender(); MV.focusFirst(); };
   function streamPlay(tab, ch) {
     if (!ch) return;
+    MV.save('streamLast', { tab: tab, ch: String(ch).trim().toLowerCase().replace(/^@/, ''), ts: Date.now() });
+    stopHeroPreview();
     if (AU.current()) AU.stop();
     if (streamBox) streamBox.remove();
     streamBox = document.createElement('div');
