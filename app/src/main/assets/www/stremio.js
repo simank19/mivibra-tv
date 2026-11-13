@@ -33,6 +33,21 @@
     });
   };
 
+  /** ID de IMDb buscando por nombre (y año) en Cinemeta, el catálogo público de Stremio. Sirve para pedir subtítulos. */
+  var CM = {};
+  MV.cinemetaImdb = function (name, year, type) {
+    var k = type + '|' + MV.norm(name) + '|' + (year || '');
+    if (CM[k] !== undefined) return Promise.resolve(CM[k]);
+    return MV.getJSON('https://v3-cinemeta.strem.io/catalog/' + (type === 'series' ? 'series' : 'movie') + '/top/search=' + encodeURIComponent(String(name).replace(/\(\d{4}\)/g, '').trim()) + '.json').then(function (j) {
+      var n = MV.norm(String(name).replace(/\(\d{4}\)/g, '')), best = null;
+      ((j && j.metas) || []).forEach(function (m) {
+        if (best || !m || !/^tt\d+/.test(m.imdb_id || m.id || '')) return;
+        var y = parseInt(String(m.releaseInfo || m.year || '').slice(0, 4), 10);
+        if (MV.norm(m.name) === n && (!year || !y || Math.abs(y - +year) <= 1)) best = m.imdb_id || m.id;
+      });
+      CM[k] = best; return best;
+    }).catch(function () { return null; });
+  };
   /** Addons instalados que dan subtítulos (OpenSubtitles v3, SubDL, SubSource…): el reproductor les pide los del video. */
   MV.stremioSubBases = function () {
     // Si aún no se leyó su manifest (por ejemplo recién abierta la app), igual se le pregunta: el que no tenga subtítulos no responde nada

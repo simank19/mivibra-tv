@@ -2178,7 +2178,8 @@
     var m = it._meta || {};
     var o = { sTitle: MV.cleanTitle(it.name), sYear: String(it.year || m.year || ''), sTmdb: m.tmdbId || '', sImdb: m.imdb || '', sKind: it.type === 'series' || season ? 'tv' : 'movie', sSeason: season || 0, sEpisode: ep || 0 };
     // Id para los addons de subtítulos (Stremio): el del addon o el de IMDb
-    if (it.st && it.st.id) o.stSubId = season ? '' : it.st.id;
+    // Los addons de subtítulos (OpenSubtitles) solo entienden IDs de IMDb (tt…): otros IDs (tmdb:, kitsu:) no sirven ahí
+    if (it.st && it.st.id && /^tt\d+/.test(it.st.id)) { o.stSubId = season ? '' : it.st.id; if (!o.sImdb) o.sImdb = it.st.id.split(':')[0]; }
     if (!o.sImdb && it.st && /^tt\d+$/.test(it.st.id)) o.sImdb = it.st.id;
     return o;
   }
@@ -2203,13 +2204,21 @@
     var q0 = (req.queue || [])[0], it0 = ctx.item;
     if (A && req.subAddons.length && !req.live && !req.ext && q0 && !q0.sImdb && !q0.stSubId && it0 && it0.type !== 'rom' && !ctx._metaTried && MV.meta) {
       ctx._metaTried = true;
-      var done = false, go = function (m) {
+      var done = false, play = function (m) {
         if (done) return; done = true;
         if (m && m.imdb) (req.queue || []).forEach(function (x) { if (!x.sImdb) x.sImdb = m.imdb; if (!x.sTmdb && m.tmdbId) x.sTmdb = m.tmdbId; });
-        if (m && !it0._meta) it0._meta = m;
+        if (m && m.tmdbId && !it0._meta) it0._meta = m;
         A.play(JSON.stringify(req));
       };
-      setTimeout(function () { go(null); }, 2500);
+      // Sin ID de IMDb en la ficha: se busca por nombre y año en Cinemeta (el catálogo de Stremio, sin claves)
+      var go = function (m) {
+        if (done) return;
+        if (m && m.imdb) return play(m);
+        if (!MV.cinemetaImdb) return play(m);
+        MV.cinemetaImdb(MV.cleanTitle(it0.orig || it0.name) || it0.name, it0.year || (m && m.year) || '', it0.type === 'series' ? 'series' : 'movie')
+          .then(function (tt) { play(tt ? Object.assign({}, m || {}, { imdb: tt }) : m); }, function () { play(m); });
+      };
+      setTimeout(function () { play(null); }, 4000);
       MV.meta(it0).then(go, function () { go(null); });
       return;
     }
