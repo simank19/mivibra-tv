@@ -283,7 +283,7 @@
     try { el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: b }); } catch (e) { el.scrollIntoView(false); }
   }
   /** Contenedor que agrupa tarjetas (fila horizontal, cuadrícula, chips): se mide una vez en vez de medir cada tarjeta. */
-  var GROUP = '.strip, .grid, .vgrid, .pgrid, .chips, .apps, .qbar, .side';
+  var GROUP = '.strip, .grid, .vgrid, .pgrid, .chips, .apps, .qbar, .side, .mini';
   function score(dir, c, cx, cy, r) {
     var x = r.left + r.width / 2, y = r.top + r.height / 2, dx = x - cx, dy = y - cy, primary, secondary, overlap;
     if (dir === 'left') { if (r.right > c.left + 2 && dx >= -2) return -1; primary = c.left - r.right; secondary = Math.abs(dy); overlap = r.bottom > c.top && r.top < c.bottom; }
@@ -296,7 +296,9 @@
   function usable(el, r) { return !el.disabled && r.width > 0 && r.height > 0; }
   MV.move = function (dir) {
     var root = MV.scope(), cur = document.activeElement;
-    if (!cur || !root.contains(cur) || !cur.classList || !cur.classList.contains('f')) {
+    // El mini reproductor de música está fuera de la pantalla principal: también se alcanza con el control
+    var mini = root.id === 'app' ? document.querySelector('#mini:not([hidden])') : null;
+    if (!cur || !(root.contains(cur) || (mini && mini.contains(cur))) || !cur.classList || !cur.classList.contains('f')) {
       var first = Array.prototype.find.call(root.querySelectorAll('.f'), function (el) { return usable(el, el.getBoundingClientRect()); });
       if (first) { first.focus({ preventScroll: true }); reveal(first); }
       return;
@@ -325,6 +327,7 @@
       if (!g || !root.contains(g)) { consider2(el); return; }
       if (seen.has(g)) return; seen.add(g); groups.push(g);
     });
+    if (mini) groups.push(mini);
     function consider2(el) {
       if (!inSide && dir !== 'left' && el.closest('.side')) return;
       var r = el.getBoundingClientRect();

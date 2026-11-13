@@ -1247,3 +1247,7 @@ body.np-open .mini { display: none; }
 .wgtxt { margin: 0; font: 500 11.5px/1.4 var(--ui); color: var(--muted); }
 @media (max-width: 1100px) { .wgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px) { .wgrid { gap: 10px; } .wg { padding: 10px; } .wgsites { grid-template-columns: repeat(2, minmax(0, 1fr)); } .wgduo { grid-template-columns: 1fr; } }
+/* Mini reproductor: más ancho en pantallas grandes (se ve el nombre) y el contenido no queda debajo */
+body.has-mini .main { padding-bottom: 130px; }
+@media (min-width: 761px) { .mini { width: min(760px, calc(100vw - 140px)); } .mini .mopen { min-width: 180px; } }
+.mini .mopen.f:focus-visible, .mini .mopen.f.kf { box-shadow: 0 0 0 3px var(--accent); transform: none; }

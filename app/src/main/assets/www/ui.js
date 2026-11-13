@@ -4011,6 +4011,9 @@
       var b = box(); if (!b) return;
       if (!cur) { b.hidden = true; b.innerHTML = ''; document.body.classList.remove('has-mini'); return; }
       b.hidden = false; document.body.classList.add('has-mini');
+      // Al redibujar se conserva el botón elegido (antes el foco se perdía y con el control no se podía seguir)
+      var fa = document.activeElement, keep = fa && b.contains(fa) ? fa.getAttribute('data-act') : '';
+      setTimeout(function () { if (!keep) return; var n = b.querySelector('[data-act="' + keep + '"]') || b.querySelector('[data-act="auToggle"]'); if (n && document.activeElement !== n && (document.activeElement === document.body || !document.activeElement)) n.focus({ preventScroll: true }); }, 0);
       var playingNow = !el.paused, music = cur.kind !== 'radio';
       b.innerHTML = '<button class="mopen f" data-act="npOpen" aria-label="Abrir el reproductor: ' + esc(cur.title) + '"><span class="art">' + (cur.art ? '<img src="' + esc(cur.art) + '" alt="" onerror="this.remove()">' : '') + '<span>' + (cur.kind === 'radio' ? IC.radio : IC.music) + '</span></span>' +
         '<span class="t"><b>' + esc(cur.title) + '</b><span id="miniSub">' + esc(AU.status || cur.sub || '') + '</span></span></button>' +
