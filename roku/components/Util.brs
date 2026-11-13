@@ -124,26 +124,26 @@ end function
 
 function fsEnc(x as Dynamic) as Object
     t = type(x)
-    if x = invalid then return { nullValue: invalid }
-    if t = "roString" or t = "String" then return { stringValue: x }
-    if t = "roBoolean" or t = "Boolean" then return { booleanValue: x }
-    if t = "roInt" or t = "Integer" or t = "roLongInteger" or t = "LongInteger" then return { integerValue: x.ToStr() }
-    if t = "roFloat" or t = "Float" or t = "roDouble" or t = "Double" then return { doubleValue: x }
+    if x = invalid then return { "nullValue": invalid }
+    if t = "roString" or t = "String" then return { "stringValue": x }
+    if t = "roBoolean" or t = "Boolean" then return { "booleanValue": x }
+    if t = "roInt" or t = "Integer" or t = "roLongInteger" or t = "LongInteger" then return { "integerValue": x.ToStr() }
+    if t = "roFloat" or t = "Float" or t = "roDouble" or t = "Double" then return { "doubleValue": x }
     if t = "roArray" then
         vals = []
         for each y in x
             vals.Push(fsEnc(y))
         end for
-        return { arrayValue: { values: vals } }
+        return { "arrayValue": { "values": vals } }
     end if
     if t = "roAssociativeArray" then
         f = {}
         for each k in x
             f[k] = fsEnc(x[k])
         end for
-        return { mapValue: { fields: f } }
+        return { "mapValue": { "fields": f } }
     end if
-    return { nullValue: invalid }
+    return { "nullValue": invalid }
 end function
 
 ' ---------- Grupos +18: nunca se muestran en Roku ----------

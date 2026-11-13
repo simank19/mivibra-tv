@@ -114,7 +114,8 @@ function fsGet(path as String, auth as Dynamic, query = "" as String) as Object
 end function
 
 function idpSignIn(cfg as Object, postBody as String) as Object
-    body = FormatJson({ postBody: postBody, requestUri: "http://localhost", returnSecureToken: true, returnIdpCredential: true })
+    ' Claves entre comillas: sin comillas BrightScript las pasa a minúsculas y Firebase no las reconoce (MISSING_REQUEST_URI)
+    body = FormatJson({ "postBody": postBody, "requestUri": "http://localhost", "returnSecureToken": true, "returnIdpCredential": true })
     return httpJson("POST", "https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=" + cfg.apiKey, body, jsonHdr())
 end function
 
@@ -466,8 +467,8 @@ function cmdPush(r as Object) as Object
             prog[e.key] = pe
         end if
     end if
-    body = { fields: { pdata: { mapValue: { fields: {} } } } }
-    body.fields.pdata.mapValue.fields[pid] = { mapValue: { fields: { history: fsEnc(nh), progress: fsEnc(prog) } } }
+    body = { "fields": { "pdata": { "mapValue": { "fields": {} } } } }
+    body.fields.pdata.mapValue.fields[pid] = { "mapValue": { "fields": { "history": fsEnc(nh), "progress": fsEnc(prog) } } }
     mask = "?updateMask.fieldPaths=" + enc(fp + ".history") + "&updateMask.fieldPaths=" + enc(fp + ".progress") + "&currentDocument.exists=true&key=" + mvConfig().apiKey
     res = http("PATCH", fsUrl("mivibra/" + auth.uid) + mask, FormatJson(body), { "Content-Type": "application/json", "Authorization": "Bearer " + auth.id })
     return { ok: res.code = 200, auth: auth, history: nh, progress: prog }
