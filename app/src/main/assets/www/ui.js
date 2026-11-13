@@ -583,7 +583,6 @@
         firstB.concat(bks.filter(function (b) { return firstB.indexOf(b) < 0; })).slice(0, 24).map(bookCard).join('') +
         '<button class="btn ghost sm f" style="align-self:center;flex:0 0 auto" data-act="nav" data-arg="books">Ver todo</button></div></section>';
     }
-    html += '<div id="archiveRow"></div>';
     return html;
   };
   // ---------- Inicio estilo "vidrio gris" (maqueta aprobada): saludo, modos, canal en vivo grande, fecha y hora, continuar y categorías ----------
@@ -688,7 +687,6 @@
     var bks = visibleBooks();
     if (bks.length) out += '<section class="row"><h3>Mangas y libros <small>' + bks.length + ' para leer</small></h3><div class="strip">' + bks.slice(0, 24).map(bookCard).join('') +
       '<button class="btn ghost sm f" style="align-self:center;flex:0 0 auto" data-act="nav" data-arg="books">Ver todo</button></div></section>';
-    out += '<div id="archiveRow"></div>';
     return out;
   }
 
@@ -734,10 +732,6 @@
   VIEWS.home.after = function () {
     if (MV.isKids()) return;
     setTimeout(heroPreview, 600);
-    MV.archive().then(function (items) {
-      var box = document.getElementById('archiveRow'); if (!box || !items.length) return;
-      box.innerHTML = row('Cine clásico de dominio público', items.slice(0, 30), 'poster', 'Internet Archive');
-    });
   };
   /** Vista previa en vivo (sin sonido) del canal del recuadro principal. Si el canal no abre en vista previa, queda el logo. */
   function heroPreview() {
