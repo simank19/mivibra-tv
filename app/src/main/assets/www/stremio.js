@@ -455,9 +455,54 @@
     // Se le pide la lista de capítulos a todos los que la dan (no solo al primero): algunos addons solo listan los capítulos que tienen
     var jobs = [];
     urls.forEach(function (b) { tys.forEach(function (ty) { jobs.push(fetchMeta(b, ty, st.id)); }); });
+    // Plan B: ningún addon dio capítulos con ese id (pasa con catálogos de TMDB o MAL que no tienen "meta").
+    // Se busca la serie por nombre en Kitsu (anime) y en Cinemeta, y si el nombre trae "3rd Season" se toma esa temporada.
+    function byName() {
+      var raw = String(item.name || '').replace(/\(\d{4}\)/g, '').trim();
+      var sm = raw.match(/\b(\d+)(?:st|nd|rd|th)\s+season\b|\bseason\s*(\d+)\b|\btemporada\s*(\d+)\b|\b(\d+)\s*(?:ª|a)?\s+temporada\b/i);
+      var sn = sm ? +(sm[1] || sm[2] || sm[3] || sm[4]) : 0;
+      var clean = raw.replace(/\b\d+(?:st|nd|rd|th)\s+season\b|\bseason\s*\d+\b|\btemporada\s*\d+\b|\b\d+\s*(?:ª|a)?\s+temporada\b|\b(?:part|parte|cour)\s*\d+\b/ig, '').replace(/[\s:–-]+$/, '').trim();
+      var KITSU = 'https://anime-kitsu.strem.fun';
+      var isAnime = anim || item.anime;
+      var seasonRx = sn ? new RegExp('\\b(' + sn + '(st|nd|rd|th)?|' + (['', 'i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'][sn] || sn) + ')\\b', 'i') : null;
+      function search(b, ty, cat, q) {
+        return withTimeout(MV.getJSON(b + '/catalog/' + ty + '/' + cat + '/search=' + encodeURIComponent(q) + '.json'), 12000).then(function (j) { return (j && j.metas) || []; }).catch(function () { return []; });
+      }
+      function pick(list) {
+        if (!list.length) return null;
+        var n = MV.norm(clean).split(' ').slice(0, 2).join(' ');
+        var ok = list.filter(function (m) { return m && m.id && MV.norm(m.name || '').indexOf(n) >= 0; });
+        if (!ok.length) return null;
+        return (seasonRx && ok.filter(function (m) { return seasonRx.test(m.name || ''); })[0]) || ok[0];
+      }
+      var steps = [];
+      if (anim) steps.push(function () { return fetchMeta(KITSU, 'anime', st.id).then(function (m) { return m || fetchMeta(KITSU, 'series', st.id); }); });
+      if (isAnime) steps.push(function () {
+        return search(KITSU, 'anime', 'kitsu-anime-list', raw).then(function (l) { var m = pick(l); return m ? fetchMeta(KITSU, 'anime', m.id) : null; });
+      });
+      steps.push(function () {
+        var q = clean.split(':')[0].trim() === clean ? [clean] : [clean, clean.split(':')[0].trim()];
+        return search(base(CINEMETA), 'series', 'top', q[0]).then(function (l) { return l.length || !q[1] ? l : search(base(CINEMETA), 'series', 'top', q[1]); }).then(function (l) {
+          var m = l.filter(function (x) { return /^tt\d+/.test(x.imdb_id || x.id || ''); })[0];
+          if (!m) return null;
+          var tt = m.imdb_id || m.id;
+          MV.stAlt(st.id, tt);
+          return fetchMeta(base(CINEMETA), 'series', tt).then(function (meta) {
+            if (meta && sn && (meta.videos || []).some(function (v) { return +v.season === sn; })) meta = Object.assign({}, meta, { videos: meta.videos.filter(function (v) { return +v.season === sn; }) });
+            return meta;
+          });
+        });
+      });
+      var i = 0;
+      function next() {
+        if (i >= steps.length) return Promise.resolve([]);
+        return steps[i++]().catch(function () { return null; }).then(function (m) { return m && (m.videos || []).length ? eps(m) : next(); });
+      }
+      return next();
+    }
     return Promise.all(jobs).then(function (metas) {
       metas = metas.filter(Boolean);
-      if (!metas.length) return [];
+      if (!metas.length) return byName();
       var meta = metas[0];
       var imdb = metas.map(function (m) { return m.imdb_id || (/^tt\d+$/.test(m.id) ? m.id : ''); }).filter(Boolean)[0] || (item._meta && item._meta.imdb) || '';
       if (imdb) MV.stAlt(st.id, imdb);

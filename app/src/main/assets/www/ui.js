@@ -1512,7 +1512,8 @@
   VIEWS.detail.after = function (key) {
     var it = S.byKey[key] || MV.reg[key]; if (!it) return;
     setPlot(it.plot || '');
-    MV.meta(it).then(function (m) {
+    // Si la ficha tarda mucho, no se queda en "Buscando ficha…" para siempre
+    Promise.race([MV.meta(it), new Promise(function (r) { setTimeout(function () { r(null); }, 15000); })]).catch(function () { return null; }).then(function (m) {
       var src = document.getElementById('metaSrc'); if (!src) return;
       if (!m) {
         src.textContent = it.ia ? 'DOMINIO PÚBLICO · INTERNET ARCHIVE' : (S.prefs.tmdbKey || it.anime ? 'SIN FICHA EN LÍNEA' : 'AGREGA TU CLAVE DE TMDB EN AJUSTES PARA VER SINOPSIS');
