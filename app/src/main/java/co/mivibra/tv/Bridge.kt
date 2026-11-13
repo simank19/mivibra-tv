@@ -324,6 +324,18 @@ class Bridge(private val a: MainActivity) {
         a.runOnUiThread { a.startActivity(Intent(a, co.mivibra.tv.diag.DiagActivity::class.java)) }
     }
 
+    /** Canal en vivo del Inicio con el reproductor nativo encima del recuadro (coordenadas en px CSS). */
+    @JavascriptInterface
+    fun previewShow(url: String, ua: String, ref: String, x: Double, y: Double, w: Double, h: Double, cssW: Double, radius: Double, mute: Boolean) {
+        a.runOnUiThread { a.preview.show(url, ua, ref, x, y, w, h, cssW, radius, mute) }
+    }
+    @JavascriptInterface
+    fun previewMove(x: Double, y: Double, w: Double, h: Double, cssW: Double, visible: Boolean) { a.runOnUiThread { a.preview.move(x, y, w, h, cssW, visible) } }
+    @JavascriptInterface
+    fun previewMute(m: Boolean) { a.runOnUiThread { a.preview.mute(m) } }
+    @JavascriptInterface
+    fun previewHide() { a.runOnUiThread { a.preview.release() } }
+
     /** Ventana flotante para el reproductor de YouTube / Twitch / Kick (sigue visible sobre otras apps). */
     @JavascriptInterface
     fun setPip(on: Boolean) { a.runOnUiThread { a.setPip(on) } }

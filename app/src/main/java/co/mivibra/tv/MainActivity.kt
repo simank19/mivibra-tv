@@ -31,6 +31,7 @@ import java.io.File
 /** Pantalla principal: la interfaz glass (HTML) dentro de un WebView, con puente nativo. */
 class MainActivity : ComponentActivity() {
     lateinit var web: WebView
+    lateinit var preview: Preview
     private lateinit var bridge: Bridge
     private val pending = HashMap<Int, (Int, Intent?) -> Unit>()
     private var reqSeq = 100
@@ -94,7 +95,11 @@ class MainActivity : ComponentActivity() {
         web.addJavascriptInterface(bridge, "Android")
         web.isFocusable = true
         web.isFocusableInTouchMode = true
-        setContentView(web)
+        // El WebView va dentro de un marco para poder poner encima el canal en vivo del Inicio (reproductor nativo)
+        val root = android.widget.FrameLayout(this)
+        root.addView(web, android.widget.FrameLayout.LayoutParams(-1, -1))
+        setContentView(root)
+        preview = Preview(this, root)
         // Sin el recuadro de foco que Android TV dibuja alrededor de toda la página (se veía naranja sobre la intro)
         if (android.os.Build.VERSION.SDK_INT >= 26) web.defaultFocusHighlightEnabled = false
         web.requestFocus()
@@ -156,6 +161,9 @@ class MainActivity : ComponentActivity() {
     }
     override fun onStop() {
         super.onStop()
+        // La vista previa del Inicio se apaga (libera el decodificador para el reproductor y no suena en segundo plano)
+        preview.release()
+        js("window.MV&&MV.onPreview&&MV.onPreview('stopped')")
         // Pantalla apagada, ventana flotante cerrada o app en segundo plano: el video de YouTube se pausa
         // (las reglas de YouTube no permiten reproducir sin que el reproductor se vea)
         js("window.MV&&MV.onHidden&&MV.onHidden()")

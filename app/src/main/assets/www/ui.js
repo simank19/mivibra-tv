@@ -141,7 +141,7 @@
   // ---------- Render ----------
   var VIEWS = {};
   function render(keepFocus) {
-    if (MV.stopHeroPreview) MV.stopHeroPreview();
+    if (MV.stopHeroPreview) MV.stopHeroPreview(view.name !== 'home');
     MV.applyLook();
     var app = document.getElementById('app');
     var full = view.name === 'profiles' || view.name === 'profileEdit' || view.name === 'boot' || view.name === 'login';
@@ -586,10 +586,11 @@
     return html;
   };
   // ---------- Inicio estilo "vidrio gris" (maqueta aprobada): saludo, modos, canal en vivo grande, fecha y hora, continuar y categorías ----------
-  var heroPickKey = '', homeChip = 'all';
+  var homeChip = 'all';
   var HCHIPS = [['all', 'Todo'], ['movies', 'Películas'], ['series', 'Series'], ['anime', 'Anime'], ['kdrama', 'Doramas'], ['novelas', 'Novelas'], ['infantil', 'Infantil'], ['docs', 'Documentales']];
   var HMODES = [['sec:news', IC.news || IC.live, 'Mañana informada', 'Noticias en vivo'], ['movies', IC.movie, 'Noche de película', 'Películas para hoy'],
     ['infantil', IC.kids, 'Hora de los niños', 'Contenido infantil'], ['sec:sports', IC.sports || IC.live, 'Deportes', 'Partidos y canales'], ['music', IC.music || IC.radio, 'Música', 'Radio y tus listas']];
+  function soundInner() { return (PV.mute ? IC.volOff || IC.volume || '' : IC.volume || '') + (PV.mute ? 'Activar sonido' : 'Quitar sonido'); }
   function greet() { var h = new Date().getHours(); return h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches'; }
   function cap(t) { return t.charAt(0).toUpperCase() + t.slice(1); }
   function clockParts() {
@@ -615,7 +616,7 @@
       '<circle cx="60" cy="60" r="46" class="tr" stroke-dasharray="' + arc.toFixed(1) + ' ' + C.toFixed(1) + '"></circle>' +
       '<circle cx="60" cy="60" r="46" class="pg" stroke-dasharray="' + (arc * pct).toFixed(1) + ' ' + C.toFixed(1) + '"></circle></g>' +
       '<circle cx="' + (60 + R * Math.cos(a)).toFixed(1) + '" cy="' + (60 + R * Math.sin(a)).toFixed(1) + '" r="6.5" class="kn"></circle></svg>' +
-      '<div class="in"><span>Visto</span><b>' + Math.round(pct * 100) + '%</b></div></div>';
+      '<div class="rc"><b>' + Math.round(pct * 100) + '%</b><span>visto</span></div></div>';
   }
   function vidrioHome(html, live, movies, series, anime, kd, favs, saved, cont) {
     var p = MV.profile(), ck = clockParts();
@@ -624,8 +625,11 @@
       if (hist[hi].type !== 'live') continue;
       var cand = S.byKey[hist[hi].key]; if (cand && live.indexOf(cand) >= 0) lastLive = cand;
     }
-    var picked = heroPickKey && S.byKey[heroPickKey];
-    var heroIt = (picked && live.indexOf(picked) >= 0 ? picked : null) || lastLive || favs.find(function (f) { return f.type === 'live' && live.indexOf(f) >= 0; }) ||
+    var hp = MV.load('heroPick', null), picked = hp && S.byKey[hp.k];
+    if (picked && live.indexOf(picked) < 0) picked = null;
+    // El último canal que dejaste aquí, o el último que viste en pantalla completa si fue después
+    var lastTs = 0; for (var hj = 0; hj < hist.length; hj++) if (hist[hj].type === 'live' && S.byKey[hist[hj].key] === lastLive) { lastTs = hist[hj].ts || 0; break; }
+    var heroIt = (picked && (!lastLive || hp.ts >= lastTs) ? picked : null) || lastLive || picked || favs.find(function (f) { return f.type === 'live' && live.indexOf(f) >= 0; }) ||
       live.find(function (c) { return c.country === 'co'; }) || live[0] || null;
     MV._heroIt = heroIt;
     var out = '<div class="vhead"><div class="t"><span class="kick">' + esc(cap(new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' }))) + '</span>' +
@@ -642,12 +646,11 @@
       var nn = MV.nowNext(heroIt) || {}, img = MV.poster(heroIt), logo = img && MV.logoUrl ? MV.logoUrl(img) : img;
       var others = coFirst(live).filter(function (c) { return c !== heroIt; }).slice(0, 4);
       others.forEach(reg);
-      out += '<section class="vlive" aria-label="En vivo ahora"><div class="scr livebg" style="--h:' + MV.hue(heroIt.name) + '">' +
+      out += '<section class="vlive" aria-label="En vivo ahora"><button class="scr livebg f" style="--h:' + MV.hue(heroIt.name) + '" data-act="play" data-key="' + esc(heroIt.key) + '" data-autofocus aria-label="Ver ' + esc(MV.cleanTitle(heroIt.name) || heroIt.name) + ' en pantalla completa">' +
         (img ? '<img src="' + esc(logo) + '"' + (logo !== img ? ' data-o="' + esc(img) + '" onerror="if(this.dataset.o){this.src=this.dataset.o;this.removeAttribute(\'data-o\')}"' : '') + ' alt="">' : '<span class="mono">' + esc(MV.mono(heroIt.name)) + '</span>') +
-        '<video id="heroVid" muted playsinline preload="none"></video>' +
-        '<span class="vbadge"><i></i>EN VIVO</span>' +
-        '<div class="cap"><b>' + esc(MV.cleanTitle(heroIt.name) || heroIt.name) + '</b><span>' + esc([heroIt.group, nn.now ? nn.now.t : ''].filter(Boolean).join(' · ')) + '</span></div>' +
-        '<button class="vplay f" data-act="play" data-key="' + esc(heroIt.key) + '" aria-label="Ver en pantalla completa" data-autofocus>' + IC.play + '</button></div>' +
+        (A && A.previewShow ? '' : '<video muted playsinline preload="none"></video>') + '</button>' +
+        '<div class="vinfo"><span class="vbadge"><i></i>EN VIVO</span><div class="t"><b>' + esc(MV.cleanTitle(heroIt.name) || heroIt.name) + '</b><span>' + esc([heroIt.group, nn.now ? nn.now.t : ''].filter(Boolean).join(' · ')) + '</span></div>' +
+        '<button class="vsound f" data-act="heroSound" aria-pressed="' + !PV.mute + '">' + soundInner() + '</button></div>' +
         '<div class="thumbs">' + others.map(function (c) {
           var im = MV.poster(c), lg = im && MV.logoUrl ? MV.logoUrl(im) : im;
           return '<button class="vth f" data-act="heroPick" data-key="' + esc(c.key) + '" style="--h:' + MV.hue(c.name) + '" aria-label="Ver ' + esc(c.name) + ' aquí">' + (im ? '<img loading="lazy" src="' + esc(lg) + '" alt="">' : '') + '<span>' + esc(MV.cleanTitle(c.name) || c.name) + '</span></button>';
@@ -731,25 +734,73 @@
   }
   VIEWS.home.after = function () {
     if (MV.isKids()) return;
-    setTimeout(heroPreview, 600);
+    setTimeout(heroPreview, PV.on ? 0 : 500);
   };
-  /** Vista previa en vivo (sin sonido) del canal del recuadro principal. Si el canal no abre en vista previa, queda el logo. */
-  function heroPreview() {
-    var v = document.getElementById('heroVid'), it = MV._heroIt;
-    if (!v || !it || it.type !== 'live' || !it.url || it.stk || document.hidden) return;
-    if (MV.lite) { v.remove(); return; }   // en equipos modestos sin vista previa en vivo (se nota más fluido)
-    var done = false;
-    v.muted = true;
-    v.addEventListener('playing', function () { done = true; v.classList.add('on'); var l = document.getElementById('heroLive'); if (l) l.classList.add('on'); });
-    v.addEventListener('error', function () { v.remove(); });
-    setTimeout(function () { if (!done && v.isConnected) { try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {} v.remove(); } }, 12000);
-    v.src = it.url;
-    var pr = v.play(); if (pr && pr.catch) pr.catch(function () {});
+  /* Canal en vivo del recuadro grande del Inicio. En Android lo reproduce un reproductor nativo puesto encima
+     (abre .ts y HLS como el reproductor principal); en PC y TV web, un <video>. Si no abre, queda el logo. */
+  var PV = { on: false, key: '', sig: '', t: 0, fail: {}, mute: MV.load('heroMute', !(MV.device && MV.device.tv)) };
+  MV.heroMuted = function () { return PV.mute; };
+  function heroBox() { return document.querySelector('.vlive .scr'); }
+  function pvVisible(box) {
+    if (view.name !== 'home' || document.hidden || MV.modalOpen()) return false;
+    var r = box.getBoundingClientRect();
+    if (r.width < 20 || r.top < 0 || r.left < 0 || r.bottom > window.innerHeight || r.right > window.innerWidth) return false;
+    // Si algo queda encima (menú abierto, avisos, tutorial…), el video se esconde para no taparlo
+    var pts = [[.5, .5], [.03, .05], [.97, .05], [.03, .95], [.97, .95]];
+    for (var i = 0; i < pts.length; i++) {
+      var el = document.elementFromPoint(r.left + r.width * pts[i][0], r.top + r.height * pts[i][1]);
+      if (!el || !box.contains(el)) return false;
+    }
+    return true;
   }
-  // Al salir de Inicio o abrir el reproductor se corta la vista previa
-  function stopHeroPreview() { var v = document.getElementById('heroVid'); if (v) { try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {} } }
+  function pvSync() {
+    if (!PV.on) return;
+    var box = heroBox();
+    if (!box) { pvStop(); return; }
+    var r = box.getBoundingClientRect(), v = pvVisible(box);
+    var sig = [v, Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height), window.innerWidth].join();
+    if (sig === PV.sig) return;
+    PV.sig = sig;
+    A.previewMove(r.left, r.top, r.width, r.height, window.innerWidth, v);
+  }
+  var pvRaf = 0;
+  document.addEventListener('scroll', function () { if (PV.on && !pvRaf) pvRaf = requestAnimationFrame(function () { pvRaf = 0; pvSync(); }); }, true);
+  window.addEventListener('resize', function () { PV.sig = ''; pvSync(); });
+  function pvStop() { if (PV.on && A && A.previewHide) A.previewHide(); PV.on = false; PV.key = ''; PV.sig = ''; clearInterval(PV.t); }
+  MV.onPreview = function (st) {
+    if (st === 'on') { var b = heroBox(); if (b) b.classList.add('playing'); }
+    else if (st === 'fail') { PV.fail[PV.key] = Date.now(); PV.on = false; PV.key = ''; clearInterval(PV.t); }
+    else if (st === 'stopped') { PV.on = false; PV.key = ''; PV.sig = ''; clearInterval(PV.t); }
+  };
+  function heroPreview() {
+    var it = MV._heroIt, box = heroBox();
+    if (!box || !it || it.type !== 'live' || !it.url || it.stk || document.hidden) return;
+    if (A && A.previewShow) {
+      if (PV.on && PV.key === it.key) { PV.sig = ''; pvSync(); return; }
+      if (PV.fail[it.key] && Date.now() - PV.fail[it.key] < 10 * 60e3) return;
+      var r = box.getBoundingClientRect();
+      PV.on = true; PV.key = it.key; PV.sig = '';
+      A.previewShow(it.url, it.ua || '', it.ref || '', r.left, r.top, r.width, r.height, window.innerWidth, 14, PV.mute);
+      clearInterval(PV.t); PV.t = setInterval(pvSync, 150);
+      setTimeout(pvSync, 50);
+      return;
+    }
+    var v = box.querySelector('video'); if (!v) return;
+    var done = false;
+    v.muted = PV.mute;
+    v.addEventListener('playing', function () { done = true; v.classList.add('on'); box.classList.add('playing'); });
+    v.addEventListener('error', function () { v.remove(); });
+    setTimeout(function () { if (!done && v.isConnected) { try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {} v.remove(); } }, 15000);
+    v.src = it.url;
+    var pr = v.play(); if (pr && pr.catch) pr.catch(function () { if (!v.muted) { v.muted = true; v.play().catch(function () {}); } });
+  }
+  // Al salir de Inicio o abrir el reproductor se corta la vista previa (al volver a dibujar el Inicio sigue sonando el mismo canal)
+  function stopHeroPreview(leaving) {
+    var v = document.querySelector('.vlive .scr video'); if (v) { try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {} }
+    if (leaving !== false) pvStop();
+  }
   MV.stopHeroPreview = stopHeroPreview;
-  document.addEventListener('visibilitychange', function () { if (document.hidden) stopHeroPreview(); });
+  document.addEventListener('visibilitychange', function () { if (document.hidden) stopHeroPreview(); else if (view.name === 'home') setTimeout(heroPreview, 400); });
   function suggested() {
     var hist = MV.pdata().history, seen = {}, groups = {};
     hist.forEach(function (h) { seen[h.key] = 1; if (h.group) groups[h.group] = (groups[h.group] || 0) + 1; });
@@ -2868,7 +2919,13 @@
       }
       if (it.type === 'live' || it.type === 'rom') MV.playItem(it); else MV.go('detail', it.key); },
     play: function (_, el) { MV.playItem(S.byKey[el.dataset.key] || MV.reg[el.dataset.key], false); },
-    heroPick: function (_, el) { stopHeroPreview(); heroPickKey = el.dataset.key; MV.rerender(); setTimeout(heroPreview, 300); },
+    heroPick: function (_, el) { MV.save('heroPick', { k: el.dataset.key, ts: Date.now() }); MV.rerender(); },
+    heroSound: function () {
+      PV.mute = !PV.mute; MV.save('heroMute', PV.mute);
+      if (PV.on && A && A.previewMute) A.previewMute(PV.mute);
+      var v = document.querySelector('.vlive .scr video'); if (v) v.muted = PV.mute;
+      var b = document.querySelector('.vsound'); if (b) { b.innerHTML = soundInner(); b.setAttribute('aria-pressed', String(!PV.mute)); }
+    },
     homeChip: function (c) { homeChip = c; MV.rerender(); },
     homeMode: function (m) {
       if (m.indexOf('sec:') === 0) { liveSec = m.slice(4); liveCat = 'Todos'; limits.live = 150; MV.go('live'); return; }
@@ -4749,7 +4806,7 @@
   });
   var acctRedraw = null;
   MV.onStorageChanged = function () { if (view.name === 'games') { MV.toast('Unidad conectada: buscando juegos…'); ACT.scanRoms(); } };
-  MV.onResume = function () { if (view.name === 'games') MV.rerender(); };
+  MV.onResume = function () { if (view.name === 'games') MV.rerender(); if (view.name === 'home') setTimeout(heroPreview, 500); };
   MV.onOpenFile = function (d) {
     fetch(d.path).then(function (r) { return r.text(); }).then(function (txt) {
       if (!/#EXTINF/i.test(txt.slice(0, 20000)) && (MV.parseMacList(txt).length || (MV.parseUrlList(txt) || []).length)) { MV.go('settings'); setTimeout(function () { multiWith(txt); }, 300); return 'multi'; }

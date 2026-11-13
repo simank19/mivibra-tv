@@ -999,9 +999,9 @@ html[data-theme="gris"] .side .nav.on { color: #2A2C2E; }
 .vring .tr { stroke: rgba(255,255,255,.16); }
 .vring .pg { stroke: var(--accent); }
 .vring .kn { fill: #fff; stroke: none; }
-.vring .in { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-.vring .in span { font: 500 11px var(--ui); color: var(--muted); }
-.vring .in b { font: 600 26px var(--ui); letter-spacing: -.5px; }
+.vring .rc { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; background: none; border: 0; text-align: center; }
+.vring .rc b { font: 600 28px/1 var(--ui); letter-spacing: -.5px; }
+.vring .rc span { margin-top: 3px; font: 500 11px var(--ui); color: var(--muted); }
 .vchips { margin: 0 0 6px; }
 @media (max-width: 1100px) { .vmain { grid-template-columns: minmax(0, 1fr) 260px; } .vring { width: 108px; height: 108px; } }
 @media (max-width: 760px) {
@@ -1018,3 +1018,16 @@ html[data-theme="gris"] .side .nav.on { color: #2A2C2E; }
 html.lite .vbadge i { animation: none; }
 .vchips .chip { white-space: nowrap; }
 .vchips .chip svg { width: 15px; height: 15px; flex: none; }
+
+/* Recuadro del canal: todo el recuadro es el botón; nombre y sonido debajo (el video nativo va encima del recuadro) */
+.vlive .scr { width: 100%; border: 0; padding: 0; color: inherit; height: clamp(200px, 32vh, 400px); }
+.vlive .scr.f:focus-visible, .vlive .scr.f.kf { transform: none; box-shadow: 0 0 0 3px var(--accent), 0 14px 34px rgba(0,0,0,.35); }
+.vinfo { display: flex; align-items: center; gap: 10px; padding: 0 4px; min-width: 0; }
+.vinfo .vbadge { position: static; flex: none; }
+.vinfo .t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.vinfo .t b { font: 700 15px var(--ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vinfo .t span { font: 500 12px var(--ui); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vsound { flex: none; height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--line); background: rgba(255,255,255,.08); color: var(--text); display: inline-flex; align-items: center; gap: 7px; font: 600 12.5px var(--ui); }
+.vsound svg { width: 16px; height: 16px; }
+.vsound[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+@media (max-width: 760px) { .vlive .scr { height: 190px; } .vsound { padding: 0 10px; font-size: 0; gap: 0; width: 36px; justify-content: center; } }
