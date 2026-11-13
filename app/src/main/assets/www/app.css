@@ -1050,3 +1050,53 @@ html[data-theme="gris"] .dialog, html[data-theme="gris"] .dialog.glass { backgro
 .th.brandth img { max-width: 62%; max-height: 46%; object-fit: contain; filter: drop-shadow(0 4px 12px rgba(0,0,0,.35)); }
 .th.brandth img.wh { filter: brightness(0) invert(1) drop-shadow(0 4px 12px rgba(0,0,0,.35)); }
 .th.brandth img[src$="discovery.png"] { max-height: 72%; }
+
+/* Ficha compacta en TV, tablet y PC: póster, datos, reparto, botones y recomendaciones en una sola pantalla */
+@media (min-width: 761px) {
+  .detail { gap: 22px; }
+  .detail .ps { flex: 0 0 150px; height: 225px; border-radius: 16px; }
+  .detail .info { gap: 7px; }
+  .detail .info > .badge { align-self: flex-start; height: 22px; font-size: 10px; }
+  .detail h1 { font-size: 30px; letter-spacing: -.5px; }
+  .detail .facts { gap: 6px; }
+  .detail .facts .pill { height: 28px; padding: 0 11px; font-size: 12px; }
+  .detail #plot { font-size: 13px; line-height: 1.4; }
+  .detail #plot.clamp { -webkit-line-clamp: 2; }
+  .detail .more { margin: 0; padding: 2px 12px; font-size: 12px; align-self: flex-start; }
+  .detail .rate { margin: 0; }
+  .detail .rate > span { font-size: 12px; }
+  .detail .rate .rstar { width: 28px; height: 28px; }
+  .detail .rate .rstar svg { width: 18px; height: 18px; }
+  .detail .castlbl { font-size: 11px; margin: 2px 0 2px; }
+  .detail .castrow { gap: 6px; padding: 2px 2px 2px; }
+  .detail .castp { width: 68px; gap: 2px; padding: 2px; }
+  .detail .castp .ph { width: 46px; height: 46px; }
+  .detail .castp b { font-size: 10px; }
+  .detail .castp small { font-size: 9px; }
+  .detail .btns { gap: 8px; }
+  .detail .btns .btn { height: 38px; padding: 0 16px; font-size: 13px; gap: 7px; }
+  .detail .btns .btn svg { width: 16px; height: 16px; }
+  #related .row { margin-top: 12px; }
+  #related .row h3 { font-size: 15px; margin-bottom: 4px; }
+  #related .card.poster { width: 92px; }
+  #related .card.poster .th { height: 136px; }
+  #related .card .meta { padding: 5px 8px 7px; gap: 2px; }
+  #related .card .meta b { font-size: 11px; }
+  #related .card .meta span { font-size: 10px; }
+}
+/* Pantallas bajitas (TV a 960×540): aún más compacta para que quepan las recomendaciones */
+@media (min-width: 761px) and (max-height: 620px) {
+  .detail { margin-top: -8px; }
+  .detail .ps { flex-basis: 130px; height: 195px; }
+  .detail .info { gap: 6px; }
+  .detail h1 { font-size: 26px; }
+  .detail .facts .pill { height: 26px; }
+  .detail .rate .rstar { width: 24px; height: 24px; }
+  .detail .castp { width: 60px; }
+  .detail .castp .ph { width: 40px; height: 40px; }
+  .detail .btns .btn { height: 34px; }
+  #related .row { margin-top: 8px; }
+  #related .card.poster { width: 78px; }
+  #related .card.poster .th { height: 114px; }
+  #related .card .meta { display: none; }
+}
