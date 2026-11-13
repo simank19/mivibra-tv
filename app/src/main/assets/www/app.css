@@ -1031,3 +1031,6 @@ html.lite .vbadge i { animation: none; }
 .vsound svg { width: 16px; height: 16px; }
 .vsound[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 @media (max-width: 760px) { .vlive .scr { height: 190px; } .vsound { padding: 0 10px; font-size: 0; gap: 0; width: 36px; justify-content: center; } }
+/* Vidrio gris: ventanas y menús más oscuros para que no se mezclen con lo de atrás */
+html[data-theme="gris"] #modal { background: rgba(0,0,0,.66); }
+html[data-theme="gris"] .dialog, html[data-theme="gris"] .dialog.glass { background: linear-gradient(180deg, rgba(52,55,58,.97), rgba(36,38,41,.97)); box-shadow: inset 0 1px 0 rgba(255,255,255,.10), 0 30px 80px rgba(0,0,0,.55); }
