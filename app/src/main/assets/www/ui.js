@@ -616,7 +616,7 @@
       '<circle cx="60" cy="60" r="46" class="tr" stroke-dasharray="' + arc.toFixed(1) + ' ' + C.toFixed(1) + '"></circle>' +
       '<circle cx="60" cy="60" r="46" class="pg" stroke-dasharray="' + (arc * pct).toFixed(1) + ' ' + C.toFixed(1) + '"></circle></g>' +
       '<circle cx="' + (60 + R * Math.cos(a)).toFixed(1) + '" cy="' + (60 + R * Math.sin(a)).toFixed(1) + '" r="6.5" class="kn"></circle></svg>' +
-      '<div class="rc"><b>' + Math.round(pct * 100) + '%</b><span>visto</span></div></div>';
+      '<div class="rc"><b>' + Math.round(pct * 100) + '%</b></div></div>';
   }
   function vidrioHome(html, live, movies, series, anime, kd, favs, saved, cont) {
     var p = MV.profile(), ck = clockParts();
