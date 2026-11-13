@@ -880,3 +880,36 @@ html.lite *, html.lite *::before, html.lite *::after { -webkit-backdrop-filter: 
 html.lite .main, html.lite .strip, html.lite .row { scroll-behavior: auto !important; }
 /* Filas largas: el navegador no pinta lo que está fuera de pantalla */
 html.perf-mid .chrow, html.lite .chrow { content-visibility: auto; contain-intrinsic-size: auto 60px; }
+
+/* ---------- Inicio: título y tarjetas de categorías (como la maqueta) ---------- */
+.hhead { display: flex; flex-direction: column; gap: 2px; margin: -46px 0 18px; min-height: 48px; justify-content: center; max-width: calc(100% - 260px); }
+.hhead span { font: 600 13px var(--ui); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.hhead h1 { margin: 0; font: 800 28px var(--brand); letter-spacing: -.3px; }
+.hcats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px 16px; margin: 0 0 26px; }
+.hcat { position: relative; height: 88px; border-radius: 16px; border: 1px solid rgba(255,255,255,.10); color: #fff; display: flex; align-items: center; gap: 12px; padding: 0 14px; text-align: left; cursor: pointer; min-width: 0; font: inherit; transition: transform .18s, box-shadow .18s, border-color .18s; }
+.hcat .ic { width: 42px; height: 42px; flex: none; border-radius: 12px; background: rgba(0,0,0,.25); display: flex; align-items: center; justify-content: center; color: var(--ci); }
+.hcat .ic svg { width: 22px; height: 22px; }
+.hcat .tx { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.hcat b { font: 800 16px var(--ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hcat small { font: 500 12px var(--ui); color: rgba(255,255,255,.85); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hcat .ch { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; opacity: .8; }
+.hcat:hover { border-color: rgba(255,255,255,.35); }
+.hcat.f:focus-visible, .hcat.f.kf { border: 2px solid #fff; transform: scale(1.04); box-shadow: 0 12px 30px rgba(0,0,0,.5); z-index: 2; }
+.hcat.c1 { background: linear-gradient(135deg, #8A4512, #3A1D0A); --ci: #FFB066; }
+.hcat.c2 { background: linear-gradient(135deg, #1E3A8A, #0F1B44); --ci: #93C5FD; }
+.hcat.c3 { background: linear-gradient(135deg, #6D28D9, #2E1065); --ci: #E9D5FF; }
+.hcat.c4 { background: linear-gradient(135deg, #A21CAF, #4A044E); --ci: #F5D0FE; }
+.hcat.c5 { background: linear-gradient(135deg, #DB2777, #500724); --ci: #FBCFE8; }
+.hcat.c6 { background: linear-gradient(135deg, #4D7C0F, #1A2E05); --ci: #D9F99D; }
+.hcat.c7 { background: linear-gradient(135deg, #A3123A, #4C0519); --ci: #FDA4AF; }
+.hcat.c8 { background: linear-gradient(135deg, #0F766E, #053B37); --ci: #5EEAD4; }
+@media (min-width: 1500px) { .hcat { height: 96px; } .hcat b { font-size: 17px; } }
+@media (max-width: 760px) {
+  .hhead { margin: -44px 0 14px; max-width: calc(100% - 150px); }
+  .hhead span { font-size: 11px; } .hhead h1 { font-size: 22px; }
+  .hcats { grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+  .hcat { height: 62px; padding: 0 10px; gap: 10px; }
+  .hcat .ic { width: 34px; height: 34px; border-radius: 10px; } .hcat .ic svg { width: 18px; height: 18px; }
+  .hcat b { font-size: 14px; } .hcat small, .hcat .ch { display: none; }
+}
+html.lite .hcat { transition: none; }

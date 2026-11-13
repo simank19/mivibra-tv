@@ -532,16 +532,7 @@
     if (!S.lists.length) return top('Hola' + (MV.profile() ? ', ' + MV.profile().name : '')) + emptyLists();
     var live = MV.visible(S.live), movies = MV.visible(S.movies), series = MV.visible(S.series);
     var favs = MV.favs().map(MV.resolve), cont = MV.continueList();
-    // Recuadro principal: el último canal que abriste; si no, un favorito; si no, uno de Colombia
-    var hist = MV.pdata().history || [], lastLive = null;
-    for (var hi = 0; hi < hist.length && !lastLive; hi++) {
-      if (hist[hi].type !== 'live') continue;
-      var cand = S.byKey[hist[hi].key];
-      if (cand && live.indexOf(cand) >= 0) lastLive = cand;
-    }
-    var heroIt = lastLive || favs.find(function (f) { return f.type === 'live' && live.indexOf(f) >= 0; }) ||
-      live.find(function (c) { return c.country === 'CO'; }) || live[0] || movies[0];
-    MV._heroIt = heroIt;
+    MV._heroIt = null;   // el Inicio ya no tiene recuadro grande: arranca con las categorías
     var html = seasonBanner() + loadingBlock();
     // Continuar desde otro dispositivo
     var other = cont.find(function (c) { return c.device && c.device !== P.deviceName && Date.now() - c.ts < 3 * 86400e3; });
@@ -550,25 +541,21 @@
       html += '<div class="banner glass"><div class="t"><span class="badge">CONTINÚA DONDE LO DEJASTE</span><h3 style="margin:8px 0 2px;font:800 22px var(--brand)">' + esc(other.name) + '</h3><span class="muted">Lo estabas viendo en ' + esc(other.device) + ' ' + MV.ago(other.ts) + ' · ' + MV.fmtDur(other.pos) + ' de ' + MV.fmtDur(other.dur) + '</span></div>' +
         '<button class="btn f" data-act="resume" data-key="' + esc(other.key) + '">Continuar aquí</button></div>';
     }
-    if (heroIt) {
-      reg(heroIt);
-      var nn = heroIt.type === 'live' ? MV.nowNext(heroIt) : {};
-      var img = MV.poster(heroIt);
-      html += '<section class="hero"><div class="txt">' +
-        (heroIt.type === 'live' ? '<div style="display:flex;gap:10px;align-items:center"><span class="badge"><span class="live-dot"></span>EN VIVO</span><span class="muted">' + esc(heroIt.group || '') + '</span></div>' : '<span class="badge">DESTACADO</span>') +
-        (heroIt.type === 'live' && nn.now ? '<h2>' + esc(nn.now.t) + '</h2><p><b>' + esc(MV.cleanTitle(heroIt.name) || heroIt.name) + '</b>' + (nn.now.d ? ' · ' + esc(nn.now.d) : '') + '</p>' : '<h2>' + esc(heroIt.type === 'live' ? (MV.cleanTitle(heroIt.name) || heroIt.name) : heroIt.name) + '</h2><p>' + esc(heroIt.plot || '') + '</p>') +
-        (nn.now ? '<div style="display:flex;gap:12px;align-items:center" class="muted"><span>' + MV.fmtTime(nn.now.s) + ' – ' + MV.fmtTime(nn.now.e) + '</span><div class="prog" style="width:200px"><i style="width:' + Math.round((Date.now() - nn.now.s) / (nn.now.e - nn.now.s) * 100) + '%"></i></div>' + (nn.next ? '<span>Después: ' + esc(nn.next.t) + '</span>' : '') + '</div>' : '') +
-        '<div class="btns" style="margin-top:6px"><button class="btn f" data-act="play" data-key="' + esc(heroIt.key) + '" data-autofocus>' + IC.play + 'Ver en pantalla completa</button>' +
-        (heroIt.type === 'live' ? '<button class="btn ghost f" data-act="nav" data-arg="guide">Guía</button>' : '<button class="btn ghost f" data-act="open" data-key="' + esc(heroIt.key) + '">Ficha</button>') + '</div></div>' +
-        '<div class="prev glass"><div class="in' + (heroIt.type === 'live' ? ' livebg' : '') + '" style="' + (heroIt.type === 'live' ? '--h:' + MV.hue(heroIt.name) : 'background:linear-gradient(140deg,' + MV.hue(heroIt.name) + ',#17140F 80%)') + '">' + (img ? '<img src="' + esc(heroIt.type === 'live' && MV.logoUrl ? MV.logoUrl(img) : img) + '"' + (heroIt.type === 'live' && MV.logoUrl && MV.logoUrl(img) !== img ? ' data-o="' + esc(img) + '" onerror="if(this.dataset.o){this.src=this.dataset.o;this.removeAttribute(\'data-o\')}"' : '') + ' alt="" style="' + (heroIt.type === 'live' ? 'object-fit:contain;padding:30px' : '') + '">' : '<span class="mono" style="font:800 80px var(--brand)">' + esc(MV.mono(heroIt.name)) + '</span>') +
-        (heroIt.type === 'live' ? '<video id="heroVid" muted playsinline preload="none"></video><span class="herolive" id="heroLive"><span class="live-dot"></span>EN VIVO · sin sonido</span>' : '') + '</div></div></section>';
-    }
-    if (MV.sportsRow) html += MV.sportsRow();
-    html += row('Continuar viendo', cont.map(function (c) { return MV.resolve(c); }), 'wide');
-    html += row('Favoritos', favs.slice(0, 30));
+    // Inicio como en la maqueta: título, las 8 categorías en tarjetas de color y luego En vivo y Continuar viendo
+    var anime = MV.visible(S.items.filter(function (i) { return i.anime && i.type !== 'live'; }));
+    var kd = MV.visible(S.items.filter(function (i) { return i.kdrama && i.type !== 'live'; }));
     var saved = MV.savedList ? MV.savedList().map(MV.resolve) : [];
+    html = '<div class="hhead"><span>MiVibra TV</span><h1>Inicio</h1></div>' + homeCats([
+      ['live', 'En vivo', IC.live, live.length, 'canales', 'c1'], ['movies', 'Películas', IC.movie, movies.length, 'películas', 'c2'],
+      ['series', 'Series', IC.series, series.length, 'series', 'c3'], ['anime', 'Anime', IC.anime, anime.length, 'títulos', 'c4'],
+      ['kdrama', 'Doramas', IC.kdrama, kd.length, 'títulos', 'c5'], ['novelas', 'Novelas', IC.novela, (S.novelas || []).length, 'novelas', 'c6'],
+      ['favs', 'Favoritos', IC.star, favs.length, 'guardados', 'c7'], ['saved', 'Mi lista', IC.bookmark, saved.length, 'para ver después', 'c8']
+    ]) + html;
+    html += row('En vivo', coFirst(live).slice(0, 30), 'ch', live.length + ' canales', 'live');
+    html += row('Continuar viendo', cont.map(function (c) { return MV.resolve(c); }), 'wide');
+    if (MV.sportsRow) html += MV.sportsRow();
+    html += row('Favoritos', favs.slice(0, 30));
     if (saved.length) html += row('Mi lista', saved.slice(0, 30));
-    html += row('Canales en vivo', coFirst(live).slice(0, 30), 'ch', live.length + ' canales', 'live');
     html += row('Sugerido para ti', suggested(), 'poster', 'Según lo que ves en este perfil');
     var trendHave = (DISC.rows.trend || []).filter(function (t) { return t.have; });
     if (trendHave.length) html += row('Tendencia esta semana', trendHave.slice(0, 20), 'poster', 'Lo más visto en el mundo que ya tienes', 'discover');
@@ -576,9 +563,7 @@
     if (pls.length) html += '<section class="row"><h3>Plataformas</h3><div class="strip">' + pls.map(platformTile).join('') + '</div></section>';
     html += row('Películas', movies.slice(0, 30), 'poster', '', 'movies');
     html += row('Series', series.slice(0, 30), 'poster', '', 'series');
-    var anime = MV.visible(S.items.filter(function (i) { return i.anime && i.type !== 'live'; }));
     html += row('Anime', anime.slice(0, 30), 'poster', '', 'anime');
-    var kd = MV.visible(S.items.filter(function (i) { return i.kdrama && i.type !== 'live'; }));
     html += row('K-Drama', kd.slice(0, 30), 'poster', '', 'kdrama');
     html += row('Novelas', MV.visible(S.novelas || []).slice(0, 30), 'poster', '', 'novelas');
     var docs = MV.visible(S.items.filter(function (i) { return i.doc && i.type !== 'live'; }));
@@ -594,6 +579,15 @@
     html += '<div id="archiveRow"></div>';
     return html;
   };
+  /** Tarjetas de categorías del Inicio (4 columnas en TV, PC y tablet; 2 en celular). */
+  function homeCats(list) {
+    var n = function (x) { return x ? x.toLocaleString('es-CO') : ''; };
+    return '<section class="hcats" aria-label="Categorías">' + list.map(function (c, i) {
+      return '<button class="hcat ' + c[5] + ' f" data-act="nav" data-arg="' + c[0] + '" data-fid="hc-' + c[0] + '"' + (i === 0 ? ' data-autofocus' : '') + '>' +
+        '<span class="ic">' + c[2] + '</span><span class="tx"><b>' + c[1] + '</b><small>' + (c[3] ? n(c[3]) + ' ' + c[4] : 'Ver') + '</small></span>' +
+        '<svg class="ch" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>';
+    }).join('') + '</section>';
+  }
   VIEWS.home.after = function () {
     if (MV.isKids()) return;
     setTimeout(heroPreview, 600);
