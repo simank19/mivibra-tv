@@ -177,8 +177,12 @@ class PlayerActivity : ComponentActivity() {
     // Deslizar arriba/abajo en la mitad izquierda: brillo; en la mitad derecha: volumen.
     private lateinit var hud: TextView
     private var hudHide: Runnable? = null
-    private fun showHud(text: String) {
+    /** Aviso del centro con ícono blanco (los mismos de la barra de control, sin emojis de colores). */
+    private fun showHud(text: String, icon: Int = 0) {
         hud.text = text; hud.visibility = View.VISIBLE
+        val d = if (icon != 0) androidx.core.content.ContextCompat.getDrawable(this, icon)?.mutate() else null
+        d?.let { it.setTint(Color.WHITE); it.setBounds(0, 0, dp(30), dp(30)) }
+        hud.setCompoundDrawables(d, null, null, null); hud.compoundDrawablePadding = dp(10)
         hudHide?.let { ui.removeCallbacks(it) }
         hudHide = Runnable { hud.visibility = View.GONE }.also { ui.postDelayed(it, 900) }
     }
@@ -203,7 +207,7 @@ class PlayerActivity : ComponentActivity() {
             override fun onDown(e: MotionEvent): Boolean { mode = 0; seekTo = -1; startY = e.y; return true }
             override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
                 val p = player ?: return true
-                if (p.isPlaying) { p.pause(); showHud("⏸  Pausa") } else { p.play(); showHud("▶  Reproducir") }
+                if (p.isPlaying) { p.pause(); showHud("Pausa", androidx.media3.ui.R.drawable.exo_styled_controls_pause) } else { p.play(); showHud("Reproducir", androidx.media3.ui.R.drawable.exo_styled_controls_play) }
                 view.showController()
                 return true
             }
@@ -218,7 +222,7 @@ class PlayerActivity : ComponentActivity() {
                 if (to < 0) to = 0
                 if (d > 0 && d != C.TIME_UNSET && to > d - 1000) to = d - 1000
                 p.seekTo(to)
-                showHud(if (right) "+30 s  ⏩" else "⏪  -30 s")
+                if (right) showHud("+30 s", androidx.media3.ui.R.drawable.exo_styled_controls_fastforward) else showHud("-30 s", androidx.media3.ui.R.drawable.exo_styled_controls_rewind)
                 return true
             }
             override fun onScroll(e1: MotionEvent?, e2: MotionEvent, dx: Float, dy: Float): Boolean {
@@ -236,7 +240,7 @@ class PlayerActivity : ComponentActivity() {
                     val delta = (totalX / view.width * span).toLong()
                     seekTo = (seekFrom + delta).coerceAtLeast(0L).let { if (dur > 0) it.coerceAtMost(dur - 1000) else it }
                     val d = seekTo - seekFrom
-                    showHud((if (d >= 0) "⏩ +" else "⏪ -") + fmt(kotlin.math.abs(d)) + "\n" + fmt(seekTo) + (if (dur > 0) " / " + fmt(dur) else ""))
+                    showHud((if (d >= 0) "+" else "-") + fmt(kotlin.math.abs(d)) + "\n" + fmt(seekTo) + (if (dur > 0) " / " + fmt(dur) else ""), if (d >= 0) androidx.media3.ui.R.drawable.exo_styled_controls_fastforward else androidx.media3.ui.R.drawable.exo_styled_controls_rewind)
                     return true
                 }
                 if (mode == 0) {
@@ -254,11 +258,11 @@ class PlayerActivity : ComponentActivity() {
                 val v = (startVal + frac).coerceIn(0f, 1f)
                 if (mode == 1) {
                     val lp = window.attributes; lp.screenBrightness = v.coerceAtLeast(0.01f); window.attributes = lp
-                    showHud("☀  Brillo " + (v * 100).toInt() + " %")
+                    showHud("Brillo " + (v * 100).toInt() + " %", R.drawable.mv_ic_brightness)
                 } else if (mode == 2) {
                     val vol = Math.round(v * maxVol)
                     audio.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, vol, 0)
-                    showHud((if (vol == 0) "🔇" else "🔊") + "  Volumen " + (vol * 100 / maxVol) + " %")
+                    showHud("Volumen " + (vol * 100 / maxVol) + " %", if (vol == 0) R.drawable.mv_vol_off else R.drawable.mv_vol_on)
                 }
                 return true
             }

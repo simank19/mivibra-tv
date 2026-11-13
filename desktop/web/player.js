@@ -258,7 +258,7 @@
         var span = Math.max(60, Math.min(600, v.duration / 4));
         tStart.to = Math.max(0, Math.min(v.duration - 1, tStart.from + dx / w * span));
         var d = tStart.to - tStart.from;
-        osd((d >= 0 ? '⏩ +' : '⏪ -') + fmt(Math.abs(d)) + ' · ' + fmt(tStart.to) + ' / ' + fmt(v.duration));
+        osd((d >= 0 ? 'Adelantar +' : 'Atrasar -') + fmt(Math.abs(d)) + ' · ' + fmt(tStart.to) + ' / ' + fmt(v.duration));
         return;
       }
       if (!mode) {
@@ -267,8 +267,8 @@
       }
       e.preventDefault();
       var val = Math.max(0, Math.min(1, base + (tStart.y - t.clientY) / (h * 0.7)));
-      if (mode === 1) { bright = Math.max(0.15, val); applyBright(); osd('☀ Brillo ' + Math.round(bright * 100) + ' %'); }
-      else { v.volume = val; v.muted = val === 0; try { $('vol').value = Math.round(val * 100); } catch (er) {} osd((val ? '🔊' : '🔇') + ' Volumen ' + Math.round(val * 100) + ' %'); }
+      if (mode === 1) { bright = Math.max(0.15, val); applyBright(); osd('Brillo ' + Math.round(bright * 100) + ' %'); }
+      else { v.volume = val; v.muted = val === 0; try { $('vol').value = Math.round(val * 100); } catch (er) {} osd('Volumen ' + Math.round(val * 100) + ' %'); }
     }, { passive: false });
     v.addEventListener('touchend', function (e) {
       if (!tStart) return;
