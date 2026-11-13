@@ -1044,3 +1044,8 @@ html[data-theme="gris"] .dialog, html[data-theme="gris"] .dialog.glass { backgro
 .scrbtn.f:focus-visible, .scrbtn.f.kf { transform: none; box-shadow: inset 0 0 0 3px var(--accent); }
 .vbadge.twitch { background: #6D28D9; } .vbadge.kick { background: #15803D; }
 .vlive .scr.stream:focus-within { box-shadow: 0 0 0 3px var(--accent), 0 14px 34px rgba(0,0,0,.35); }
+
+/* Tarjetas de plataformas con su logo */
+.th.brandth { display: flex; align-items: center; justify-content: center; }
+.th.brandth img { max-width: 62%; max-height: 46%; object-fit: contain; filter: drop-shadow(0 4px 12px rgba(0,0,0,.35)); }
+.th.brandth img.wh { filter: brightness(0) invert(1) drop-shadow(0 4px 12px rgba(0,0,0,.35)); }

@@ -1192,20 +1192,30 @@
     MV.visible(S.items).forEach(function (i) { if (i.platform && i.type !== 'live') m[i.platform] = (m[i.platform] || 0) + 1; });
     return D.PLATFORMS.filter(function (p) { return m[p.id]; }).map(function (p) { return { id: p.id, name: p.name, count: m[p.id] }; });
   }
+  // Logos de las plataformas (colección Logos Apps, MIT): fondo de la tarjeta y si el logo va en sus colores o en blanco
+  var BRAND = {
+    youtube: ['#0F0F0F', 'c'], twitch: ['linear-gradient(135deg,#7C3AED,#2E1065)', 'w'], kick: ['#0B0E0F', 'c'],
+    netflix: ['#000', 'c'], disney: ['linear-gradient(135deg,#0B1A4A,#0E7490)', 'w'], prime: ['linear-gradient(135deg,#00A8E1,#0F1B2D)', 'w'],
+    max: ['linear-gradient(135deg,#002BE7,#0A0F3D)', 'w'], paramount: ['linear-gradient(135deg,#0064FF,#001A4D)', 'w'], apple: ['#111', 'w'],
+    hulu: ['#0B0C0F', 'c'], crunchyroll: ['#111', 'c'], peacock: ['#000', 'w'], mubi: ['#111', 'w'], starz: ['#000', 'w'], showtime: ['linear-gradient(135deg,#B10000,#3A0000)', 'w']
+  };
+  function brandTh(id, name) {
+    var b = BRAND[id];
+    if (!b) return '<div class="th" style="height:120px"><span class="mono" style="font-size:30px;letter-spacing:-.5px">' + esc(name) + '</span></div>';
+    return '<div class="th brandth" style="height:120px;background:' + b[0] + '"><img class="' + (b[1] === 'w' ? 'wh' : '') + '" src="img/brands/' + id + '.svg" alt="' + esc(name) + '"></div>';
+  }
   /** Fila Plataformas del Inicio: YouTube, Twitch y Kick primero, luego las plataformas de tus listas. */
   function platRow(pls) {
     var apps = (MV.isKids() ? [] : [['youtube', 'YouTube', '#B91C1C', 'Videos y tendencias'], ['twitch', 'Twitch', '#6D28D9', 'Canales en vivo'], ['kick', 'Kick', '#15803D', 'Canales en vivo']]);
     var tiles = apps.map(function (a, i) {
       return '<button class="card wide f" style="--h:' + a[2] + ';animation-delay:' + i * 0.04 + 's" data-act="' + (a[0] === 'youtube' ? 'nav' : 'openStreams') + '" data-arg="' + a[0] + '" data-fid="pl-' + a[0] + '">' +
-        '<div class="th" style="height:120px"><span class="mono" style="font-size:30px;letter-spacing:-.5px">' + a[1] + '</span></div>' +
-        '<div class="meta"><b>' + a[1] + '</b><span>' + a[3] + '</span></div></button>';
+        brandTh(a[0], a[1]) + '<div class="meta"><b>' + a[1] + '</b><span>' + a[3] + '</span></div></button>';
     }).join('') + pls.map(function (p, i) { return platformTile(p, i + apps.length); }).join('');
     return tiles ? '<section class="row"><h3>Plataformas</h3><div class="strip">' + tiles + '</div></section>' : '';
   }
   function platformTile(p, i) {
     return '<button class="card wide f" style="--h:' + MV.hue(p.id + 'mv') + ';animation-delay:' + Math.min(i, 12) * 0.04 + 's" data-act="platform" data-arg="' + p.id + '" data-fid="pl-' + p.id + '">' +
-      '<div class="th" style="height:120px"><span class="mono" style="font-size:30px;letter-spacing:-.5px">' + esc(p.name) + '</span></div>' +
-      '<div class="meta"><b>' + esc(p.name) + '</b><span>' + p.count + ' títulos</span></div></button>';
+      brandTh(p.id, p.name) + '<div class="meta"><b>' + esc(p.name) + '</b><span>' + p.count + ' títulos</span></div></button>';
   }
   VIEWS.platforms = function (id) {
     if (!S.lists.length) return top('Plataformas') + emptyLists();
