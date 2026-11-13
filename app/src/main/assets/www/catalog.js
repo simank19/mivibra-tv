@@ -1136,7 +1136,7 @@
         list.count = items.length; list.updated = Date.now(); list.error = '';
         // Para borrar listas vacías sin equivocarse: se recuerda si alguna vez trajo contenido y cuántas veces seguidas llegó vacía
         if (items.length) { list.hadItems = true; list.zeroLoads = 0; } else list.zeroLoads = (list.zeroLoads || 0) + 1;
-        MV.idbSet(ck, { ts: Date.now(), v: 8, sv: ST_V, items: items });
+        MV.idbSet(ck, { ts: Date.now(), v: 8, sv: ST_V, items: items }); listStamp(list.id);
         return items;
       }).catch(function (e) {
         list.error = e.message || 'Error';
@@ -1189,6 +1189,30 @@
   MV.startCatalog = function () {
     var lists = S.lists.filter(function (l) { return l.enabled !== false; });
     if (!lists.length) return Promise.resolve();
+    return openSnap().then(function (fast) {
+      if (!fast) return startFull(lists);
+      S.loading = false; MV.emit('catalog');
+      MV.loadEpg(false);
+      // En segundo plano (sin apuro): se leen las listas guardadas para poder actualizarlas y combinarlas después
+      setTimeout(function () {
+        Promise.all(lists.map(function (l) {
+          return MV.idbGet('list:' + l.id).then(function (c) { return c && c.v >= 7 && c.items ? c : null; }).catch(function () { return null; });
+        })).then(function (caches) {
+          var all = caches.map(function (c) { return c ? c.items : []; });
+          return chunked(all, function (it, i, arr) { arr[i] = retag(it); }).then(function () {
+            if (!lastAll) lastAll = all;
+            setTimeout(function () { MV.checkDupes(false); }, 4000);
+            var stale = lists.map(function (l, i) {
+              var c = caches[i], age = l.type === 'web' || l.type === 'fb' ? 3600e3 : 12 * 3600e3;
+              return !c || c.ts < Date.now() - age || (P.stAutoRefresh && (l.type === 'stremio' || l.type === 'mvplugin')) ? i : -1;
+            }).filter(function (i) { return i >= 0; });
+            if (stale.length) refreshInBackground(lists, stale);
+          });
+        });
+      }, 12000);
+    });
+  };
+  function startFull(lists) {
     return Promise.all(lists.map(function (l) {
       return MV.idbGet('list:' + l.id).then(function (c) { return c && c.v >= 7 && c.items ? c : null; }).catch(function () { return null; });
     })).then(function (caches) {
@@ -1210,7 +1234,7 @@
       if (stale.length) setTimeout(function () { refreshInBackground(lists, stale); }, 5000);
       });
     });
-  };
+  }
   function refreshInBackground(lists, idxs) {
     if (bgRunning) return;
     bgRunning = true;
@@ -1334,6 +1358,51 @@
     });
   }
   MV.chunked = chunked;
+  function derive(items) {
+    S.live = items.filter(function (i) { return i.type === 'live'; });
+    S.live.forEach(function (i) { if (i.cands) applyProbe(i); });
+    // Las novelas van en su propia sección (no se mezclan con Películas ni Series)
+    S.movies = items.filter(function (i) { return i.type === 'movie' && (!i.novela || i.novelaAuto); }).sort(function (a, b) { return (b.added || 0) - (a.added || 0); });
+    S.series = items.filter(function (i) { return i.type === 'series' && (!i.novela || i.novelaAuto); });
+    S.novelas = items.filter(function (i) { return i.novela && (i.type === 'series' || i.type === 'movie'); });
+  }
+  // ---------- Catálogo listo guardado (abre al instante) ----------
+  // Armar el catálogo (clasificar y juntar duplicados de cientos de miles de títulos) tarda mucho en un TV box.
+  // El resultado se guarda y, si nada cambió (mismas listas, mismas versiones guardadas, mismos ajustes), se abre directo.
+  var SNAP_V = 1;
+  function listStamp(id) { var m = MV.load('listTs', {}) || {}; m[id] = Date.now(); MV.save('listTs', m); }
+  function snapSig() {
+    var ts = MV.load('listTs', {}) || {};
+    var ls = S.lists.filter(function (l) { return l.enabled !== false; }).map(function (l) { return [l.id, l.url || '', l.host || '', l.user || '', l.updatedAt || 0, ts[l.id] || 0]; });
+    return JSON.stringify([SNAP_V, (MV.device && (MV.device.versionCode || MV.device.version)) || '', ls, MV.CONTENT_PREFS.map(function (k) { return P[k]; }), P.dedupe !== false, P.adultOn || false]);
+  }
+  var snapT = null;
+  function snapLater() {
+    clearTimeout(snapT);
+    snapT = setTimeout(function again() {
+      // Se guarda cuando no se está usando el control ni viendo algo (guardar mucho de una vez frena un momento)
+      if (Date.now() - (MV._lastKey || 0) < 5000 || S.loading || MV.playing) { snapT = setTimeout(again, 5000); return; }
+      try {
+        var items = S.items, idx = new Map(), alias = {};
+        items.forEach(function (it, i) { idx.set(it, i); });
+        Object.keys(S.byKey).forEach(function (k) { var o = S.byKey[k], i = idx.get(o); if (i !== undefined && items[i].key !== k) alias[k] = i; });
+        MV.idbSet('catalogSnap', { sig: snapSig(), at: Date.now(), items: items, alias: alias, books: S.books || [], hidden: S.hiddenDupes || {} });
+      } catch (e) {}
+    }, 15000);
+  }
+  /** Abre el catálogo guardado si sigue al día. true = abierto. */
+  function openSnap() {
+    return MV.idbGet('catalogSnap').then(function (sn) {
+      if (!sn || sn.sig !== snapSig() || !sn.items || !sn.items.length) return false;
+      var items = sn.items, byKey = {}, byTid = {};
+      items.forEach(function (it) { byKey[it.key] = it; if (it.tid) byTid[it.tid] = it; });
+      Object.keys(sn.alias || {}).forEach(function (k) { var o = items[sn.alias[k]]; if (o) byKey[k] = o; });
+      S.books = sn.books || []; S.bookByKey = {}; S.books.forEach(function (b) { S.bookByKey[b.key] = b; });
+      S.items = items; S.byKey = byKey; S.byTid = byTid; S.hiddenDupes = sn.hidden || {};
+      derive(items);
+      return true;
+    }).catch(function () { return false; });
+  }
   var combineSeq = 0;
   function combine(all, async) {
     var mySeq = ++combineSeq;
@@ -1425,12 +1494,8 @@
     // Cuántos títulos de cada lista quedaron ocultos porque otra lista tiene una versión mejor
     pairs.forEach(function (pr) { if (pr[0].type !== 'live' && (pr[1].url !== pr[0].url || pr[1].list !== pr[0].list) && !(pr[0].type === 'series' && pr[1].list === pr[0].list)) hidden[pr[0].list] = (hidden[pr[0].list] || 0) + 1; });
     S.items = items; S.byKey = byKey; S.byTid = byTid; S.hiddenDupes = hidden;
-    S.live = items.filter(function (i) { return i.type === 'live'; });
-    S.live.forEach(function (i) { if (i.cands) applyProbe(i); });
-    // Las novelas van en su propia sección (no se mezclan con Películas ni Series)
-    S.movies = items.filter(function (i) { return i.type === 'movie' && (!i.novela || i.novelaAuto); }).sort(function (a, b) { return (b.added || 0) - (a.added || 0); });
-    S.series = items.filter(function (i) { return i.type === 'series' && (!i.novela || i.novelaAuto); });
-    S.novelas = items.filter(function (i) { return i.novela && (i.type === 'series' || i.type === 'movie'); });
+    derive(items);
+    snapLater();
     }
   }
 

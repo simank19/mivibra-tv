@@ -245,7 +245,18 @@
     });
     // Primero los que se ven como video (mp4, mkv, m3u8…); al final los que pueden ser páginas web
     function score(x) { var u = x.url.toLowerCase().split('?')[0]; return /\.(mp4|mkv|m3u8|webm|avi|mov|ts|mpd)$/.test(u) ? 0 : /\/(hls|stream|video|playlist|manifest)/.test(u) ? 1 : 2; }
-    return Promise.all(jobs).then(function (all) { var r = all.reduce(function (a, b) { return a.concat(b); }, []).sort(function (a, b) { return score(a) - score(b); }); r.failed = failed; return r; });
+    // No se espera al addon más lento: a los 5 s, si ya hay enlaces, se sigue con esos (los que lleguen tarde no frenan el video)
+    return new Promise(function (resolve) {
+      var got = jobs.map(function () { return null; }), left = jobs.length, sent = false;
+      function out() {
+        if (sent) return; sent = true; clearTimeout(soft);
+        var r = got.filter(Boolean).reduce(function (a, b) { return a.concat(b); }, []).sort(function (a, b) { return score(a) - score(b); });
+        r.failed = failed + got.filter(function (g) { return g === null; }).length; resolve(r);
+      }
+      var soft = setTimeout(function () { if (got.some(function (g) { return g && g.length; })) out(); }, 5000);
+      if (!left) out();
+      jobs.forEach(function (j, i) { j.then(function (r) { got[i] = r || []; if (--left === 0) out(); }); });
+    });
   };
 
   /** Elige el enlace: si hay varios, se muestra la lista para escoger (calidad, idioma, fuente). */

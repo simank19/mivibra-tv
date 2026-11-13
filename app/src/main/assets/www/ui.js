@@ -2222,7 +2222,8 @@
     if (it.type === 'live') {
       // En el reproductor van todos los canales (con su país y si son de deportes) para la lista lateral
       var list = it.adult ? adultItems().filter(function (i) { return i.type === 'live'; }) : MV.visible(S.live);
-      var idx = Math.max(0, list.indexOf(it)), from = Math.max(0, Math.min(idx - 1500, list.length - 3000)), slice = list.slice(from, from + 3000);
+      var CAP = MV.perf === 'high' ? 3000 : 1000;   // en TV box modestos se le pasan menos canales al reproductor (abre más rápido)
+      var idx = Math.max(0, list.indexOf(it)), from = Math.max(0, Math.min(idx - CAP / 2, list.length - CAP)), slice = list.slice(from, from + CAP);
       // Recientes para la lista de canales del reproductor
       var recent = (MV.pdata().history || []).filter(function (h) { return h.type === 'live'; }).slice(0, 30).map(function (h) { return h.key; });
       launch({ queue: slice.map(function (c) { return q(c); }), index: slice.indexOf(it) < 0 ? 0 : slice.indexOf(it), live: true, recent: recent }, { item: it, list: slice });
