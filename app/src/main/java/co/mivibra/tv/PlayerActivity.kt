@@ -449,8 +449,27 @@ class PlayerActivity : ComponentActivity() {
             // Primero el idioma preferido
             val want = when (subLang) { "en" -> "Inglés"; "pt" -> "Portugués"; else -> "Español" }
             val sorted = res.sortedBy { val l = Subtitles.langLabel(it.lang); if (l.startsWith(want)) 0 else if (l == "Inglés") 1 else 2 }
-            ui.post { if (addonSubsFor == key) addonSubs = sorted }
+            ui.post { if (addonSubsFor == key) { addonSubs = sorted; ui.postDelayed({ autoAddonSub(key) }, 3500) } }
         }.start()
+    }
+
+    /**
+     * Subtítulos en tu idioma aunque el video no los traiga: si elegiste un idioma de subtítulos (Español, por defecto el latino primero)
+     * y el video no tiene una pista en ese idioma, se pone sola la primera que den tus addons de subtítulos.
+     */
+    private var autoSubDone = ""
+    private fun autoAddonSub(key: String) {
+        if (subLang.isBlank() || extSub != null || autoSubDone == key || addonSubsFor != key) return
+        val p = player ?: return
+        val want = when (subLang) { "en" -> "Inglés"; "pt" -> "Portugués"; else -> "Español" }
+        // ¿El video ya trae subtítulos en ese idioma?
+        val has = p.currentTracks.groups.any { g -> g.type == C.TRACK_TYPE_TEXT && (0 until g.length).any { i -> (g.getTrackFormat(i).language ?: "").lowercase().startsWith(subLang) } }
+        if (has) return
+        val list = addonSubs ?: return
+        val pick = list.firstOrNull { Subtitles.langLabel(it.lang) == "Español latino" && want == "Español" }
+            ?: list.firstOrNull { Subtitles.langLabel(it.lang).startsWith(want) } ?: return
+        autoSubDone = key
+        applyAddonSub(pick, Subtitles.langLabel(pick.lang) + " · " + pick.src)
     }
 
     private fun applyAddonSub(s: Subtitles.AddonSub, label: String) {
