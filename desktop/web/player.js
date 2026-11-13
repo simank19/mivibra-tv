@@ -214,7 +214,9 @@
   function wake() { document.body.classList.remove('idle'); clearTimeout(idleT); idleT = setTimeout(function () { if (!v.paused && !listOpen() && $('tracks').hidden) document.body.classList.add('idle'); }, 3200); }
   ['mousemove', 'mousedown', 'keydown', 'wheel'].forEach(function (ev) { window.addEventListener(ev, wake, true); });
   function toggle() { if (v.paused) play(); else v.pause(); }
-  function seekBy(s) { if (live || !isFinite(v.duration)) return; v.currentTime = Math.max(0, Math.min(v.duration - 1, v.currentTime + s)); osd((s > 0 ? '+' : '') + s + ' s · ' + fmt(v.currentTime)); }
+  /** En vivo de verdad: sin final (Infinity) o de TV en vivo sin duración. Una película dentro de una lista de canales sí se adelanta. */
+  function liveNow() { return v.duration === Infinity || (live && !(v.duration > 0)); }
+  function seekBy(s) { if (liveNow()) return; if (!(v.duration > 0)) { v.currentTime = Math.max(0, v.currentTime + s); osd((s > 0 ? '+' : '') + s + ' s'); return; } v.currentTime = Math.max(0, Math.min(v.duration - 1, v.currentTime + s)); osd((s > 0 ? '+' : '') + s + ' s · ' + fmt(v.currentTime)); }
   function chan(d) { if (queue.length > 1) playIndex(index + d, 0, true); }
   function fav() {
     var it = cur(); if (!it.id) return;
@@ -251,7 +253,7 @@
       // Deslizar a los lados: adelanta o atrasa según el recorrido del dedo (todo el ancho = 1/4 del video, entre 1 y 10 min)
       if (mode === 3 || (!mode && Math.abs(dx) > 24 && Math.abs(dx) > Math.abs(dy) * 1.5)) {
         e.preventDefault();
-        if (live || !isFinite(v.duration) || !v.duration) { if (!mode) osd('En vivo: no se puede adelantar'); mode = 3; tStart.to = -1; return; }
+        if (liveNow() || !(v.duration > 0)) { if (!mode) osd(liveNow() ? 'En vivo: no se puede adelantar' : 'Este video todavía no deja adelantar'); mode = 3; tStart.to = -1; return; }
         if (mode !== 3) { mode = 3; tStart.from = v.currentTime; }
         var span = Math.max(60, Math.min(600, v.duration / 4));
         tStart.to = Math.max(0, Math.min(v.duration - 1, tStart.from + dx / w * span));
@@ -278,7 +280,7 @@
       if (now - lastTap < 300) {
         clearTimeout(tapT); lastTap = 0;
         seekBy(st.x > (v.clientWidth || innerWidth) / 2 ? 30 : -30);
-        if (live) osd('En vivo: no se puede adelantar');
+        if (liveNow()) osd('En vivo: no se puede adelantar');
         return;
       }
       lastTap = now;

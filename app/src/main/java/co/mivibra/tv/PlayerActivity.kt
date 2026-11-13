@@ -182,6 +182,8 @@ class PlayerActivity : ComponentActivity() {
         hudHide?.let { ui.removeCallbacks(it) }
         hudHide = Runnable { hud.visibility = View.GONE }.also { ui.postDelayed(it, 900) }
     }
+    /** En vivo de verdad: el reproductor lo marca así, o viene de TV en vivo y no tiene duración. */
+    private fun liveNow(p: ExoPlayer): Boolean = p.isCurrentMediaItemLive || (live && (p.duration <= 0 || p.duration == C.TIME_UNSET))
     private fun setupTouch() {
         hud = TextView(this).apply {
             setTextColor(Color.WHITE); setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f); typeface = Typeface.DEFAULT_BOLD
@@ -207,12 +209,13 @@ class PlayerActivity : ComponentActivity() {
             }
             override fun onDoubleTap(e: MotionEvent): Boolean {
                 val p = player ?: return true
-                if (live || !p.isCurrentMediaItemSeekable) { showHud("En vivo: no se puede adelantar"); return true }
+                // Solo lo que de verdad es en vivo no se adelanta (una película dentro de una lista de canales sí)
+                if (liveNow(p)) { showHud("En vivo: no se puede adelantar"); return true }
                 val right = e.x > view.width / 2f
                 val d = p.duration
                 var to = p.currentPosition + if (right) 30_000 else -30_000
                 if (to < 0) to = 0
-                if (d > 0 && to > d - 1000) to = d - 1000
+                if (d > 0 && d != C.TIME_UNSET && to > d - 1000) to = d - 1000
                 p.seekTo(to)
                 showHud(if (right) "+30 s  ⏩" else "⏪  -30 s")
                 return true
@@ -224,13 +227,14 @@ class PlayerActivity : ComponentActivity() {
                 // Deslizar a los lados: adelanta o atrasa según cuánto se mueve el dedo (todo el ancho = una cuarta parte del video, entre 1 y 10 min)
                 if (mode == 3 || (mode == 0 && kotlin.math.abs(totalX) > dp(24) && kotlin.math.abs(totalX) > kotlin.math.abs(totalY) * 1.5)) {
                     val p = player ?: return false
-                    if (live || !p.isCurrentMediaItemSeekable || p.duration <= 0) { if (mode == 0) { mode = 3; seekTo = -1; showHud("En vivo: no se puede adelantar") }; return true }
+                    if (liveNow(p)) { if (mode == 0) { mode = 3; seekTo = -1; showHud("En vivo: no se puede adelantar") }; return true }
                     if (mode == 0) { mode = 3; seekFrom = p.currentPosition }
-                    val span = (p.duration / 4).coerceIn(60_000L, 600_000L)
+                    val dur = if (p.duration > 0 && p.duration != C.TIME_UNSET) p.duration else 0L
+                    val span = if (dur > 0) (dur / 4).coerceIn(60_000L, 600_000L) else 120_000L
                     val delta = (totalX / view.width * span).toLong()
-                    seekTo = (seekFrom + delta).coerceIn(0L, p.duration - 1000)
+                    seekTo = (seekFrom + delta).coerceAtLeast(0L).let { if (dur > 0) it.coerceAtMost(dur - 1000) else it }
                     val d = seekTo - seekFrom
-                    showHud((if (d >= 0) "⏩ +" else "⏪ -") + fmt(kotlin.math.abs(d)) + "\n" + fmt(seekTo) + " / " + fmt(p.duration))
+                    showHud((if (d >= 0) "⏩ +" else "⏪ -") + fmt(kotlin.math.abs(d)) + "\n" + fmt(seekTo) + (if (dur > 0) " / " + fmt(dur) else ""))
                     return true
                 }
                 if (mode == 0) {
