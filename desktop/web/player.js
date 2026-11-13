@@ -236,6 +236,43 @@
   $('bList').onclick = function () { listOpen() ? hideList() : showList(); };
   $('bTracks').onclick = tracksMenu;
   v.addEventListener('dblclick', fullscreen);
+  // ---------- Pantalla táctil (PC o tablet con Windows): igual que en el celular ----------
+  // Un toque: pausa/reproduce. Doble toque derecha +30 s, izquierda -30 s. Deslizar a la izquierda: brillo; a la derecha: volumen.
+  (function () {
+    var bright = 1, tStart = null, mode = 0, base = 0, lastTap = 0, tapT = null;
+    function applyBright() { v.style.filter = bright < 0.999 ? 'brightness(' + bright.toFixed(2) + ')' : ''; }
+    v.addEventListener('touchstart', function (e) {
+      if (e.touches.length !== 1) return;
+      var t = e.touches[0]; tStart = { x: t.clientX, y: t.clientY, at: Date.now() }; mode = 0;
+    }, { passive: true });
+    v.addEventListener('touchmove', function (e) {
+      if (!tStart || e.touches.length !== 1) return;
+      var t = e.touches[0], dy = tStart.y - t.clientY, dx = t.clientX - tStart.x, h = v.clientHeight || innerHeight;
+      if (!mode) {
+        if (Math.abs(dy) < 18 || Math.abs(dx) > Math.abs(dy)) return;
+        mode = tStart.x < (v.clientWidth || innerWidth) / 2 ? 1 : 2; base = mode === 1 ? bright : v.volume; tStart.y = t.clientY;
+      }
+      e.preventDefault();
+      var val = Math.max(0, Math.min(1, base + (tStart.y - t.clientY) / (h * 0.7)));
+      if (mode === 1) { bright = Math.max(0.15, val); applyBright(); osd('☀ Brillo ' + Math.round(bright * 100) + ' %'); }
+      else { v.volume = val; v.muted = val === 0; try { $('vol').value = Math.round(val * 100); } catch (er) {} osd((val ? '🔊' : '🔇') + ' Volumen ' + Math.round(val * 100) + ' %'); }
+    }, { passive: false });
+    v.addEventListener('touchend', function (e) {
+      if (!tStart) return;
+      var was = mode, st = tStart; tStart = null; mode = 0;
+      e.preventDefault();   // sin clic ni doble clic simulados (el doble clic del mouse es pantalla completa)
+      if (was || Date.now() - st.at > 400) return;
+      var now = Date.now();
+      if (now - lastTap < 300) {
+        clearTimeout(tapT); lastTap = 0;
+        seekBy(st.x > (v.clientWidth || innerWidth) / 2 ? 30 : -30);
+        if (live) osd('En vivo: no se puede adelantar');
+        return;
+      }
+      lastTap = now;
+      tapT = setTimeout(function () { if (listOpen()) hideList(); else if (!$('tracks').hidden) $('tracks').hidden = true; else toggle(); }, 300);
+    }, { passive: false });
+  })();
   v.addEventListener('click', function () { if (listOpen()) hideList(); else if (!$('tracks').hidden) $('tracks').hidden = true; else toggle(); });
 
   window.addEventListener('keydown', function (e) {
