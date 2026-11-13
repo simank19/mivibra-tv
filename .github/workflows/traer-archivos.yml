@@ -1,0 +1,25 @@
+# Herramienta: descarga archivos públicos (por ejemplo de archive.org) y los deja como artefacto para usarlos en la app.
+name: Traer archivos
+on:
+  workflow_dispatch:
+    inputs:
+      urls:
+        description: "Enlaces separados por espacio"
+        required: true
+jobs:
+  traer:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar
+        run: |
+          mkdir -p out && cd out
+          i=0
+          for u in ${{ github.event.inputs.urls }}; do
+            i=$((i+1)); n=$(basename "${u%%\?*}"); n=$(python3 -c "import sys,urllib.parse;print(urllib.parse.unquote(sys.argv[1]))" "$n")
+            curl -sSL --retry 3 -o "$i-$n" "$u" || echo "falló $u"
+          done
+          ls -la
+      - uses: actions/upload-artifact@v4
+        with:
+          name: archivos
+          path: out
