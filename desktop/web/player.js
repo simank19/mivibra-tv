@@ -247,7 +247,18 @@
     }, { passive: true });
     v.addEventListener('touchmove', function (e) {
       if (!tStart || e.touches.length !== 1) return;
-      var t = e.touches[0], dy = tStart.y - t.clientY, dx = t.clientX - tStart.x, h = v.clientHeight || innerHeight;
+      var t = e.touches[0], dy = tStart.y - t.clientY, dx = t.clientX - tStart.x, h = v.clientHeight || innerHeight, w = v.clientWidth || innerWidth;
+      // Deslizar a los lados: adelanta o atrasa según el recorrido del dedo (todo el ancho = 1/4 del video, entre 1 y 10 min)
+      if (mode === 3 || (!mode && Math.abs(dx) > 24 && Math.abs(dx) > Math.abs(dy) * 1.5)) {
+        e.preventDefault();
+        if (live || !isFinite(v.duration) || !v.duration) { if (!mode) osd('En vivo: no se puede adelantar'); mode = 3; tStart.to = -1; return; }
+        if (mode !== 3) { mode = 3; tStart.from = v.currentTime; }
+        var span = Math.max(60, Math.min(600, v.duration / 4));
+        tStart.to = Math.max(0, Math.min(v.duration - 1, tStart.from + dx / w * span));
+        var d = tStart.to - tStart.from;
+        osd((d >= 0 ? '⏩ +' : '⏪ -') + fmt(Math.abs(d)) + ' · ' + fmt(tStart.to) + ' / ' + fmt(v.duration));
+        return;
+      }
       if (!mode) {
         if (Math.abs(dy) < 18 || Math.abs(dx) > Math.abs(dy)) return;
         mode = tStart.x < (v.clientWidth || innerWidth) / 2 ? 1 : 2; base = mode === 1 ? bright : v.volume; tStart.y = t.clientY;
@@ -260,7 +271,8 @@
     v.addEventListener('touchend', function (e) {
       if (!tStart) return;
       var was = mode, st = tStart; tStart = null; mode = 0;
-      e.preventDefault();   // sin clic ni doble clic simulados (el doble clic del mouse es pantalla completa)
+      e.preventDefault();
+      if (was === 3 && st.to >= 0) { v.currentTime = st.to; return; }   // sin clic ni doble clic simulados (el doble clic del mouse es pantalla completa)
       if (was || Date.now() - st.at > 400) return;
       var now = Date.now();
       if (now - lastTap < 300) {

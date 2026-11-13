@@ -192,11 +192,13 @@ class PlayerActivity : ComponentActivity() {
         if (!packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TOUCHSCREEN)) return
         val audio = getSystemService(AUDIO_SERVICE) as android.media.AudioManager
         val maxVol = audio.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC).coerceAtLeast(1)
-        var mode = 0            // 0 = nada, 1 = brillo, 2 = volumen
+        var mode = 0            // 0 = nada, 1 = brillo, 2 = volumen, 3 = adelantar/atrasar
         var startVal = 0f
         var startY = 0f
+        var seekFrom = 0L; var seekTo = -1L
+        fun fmt(ms: Long): String { val t = ms / 1000; val h = t / 3600; val m = (t % 3600) / 60; val sec = t % 60; return if (h > 0) String.format(Locale.US, "%d:%02d:%02d", h, m, sec) else String.format(Locale.US, "%d:%02d", m, sec) }
         val gd = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
-            override fun onDown(e: MotionEvent): Boolean { mode = 0; startY = e.y; return true }
+            override fun onDown(e: MotionEvent): Boolean { mode = 0; seekTo = -1; startY = e.y; return true }
             override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
                 val p = player ?: return true
                 if (p.isPlaying) { p.pause(); showHud("⏸  Pausa") } else { p.play(); showHud("▶  Reproducir") }
@@ -218,6 +220,19 @@ class PlayerActivity : ComponentActivity() {
             override fun onScroll(e1: MotionEvent?, e2: MotionEvent, dx: Float, dy: Float): Boolean {
                 val s = e1 ?: return false
                 val totalY = s.y - e2.y
+                val totalX = e2.x - s.x
+                // Deslizar a los lados: adelanta o atrasa según cuánto se mueve el dedo (todo el ancho = una cuarta parte del video, entre 1 y 10 min)
+                if (mode == 3 || (mode == 0 && kotlin.math.abs(totalX) > dp(24) && kotlin.math.abs(totalX) > kotlin.math.abs(totalY) * 1.5)) {
+                    val p = player ?: return false
+                    if (live || !p.isCurrentMediaItemSeekable || p.duration <= 0) { if (mode == 0) { mode = 3; seekTo = -1; showHud("En vivo: no se puede adelantar") }; return true }
+                    if (mode == 0) { mode = 3; seekFrom = p.currentPosition }
+                    val span = (p.duration / 4).coerceIn(60_000L, 600_000L)
+                    val delta = (totalX / view.width * span).toLong()
+                    seekTo = (seekFrom + delta).coerceIn(0L, p.duration - 1000)
+                    val d = seekTo - seekFrom
+                    showHud((if (d >= 0) "⏩ +" else "⏪ -") + fmt(kotlin.math.abs(d)) + "\n" + fmt(seekTo) + " / " + fmt(p.duration))
+                    return true
+                }
                 if (mode == 0) {
                     // Solo gestos verticales y lejos de los bordes de arriba y abajo (ahí están las barras del sistema)
                     if (kotlin.math.abs(totalY) < dp(18) || kotlin.math.abs(e2.x - s.x) > kotlin.math.abs(totalY)) return false
@@ -243,7 +258,15 @@ class PlayerActivity : ComponentActivity() {
             }
         })
         // Los botones de la barra de control siguen funcionando: este manejador solo recibe los toques que no son de un botón
-        view.setOnTouchListener { _, ev -> gd.onTouchEvent(ev); true }
+        view.setOnTouchListener { _, ev ->
+            gd.onTouchEvent(ev)
+            // Al soltar el dedo se salta al punto elegido deslizando
+            if ((ev.actionMasked == MotionEvent.ACTION_UP || ev.actionMasked == MotionEvent.ACTION_CANCEL) && mode == 3) {
+                if (seekTo >= 0) { player?.seekTo(seekTo); view.showController() }
+                mode = 0; seekTo = -1
+            }
+            true
+        }
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
