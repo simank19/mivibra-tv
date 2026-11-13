@@ -597,11 +597,61 @@
     var d = new Date(), h = d.getHours(), m = d.getMinutes();
     return { day: d.getDate(), wd: cap(d.toLocaleDateString('es-CO', { weekday: 'long' })), hm: ((h % 12) || 12) + ':' + (m < 10 ? '0' : '') + m, ap: h < 12 ? 'AM' : 'PM' };
   }
+  // ---------- Reloj digital y clima (Open-Meteo, gratis y sin clave; ubicación aproximada por la conexión) ----------
+  var WX = MV.load('wx', null), wxBusy = false;
+  var WX_TXT = function (c) {
+    return c === 0 ? 'Despejado' : c <= 2 ? 'Algo nublado' : c === 3 ? 'Nublado' : c <= 48 ? 'Niebla' : c <= 57 ? 'Llovizna' : c <= 67 ? 'Lluvia' : c <= 77 ? 'Nieve' : c <= 82 ? 'Chubascos' : c <= 86 ? 'Nieve' : 'Tormenta';
+  };
+  function wxIcon(c, day) {
+    var sun = '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>';
+    var moon = '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>';
+    var cloud = '<path d="M7 18h10a4 4 0 0 0 .5-8 6 6 0 0 0-11.5 1.5A3.3 3.3 0 0 0 7 18z"/>';
+    var p = c === 0 ? (day ? sun : moon) : c <= 2 ? '<path d="M8 4.5a4 4 0 0 1 6.2 3.2"/><path d="M4.5 8.5l1 .6M8 2v1.2"/><path d="M8 19h9a3.5 3.5 0 0 0 .4-7 5 5 0 0 0-9.6 1.3A2.9 2.9 0 0 0 8 19z"/>' :
+      c === 3 ? cloud : c <= 48 ? '<path d="M4 10h16M3 14h18M5 18h14"/>' :
+      c <= 67 || (c >= 80 && c <= 82) ? cloud.replace('18h10', '15h10').replace('7 18z', '7 15z') + '<path d="M8 18l-1 3M12 18l-1 3M16 18l-1 3"/>' :
+      c <= 86 ? cloud.replace('18h10', '15h10').replace('7 18z', '7 15z') + '<path d="M8 19h.01M12 20h.01M16 19h.01"/>' :
+      cloud.replace('18h10', '15h10').replace('7 18z', '7 15z') + '<path d="M12 15l-2 4h3l-2 4"/>';
+    return '<svg viewBox="0 0 24 24" aria-hidden="true">' + p + '</svg>';
+  }
+  function wxHtml() {
+    if (!WX) return '<span class="wxs">Buscando el clima…</span>';
+    return '<span class="wxi">' + wxIcon(WX.c, WX.d) + '</span><span class="wxt"><b>' + WX.t + '°</b><span>' + esc(WX_TXT(WX.c)) + '</span></span>' +
+      '<span class="wxs">' + (WX.hi != null ? 'Máx ' + WX.hi + '° · Mín ' + WX.lo + '°' : '') + '<br>' + [WX.city ? esc(WX.city) : '', WX.pp ? 'Lluvia ' + WX.pp + '%' : ''].filter(Boolean).join(' · ') + '</span>';
+  }
+  function wxLoad() {
+    if (wxBusy || (WX && Date.now() - WX.ts < 30 * 60e3)) return;
+    wxBusy = true;
+    var loc = MV.load('wxLoc', null);
+    (loc && Date.now() - loc.ts < 86400e3 ? Promise.resolve(loc) :
+      MV.getJSON('https://ipwho.is/?fields=success,city,latitude,longitude').then(function (j) {
+        if (!j || j.success === false || j.latitude == null) throw new Error('sin ubicación');
+        var l = { lat: j.latitude, lon: j.longitude, city: j.city || '', ts: Date.now() }; MV.save('wxLoc', l); return l;
+      }).catch(function () { return { lat: 4.711, lon: -74.072, city: 'Bogotá', ts: 0 }; })
+    ).then(function (l) {
+      return MV.getJSON('https://api.open-meteo.com/v1/forecast?latitude=' + l.lat + '&longitude=' + l.lon +
+        '&current=temperature_2m,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=1').then(function (j) {
+        var cu = j && j.current, dy = (j && j.daily) || {};
+        if (!cu) return;
+        WX = { t: Math.round(cu.temperature_2m), c: +cu.weather_code || 0, d: cu.is_day !== 0, hi: dy.temperature_2m_max ? Math.round(dy.temperature_2m_max[0]) : null,
+          lo: dy.temperature_2m_min ? Math.round(dy.temperature_2m_min[0]) : null, pp: dy.precipitation_probability_max ? dy.precipitation_probability_max[0] : 0, city: l.city, ts: Date.now() };
+        MV.save('wx', WX);
+        var b = document.getElementById('vWx'); if (b) b.innerHTML = wxHtml();
+      });
+    }).catch(function () {}).then(function () { wxBusy = false; });
+  }
+  function clockTile() {
+    var p = clockParts(), d = new Date();
+    setTimeout(wxLoad, 300);
+    return '<section class="vtile vclock" aria-label="Hora y clima"><div class="dg"><b id="vcT">' + p.hm + '</b><span id="vcA">' + p.ap + '</span></div>' +
+      '<span class="dd" id="vcD">' + esc(cap(d.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, ''))) + '</span>' +
+      '<div class="wx" id="vWx">' + wxHtml() + '</div></section>';
+  }
   setInterval(function () {
-    var c = document.getElementById('vClock'); if (!c) return;
-    var p = clockParts(); c.firstChild.textContent = p.hm; c.lastChild.textContent = p.ap;
-    var d = document.getElementById('vDate'); if (d) { d.firstChild.textContent = p.day; d.lastChild.textContent = p.wd; }
-  }, 20000);
+    var t = document.getElementById('vcT'); if (!t) return;
+    var p = clockParts(); t.textContent = p.hm;
+    var a = document.getElementById('vcA'); if (a) a.textContent = p.ap;
+    wxLoad();
+  }, 15000);
   function chipItems(id, movies, series, anime, kd) {
     var vis = function (f) { return MV.visible(S.items.filter(function (i) { return i.type !== 'live' && f(i); })); };
     if (id === 'movies') return movies; if (id === 'series') return series; if (id === 'anime') return anime; if (id === 'kdrama') return kd;
@@ -672,7 +722,7 @@
         }).join('') + '<button class="vth all f" data-act="nav" data-arg="live" aria-label="Ver todos los canales">' + IC.grid + '<span>Todos</span></button></div></section>';
     }
     var c0 = cont.find(function (c) { return c.dur > 0; }), it0 = c0 && MV.resolve(c0);
-    out += '<div class="vside"><div class="vtiles"><div class="vtile" id="vDate"><b>' + ck.day + '</b><span>' + ck.wd + '</span></div><div class="vtile" id="vClock"><b>' + ck.hm + '</b><span>' + ck.ap + '</span></div></div>';
+    out += '<div class="vside"><div class="vtiles">' + (MV.sportsMini ? MV.sportsMini() : '') + clockTile() + '</div>';
     if (it0) {
       reg(it0);
       var pct = Math.max(0, Math.min(1, c0.pos / c0.dur)), left = Math.max(0, Math.round((c0.dur - c0.pos) / 60));

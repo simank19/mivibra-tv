@@ -9,7 +9,7 @@
     ['soccer', 'mex.1', 'Liga MX'], ['soccer', 'arg.1', 'Liga argentina'], ['soccer', 'fifa.world', 'Mundial'], ['soccer', 'fifa.worldq.conmebol', 'Eliminatorias'],
     ['basketball', 'nba', 'NBA']
   ];
-  var DATA = { ts: 0, events: [], loading: false };
+  var DATA = MV._sports = { ts: 0, events: [], loading: false };
 
   function fetchAll() {
     if (DATA.loading || Date.now() - DATA.ts < 60e3) return Promise.resolve(DATA.events);
@@ -104,8 +104,40 @@
     setTimeout(refresh, 50);
     return '<div id="sportsRow">' + rowHtml() + '</div>';
   };
+  // ---------- Widget de Inicio: un partido a la vez, con flechas para ver los demás ----------
+  var SPI = 0;
+  function miniHtml() {
+    var evs = DATA.events;
+    if (!evs.length) return '<div class="vsm-empty"><b>Deportes de hoy</b><span>' + (DATA.ts ? 'No hay partidos hoy en las ligas que seguimos' : 'Buscando partidos…') + '</span></div>';
+    if (SPI >= evs.length) SPI = 0;
+    var e = evs[SPI], ch = channelFor(e);
+    if (ch && MV.reg) MV.reg[ch.key] = ch;
+    var act = ch ? 'data-act="play" data-key="' + esc(ch.key) + '"' : 'data-act="sportFind" data-arg="' + esc(e.home.name + ' ' + e.away.name) + '"';
+    var badge = e.state === 'in' ? '<span class="vsm-b live"><i></i>EN VIVO</span>' : '<span class="vsm-b">' + (e.state === 'post' ? 'FINAL' : 'HOY') + '</span>';
+    var team = function (t) { return '<span class="vsm-t">' + (t.logo ? '<img src="' + esc(t.logo) + '" alt="" loading="lazy" onerror="this.remove()">' : '<i></i>') + '<b>' + esc(t.name) + '</b>' + (e.state !== 'pre' ? '<em>' + esc(t.score) + '</em>' : '') + '</span>'; };
+    return '<button class="vsm-main f" ' + act + ' data-fid="vsm-main" aria-label="' + esc(e.home.full + ' contra ' + e.away.full + ', ' + line(e)) + '">' +
+      '<span class="vsm-h">' + badge + '<small>' + esc(e.lg) + '</small></span>' + team(e.home) + team(e.away) +
+      '<span class="vsm-l">' + esc(e.state === 'pre' ? line(e).replace('Empieza ', '') : line(e)) + (ch ? ' · ' + esc(MV.cleanTitle ? (MV.cleanTitle(ch.name) || ch.name) : ch.name) : '') + '</span></button>' +
+      (evs.length > 1 ? '<span class="vsm-nav"><button class="vsm-arr f" data-act="sportsMini" data-arg="-1" data-fid="vsm-prev" aria-label="Partido anterior"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>' +
+        '<small>' + (SPI + 1) + ' / ' + evs.length + '</small>' +
+        '<button class="vsm-arr f" data-act="sportsMini" data-arg="1" data-fid="vsm-next" aria-label="Siguiente partido"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></span>' : '');
+  }
+  function miniPaint() {
+    var box = document.getElementById('sportsMini'); if (!box) return;
+    var html = miniHtml(); if (box.innerHTML === html) return;
+    var a = document.activeElement, fid = a && box.contains(a) ? a.getAttribute('data-fid') : '';
+    box.innerHTML = html;
+    if (fid) { var b = box.querySelector('[data-fid="' + fid + '"]'); if (b) b.focus(); }
+  }
+  MV.sportsMini = function () {
+    if (MV.isKids && MV.isKids()) return '';
+    setTimeout(refresh, 50);
+    return '<section class="vtile vsport" id="sportsMini" aria-label="Deportes de hoy">' + miniHtml() + '</section>';
+  };
+  MV.ACT.sportsMini = function (d) { var n = DATA.events.length; if (!n) return; SPI = (SPI + (+d || 1) + n) % n; miniPaint(); };
   function refresh() {
     fetchAll().then(function () {
+      miniPaint();
       var box = document.getElementById('sportsRow'); if (!box) return;
       var html = rowHtml(); if (box.innerHTML === html) return;
       var a = document.activeElement, fid = a && box.contains(a) ? a.getAttribute('data-fid') : '';
@@ -113,6 +145,6 @@
       if (fid) { var b = box.querySelector('[data-fid="' + fid + '"]'); if (b) b.focus(); }
     });
   }
-  setInterval(function () { if (document.getElementById('sportsRow')) { DATA.ts = 0; refresh(); } }, 60e3);
+  setInterval(function () { if (document.getElementById('sportsRow') || document.getElementById('sportsMini')) { DATA.ts = 0; refresh(); } }, 60e3);
   MV.ACT.sportFind = function (q) { if (MV.remoteText) MV.remoteText(q); };
 })();

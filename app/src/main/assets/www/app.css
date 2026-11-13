@@ -1100,3 +1100,47 @@ html[data-theme="gris"] .dialog, html[data-theme="gris"] .dialog.glass { backgro
   #related .card.poster .th { height: 114px; }
   #related .card .meta { display: none; }
 }
+
+/* ---------- Inicio: deportes (uno a la vez) y reloj digital con clima ---------- */
+.vmain { grid-template-columns: minmax(0, 1fr) 360px; }
+.vtiles { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); align-items: stretch; }
+.vtiles .vtile { height: auto; min-height: 150px; align-items: stretch; justify-content: flex-start; gap: 0; padding: 10px 12px; text-align: left; }
+.vsport { display: flex; flex-direction: column; }
+.vsm-main { flex: 1; display: flex; flex-direction: column; gap: 5px; border: 0; background: transparent; color: var(--text); text-align: left; padding: 2px; border-radius: 12px; min-width: 0; }
+.vsm-h { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.vsm-h small { font: 600 11px var(--ui); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vsm-b { flex: none; height: 18px; padding: 0 7px; border-radius: 9px; background: rgba(255,255,255,.14); font: 800 9.5px var(--ui); letter-spacing: .06em; display: inline-flex; align-items: center; gap: 4px; }
+.vsm-b.live { background: #DC2626; color: #fff; }
+.vsm-b.live i { width: 5px; height: 5px; border-radius: 50%; background: #fff; animation: pulse 1.6s infinite; }
+.vsm-t { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.vsm-t img, .vsm-t i { width: 20px; height: 20px; flex: none; object-fit: contain; }
+.vsm-t b { flex: 1; min-width: 0; font: 700 13px var(--ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vsm-t em { font: 800 14px var(--ui); font-style: normal; font-variant-numeric: tabular-nums; }
+.vsm-l { font: 500 11px var(--ui); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vsm-nav { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 4px; }
+.vsm-nav small { font: 600 10.5px var(--ui); color: var(--muted); font-variant-numeric: tabular-nums; }
+.vsm-arr { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: rgba(255,255,255,.08); color: var(--text); display: flex; align-items: center; justify-content: center; padding: 0; }
+.vsm-arr svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.vsm-empty { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+.vsm-empty b { font: 700 13px var(--ui); } .vsm-empty span { font: 500 11px var(--ui); color: var(--muted); }
+.vclock { display: flex; flex-direction: column; }
+.vclock .dg { display: flex; align-items: baseline; gap: 5px; }
+.vclock .dg b { font: 600 34px/1 var(--ui); letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+.vclock .dg span { font: 700 12px var(--ui); color: var(--muted); }
+.vclock .dd { font: 500 11px var(--ui); color: var(--muted); margin-top: 3px; }
+.vclock .wx { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 2px 8px; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--line); }
+.vclock .wxi svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; display: block; }
+.vclock .wxt { display: flex; flex-direction: column; min-width: 0; }
+.vclock .wxt b { font: 700 19px/1.1 var(--ui); }
+.vclock .wxt span { font: 500 10.5px var(--ui); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vclock .wxs { grid-column: 1 / -1; font: 500 10.5px/1.35 var(--ui); color: var(--muted); }
+/* Continuar viendo más pequeño */
+.vcont { padding: 10px 14px; gap: 4px; }
+.vcont .hd b { font-size: 13px; } .vcont .hd span { font-size: 11px; }
+.vring { width: 92px; height: 92px; }
+.vring .rc b { font-size: 21px; }
+.vcont .vrb { width: 34px; height: 34px; } .vcont .vrb svg { width: 15px; height: 15px; }
+.vcont .left { font-size: 11px; }
+@media (max-width: 1100px) { .vmain { grid-template-columns: minmax(0, 1fr) 320px; } .vring { width: 84px; height: 84px; } }
+@media (max-width: 760px) { .vmain { grid-template-columns: minmax(0, 1fr); } .vtiles .vtile { min-height: 140px; } }
+html.lite .vsm-b.live i { animation: none; }
