@@ -139,7 +139,10 @@
 
   /** Catálogos del addon → películas y series de MiVibra (hasta 300 por catálogo). */
   var TYH = MV._stTyHint = {};
-  MV.buildFromStremio = function (list) {
+  MV.buildFromStremio = function (list, deep) {
+    // Rápida: ~500 por catálogo. Completa (en segundo plano): sigue pidiendo páginas hasta que el addon no tenga más.
+    // Los topes son los mismos en todos los equipos, así el celular y la TV muestran lo mismo.
+    var LIM = deep ? { cat: 3000, pages: 160, genres: 60, cats: 160, total: 30000 } : { cat: 500, pages: 25, genres: 12, cats: 90, total: 8000 };
     var b = base(list.url);
     return MV.stremioManifest(list.url).then(function (man) {
       list.man = { name: man.name, resources: man.resources, types: man.types, idPrefixes: man.idPrefixes, logo: man.logo || '' };
@@ -152,11 +155,11 @@
         if (!req.length) { cats.push(c); return; }
         if (req.length === 1 && req[0] === 'genre') {
           var g = ((c.extra || []).filter(function (e) { return e && e.name === 'genre'; })[0] || {}).options || c.genres || [];
-          g.slice(0, 12).forEach(function (o) { byGenre.push(Object.assign({}, c, { _genre: o, name: (c.name ? c.name + ' · ' : '') + o })); });
+          g.slice(0, LIM.genres).forEach(function (o) { byGenre.push(Object.assign({}, c, { _genre: o, name: (c.name ? c.name + ' · ' : '') + o })); });
         }
       });
       // Primero todos los catálogos normales (Netflix, Apple TV+, populares…) y después los que se piden por género
-      cats = cats.concat(byGenre).slice(0, 90);
+      cats = cats.concat(byGenre).slice(0, LIM.cats);
       var out = [], seen = {}, perCat = [], failedCats = [];
       // De a 6 catálogos a la vez (con muchos a la vez algunos servidores cortan)
       var queue = cats.map(function (c, i) { return Object.assign({ _i: i }, c); }), workers = [];
@@ -178,7 +181,7 @@
             // Muchos addons (como TMDB) aceptan "skip" aunque no lo declaren: se intenta igual mientras sigan llegando títulos nuevos
             total += metas.length;
             // Tope por catálogo (~500); el mismo en todos los equipos para que se vea igual en el celular y en la TV
-            if (metas.length >= (canSkip ? 1 : 10) && n < 25 && skip + metas.length < 500) return page(skip + metas.length, n + 1);
+            if (metas.length >= (canSkip ? 1 : 10) && n < LIM.pages && skip + metas.length < LIM.cat) return page(skip + metas.length, n + 1);
           });
         }
         return page(0, 1).then(function () {
@@ -191,7 +194,7 @@
         cats.forEach(function (c, ci) {
           (perCat[ci] || []).forEach(function (metas) {
             metas.forEach(function (m) {
-              if (out.length >= 8000) return;
+              if (out.length >= LIM.total) return;
               if (!m || !m.id || seen[c.type + m.id]) return; seen[c.type + m.id] = 1;
               var year = String(m.releaseInfo || m.year || '').slice(0, 4);
               var t = m.type === 'movie' || m.type === 'series' ? m.type : /^(series|anime|tv ?shows?|shows?)$/i.test(c.type) ? 'series' : 'movie';

@@ -1108,7 +1108,9 @@
   // ---------- Carga y combinación de todas las listas ----------
   function retag(o) { if (o.type === 'book') return o; try { return tags(o); } catch (e) { return o; } }
   var ST_V = 6, ST_SESSION = {}; // sube cuando cambia la forma de leer los addons (fuerza recargarlos)
-  function loadList(list, force) {
+  function loadList(list, force, bg) {
+    // En segundo plano los addons se leen completos (todas las páginas de cada catálogo); al abrir, rápido
+    var deep = !!bg && list.type === 'stremio' && P.stDeep !== false;
     var ck = 'list:' + list.id;
     return MV.idbGet(ck).then(function (cached) {
       // Las páginas web se actualizan cada hora (tus series nuevas aparecen solas); lo demás cada 12 horas
@@ -1118,6 +1120,8 @@
       // "Actualizar addons al abrir la app": la primera carga de cada sesión se pide de nuevo
       if (fresh && (list.type === 'stremio' || list.type === 'mvplugin') && P.stAutoRefresh && !ST_SESSION[list.id]) fresh = false;
       if (list.type === 'stremio' || list.type === 'mvplugin') ST_SESSION[list.id] = 1;
+      // Addon guardado solo con la carga rápida: en segundo plano se completa con todo su catálogo
+      if (fresh && deep && !cached.deep) fresh = false;
       // Lo guardado se vuelve a clasificar con las reglas actuales (+18, infantil, géneros, sin emojis)
       if (cached && !force && fresh) return cached.items.map(retag);
       var job;
@@ -1128,7 +1132,7 @@
       else if (list.type === 'web') job = buildFromWeb(list);
       else if (list.type === 'fb') job = buildFromFirebase(list);
       else if (list.type === 'mvplugin') job = MV.buildFromMvPlugin(list).then(function (arr) { return arr.map(retag); });
-      else if (list.type === 'stremio') job = MV.buildFromStremio(list).then(function (arr) {
+      else if (list.type === 'stremio') job = MV.buildFromStremio(list, deep).then(function (arr) {
         // Si algún catálogo del addon no respondió esta vez, se conserva lo que traía antes (así no desaparece y vuelve a aparecer)
         var failed = list._stFailed || [];
         var old = (cached && cached.items) || [];
@@ -1148,7 +1152,7 @@
         list.count = items.length; list.updated = Date.now(); list.error = '';
         // Para borrar listas vacías sin equivocarse: se recuerda si alguna vez trajo contenido y cuántas veces seguidas llegó vacía
         if (items.length) { list.hadItems = true; list.zeroLoads = 0; } else list.zeroLoads = (list.zeroLoads || 0) + 1;
-        MV.idbSet(ck, { ts: Date.now(), v: 8, sv: ST_V, items: items }); listStamp(list.id);
+        MV.idbSet(ck, { ts: Date.now(), v: 8, sv: ST_V, items: items, deep: deep }); listStamp(list.id);
         return items;
       }).catch(function (e) {
         list.error = e.message || 'Error';
@@ -1189,6 +1193,11 @@
       S.loading = false; MV.emit('catalog');
       MV.loadEpg(false);
       setTimeout(function () { MV.checkDupes(false); }, 4000);
+      // Después de la carga rápida, los addons se completan en segundo plano con todo su catálogo
+      if (P.stDeep !== false) setTimeout(function () {
+        var idx = lists.map(function (l, i) { return l.type === 'stremio' ? i : -1; }).filter(function (i) { return i >= 0 && lastAll === all; });
+        if (idx.length) refreshInBackground(lists, idx);
+      }, 30000);
     });
   };
 
@@ -1216,7 +1225,7 @@
             setTimeout(function () { MV.checkDupes(false); }, 4000);
             var stale = lists.map(function (l, i) {
               var c = caches[i], age = l.type === 'web' || l.type === 'fb' ? 3600e3 : 12 * 3600e3;
-              return !c || c.ts < Date.now() - age || (P.stAutoRefresh && (l.type === 'stremio' || l.type === 'mvplugin')) ? i : -1;
+              return !c || c.ts < Date.now() - age || (P.stAutoRefresh && (l.type === 'stremio' || l.type === 'mvplugin')) || (l.type === 'stremio' && P.stDeep !== false && !c.deep) ? i : -1;
             }).filter(function (i) { return i >= 0; });
             if (stale.length) refreshInBackground(lists, stale);
           });
@@ -1254,7 +1263,7 @@
     function next() {
       if (k >= idxs.length) return Promise.resolve();
       var i = idxs[k++], l = lists[i];
-      return loadList(l, false).then(function (items) {
+      return loadList(l, false, true).then(function (items) {
         if (lastAll && lastAll[i] !== undefined && items && items.length) { lastAll[i] = items; changed = true; }
       }).catch(function () {}).then(next);
     }

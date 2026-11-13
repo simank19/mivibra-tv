@@ -2227,6 +2227,7 @@
           '<button class="iconbtn f" data-act="listDelete" data-arg="' + l.id + '" aria-label="Eliminar">' + IC.trash + '</button></div>';
       }).join('') : '<p class="muted">' + (provBlock ? 'Aún no has agregado listas propias.' : 'No has agregado listas.') + '</p>') +
       '<div class="line"><div class="t"><b>Elegir de dónde reproducir</b><span>Antes de ver una película o capítulo muestra la lista de enlaces y fuentes para escoger (apagado: arranca solo con el mejor).</span></div><button class="toggle f' + (P.askSource !== false ? ' on' : '') + '" data-act="askSrcToggle" aria-label="Elegir de dónde reproducir"></button></div>' +
+      '<div class="line"><div class="t"><b>Cargar el catálogo completo de los addons</b><span>Después de abrir, sigue pidiendo en segundo plano todas las páginas de cada catálogo (anime, películas, series…) hasta traerlo todo. Apágalo si tu equipo va lento.</span></div><button class="toggle f' + (P.stDeep !== false ? ' on' : '') + '" data-act="stDeepToggle"></button></div>' +
       '<div class="line"><div class="t"><b>Actualizar addons al abrir la app</b><span>Vuelve a pedir los catálogos de tus addons cada vez que abres MiVibra (si está apagado, se guardan 12 horas).</span></div><button class="toggle f' + (P.stAutoRefresh ? ' on' : '') + '" data-act="stAutoToggle" aria-label="Actualizar addons al abrir la app"></button></div>' +
       '<div class="line"><div class="t"><b>Actualizar addons ahora</b><span>Vuelve a cargar todos los addons y plugins (catálogos nuevos, cambios de configuración).</span></div><button class="btn ghost f" data-act="stRefreshNow">Actualizar</button></div>' +
       (function () {
@@ -2938,6 +2939,11 @@
     showHidden: function () { MV._showHidden = !MV._showHidden; MV.rerender(); },
     srcPick: function (i) { if (MV._srcPick) MV._srcPick(i); },
     askSrcToggle: function (_, el) { P.askSource = P.askSource === false; MV.savePrefs(); if (el) el.classList.toggle('on', P.askSource !== false); MV.toast(P.askSource !== false ? 'Antes de reproducir podrás elegir la fuente' : 'Se reproducirá solo con el mejor enlace'); },
+    stDeepToggle: function (_, el) {
+      P.stDeep = P.stDeep === false; MV.savePrefs(); if (el) el.classList.toggle('on', P.stDeep !== false);
+      MV.toast(P.stDeep !== false ? 'Los addons se completarán en segundo plano (puede tardar unos minutos)' : 'Los addons cargarán solo lo principal');
+      if (P.stDeep !== false && MV.startCatalog) setTimeout(function () { MV.startCatalog(); }, 500);
+    },
     stAutoToggle: function (_, el) { P.stAutoRefresh = !P.stAutoRefresh; MV.savePrefs(); if (el) el.classList.toggle('on', P.stAutoRefresh); MV.toast(P.stAutoRefresh ? 'Los addons se actualizarán al abrir la app' : 'Los addons se guardan 12 horas'); },
     stRefreshNow: function () {
       MV.toast('Actualizando tus addons…', 3000);
