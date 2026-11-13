@@ -11,6 +11,8 @@ import android.os.Looper
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
+import android.view.GestureDetector
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
@@ -104,6 +106,7 @@ class PlayerActivity : ComponentActivity() {
         view.controllerAutoShow = true
         view.setKeepContentOnPlayerReset(true)
         root.addView(view, FrameLayout.LayoutParams(-1, -1))
+        setupTouch()
 
         info = TextView(this).apply {
             setTextColor(Color.WHITE)
@@ -167,6 +170,80 @@ class PlayerActivity : ComponentActivity() {
 
         createPlayer()
         playIndex(index, req.optLong("startMs", 0))
+    }
+
+    // ---------- Controles táctiles (celular y tablet) ----------
+    // Un toque: pausa o reproduce. Doble toque a la derecha: +30 s; a la izquierda: -30 s.
+    // Deslizar arriba/abajo en la mitad izquierda: brillo; en la mitad derecha: volumen.
+    private lateinit var hud: TextView
+    private var hudHide: Runnable? = null
+    private fun showHud(text: String) {
+        hud.text = text; hud.visibility = View.VISIBLE
+        hudHide?.let { ui.removeCallbacks(it) }
+        hudHide = Runnable { hud.visibility = View.GONE }.also { ui.postDelayed(it, 900) }
+    }
+    private fun setupTouch() {
+        hud = TextView(this).apply {
+            setTextColor(Color.WHITE); setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f); typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER; setPadding(dp(22), dp(12), dp(22), dp(12)); visibility = View.GONE
+            background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(18).toFloat(); setColor(0xB30D0C0B.toInt()) }
+        }
+        root.addView(hud, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
+        if (!packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TOUCHSCREEN)) return
+        val audio = getSystemService(AUDIO_SERVICE) as android.media.AudioManager
+        val maxVol = audio.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+        var mode = 0            // 0 = nada, 1 = brillo, 2 = volumen
+        var startVal = 0f
+        var startY = 0f
+        val gd = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDown(e: MotionEvent): Boolean { mode = 0; startY = e.y; return true }
+            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                val p = player ?: return true
+                if (p.isPlaying) { p.pause(); showHud("⏸  Pausa") } else { p.play(); showHud("▶  Reproducir") }
+                view.showController()
+                return true
+            }
+            override fun onDoubleTap(e: MotionEvent): Boolean {
+                val p = player ?: return true
+                if (live || !p.isCurrentMediaItemSeekable) { showHud("En vivo: no se puede adelantar"); return true }
+                val right = e.x > view.width / 2f
+                val d = p.duration
+                var to = p.currentPosition + if (right) 30_000 else -30_000
+                if (to < 0) to = 0
+                if (d > 0 && to > d - 1000) to = d - 1000
+                p.seekTo(to)
+                showHud(if (right) "+30 s  ⏩" else "⏪  -30 s")
+                return true
+            }
+            override fun onScroll(e1: MotionEvent?, e2: MotionEvent, dx: Float, dy: Float): Boolean {
+                val s = e1 ?: return false
+                val totalY = s.y - e2.y
+                if (mode == 0) {
+                    // Solo gestos verticales y lejos de los bordes de arriba y abajo (ahí están las barras del sistema)
+                    if (kotlin.math.abs(totalY) < dp(18) || kotlin.math.abs(e2.x - s.x) > kotlin.math.abs(totalY)) return false
+                    if (s.y < dp(40) || s.y > view.height - dp(40)) return false
+                    mode = if (s.x < view.width / 2f) 1 else 2
+                    startY = e2.y
+                    startVal = if (mode == 1) {
+                        val b = window.attributes.screenBrightness
+                        if (b >= 0) b else try { android.provider.Settings.System.getInt(contentResolver, android.provider.Settings.System.SCREEN_BRIGHTNESS) / 255f } catch (_: Exception) { 0.5f }
+                    } else audio.getStreamVolume(android.media.AudioManager.STREAM_MUSIC).toFloat() / maxVol
+                }
+                val frac = (startY - e2.y) / (view.height * 0.7f)
+                val v = (startVal + frac).coerceIn(0f, 1f)
+                if (mode == 1) {
+                    val lp = window.attributes; lp.screenBrightness = v.coerceAtLeast(0.01f); window.attributes = lp
+                    showHud("☀  Brillo " + (v * 100).toInt() + " %")
+                } else if (mode == 2) {
+                    val vol = Math.round(v * maxVol)
+                    audio.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, vol, 0)
+                    showHud((if (vol == 0) "🔇" else "🔊") + "  Volumen " + (vol * 100 / maxVol) + " %")
+                }
+                return true
+            }
+        })
+        // Los botones de la barra de control siguen funcionando: este manejador solo recibe los toques que no son de un botón
+        view.setOnTouchListener { _, ev -> gd.onTouchEvent(ev); true }
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
