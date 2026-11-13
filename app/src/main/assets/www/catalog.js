@@ -241,6 +241,8 @@
     o.novelaAuto = o.novela && !nvCat;
     o.anime = RX.anime.test(gs) && !(o.st && o.kdrama && !/^Anime/.test(o.group || ''));
     o.platform = D.platformOf(o.group || '') || (o.st && o.src ? D.platformOf(o.src) : '') || (o.type !== 'live' ? D.platformOf(o.name || '') : '');
+    // Todo el anime sin plataforma va a Crunchyroll
+    if (o.anime && !o.platform && o.type !== 'live') o.platform = 'crunchyroll';
     if (o.platform === 'viki' && !o.anime) o.kdrama = o.kdrama || /drama|corea|korea/i.test(g);
     // Documental solo si la categoría lo dice claramente (no "Ciencia ficción", "Historia" o "Animales fantásticos")
     o.doc = (RX.doc.test(o.group || '') && !RX.notDoc.test(o.group || '')) || /\bdocumental\b|\bdocumentary\b/i.test(o.name || '');

@@ -1189,7 +1189,8 @@
   // ---------- Plataformas (separadores por servicio, según las categorías de tus listas) ----------
   function platformCounts() {
     var m = {};
-    MV.visible(S.items).forEach(function (i) { if (i.platform && i.type !== 'live') m[i.platform] = (m[i.platform] || 0) + 1; });
+    // Crunchyroll reúne todo el anime (también el que viene marcado de otra plataforma)
+    MV.visible(S.items).forEach(function (i) { if (i.type === 'live') return; if (i.platform) m[i.platform] = (m[i.platform] || 0) + 1; if (i.anime && i.platform !== 'crunchyroll') m.crunchyroll = (m.crunchyroll || 0) + 1; });
     return D.PLATFORMS.filter(function (p) { return m[p.id]; }).map(function (p) { return { id: p.id, name: p.name, count: m[p.id] }; });
   }
   // Logos de las plataformas (colección Logos Apps, MIT): fondo de la tarjeta y si el logo va en sus colores o en blanco
@@ -1222,7 +1223,7 @@
   VIEWS.platforms = function (id) {
     if (!S.lists.length) return top('Plataformas') + emptyLists();
     if (id) {
-      var items = S.items.filter(function (i) { return i.platform === id && i.type !== 'live'; });
+      var items = S.items.filter(function (i) { return (i.platform === id || (id === 'crunchyroll' && i.anime)) && i.type !== 'live'; });
       return '<div class="top"><button class="iconbtn f" data-act="back" aria-label="Volver">' + IC.back + '</button></div>' + catalogView('pl-' + id, D.platformName(id), items);
     }
     var list = platformCounts();
