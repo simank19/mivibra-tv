@@ -3,8 +3,9 @@
 (function () {
   'use strict';
   var MV = window.MV = window.MV || {};
-  var CONS = ['nes', 'snes', 'n64', 'gba', 'psx', 'psp', 'md', 'dc', 'neogeo', 'arcade', 'gb', 'nds'];
-  var CARDS = JSON.parse('"<div class=\\"sec\\" style=\\"--c:#E0447C;--i:0\\"><div class=\\"si\\"><svg viewBox=\\"0 0 24 24\\" fill=\\"none\\" stroke=\\"currentColor\\" stroke-width=\\"1.7\\" stroke-linecap=\\"round\\" stroke-linejoin=\\"round\\"><rect x=\\"3\\" y=\\"7\\" width=\\"18\\" height=\\"13\\" rx=\\"2\\"/><path d=\\"M8 3l4 4 4-4\\"/></svg></div><b>TV en vivo</b></div><div class=\\"sec\\" style=\\"--c:#A879FF;--i:1\\"><div class=\\"si\\"><svg viewBox=\\"0 0 24 24\\" fill=\\"none\\" stroke=\\"currentColor\\" stroke-width=\\"1.7\\" stroke-linecap=\\"round\\" stroke-linejoin=\\"round\\"><path d=\\"M4 9h16v11H4z\\"/><path d=\\"M4 9l2-5 4 1-2 4M10 5l4 1-2 3M14 6l4 1-1 2\\"/></svg></div><b>Pel\\u00edculas</b></div><div class=\\"sec\\" style=\\"--c:#4C8DFF;--i:2\\"><div class=\\"si\\"><svg viewBox=\\"0 0 24 24\\" fill=\\"none\\" stroke=\\"currentColor\\" stroke-width=\\"1.7\\" stroke-linecap=\\"round\\" stroke-linejoin=\\"round\\"><rect x=\\"3\\" y=\\"5\\" width=\\"18\\" height=\\"12\\" rx=\\"2\\"/><path d=\\"M8 21h8M10 9l5 3-5 3z\\"/></svg></div><b>Series</b></div><div class=\\"sec\\" style=\\"--c:#FF4D4D;--i:3\\"><div class=\\"si\\"><svg viewBox=\\"0 0 24 24\\" fill=\\"none\\" stroke=\\"currentColor\\" stroke-width=\\"1.7\\" stroke-linecap=\\"round\\" stroke-linejoin=\\"round\\"><rect x=\\"2.5\\" y=\\"5\\" width=\\"19\\" height=\\"14\\" rx=\\"4\\"/><path d=\\"M10 9l5 3-5 3z\\" fill=\\"currentColor\\"/></svg></div><b>YouTube</b></div><div class=\\"sec\\" style=\\"--c:#22C7A9;--i:4\\"><div class=\\"si\\"><svg viewBox=\\"0 0 24 24\\" fill=\\"none\\" stroke=\\"currentColor\\" stroke-width=\\"1.7\\" stroke-linecap=\\"round\\" stroke-linejoin=\\"round\\"><path d=\\"M9 18V5l11-2v13\\"/><circle cx=\\"6\\" cy=\\"18\\" r=\\"3\\"/><circle cx=\\"17\\" cy=\\"16\\" r=\\"3\\"/></svg></div><b>M\\u00fasica</b></div><div class=\\"sec\\" style=\\"--c:#FF9A4D;--i:5\\"><div class=\\"si\\"><svg viewBox=\\"0 0 24 24\\" fill=\\"none\\" stroke=\\"currentColor\\" stroke-width=\\"1.7\\" stroke-linecap=\\"round\\" stroke-linejoin=\\"round\\"><path d=\\"M6 9h12a4 4 0 0 1 4 4v1a3 3 0 0 1-5 2l-2-2H9l-2 2a3 3 0 0 1-5-2v-1a4 4 0 0 1 4-4z\\"/><path d=\\"M8 11v3M6.5 12.5h3\\"/><circle cx=\\"16\\" cy=\\"12\\" r=\\".8\\" fill=\\"currentColor\\"/><circle cx=\\"18\\" cy=\\"14\\" r=\\".8\\" fill=\\"currentColor\\"/></svg></div><b>Juegos</b></div><div class=\\"sec\\" style=\\"--c:#53FC18;--i:6\\"><div class=\\"si\\"><svg viewBox=\\"0 0 24 24\\" fill=\\"none\\" stroke=\\"currentColor\\" stroke-width=\\"1.7\\" stroke-linecap=\\"round\\" stroke-linejoin=\\"round\\"><rect x=\\"3\\" y=\\"6\\" width=\\"13\\" height=\\"12\\" rx=\\"2\\"/><path d=\\"M16 10l5-3v10l-5-3\\"/><circle cx=\\"7\\" cy=\\"10\\" r=\\"1.2\\" fill=\\"currentColor\\"/></svg></div><b>Kick</b></div><div class=\\"sec\\" style=\\"--c:#9146FF;--i:7\\"><div class=\\"si\\"><svg viewBox=\\"0 0 24 24\\" fill=\\"none\\" stroke=\\"currentColor\\" stroke-width=\\"1.7\\" stroke-linecap=\\"round\\" stroke-linejoin=\\"round\\"><circle cx=\\"12\\" cy=\\"12\\" r=\\"2\\" fill=\\"currentColor\\"/><path d=\\"M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8\\"/></svg></div><b>Twitch</b></div><div class=\\"sec\\" style=\\"--c:#F5C842;--i:8\\"><div class=\\"si\\"><svg viewBox=\\"0 0 24 24\\" fill=\\"none\\" stroke=\\"currentColor\\" stroke-width=\\"1.7\\" stroke-linecap=\\"round\\" stroke-linejoin=\\"round\\"><circle cx=\\"12\\" cy=\\"12\\" r=\\"9\\"/><path d=\\"M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18\\"/></svg></div><b>Navegador</b></div><div class=\\"sec\\" style=\\"--c:#9AA5B1;--i:9\\"><div class=\\"si\\"><svg viewBox=\\"0 0 24 24\\" fill=\\"none\\" stroke=\\"currentColor\\" stroke-width=\\"1.7\\" stroke-linecap=\\"round\\" stroke-linejoin=\\"round\\"><rect x=\\"7\\" y=\\"2.5\\" width=\\"10\\" height=\\"19\\" rx=\\"2\\"/><path d=\\"M11 18h2\\"/></svg></div><b>Celular como mando</b></div>"');
+  var BRANDS = [['netflix.svg', 'Netflix'], ['prime.svg', 'Prime Video'], ['disney.svg', 'Disney+'], ['max.svg', 'Max'], ['crunchyroll.svg', 'Crunchyroll'], ['youtube.svg', 'YouTube'], ['twitch.svg', 'Twitch'], ['kick.svg', 'Kick'], ['vix.png', 'ViX'], ['pluto.png', 'Pluto TV']];
+  var SECS = ['TV en vivo', 'Películas', 'Series', 'Anime', 'Música', 'Lectura'];
+  var LANES = [['snes', 'n64', 'gba', 'nds', 'wii', 'gc', 'gb', 'nes'], ['psx', 'ps2', 'psp', 'md', 'saturn', 'dc', 'neogeo', 'arcade'], ['wii', 'gc', 'gb', 'nes', 'snes', 'n64', 'gba', 'nds'], ['dc', 'neogeo', 'arcade', 'psx', 'ps2', 'psp', 'md', 'saturn']];
   var el = null, ac = null, sound = true, endT = null, done = null;
   function mode() { var p = MV.load('prefs', {}) || {}; return p.introMode || 'daily'; }
   function soundOn() { var p = MV.load('prefs', {}) || {}; return p.introSound !== false; }
@@ -125,14 +126,22 @@
     if (!force && !shouldShow()) { if (cb) cb(); return; }
     done = cb || null;
     sound = soundOn();
-    var orb = CONS.map(function (c, i) { return '<img class="cons" style="--i:' + i + ';--n:' + CONS.length + '" src="img/consoles/' + c + '.png" alt="">'; }).join('');
-    el = document.createElement('div'); el.id = 'intro';
-    el.innerHTML = '<div class="layer s1"><div class="ring"></div><div class="logo"><img src="img/isotipo.svg" alt=""></div></div>' +
-      '<div class="layer s2"><h2>Todo en <span>un solo lugar</span></h2><div class="row">' + CARDS + '</div></div>' +
-      '<div class="layer s3"><div class="center">Tus juegos<small>De cualquier consola, en cualquier equipo</small></div>' + orb + '</div>' +
-      '<div class="layer s4"><div class="logo"><img src="img/isotipo.svg" alt=""></div><h1>MiVibra <span>TV</span></h1><p>Tu entretenimiento, a tu manera</p></div>' +
-      '<div class="skip"><i>OK</i>Saltar</div>';
-    document.body.appendChild(el);
+    var port = window.innerHeight > window.innerWidth;
+    var W = port ? 390 : 1280, H = port ? 844 : 720;
+    var lanes = LANES.slice(0, port ? 4 : 2).map(function (l, n) { return '<div class="iv-lane ' + (n % 2 ? 'iv-b' : 'iv-a') + '">' + l.map(function (c) { return '<div class="iv-cl iv-gl"><img src="img/consolelogos/c-' + c + '.webp" alt=""></div>'; }).join('') + '</div>'; }).join('');
+    el = document.createElement('div'); el.id = 'intro'; if (port) el.className = 'iv-port';
+    el.innerHTML = '<div class="iv-orb iv-o1"></div><div class="iv-orb iv-o2"></div><div class="iv-orb iv-o3"></div>' +
+      '<div class="iv-stage" style="width:' + W + 'px;height:' + H + 'px">' +
+      '<section class="iv-sc iv-s1"><div class="iv-ring"></div><div class="iv-tile iv-gl"><img src="img/isotipo.svg" alt=""></div><div class="iv-cap">MIVIBRA TV</div></section>' +
+      '<section class="iv-sc iv-s2"><h2>Todo en <span>un solo lugar</span></h2><div class="iv-grid">' +
+      BRANDS.map(function (b, i) { return '<div class="iv-pl iv-gl" style="--i:' + i + '"><img src="img/brands/' + b[0] + '" alt="' + b[1] + '"></div>'; }).join('') +
+      '</div><div class="iv-sub">' + SECS.map(function (t, i) { return '<b class="iv-gl" style="--i:' + i + '">' + t + '</b>'; }).join('') + '</div></section>' +
+      '<section class="iv-sc iv-s3"><p class="iv-big">Tus juegos</p><p class="iv-small">DE CUALQUIER CONSOLA, EN CUALQUIER EQUIPO</p>' + lanes + '</section>' +
+      '<section class="iv-sc iv-s4"><div class="iv-card iv-gl"><div class="iv-mini iv-gl"><img src="img/isotipo.svg" alt=""></div><h1>MiVibra<span>TV</span></h1><p>Tu entretenimiento, a tu manera</p><div class="iv-line"></div></div></section>' +
+      '</div><div class="iv-dots"><i class="iv-d1"><b></b></i><i class="iv-d2"><b></b></i><i class="iv-d3"><b></b></i><i class="iv-d4"><b></b></i></div>' +
+      '<div class="skip"><i class="iv-gl">OK</i>Saltar</div>';
+    var fit = function () { var st = el && el.querySelector('.iv-stage'); if (st) st.style.transform = 'translate(-50%,-50%) scale(' + Math.min(window.innerWidth / W, window.innerHeight / H) + ')'; };
+    document.body.appendChild(el); fit();
     el.addEventListener('click', finish);
     window.addEventListener('keydown', onKey, true);
     document.addEventListener('keyup', onKey, true);

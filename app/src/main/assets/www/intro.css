@@ -1,101 +1,136 @@
-/* MiVibra TV — Intro de bienvenida (animación al abrir la app). 1em = 1/96 del ancho de la pantalla. */
-#intro{position:fixed;inset:0;z-index:9999;background:#0E0D0C;overflow:hidden;font-size:calc(100vw / 96);color:#F3EFEA;font-family:var(--ui,"DM Sans",system-ui,sans-serif);transition:opacity .5s}
-#intro::before{content:"";position:absolute;inset:0;background:radial-gradient(120% 90% at 85% -10%,rgba(255,105,0,.22),transparent 55%),radial-gradient(90% 80% at -10% 110%,rgba(76,141,255,.14),transparent 55%)}
-#intro.out{opacity:0;pointer-events:none}
-#intro .logo img,#intro .logo svg{width:100%;height:100%;display:block}
-#intro{--a:#FF6900;--bg:#0E0D0C}
-#intro .layer{position:absolute;inset:0;display:grid;place-items:center;opacity:0}
-/* 1. Logo */
-#intro .s1 .logo{width:13em;height:13em;filter:drop-shadow(0 0 2.5em rgba(255,105,0,.6))}
-#intro .s1 .ring{position:absolute;width:13em;height:13em;border-radius:50%;border:.25em solid var(--a,#FF6900);opacity:0}
-#intro.play .s1{animation:i-show 2.25s 0.15s both}
-#intro.play .s1 .logo{animation:i-pop 1.65s 0.22s cubic-bezier(.16,1,.3,1) both, i-spin 2.1s 0.22s ease-out both}
-#intro.play .s1 .ring{animation:i-ring 1.65s 0.83s ease-out both}
-@keyframes i-pop{0%{transform:scale(1.9);opacity:0;filter:blur(1.2em)}55%{opacity:1;filter:blur(0)}100%{transform:scale(1);opacity:1;filter:blur(0)}}
-@keyframes i-spin{from{rotate:-24deg}to{rotate:0deg}}
-@keyframes i-ring{from{transform:scale(.9);opacity:.9}to{transform:scale(2.6);opacity:0}}
-@keyframes i-show{0%{opacity:0}10%{opacity:1}85%{opacity:1}100%{opacity:0}}
-/* 2. Secciones */
-#intro .s2{align-content:center;gap:2.4em}
-#intro .s2 h2{font-family:var(--brand,"Bricolage Grotesque");font-weight:800;font-size:2.6em;letter-spacing:-.02em;opacity:0}
-#intro .s2 h2 span{color:var(--a,#FF6900)}
-#intro .row{display:flex;gap:1.15em;flex-wrap:wrap;justify-content:center;max-width:92em;flex-wrap:nowrap}
-#intro .sec{width:7.7em;padding:1.5em .6em 1.2em;border-radius:1.4em;background:linear-gradient(160deg,color-mix(in srgb,var(--c) 28%,#1B1916),#141210 80%);border:.12em solid color-mix(in srgb,var(--c) 55%,transparent);display:flex;flex-direction:column;align-items:center;gap:.9em;opacity:0;text-align:center}
-#intro .si{width:4.2em;height:4.2em;border-radius:1.1em;display:grid;place-items:center;background:var(--c);color:#0E0D0C;box-shadow:0 .6em 2em color-mix(in srgb,var(--c) 45%,transparent)}
-#intro .si svg{width:2.6em;height:2.6em}
-#intro .sec b{font-size:1.05em;line-height:1.15}
-#intro.play .s2{animation:i-show 4.35s 2.1s both}
-#intro.play .s2 h2{animation:i-up 0.9s 2.25s both}
-#intro.play .sec{animation:i-card 0.83s calc(2.47s + var(--i)*0.2s) cubic-bezier(.16,1,.3,1) both, i-glow 0.75s calc(4.35s + var(--i)*0.14s) both}
-@keyframes i-up{from{opacity:0;transform:translateY(1em)}to{opacity:1;transform:none}}
-@keyframes i-card{from{opacity:0;transform:perspective(40em) translateY(2.6em) rotateX(-55deg) scale(.86)}to{opacity:1;transform:perspective(40em) rotateX(0)}}
-@keyframes i-glow{50%{transform:scale(1.08);box-shadow:0 0 2.5em color-mix(in srgb,var(--c) 70%,transparent)}}
-/* 3. Consolas */
-#intro .s3 .center{font-family:var(--brand,"Bricolage Grotesque");font-weight:800;font-size:3em;text-align:center;line-height:1.05}
-#intro .s3 .center small{display:block;font:600 .38em var(--ui,"DM Sans");color:#FFB98A;letter-spacing:.14em;text-transform:uppercase;margin-top:.6em;white-space:nowrap}
-#intro .cons{position:absolute;left:50%;top:50%;width:7.5em;height:7.5em;margin:-3.75em;object-fit:contain;opacity:0;filter:drop-shadow(0 .5em 1em rgba(0,0,0,.6))}
-#intro.play .s3{animation:i-show 3.0s 6.3s both}
-#intro.play .s3 .center{animation:i-pop 1.05s 6.45s cubic-bezier(.16,1,.3,1) both}
-#intro.play .cons{animation:i-orbit 2.85s calc(6.38s + var(--i)*0.08s) cubic-bezier(.2,.9,.3,1) both}
-@keyframes i-orbit{
- 0%{opacity:0;transform:rotate(calc(var(--i)/var(--n)*360deg)) translateX(0) rotate(calc(var(--i)/var(--n)*-360deg)) scale(.3)}
- 35%{opacity:1;transform:rotate(calc(var(--i)/var(--n)*360deg + 30deg)) translateX(21em) rotate(calc(var(--i)/var(--n)*-360deg - 30deg)) scale(1)}
- 80%{opacity:1;transform:rotate(calc(var(--i)/var(--n)*360deg + 70deg)) translateX(23em) rotate(calc(var(--i)/var(--n)*-360deg - 70deg)) scale(1)}
- 100%{opacity:0;transform:rotate(calc(var(--i)/var(--n)*360deg + 90deg)) translateX(0) rotate(calc(var(--i)/var(--n)*-360deg - 90deg)) scale(.2)}}
-/* 4. Cierre */
-#intro .s4{align-content:center;gap:1.4em;justify-items:center}
-#intro .s4 .logo{width:8em;height:8em;filter:drop-shadow(0 0 2em rgba(255,105,0,.55))}
-#intro .s4 h1{font-family:var(--brand,"Bricolage Grotesque");font-weight:800;font-size:4.6em;letter-spacing:-.03em}
-#intro .s4 h1 span{color:var(--a,#FF6900)}
-#intro .s4 p{color:#CFC8C0;font-size:1.4em}
-#intro.play .s4{animation:i-fin 2.55s 9.0s both}
-#intro.play .s4 .logo{animation:i-pop 1.2s 9.07s cubic-bezier(.16,1,.3,1) both}
-#intro.play .s4 h1{animation:i-up 0.9s 9.38s both}
-#intro.play .s4 p{animation:i-up 0.9s 9.68s both}
-@keyframes i-fin{0%{opacity:0;transform:scale(.94)}12%{opacity:1;transform:none}80%{opacity:1;transform:none}100%{opacity:0;transform:scale(1.35)}}
-/* Inicio de la app (lo que aparece al final) */
-#intro .home{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:.8em;opacity:0;color:#A39C94;font-size:1.3em}
-#intro .home b{color:#F3EFEA;font:800 1.8em var(--brand,"Bricolage Grotesque")}
-#intro.play .home{animation:i-up 0.9s 11.4s both}
-#intro .skip{position:absolute;right:2.4em;bottom:2em;font-size:1.05em;color:#A39C94;display:flex;gap:.6em;align-items:center;opacity:0}
-#intro .skip i{font-style:normal;font-weight:800;font-size:.8em;padding:.2em .6em;border-radius:99em;background:rgba(255,255,255,.14);color:#F3EFEA}
-#intro.play .skip{animation:i-show 10.8s 0.6s both}
-#intro.skipped *{animation:none!important}
-#intro.skipped .home{opacity:1}
-
-/* ===== Estilo moderno: aurora en movimiento, destello sobre el logo, línea de luz y salida con zoom ===== */
-#intro::after{content:"";position:absolute;inset:-20%;background:radial-gradient(38% 34% at 30% 35%,rgba(255,105,0,.20),transparent 70%),radial-gradient(34% 30% at 72% 66%,rgba(255,60,120,.13),transparent 70%),radial-gradient(30% 28% at 60% 24%,rgba(76,141,255,.12),transparent 70%);will-change:transform}
-#intro.play::after{animation:i-aurora 11.5s ease-in-out both}
-@keyframes i-aurora{0%{transform:translate3d(-4%,3%,0) scale(1) rotate(0)}50%{transform:translate3d(4%,-3%,0) scale(1.18) rotate(8deg)}100%{transform:translate3d(-2%,-5%,0) scale(1.3) rotate(-6deg)}}
-#intro .layer{z-index:1}
-#intro .logo{position:relative;overflow:hidden;border-radius:22%}
-#intro .logo::after{content:"";position:absolute;top:-20%;bottom:-20%;width:38%;left:-60%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.55),transparent);transform:skewX(-18deg)}
-#intro.play .s1 .logo::after{animation:i-sweep .9s 1.15s ease-out both}
-#intro.play .s4 .logo::after{animation:i-sweep .9s 9.75s ease-out both}
-@keyframes i-sweep{to{left:130%}}
-#intro .s1 .ring{box-shadow:0 0 0 .1em rgba(255,105,0,.35)}
-#intro .s1::before{content:"";position:absolute;width:13em;height:13em;border-radius:50%;border:.14em solid #FFB98A;opacity:0}
-#intro.play .s1::before{animation:i-ring 1.5s 1.1s ease-out both}
-#intro .s4 h1{position:relative}
-#intro .s4 h1::after{content:"";position:absolute;left:50%;bottom:-.14em;height:.07em;width:0;border-radius:99em;background:linear-gradient(90deg,transparent,#FF6900,transparent);transform:translateX(-50%)}
-#intro.play .s4 h1::after{animation:i-line 1s 9.7s cubic-bezier(.16,1,.3,1) both}
-@keyframes i-line{to{width:110%}}
-#intro .sec{backface-visibility:hidden}
-#intro.out{transition:opacity .5s,transform .5s;transform:scale(1.04)}
-html.lite #intro::after{animation:none!important}
-html.lite #intro *{filter:none!important}
-
-/* TV: versión liviana (sin desenfoques, sin fondo animado ni giros 3D) para que no se trabe */
-html.tv #intro::after{display:none}
-html.tv #intro .logo::after,html.tv #intro .s1::before{display:none}
-@keyframes i-pop-tv{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
-@keyframes i-card-tv{from{opacity:0;transform:translateY(2em)}to{opacity:1;transform:none}}
-html.tv #intro.play .s1 .logo{animation:i-pop-tv 1.2s .22s ease-out both}
-html.tv #intro.play .s4 .logo{animation:i-pop-tv 1s 9.07s ease-out both}
-html.tv #intro.play .s3 .center{animation:i-pop-tv 1s 6.45s ease-out both}
-html.tv #intro.play .sec{animation:i-card-tv .6s calc(2.47s + var(--i)*0.2s) ease-out both}
-html.tv #intro .logo,html.tv #intro .cons{filter:none!important}
-html.tv #intro.out{transform:none}
-
-/* Sin recuadro de foco sobre la intro */
+/* MiVibra TV — Intro de bienvenida en vidrio gris con logos (~11,3 s). Los tiempos van sincronizados con la banda sonora.
+   El escenario mide 1280×720 (o 390×844 en vertical) y se escala a la pantalla. */
+#intro{position:fixed;inset:0;z-index:9999;overflow:hidden;color:#fff;font-family:var(--ui,"DM Sans",system-ui,sans-serif);
+  background:radial-gradient(120% 90% at 30% 0%,#6E7276 0%,#54585C 40%,#3E4144 100%);transition:opacity .5s,transform .5s}
+#intro *{box-sizing:border-box}
+#intro.out{opacity:0;pointer-events:none;transform:scale(1.04)}
 #intro,#intro:focus,#intro:focus-visible{outline:none!important;box-shadow:none!important}
+/* Luces de color detrás del vidrio */
+#intro .iv-orb{position:absolute;border-radius:50%;filter:blur(60px);opacity:.55;will-change:transform}
+#intro .iv-o1{width:42vmax;height:42vmax;left:-10vmax;top:-14vmax;background:#FF8A3D;animation:iv-drift 11.5s ease-in-out both}
+#intro .iv-o2{width:36vmax;height:36vmax;right:-10vmax;bottom:-14vmax;background:#7AA7FF;animation:iv-drift 11.5s ease-in-out reverse both}
+#intro .iv-o3{width:24vmax;height:24vmax;left:52%;top:40%;background:#E8EAEC;opacity:.22}
+@keyframes iv-drift{to{transform:translate(6vmax,3vmax) scale(1.15)}}
+#intro .iv-stage{position:absolute;left:50%;top:50%;transform-origin:center;transform:translate(-50%,-50%)}
+#intro .iv-gl{background:linear-gradient(180deg,rgba(255,255,255,.20),rgba(255,255,255,.06));border:1px solid rgba(255,255,255,.28);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 24px 60px rgba(0,0,0,.28);-webkit-backdrop-filter:blur(22px) saturate(140%);backdrop-filter:blur(22px) saturate(140%)}
+#intro .iv-sc{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:0}
+#intro img{display:block}
+@keyframes iv-show{0%{opacity:0}8%{opacity:1}88%{opacity:1}100%{opacity:0}}
+@keyframes iv-up{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+#intro.play .iv-s1{animation:iv-show 2.25s .15s both}
+#intro.play .iv-s2{animation:iv-show 4.35s 2.1s both}
+#intro.play .iv-s3{animation:iv-show 3s 6.3s both}
+#intro.play .iv-s4{animation:iv-show 2.3s 9s both}
+
+/* 1. Logo en baldosa de vidrio */
+#intro .iv-tile{width:210px;height:210px;border-radius:52px;display:grid;place-items:center;position:relative;overflow:hidden}
+#intro .iv-tile img{width:130px;height:130px}
+#intro .iv-tile::after{content:"";position:absolute;top:-30%;bottom:-30%;width:40%;left:-70%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.65),transparent);transform:skewX(-18deg)}
+#intro .iv-ring{position:absolute;width:210px;height:210px;border-radius:56px;border:2px solid rgba(255,255,255,.7);opacity:0;top:50%;left:50%;margin:-105px 0 0 -105px;margin-top:-131px}
+#intro .iv-cap{margin-top:34px;font-size:13px;font-weight:700;letter-spacing:.32em;color:#E4E6E8;opacity:0}
+#intro.play .iv-tile{animation:iv-pop 1.65s .22s cubic-bezier(.16,1,.3,1) both}
+#intro.play .iv-tile::after{animation:iv-sweep .9s 1.15s ease-out both}
+#intro.play .iv-ring{animation:iv-ring 1.6s .83s ease-out both}
+#intro.play .iv-cap{animation:iv-up .8s .7s both}
+@keyframes iv-pop{0%{transform:scale(1.6);opacity:0;filter:blur(18px)}55%{opacity:1;filter:blur(0)}100%{transform:scale(1);opacity:1;filter:blur(0)}}
+@keyframes iv-sweep{to{left:140%}}
+@keyframes iv-ring{0%{transform:scale(1);opacity:.9}100%{transform:scale(2.2);opacity:0}}
+
+/* 2. Plataformas */
+#intro h2{margin:0 0 30px;font-family:var(--brand,inherit);font-size:40px;font-weight:800;letter-spacing:-.02em;opacity:0}
+#intro h2 span{padding:2px 14px;border-radius:14px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.28)}
+#intro .iv-grid{display:grid;grid-template-columns:repeat(5,170px);gap:16px}
+#intro .iv-pl{height:92px;border-radius:22px;display:grid;place-items:center;padding:18px 22px;opacity:0}
+#intro .iv-pl img{max-width:100%;max-height:44px;object-fit:contain}
+#intro .iv-sub{margin-top:26px;display:flex;gap:10px}
+#intro .iv-sub b{padding:7px 14px;border-radius:99px;font-weight:700;font-size:13px;color:#F4F5F6;opacity:0}
+#intro.play h2{animation:iv-up .9s 2.25s both}
+#intro.play .iv-pl{animation:iv-card .8s calc(2.47s + var(--i)*.2s) cubic-bezier(.16,1,.3,1) both}
+#intro.play .iv-sub b{animation:iv-up .6s calc(4.5s + var(--i)*.09s) both}
+@keyframes iv-card{from{opacity:0;transform:translateY(26px) scale(.9)}to{opacity:1;transform:none}}
+
+/* 3. Consolas: filas que se deslizan en sentidos opuestos */
+#intro .iv-big{font-family:var(--brand,inherit);font-size:48px;font-weight:800;letter-spacing:-.02em;margin:0;opacity:0}
+#intro .iv-small{margin:6px 0 30px;font-size:13px;font-weight:700;letter-spacing:.22em;color:#E4E6E8;text-align:center}
+#intro .iv-lane{width:1500px;display:flex;gap:16px;margin:8px 0;flex:none}
+#intro .iv-cl{flex:none;width:176px;height:96px;border-radius:22px;display:grid;place-items:center;padding:16px 20px}
+#intro .iv-cl img{max-width:100%;max-height:52px;object-fit:contain;filter:drop-shadow(0 4px 10px rgba(0,0,0,.35))}
+#intro.play .iv-big{animation:iv-pop 1.05s 6.45s cubic-bezier(.16,1,.3,1) both}
+#intro.play .iv-lane.iv-a{animation:iv-la 3s 6.3s linear both}
+#intro.play .iv-lane.iv-b{animation:iv-lb 3s 6.3s linear both}
+@keyframes iv-la{from{transform:translateX(60px)}to{transform:translateX(-200px)}}
+@keyframes iv-lb{from{transform:translateX(-200px)}to{transform:translateX(60px)}}
+
+/* 4. Cierre */
+#intro .iv-card{width:620px;padding:46px 40px 40px;border-radius:40px;display:flex;flex-direction:column;align-items:center;opacity:0}
+#intro .iv-mini{width:96px;height:96px;border-radius:26px;display:grid;place-items:center;margin-bottom:22px}
+#intro .iv-mini img{width:62px;height:62px}
+#intro .iv-card h1{margin:0;font-family:var(--brand,inherit);font-size:64px;font-weight:800;letter-spacing:-.03em;line-height:1;opacity:0}
+#intro .iv-card h1 span{color:#2A2C2E;background:#F4F5F6;border-radius:16px;padding:0 14px;margin-left:8px}
+#intro .iv-card p{margin:16px 0 0;font-size:18px;color:#E4E6E8;opacity:0}
+#intro .iv-line{margin-top:22px;height:3px;width:0;border-radius:3px;background:linear-gradient(90deg,transparent,#fff,transparent)}
+#intro.play .iv-card{animation:iv-fin 2.3s 9.07s cubic-bezier(.16,1,.3,1) both}
+#intro.play .iv-card h1{animation:iv-up .9s 9.38s both}
+#intro.play .iv-card p{animation:iv-up .9s 9.68s both}
+#intro.play .iv-line{animation:iv-line 1s 9.7s cubic-bezier(.16,1,.3,1) both}
+@keyframes iv-fin{0%{opacity:0;transform:scale(.94)}20%{opacity:1;transform:none}100%{opacity:1;transform:scale(1.02)}}
+@keyframes iv-line{to{width:420px}}
+
+/* Barras de escena y saltar */
+#intro .iv-dots{position:absolute;left:28px;bottom:28px;display:flex;gap:6px;z-index:2}
+#intro .iv-dots i{width:22px;height:4px;border-radius:4px;background:rgba(255,255,255,.25);overflow:hidden}
+#intro .iv-dots b{display:block;height:100%;width:0;background:#fff}
+#intro.play .iv-d1 b{animation:iv-bar 2.1s .15s linear both}
+#intro.play .iv-d2 b{animation:iv-bar 4.2s 2.1s linear both}
+#intro.play .iv-d3 b{animation:iv-bar 2.7s 6.3s linear both}
+#intro.play .iv-d4 b{animation:iv-bar 2.3s 9s linear both}
+@keyframes iv-bar{to{width:100%}}
+#intro .skip{position:absolute;right:28px;bottom:24px;display:flex;align-items:center;gap:8px;font-size:14px;color:#E4E6E8;z-index:2;opacity:0}
+#intro .skip i{font-style:normal;font-weight:800;font-size:11px;padding:4px 9px;border-radius:99px}
+#intro.play .skip{animation:iv-show 10.8s .6s both}
+
+/* Vertical (celular / tablet de pie) */
+#intro.iv-port .iv-tile{width:150px;height:150px;border-radius:38px}
+#intro.iv-port .iv-tile img{width:92px;height:92px}
+#intro.iv-port .iv-ring{width:150px;height:150px;border-radius:40px;margin:-101px 0 0 -75px}
+#intro.iv-port .iv-cap{margin-top:26px;font-size:12px}
+#intro.iv-port h2{font-size:28px;text-align:center;line-height:1.35;margin-bottom:22px}
+#intro.iv-port h2 span{display:inline-block;margin-top:4px}
+#intro.iv-port .iv-grid{grid-template-columns:repeat(2,150px);gap:12px}
+#intro.iv-port .iv-pl{height:68px;border-radius:18px;padding:12px 16px}
+#intro.iv-port .iv-pl img{max-height:34px}
+#intro.iv-port .iv-sub{flex-wrap:wrap;justify-content:center;max-width:330px;margin-top:20px;gap:8px}
+#intro.iv-port .iv-sub b{font-size:12px;padding:6px 12px}
+#intro.iv-port .iv-big{font-size:38px}
+#intro.iv-port .iv-small{font-size:10.5px;letter-spacing:.16em;margin-bottom:24px}
+#intro.iv-port .iv-lane{width:900px;gap:12px;margin:6px 0}
+#intro.iv-port .iv-cl{width:140px;height:78px;border-radius:18px;padding:12px 14px}
+#intro.iv-port .iv-cl img{max-height:42px}
+#intro.iv-port.play .iv-lane.iv-a{animation-name:iv-pa}
+#intro.iv-port.play .iv-lane.iv-b{animation-name:iv-pb}
+@keyframes iv-pa{from{transform:translateX(120px)}to{transform:translateX(-120px)}}
+@keyframes iv-pb{from{transform:translateX(-120px)}to{transform:translateX(120px)}}
+#intro.iv-port .iv-card{width:330px;padding:36px 22px 30px;border-radius:32px}
+#intro.iv-port .iv-mini{width:80px;height:80px;border-radius:22px}
+#intro.iv-port .iv-mini img{width:52px;height:52px}
+#intro.iv-port .iv-card h1{font-size:42px}
+#intro.iv-port .iv-card h1 span{border-radius:12px;padding:0 10px}
+#intro.iv-port .iv-card p{font-size:15px}
+#intro.iv-port.play .iv-line{animation-name:iv-pline}
+@keyframes iv-pline{to{width:220px}}
+#intro.iv-port .skip{right:20px;bottom:30px}
+#intro.iv-port .iv-dots{left:20px;bottom:34px}
+
+/* TV y equipos lentos: sin desenfoques (el vidrio queda translúcido sin difuminar) para que no se trabe */
+html.tv #intro .iv-gl,html.lite #intro .iv-gl{-webkit-backdrop-filter:none;backdrop-filter:none;background:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,.10))}
+html.tv #intro .iv-orb,html.lite #intro .iv-orb{filter:none;opacity:.35;animation:none;background:radial-gradient(circle,currentColor,transparent 70%)}
+html.tv #intro .iv-o1,html.lite #intro .iv-o1{color:#FF8A3D;background:radial-gradient(circle,rgba(255,138,61,.7),transparent 70%)}
+html.tv #intro .iv-o2,html.lite #intro .iv-o2{background:radial-gradient(circle,rgba(122,167,255,.7),transparent 70%)}
+html.tv #intro .iv-o3,html.lite #intro .iv-o3{background:radial-gradient(circle,rgba(232,234,236,.5),transparent 70%)}
+@keyframes iv-pop-tv{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+html.tv #intro.play .iv-tile{animation:iv-pop-tv 1.2s .22s ease-out both}
+html.tv #intro.play .iv-big{animation:iv-pop-tv 1s 6.45s ease-out both}
+html.tv #intro .iv-cl img{filter:none}
+html.tv #intro.out{transform:none}
+#intro.skipped *{animation:none!important}
