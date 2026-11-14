@@ -190,6 +190,58 @@
     return out;
   };
 
+  /** Listas W3U (formato JSON de Wiseplay): grupos con "stations" y subgrupos; un grupo puede apuntar a otra lista W3U por "url". */
+  function isW3U(text) { var t = String(text || '').replace(/^﻿/, '').trim(); return (t[0] === '{' || t[0] === '[') && /"(stations|groups)"\s*:/.test(t.slice(0, 200000)); }
+  MV.isW3U = isW3U;
+  function jsonLoose(text) {
+    var t = String(text || '').replace(/^﻿/, '').trim();
+    try { return JSON.parse(t); } catch (e) {}
+    // Algunas listas traen comas sobrantes o comentarios /* */
+    t = t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/,\s*([}\]])/g, '$1');
+    return JSON.parse(t);
+  }
+  MV.parseW3U = function (text, list) {
+    var out = [], fetched = 0, MAX_SUB = 40;
+    function hdr(o, k) { var h = o.headers || {}; return o[k] || h[k] || h[k.toLowerCase()] || ''; }
+    function station(st, group) {
+      if (!st || typeof st !== 'object') return;
+      var url = st.url || st.link || st.stream || '';
+      if (!url || typeof url !== 'string' || st.embed === true || st.isHost === true) return;   // páginas web o servidores que no son video directo
+      var h = splitHeaders(url.trim());
+      out.push({
+        name: String(st.name || st.title || 'Sin nombre').trim(), tvg: st.epgId || st.tvg || '', logo: st.image || st.logo || st.icon || '',
+        group: group || 'Sin categoría', num: '', catchup: '', country: '',
+        url: h.url, ua: h.ua || hdr(st, 'userAgent') || hdr(st, 'User-Agent'), ref: h.ref || hdr(st, 'referer') || hdr(st, 'Referer')
+      });
+    }
+    function walk(node, group, depth) {
+      if (!node || depth > 4) return Promise.resolve();
+      if (Array.isArray(node)) return node.reduce(function (p, n) { return p.then(function () { return walk(n, group, depth); }); }, Promise.resolve());
+      var name = String(node.name || '').trim(), g = group && name ? group + ' · ' + name : (name || group);
+      if (depth === 0) g = group || '';
+      (node.stations || []).forEach(function (st) { station(st, g || name); });
+      if (Array.isArray(node.items)) node.items.forEach(function (st) { if (st && st.url && !st.stations && !st.groups) station(st, g || name); });
+      var p = walk(node.groups || [], depth === 0 ? '' : g, depth + 1);
+      // Grupo que apunta a otra lista W3U
+      if (depth > 0 && node.url && !node.stations && !node.groups && fetched < MAX_SUB && /^https?:/i.test(node.url)) {
+        fetched++;
+        p = p.then(function () {
+          return MV.getBig(node.url).then(function (txt) { if (isW3U(txt)) return walk(jsonLoose(txt), g, depth + 1); if (/#EXTINF/i.test(txt)) MV.parseM3U(txt).forEach(function (e) { e.group = g + (e.group && e.group !== 'Sin categoría' ? ' · ' + e.group : ''); out.push(e); }); }).catch(function () {});
+        });
+      }
+      return p;
+    }
+    var root;
+    try { root = jsonLoose(text); } catch (e) { return Promise.reject(new Error('La lista W3U está dañada (no es un JSON válido)')); }
+    if (list && root && root.epg && !list.epg) { list.epg = String(root.epg); list.epgAuto = true; }
+    return walk(root, '', 0).then(function () { return out; });
+  };
+  /** Lee una lista en cualquier formato soportado (M3U o W3U). */
+  MV.parseAnyList = function (text, list) {
+    if (isW3U(text)) return MV.parseW3U(text, list);
+    return Promise.resolve(MV.parseM3U(text || '', list));
+  };
+
   // Pistas de que una entrada es un canal en vivo aunque su enlace termine en .mp4/.flv
   var LIVE_HINT = /\b(live|en vivo|tv|television|televisi[oó]n|channel|canal|news|noticias|radio|web|24\/7|24h|fm)\b|\(\d{3,4}[pi]\)|\[(geo|not 24\/7)/i;
   // Libros, mangas, cómics y revistas que traen algunas listas (PDF, EPUB, CBZ/CBR/CB7)
@@ -1150,9 +1202,10 @@
         }
         return arr.map(retag);
       });
-      else if (list.type === 'file') job = MV.idbGet('raw:' + list.id).then(function (txt) { return buildFromM3U(MV.parseM3U(txt || '', list), list); });
+      else if (list.type === 'file') job = MV.idbGet('raw:' + list.id).then(function (txt) { return MV.parseAnyList(txt || '', list); }).then(function (e) { return buildFromM3U(e, list); });
       else job = MV.getBig(list.url).then(function (txt) {
-        if (!/#EXTINF|#EXTM3U/i.test(txt.slice(0, 5000))) throw new Error('No parece una lista M3U');
+        if (isW3U(txt)) return MV.parseW3U(txt, list).then(function (e) { return buildFromM3U(e, list); });
+        if (!/#EXTINF|#EXTM3U/i.test(txt.slice(0, 5000))) throw new Error('No parece una lista M3U ni W3U');
         return buildFromM3U(MV.parseM3U(txt, list), list);
       });
       return job.then(function (items) {
@@ -1593,7 +1646,7 @@
       Acepta "url", "Nombre,url", "Nombre | url" o "Nombre url". Los enlaces de Xtream (get.php?username=…&password=…) se agregan como cuenta Xtream. */
   MV.parseUrlList = function (text) {
     text = String(text || '');
-    if (/#EXTINF/i.test(text)) return null; // es una lista M3U normal
+    if (/#EXTINF/i.test(text) || isW3U(text)) return null; // es una lista M3U o W3U normal
     var out = [], seen = {};
     text.split(/\r?\n/).forEach(function (line, n) {
       line = line.trim();

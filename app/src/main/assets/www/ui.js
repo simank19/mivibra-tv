@@ -2899,7 +2899,7 @@
   }
   function addListDialog(tab) {
     tab = tab || 'url';
-    var tabs = [['url', 'Enlace M3U'], ['multi', 'Varias (.txt)'], ['file', 'Archivo'], ['xtream', 'Xtream Codes'], ['stalker', 'Portal y MAC'], ['jellyfin', 'Jellyfin / Emby'], ['plex', 'Plex'], ['web', 'Página web'], ['fb', 'Mi Firebase'], ['plugins', 'Plugins']];
+    var tabs = [['url', 'Enlace M3U / W3U'], ['multi', 'Varias (.txt)'], ['file', 'Archivo'], ['xtream', 'Xtream Codes'], ['stalker', 'Portal y MAC'], ['jellyfin', 'Jellyfin / Emby'], ['plex', 'Plex'], ['web', 'Página web'], ['fb', 'Mi Firebase'], ['plugins', 'Plugins']];
     if (tab === 'plugins' && MV.pluginsDialog) { setTimeout(MV.pluginsDialog, 0); return; }
     var body = tab === 'multi'
       ? '<p>Pega tus direcciones (una por línea) o elige tu archivo .txt. Puedes poner un nombre antes de cada una: <code>Mi lista, https://…</code>. Los enlaces de Xtream (get.php?username=…) se agregan como cuenta Xtream con películas y series. También acepta cuentas de <b>Portal y MAC</b> (la URL del portal y debajo sus MAC).</p>' +
@@ -2922,7 +2922,7 @@
       ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi proveedor" data-autofocus></label><label class="field">Servidor<input class="in f" id="lHost" placeholder="http://servidor:puerto" autocomplete="off"></label><label class="field">Usuario<input class="in f" id="lUser" autocomplete="off"></label><label class="field">Contraseña<input class="in f" id="lPass" type="password"></label><p class="muted" style="font-size:13px;margin:-4px 0 8px">Servidor: solo la dirección y el puerto, por ejemplo http://servidor.com:8080</p><p id="lErr" style="color:#FF8A80;font-size:14px;margin:0 0 8px"></p>'
       : tab === 'file'
         ? '<label class="field">Nombre<input class="in f" id="lName" placeholder="Lista descargada" data-autofocus></label><p>Elige un archivo .m3u del dispositivo, una USB o el administrador de archivos.</p>'
-        : '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi lista" data-autofocus></label><label class="field">Enlace de la lista M3U / M3U8<input class="in f" id="lUrl" placeholder="https://…/lista.m3u" autocomplete="off" inputmode="url"></label><label class="field">Guía EPG XMLTV (opcional)<input class="in f" id="lEpg" placeholder="https://…/guia.xml" autocomplete="off" inputmode="url"></label>';
+        : '<label class="field">Nombre<input class="in f" id="lName" placeholder="Mi lista" data-autofocus></label><label class="field">Enlace de la lista M3U, M3U8 o W3U<input class="in f" id="lUrl" placeholder="https://…/lista.m3u o .w3u" autocomplete="off" inputmode="url"></label><label class="field">Guía EPG XMLTV (opcional)<input class="in f" id="lEpg" placeholder="https://…/guia.xml" autocomplete="off" inputmode="url"></label>';
     MV.modal('<h2>Agregar lista</h2><div class="chips">' + tabs.map(function (t) { return '<button class="chip f' + (t[0] === tab ? ' on' : '') + '" data-act="listTab" data-arg="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' + body +
       '<div class="btns"><button class="btn f" data-act="listSave" data-arg="' + tab + '">' + (tab === 'xtream' || tab === 'stalker' || tab === 'jellyfin' || tab === 'plex' ? 'Conectar' : tab === 'web' ? 'Revisar la página' : tab === 'fb' ? 'Leer mis libros' : tab === 'file' ? 'Elegir archivo' : tab === 'multi' ? 'Importar' : 'Cargar lista') + '</button>' + (tab === 'multi' ? '<button class="btn ghost f" data-act="pasteText">Pegar texto</button><button class="btn ghost f" data-act="multiPick">Subir .txt</button><button class="btn ghost sm f" data-act="multiImage">Desde imagen</button>' : '') + '<button class="btn ghost f" data-act="confirmNo">Cancelar</button></div>',
       { onOpen: function (root) { var ta = root.querySelector('#lMulti'); if (ta) ta.addEventListener('input', multiCount); var cb = root.querySelector('#lMacBk'); if (cb) cb.addEventListener('change', multiCount); } });
@@ -2951,7 +2951,7 @@
       return;
     }
     var r = MV.parseUrlList(ta.value);
-    el.textContent = r === null ? 'Esto es una lista M3U: usa la pestaña Archivo o Enlace M3U.' : r.length ? r.length + (r.length === 1 ? ' dirección encontrada' : ' direcciones encontradas') + ' (' + r.filter(function (x) { return x.type === 'xtream'; }).length + ' Xtream)' : '';
+    el.textContent = r === null ? 'Esto es una lista M3U o W3U: usa la pestaña Archivo o Enlace.' : r.length ? r.length + (r.length === 1 ? ' dirección encontrada' : ' direcciones encontradas') + ' (' + r.filter(function (x) { return x.type === 'xtream'; }).length + ' Xtream)' : '';
   }
   function importMany(arr) {
     if (!arr || !arr.length) { MV.toast('No encontré direcciones http:// o https://'); return; }
@@ -3455,7 +3455,7 @@
         var txtAll = document.getElementById('lMulti').value, macs = MV.parseMacList(txtAll, !!(document.getElementById('lMacBk') || {}).checked);
         if (macs.length) { importMany(macs); return; }
         var parsed = MV.parseUrlList(txtAll);
-        if (parsed === null) { MV.toast('Eso es una lista M3U completa: usa la pestaña Archivo'); return; }
+        if (parsed === null) { MV.toast('Eso es una lista M3U o W3U completa: usa la pestaña Archivo'); return; }
         importMany(parsed);
       } else if (tab === 'file') {
         MV.call('pickFile', []).then(function (d) {
