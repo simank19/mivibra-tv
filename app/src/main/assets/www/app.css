@@ -1283,3 +1283,16 @@ body.np-inhead .mini { display: none !important; }
 .vcont { min-height: 150px; }
 @media (max-width: 760px) { .vlive .scr { min-height: 190px; flex: none; } }
 @media (min-width: 761px) { .vhead { padding-right: 320px; } }
+/* Mini reproductor: botones redondos de verdad, portada y nombre a la izquierda y barrita de progreso */
+.mini { gap: 8px; padding: 10px 12px 12px; border-radius: 22px; }
+.mini .mopen .art { width: 48px; height: 48px; border-radius: 12px; }
+.mini .mb { width: 42px; height: 42px; min-width: 42px; flex: none; border-radius: 50%; border: 0; padding: 0; background: rgba(255,255,255,.08); color: #fff; display: flex; align-items: center; justify-content: center; transition: transform .15s, background .15s; }
+.mini .mb svg { width: 18px; height: 18px; }
+.mini .mb:active { transform: scale(.92); }
+.mini .mb.play { width: 50px; height: 50px; min-width: 50px; background: var(--accent); color: var(--on-accent); box-shadow: 0 6px 18px rgba(0,0,0,.35); }
+.mini .mb.play svg { width: 22px; height: 22px; fill: currentColor; }
+.mini .mb.f:focus-visible, .mini .mb.f.kf { box-shadow: 0 0 0 3px var(--accent); transform: scale(1.06); }
+.mini .mb.play.f:focus-visible, .mini .mb.play.f.kf { box-shadow: 0 0 0 3px #fff; }
+.mini .mprog { position: absolute; left: 16px; right: 16px; bottom: 5px; height: 3px; border-radius: 2px; background: rgba(255,255,255,.14); overflow: hidden; pointer-events: none; }
+.mini .mprog i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 2px; transition: width .4s linear; }
+@media (max-width: 760px) { .mini .mb.prev { display: none; } .mini .mopen { min-width: 0; } }

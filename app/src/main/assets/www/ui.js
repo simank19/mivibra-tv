@@ -4027,14 +4027,12 @@
       var playingNow = !el.paused, music = cur.kind !== 'radio';
       b.innerHTML = '<button class="mopen f" data-act="npOpen" aria-label="Abrir el reproductor: ' + esc(cur.title) + '"><span class="art">' + (cur.art ? '<img src="' + esc(cur.art) + '" alt="" onerror="this.remove()">' : '') + '<span>' + (cur.kind === 'radio' ? IC.radio : IC.music) + '</span></span>' +
         '<span class="t"><b>' + esc(cur.title) + '</b><span id="miniSub">' + esc(AU.status || cur.sub || '') + '</span></span></button>' +
-        (music && queue.length > 1 ? '<button class="iconbtn f' + (shuffle ? ' on' : '') + '" data-act="auShuffle" aria-label="Aleatorio" title="Aleatorio">' + IC.shuffle + '</button>' : '') +
-        (queue.length > 1 ? '<button class="iconbtn f" data-act="auPrev" aria-label="Anterior">' + IC.prev + '</button>' : '') +
-        '<button class="iconbtn f on" data-act="auToggle" aria-label="' + (playingNow ? 'Pausa' : 'Reproducir') + '">' + (playingNow ? IC.pause : IC.play) + '</button>' +
-        (queue.length > 1 ? '<button class="iconbtn f" data-act="auNext" aria-label="Siguiente">' + IC.next + '</button>' : '') +
-        (music ? '<button class="iconbtn f" data-act="lyrics" aria-label="Letra" title="Letra">' + IC.lyrics + '</button>' : '') +
-        (music ? '<button class="iconbtn f" data-act="plAddCur" aria-label="Añadir a una lista" title="Añadir a una lista">' + IC.plAdd + '</button>' : '') +
-        '<button class="iconbtn f' + (eqOn() ? ' on' : '') + '" data-act="eqOpen" aria-label="Ecualizador" title="Ecualizador">' + IC.eq + '</button>' +
-        '<button class="iconbtn f" data-act="auStop" aria-label="Cerrar">' + IC.close + '</button>';
+        // Mini reproductor sencillo: anterior, reproducir/pausa, siguiente y cerrar; lo demás está en el reproductor completo
+        (queue.length > 1 ? '<button class="mb prev f" data-act="auPrev" aria-label="Anterior">' + IC.prev + '</button>' : '') +
+        '<button class="mb play f" data-act="auToggle" aria-label="' + (playingNow ? 'Pausa' : 'Reproducir') + '">' + (playingNow ? IC.pause : IC.play) + '</button>' +
+        (queue.length > 1 ? '<button class="mb f" data-act="auNext" aria-label="Siguiente">' + IC.next + '</button>' : '') +
+        '<button class="mb f" data-act="auStop" aria-label="Cerrar">' + IC.close + '</button>' +
+        (music ? '<span class="mprog" aria-hidden="true"><i id="miniProg"></i></span>' : '');
     }
     function setStatus(t) { AU.status = t; var s = document.getElementById('miniSub'); if (s) s.textContent = t || (cur && cur.sub) || ''; var n = document.getElementById('npStat'); if (n) n.textContent = t || ''; }
     function start() {
@@ -4174,6 +4172,8 @@
   };
   function fill(sk) { sk.style.setProperty('--p', (sk.value / 10) + '%'); }
   MV.npTick = function () {
+    var mp = document.getElementById('miniProg');
+    if (mp) { var dd = AU.dur(); mp.style.width = dd ? Math.min(100, AU.time() / dd * 100) + '%' : '0'; }
     var sk = document.getElementById('npSeek'); if (!sk || sk._drag) return;
     var d = AU.dur(), t = AU.time();
     sk.value = d ? Math.round(t / d * 1000) : 0; fill(sk);

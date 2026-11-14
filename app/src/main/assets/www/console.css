@@ -315,3 +315,8 @@ html.tv #console, html.tv #console * { animation: none !important; transition: n
 .gx-libhead .gx-clogo.wide { height: 1.3em; }
 .gx-libhead .gx-libic { width: 2.4em; height: 2.4em; } .gx-libhead .gx-libic svg, .gx-libhead .gx-libic img { width: 100%; height: 100%; }
 .gx-libhead b { font-family: var(--brand); font-weight: 800; font-size: 1em; letter-spacing: .08em; text-transform: uppercase; color: #D6D1CB; }
+/* Logos a color (ya pensados para fondo oscuro): sin pasarlos a blanco */
+.gx-clogo.clr { filter: drop-shadow(0 4px 14px rgba(0,0,0,.5)); height: 100%; max-width: 15em; }
+.gx-sysname .gx-sysic.haslogo { height: 3.4em; }
+.gx-home .gx-sysname .gx-sysic.haslogo { height: 3em; }
+.gx-libhead .gx-clogo.clr { height: 2.6em; }

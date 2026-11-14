@@ -106,12 +106,10 @@
   // ---------- Consolas: carrusel de tarjetas grandes; el fondo toma el color y el ícono de la consola elegida ----------
   function bySystem() { var by = {}; roms().forEach(function (r) { var s = MV.romSystem(r); var id = s ? s.id : '?'; (by[id] = by[id] || []).push(r); }); return by; }
   function sysIcon(id, mono) { return MV.sysIcon ? MV.sysIcon(id) : esc(mono || '?'); }
-  // Logo de la marca de cada consola (colección Logos Apps, MIT), en blanco y centrado bajo el carrusel
-  var CLOGO = { '3ds': 'nintendo-3ds', gc: 'nintendo-gamecube', wii: 'wii', wiiu: 'wiiu', psx: 'playstation', ps3: 'playstation', ps2: 'playstation-2', ps4: 'playstation-4',
-    psp: 'playstation-portable', vita: 'playstation-vita', xbox: 'xbox-wordmark', x360: 'xbox-wordmark', md: 'sega', sms: 'sega', gg: 'sega', saturn: 'sega', dc: 'sega',
-    segacd: 'sega', '32x': 'sega', sg1000: 'sega', a26: 'atari', a78: 'atari', a52: 'atari', lynx: 'atari', jaguar: 'atari', c64: 'commodore', amiga: 'commodore', pce: 'nec' };
-  var CLOGO_WIDE = { 'playstation-2': 1, 'playstation-4': 1, 'playstation-portable': 1, 'playstation-vita': 1, 'xbox-wordmark': 1, nec: 1, wiiu: 1 };
-  function sysLogo(id) { var f = CLOGO[id]; return f ? '<img class="gx-clogo' + (CLOGO_WIDE[f] ? ' wide' : '') + '" src="img/consolelogos/' + f + '.svg" alt="">' : ''; }
+  // Logo de cada consola (colección "Console Logos" de Dan Patrick en Internet Archive, versión para fondo oscuro)
+  var CLOGO = ['nes', 'snes', 'gb', 'gbc', 'gba', 'n64', 'nds', 'md', 'sms', 'gg', 'psx', 'a26', 'a78', 'lynx', 'pce', 'ngp', 'ws', 'arcade', 'neogeo', 'psp', 'dc', 'gc', 'sg1000',
+    '32x', 'segacd', 'saturn', '3do', 'vb', 'a52', 'jaguar', 'coleco', 'c64', 'amiga', 'cpc', 'zx', 'ps2', 'ps3', 'ps4', 'vita', 'xbox', 'x360', 'wii', 'wiiu', '3ds'];
+  function sysLogo(id) { return CLOGO.indexOf(id) >= 0 ? '<img class="gx-clogo clr" src="img/consolelogos/c-' + id + '.webp" alt="">' : ''; }
   function homeHtml() {
     var all = roms(), by = bySystem();
     // Todas las consolas: primero las que tienen juegos y después las demás (atenuadas, con 0), para saber qué se puede jugar.

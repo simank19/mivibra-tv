@@ -1,2 +1,3 @@
-Logos de consolas: colección "Logos Apps" (ln-dev7), licencia MIT — https://github.com/ln-dev7/logos-apps
+Logos de consolas (c-*.webp): colección "Console Logos – Professionally Redrawn + Official Versions" de Dan Patrick, Internet Archive
+https://archive.org/details/console-logos-professionally-redrawn-plus-official-versions
 Las marcas pertenecen a sus dueños; se usan solo para identificar cada consola.
