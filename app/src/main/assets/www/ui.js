@@ -290,7 +290,18 @@
   VIEWS.boot = function () { return '<div class="spinner"></div>'; };
 
   // ---------- Inicio de sesión con Google ----------
-  var loginCode = null, loginBusy = false;
+  var loginCode = null, loginBusy = false, loginAsk = false, loginShownAt = 0;
+  // Samsung / LG: si la app se cierra o reinicia por un error, el último se muestra en la pantalla de entrada para poder revisarlo
+  if (document.documentElement.classList.contains('webtv')) {
+    var keepErr = function (m) { try { localStorage.setItem('mv:lastErr', JSON.stringify({ m: String(m).slice(0, 300), t: Date.now() })); } catch (e) {} };
+    window.addEventListener('error', function (e) { keepErr((e.message || 'Error') + (e.filename ? ' · ' + String(e.filename).split('/').pop() + ':' + e.lineno : '')); });
+    window.addEventListener('unhandledrejection', function (e) { var r = e.reason; keepErr('Promesa: ' + (r && (r.message || r.code) || r)); });
+  }
+  function lastErrHtml() {
+    var x = null; try { x = JSON.parse(localStorage.getItem('mv:lastErr') || 'null'); } catch (e) {}
+    if (!x || Date.now() - x.t > 3600e3) return '';
+    return '<p class="muted" style="font-size:12px;margin-top:10px;max-width:640px;text-align:center;opacity:.7">Último error: ' + esc(x.m) + '</p>';
+  }
   VIEWS.login = function () {
     var A = MV.acct, st = A.status;
     var head = '<img src="img/logo-corto-oscuro.svg" alt="MiVibra TV" style="height:54px;margin-bottom:18px"><h1>Inicia sesión</h1>';
@@ -307,16 +318,17 @@
         '<p class="muted" style="font-size:13px">Elige tu cuenta de Google y acepta. Esta pantalla entra sola.</p></div></div>' +
         '<div class="btns" style="justify-content:center"><button class="btn ghost f" data-act="loginCancel" data-autofocus>Cancelar</button></div>';
     }
+    if (loginAsk) return head + '<p class="muted" style="max-width:520px;text-align:center">Pidiendo el código a Google…</p><div class="spinner"></div>';
     var tv = MV.device.tv, btns = [];
-    var g = A.hasGoogleButton() ? '<button class="btn f" data-act="loginGoogle"' + (tv ? '' : ' data-autofocus') + '>' + IC.user + 'Continuar con Google</button>' : '';
+    var g = A.hasGoogleButton() && !MV.device.webtv ? '<button class="btn f" data-act="loginGoogle"' + (tv ? '' : ' data-autofocus') + '>' + IC.user + 'Continuar con Google</button>' : '';
     var c = A.hasCode() ? '<button class="btn' + (tv ? '' : ' ghost') + ' f" data-act="loginCode"' + (tv ? ' data-autofocus' : '') + '>' + IC.phone + 'Entrar con el celular (código)</button>' : '';
     if (tv) btns.push(c, g); else btns.push(g, c);
     return head + '<p class="muted" style="max-width:520px;text-align:center">Entra con tu cuenta de Google para ver tu contenido, tus perfiles y seguir viendo donde lo dejaste en cualquier equipo.</p>' +
       (loginBusy ? '<div class="spinner"></div>' : '<div class="btns" style="justify-content:center;flex-direction:column;align-items:stretch;min-width:300px">' + btns.join('') + '</div>') +
-      (A.error ? '<p class="muted" style="font-size:13px;margin-top:14px;max-width:520px;text-align:center">' + esc(A.error) + '</p>' : '');
+      (A.error ? '<p style="font-size:16px;margin-top:14px;max-width:560px;text-align:center;color:#FF8A80">No se pudo entrar: ' + esc(A.error) + '</p>' : '') + lastErrHtml();
   };
   function afterLogin() {
-    loginCode = null; loginBusy = false; MV.acct.error = '';
+    loginCode = null; loginBusy = false; loginAsk = false; MV.acct.error = '';
     MV.go('boot', null, { replace: true });
     MV.acct.waitUserData().then(function () { continueBoot(); });
   }
@@ -3367,10 +3379,15 @@
       MV.acct.signInGoogle().then(afterLogin).catch(loginFail);
     },
     loginCode: function () {
-      MV.acct.error = '';
-      MV.acct.startCode(function (c) { loginCode = c; MV.rerender(); }).then(afterLogin).catch(function (e) { loginCode = null; loginFail(e); });
+      if (loginAsk || loginCode) return;   // OK presionado dos veces: no se pide otro código
+      MV.acct.error = ''; loginAsk = true; MV.rerender();
+      MV.acct.startCode(function (c) { loginAsk = false; loginCode = c; loginShownAt = Date.now(); MV.rerender(); }).then(afterLogin).catch(function (e) { loginAsk = false; loginCode = null; loginFail(e); });
     },
-    loginCancel: function () { MV.acct.stopCode(); loginCode = null; MV.rerender(); },
+    loginCancel: function () {
+      // En algunos TV el mismo OK que pidió el código llega otra vez y caía en "Cancelar"
+      if (Date.now() - loginShownAt < 2500) return;
+      MV.acct.stopCode(); loginCode = null; MV.rerender();
+    },
     loginRetry: function () {
       MV.toast('Revisando acceso…');
       MV.acct.retry().then(function (ok) {
