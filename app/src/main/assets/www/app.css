@@ -1296,3 +1296,9 @@ body.np-inhead .mini { display: none !important; }
 .mini .mprog { position: absolute; left: 16px; right: 16px; bottom: 5px; height: 3px; border-radius: 2px; background: rgba(255,255,255,.14); overflow: hidden; pointer-events: none; }
 .mini .mprog i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 2px; transition: width .4s linear; }
 @media (max-width: 760px) { .mini .mb.prev { display: none; } .mini .mopen { min-width: 0; } }
+/* Botón del perfil: en el celular es un círculo exacto con el avatar centrado */
+.qprof .avatar { flex: none; display: block; }
+@media (max-width: 760px) {
+  .qprof { width: 44px; height: 44px; padding: 0; justify-content: center; gap: 0; border-radius: 50%; }
+  .qprof .avatar { width: 36px; height: 36px; }
+}
