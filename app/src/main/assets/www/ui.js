@@ -140,6 +140,7 @@
 
   // ---------- Render ----------
   var VIEWS = {};
+  MV.VIEWS = VIEWS;
   function render(keepFocus) {
     if (MV.stopHeroPreview) MV.stopHeroPreview(view.name !== 'home');
     MV.applyLook();
@@ -271,6 +272,7 @@
     var u = MV.pendingUpdate;
     return '<button class="qbtn bell f' + (u ? ' has' : '') + '" data-act="showUpdate" data-fid="q-upd" aria-label="' + (u ? 'Actualización disponible' : 'Buscar actualizaciones') + '" title="' + (u ? 'Actualizar a la versión ' + esc(u.version) : 'Buscar actualizaciones') + '">' + IC.bell + (u ? '<i class="dot"></i>' : '') + '</button>';
   };
+  MV.topHtml = function (t, r) { return top(t, r); };
   function top(title, right) {
     return '<div class="top"><h1>' + esc(title) + '</h1><div class="sp"></div>' + (right || '') + '</div>';
   }
@@ -1579,6 +1581,7 @@
       (it.type !== 'series' && A && A.dlStartVideo && it.url && !/\.m3u8|\/live\//i.test(it.url) ? (function () { var d = MV.dlOf(it.key); return '<button class="btn ghost f" data-act="dlItem" data-key="' + esc(it.key) + '">' + IC.download + (d ? dlLabel(d) : 'Descargar') + '</button>'; })() : '') +
       '<button class="btn ghost f" data-act="saveLater" data-key="' + esc(it.key) + '">' + (MV.isSaved(it.key) ? IC.bookmarkFill + 'Guardado' : IC.bookmark + 'Guardar') + '</button>' +
       '<button class="btn ghost f' + (fav ? ' favon' : '') + '" data-act="fav" data-key="' + esc(it.key) + '">' + (fav ? IC.heartFill : IC.heart) + (fav ? 'En favoritos' : 'Favorito') + '</button>' +
+      (it.type !== 'live' && !it.adult ? '<button class="btn ghost f" data-act="trailer" data-arg="' + esc(it.key) + '">' + (IC.trailer || '') + 'Tráiler</button>' : '') +
       '<button class="btn ghost f" data-act="langMenu" data-arg="' + esc(it.key) + '">Audio y subtítulos</button>' +
       (it.adult ? '<button class="btn ghost f" data-act="adultCover" data-arg="' + esc(it.key) + '">Carátula</button>' : '') +
       '</div>' +
@@ -2301,7 +2304,7 @@
   var setTab = 'lists';
   VIEWS.settings = function (tab) {
     if (tab) setTab = tab;
-    var tabs = [['lists', 'Listas'], ['profiles', 'Perfiles'], ['look', 'Temas'], ['playback', 'Reproducción'], ['parental', 'Control parental y +18'], ['remote', 'Mando con celular'], ['sync', 'Sincronización'], ['meta', 'Sinopsis y carátulas'], ['about', 'Acerca de']];
+    var tabs = [['lists', 'Listas'], ['profiles', 'Perfiles'], ['look', 'Temas'], ['playback', 'Reproducción'], ['parental', 'Control parental y +18'], ['remote', 'Mando con celular'], ['sync', 'Sincronización'], ['meta', 'Sinopsis y carátulas'], ['feedback', MV.acct && MV.acct.isAdmin && MV.acct.isAdmin() ? 'Comentarios de usuarios' : 'Enviar comentarios'], ['about', 'Acerca de']];
     if (!MV.acct.managed()) tabs.splice(1, 0, ['menu', 'Menú']);
     if (MV.acct.managed()) {
       tabs = tabs.map(function (t) { return t[0] === 'sync' ? ['account', 'Cuenta'] : t; });
@@ -2314,6 +2317,7 @@
     return html + (SETTINGS[setTab] || SETTINGS.lists)();
   };
   var SETTINGS = {};
+  MV.SETTINGS = SETTINGS;
   VIEWS.settings.after = function () { var x = SETTINGS[setTab]; if (x && x.after) x.after(); };
   function dupesPanel() {
     var d = S.dupes || {};
@@ -2773,6 +2777,7 @@
     });
     if (r && r.replaced) { ctx = replaced; replaced = null; if (!ctx) return; }
     else { if (!playing) return; ctx = playing; playing = null; }
+    if (MV.ach) try { MV.ach.onWatched(ctx, r || {}); } catch (e) {}
     var mins = Math.round((Date.now() - ctx.started) / 60000);
     if (mins > 0) MV.addKidsMinutes(mins);
     if (ctx.noRecord) { MV.rerender(); return; }
@@ -4605,6 +4610,7 @@
       '<button class="utile glass f" data-act="nav" data-arg="webvids" data-fid="u-webvids"><span class="uic">' + IC.globe + '</span><b>Mis páginas</b><span>Videos de tus páginas web</span></button>' +
       '<button class="utile glass f" data-act="nav" data-arg="streams" data-fid="u-streams"><span class="uic">' + IC.play + '</span><b>Twitch y Kick</b><span>Transmisiones en vivo aquí mismo</span></button>' +
       '<button class="utile glass f" data-act="openDiag" data-fid="u-diag"><span class="uic">' + IC.settings + '</span><b>' + (MV.device.desktop ? 'Soporte MiVibra PC' : MV.device.tv ? 'Soporte MiVibra · TV box' : 'Diagnóstico MiVibra') + '</b><span>' + (MV.device.desktop ? 'Diagnóstico, limpieza y optimización de Windows' : 'Revisa y optimiza este equipo') + '</span></button>' +
+      '<button class="utile glass f" data-act="nav" data-arg="achievements" data-fid="u-ach"><span class="uic">' + IC.trophy + '</span><b>Logros</b><span>' + (MV.ach ? 'Nivel ' + MV.ach.level().n + ' · ' + MV.ach.level().title : 'Tu nivel y medallas') + '</span></button>' +
       '<button class="utile glass f" data-act="adultOpen" data-fid="u-adult"><span class="uic">' + IC.lock + '</span><b>+18</b><span>' + (MV.adultOk() ? 'Desbloqueado' : 'Protegido con PIN') + '</span></button>' +
       (A && A.remoteFind && !(MV.device && MV.device.tv) ? '<button class="utile glass f" data-act="nav" data-arg="phoneRemote" data-fid="u-phremote"><span class="uic">' + IC.phone + '</span><b>Control de la TV</b><span>Usa este celular como control de tu TV</span></button>' : '') +
       '<button class="utile glass f" data-act="go" data-arg="settings" data-fid="u-remote" onclick="MV.remoteTab&&MV.remoteTab()"><span class="uic">' + IC.phone + '</span><b>Celular como control</b><span>Control remoto y mando de juegos</span></button></div>';

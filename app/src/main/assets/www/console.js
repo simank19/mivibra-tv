@@ -270,6 +270,7 @@
     if (document.hidden || !playing) return;
     var dt = Date.now() - playing.t, path = playing.path; playing = null;
     if (dt < 20000) return;   // abrió y salió enseguida
+    if (MV.ach) try { MV.ach.onGame(Math.min(dt, 8 * 3600000)); } catch (e) {}
     var o = MV.load('gameTime', {}) || {}, g = o[path] || { ms: 0, n: 0 };
     g.ms += Math.min(dt, 8 * 3600000); g.n++; g.last = Date.now(); o[path] = g; MV.save('gameTime', o);
     if (gStatus({ path: path }) === 0 || gStatus({ path: path }) === 1) setStatus({ path: path }, 2);

@@ -1302,3 +1302,51 @@ body.np-inhead .mini { display: none !important; }
   .qprof { width: 44px; height: 44px; padding: 0; justify-content: center; gap: 0; border-radius: 50%; }
   .qprof .avatar { width: 36px; height: 36px; }
 }
+
+/* ---------- Logros y niveles ---------- */
+.achtoast { position: fixed; left: 50%; top: 18px; z-index: 9000; transform: translate(-50%, -140%); display: flex; align-items: center; gap: 12px; padding: 10px 18px 10px 10px; border-radius: 18px;
+  background: rgba(40,42,45,.92); border: 1px solid rgba(255,255,255,.22); box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 16px 40px rgba(0,0,0,.4); color: #fff; transition: transform .45s cubic-bezier(.16,1,.3,1); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); pointer-events: none; }
+.achtoast.on { transform: translate(-50%, 0); }
+.achtoast .achic { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: rgba(255,255,255,.16); flex: none; }
+.achtoast .achic svg { width: 24px; height: 24px; }
+.achtoast .achic b { font-size: 13px; font-weight: 800; letter-spacing: .04em; }
+.achtoast.badge .achic, .achtoast.lvl .achic { background: linear-gradient(160deg, #FFB45C, #E2622A); }
+.achtoast > div { display: flex; flex-direction: column; }
+.achtoast > div b { font-size: 15px; } .achtoast > div span { font-size: 13px; opacity: .8; }
+.achhead { display: flex; align-items: center; gap: 28px; padding: 22px 26px; border-radius: 24px; margin-bottom: 16px; }
+.achring { position: relative; width: 120px; height: 120px; flex: none; }
+.achring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.achring circle { fill: none; stroke-width: 9; stroke-linecap: round; }
+.achring .bg { stroke: rgba(255,255,255,.14); } .achring .fg { stroke: var(--accent, #FF6900); transition: stroke-dashoffset .8s; }
+.achring > div { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.achring small { font-size: 11px; letter-spacing: .14em; opacity: .7; font-weight: 700; } .achring b { font-size: 40px; line-height: 1; font-weight: 800; }
+.achinfo { flex: 1; min-width: 0; } .achinfo h2 { margin: 0 0 4px; font-size: 26px; } .achinfo p { margin: 4px 0; }
+.achbar { height: 10px; border-radius: 99px; background: rgba(255,255,255,.14); overflow: hidden; margin: 10px 0; } .achbar i { display: block; height: 100%; border-radius: 99px; background: var(--accent, #FF6900); }
+.achstats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 18px; }
+.achstat { border-radius: 18px; padding: 14px; display: flex; flex-direction: column; gap: 2px; }
+.achstat .achsi svg { width: 20px; height: 20px; opacity: .8; } .achstat b { font-size: 24px; } .achstat span:last-child { font-size: 12.5px; opacity: .75; }
+.achgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.achb { text-align: left; border-radius: 18px; padding: 14px; display: flex; flex-direction: column; gap: 4px; color: inherit; opacity: .62; }
+.achb.on { opacity: 1; }
+.achb .achmed { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.12); margin-bottom: 4px; }
+.achb.on .achmed { background: linear-gradient(160deg, #FFB45C, #E2622A); box-shadow: 0 6px 16px rgba(226,98,42,.35); }
+.achb .achmed svg { width: 22px; height: 22px; }
+.achb b { font-size: 15px; } .achb > span { font-size: 12.5px; opacity: .75; } .achb em { font-style: normal; font-size: 12px; font-weight: 700; opacity: .8; margin-top: 2px; }
+.achp { display: block; height: 6px; border-radius: 99px; background: rgba(255,255,255,.14); overflow: hidden; margin-top: 6px; } .achp i { display: block; height: 100%; background: rgba(255,255,255,.75); }
+@media (max-width: 760px) { .achstats { grid-template-columns: repeat(3, 1fr); } .achhead { gap: 16px; padding: 16px; } .achring { width: 92px; height: 92px; } .achring b { font-size: 30px; } .achgrid { grid-template-columns: 1fr 1fr; } }
+
+/* ---------- Tráiler dentro de MiVibra ---------- */
+#modal.trm { background: rgba(0,0,0,.92); padding: 0; }
+#modal.trm .dialog.trdlg { width: 100vw; max-width: none; height: 100vh; max-height: none; border-radius: 0; padding: 0; background: #000 !important; display: flex; flex-direction: column; border: 0; box-shadow: none; }
+.trdlg .trwrap { flex: 1; min-height: 0; position: relative; }
+.trdlg iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.trdlg .trbar { display: flex; align-items: center; gap: 10px; padding: 12px 20px calc(12px + env(safe-area-inset-bottom)); background: rgba(30,32,35,.95); }
+.trdlg .trt { flex: 1; min-width: 0; display: flex; flex-direction: column; } .trdlg .trt small { font-size: 11px; letter-spacing: .14em; opacity: .7; font-weight: 700; }
+.trdlg .trt b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- Comentarios ---------- */
+.fbitem { border-radius: 16px; padding: 14px 16px; margin: 10px 0; }
+.fbitem.new { border-left: 3px solid var(--accent, #FF6900); }
+.fbitem .fbh { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; } .fbitem .fbh span { font-size: 12.5px; opacity: .7; }
+.fbitem p { margin: 8px 0; white-space: pre-wrap; }
+#fbText { width: 100%; min-height: 110px; resize: vertical; font: inherit; }

@@ -4,6 +4,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null && request.auth.token.email_verified == true; }
     function admin() { return signedIn() && request.auth.token.email.lower() == 'TU_CORREO@gmail.com'; }
+    function str(d, k, max) { return !(k in d) || (d[k] is string && d[k].size() <= max); }
     function cfg() { return get(/databases/$(database)/documents/app/config).data; }
     function allowed() {
       return admin() || (signedIn() && (cfg().open == true || request.auth.token.email.lower() in cfg().allowed));
@@ -17,9 +18,19 @@ service cloud.firestore {
     match /mivibra/{uid} {
       allow read, write: if signedIn() && request.auth.uid == uid && allowed();
     }
+    // Comentarios de los usuarios (Ajustes › Enviar comentarios): cada uno escribe los suyos; solo el superadministrador los lee y borra.
+    match /feedback/{id} {
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['uid', 'email', 'name', 'type', 'text', 'device', 'ver', 'at'])
+        && request.resource.data.type in ['idea', 'bug', 'love', 'other']
+        && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 2000
+        && request.resource.data.at is number
+        && str(request.resource.data, 'email', 200) && str(request.resource.data, 'name', 100) && str(request.resource.data, 'device', 40) && str(request.resource.data, 'ver', 20);
+      allow read, delete: if admin();
+      allow update: if admin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+    }
     // Panel web: buzón donde llegan las listas para cada TV (la TV las borra apenas llegan).
     // Solo se aceptan listas con los campos y tamaños esperados, y códigos de TV con el formato correcto.
-    function str(d, k, max) { return !(k in d) || (d[k] is string && d[k].size() <= max); }
     match /inbox/{code}/lists/{id} {
       allow create: if code.matches('^[A-HJKMNP-Z2-9]{8}$')
         && request.resource.data.keys().hasOnly(['type', 'name', 'url', 'epg', 'host', 'user', 'pass', 'portal', 'mac', 'text', 'at'])
