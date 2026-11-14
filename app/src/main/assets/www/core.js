@@ -50,6 +50,21 @@
 
   // ---------- Almacenamiento ----------
   MV.load = function (k, def) { try { var v = localStorage.getItem('mv:' + k); return v == null ? def : JSON.parse(v); } catch (e) { return def; } };
+  // Samsung / LG: si los estilos no llegaron (internet lento o cortado al bajar la versión nueva), se cargan los que trae el TV
+  (function cssGuard() {
+    var tries = 0;
+    function ok() { var p = document.createElement('div'); p.className = 'hidden'; document.body.appendChild(p); var r = getComputedStyle(p).display === 'none'; p.remove(); return r; }
+    function check() {
+      if (!document.body) return setTimeout(check, 500);
+      if (ok()) return;
+      tries++;
+      ['app.css', 'console.css', 'intro.css', 'reader.css'].forEach(function (f) {
+        var l = document.createElement('link'); l.rel = 'stylesheet'; l.href = (tries > 1 && window.MVTV_REMOTE ? 'https://simank19.github.io/mivibra-tv/tv/' : '') + f + '?r=' + Date.now(); document.head.appendChild(l);
+      });
+      if (tries < 3) setTimeout(check, 4000);
+    }
+    setTimeout(check, 2500);
+  })();
   MV.save = function (k, v) { try { localStorage.setItem('mv:' + k, JSON.stringify(v)); } catch (e) { console.warn('save', k, e); } };
 
   // IndexedDB para catálogos grandes (miles de canales)
