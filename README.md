@@ -81,7 +81,7 @@ En todas usas la **misma cuenta**: tus listas, perfiles, favoritos y "Continuar 
 |---|---|
 | <img src="docs/capturas/tv-juegos.jpg" alt="Juegos: inicio de la consola"> | <img src="docs/capturas/tv-juegos-biblioteca.jpg" alt="Juegos: biblioteca por consola"> |
 | **Inicio:** jugados recientemente con carátula, consolas con su ícono y botones de buscar, BIOS, enviar, información, emuladores, editar y borrar | **Biblioteca:** todos tus juegos en estantes por consola |
-| <img src="docs/capturas/tv-juegos-opciones.jpg" alt="Opciones de un juego"> | <img src="docs/capturas/tv-intro-consolas.jpg" alt="Intro de bienvenida"> |
+| <img src="docs/capturas/tv-juegos-opciones.jpg" alt="Ficha de un juego"> | <img src="docs/capturas/tv-intro-consolas.jpg" alt="Intro de bienvenida (consolas)"> |
 | **Opciones de cada juego** (dejar presionado OK o el lápiz): ficha, renombrar, carátula, emulador y sistema | **Intro de bienvenida** con las secciones de la app y las consolas |
 
 | Celular | | |
