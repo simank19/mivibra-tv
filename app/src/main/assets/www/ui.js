@@ -595,7 +595,7 @@
   var homeChip = 'all';
   var HCHIPS = [['all', 'Todo'], ['movies', 'Películas'], ['series', 'Series'], ['anime', 'Anime'], ['kdrama', 'Doramas'], ['novelas', 'Novelas'], ['infantil', 'Infantil'], ['docs', 'Documentales']];
   var HMODES = [['sec:news', IC.news || IC.live, 'Mañana informada', 'Noticias en vivo'], ['movies', IC.movie, 'Noche de película', 'Películas para hoy'],
-    ['infantil', IC.kids, 'Hora de los niños', 'Contenido infantil'], ['sec:sports', IC.sports || IC.live, 'Deportes', 'Partidos y canales'], ['music', IC.music || IC.radio, 'Música', 'Radio y tus listas']];
+    ['infantil', IC.kids, 'Hora de los niños', 'Contenido infantil'], ['games', IC.games || IC.play, 'Juegos', 'Consolas y juegos instalados']];
   function soundInner() { return (PV.mute ? IC.volOff || IC.volume || '' : IC.volume || '') + (PV.mute ? 'Activar sonido' : 'Quitar sonido'); }
   function greet() { var h = new Date().getHours(); return h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches'; }
   function cap(t) { return t.charAt(0).toUpperCase() + t.slice(1); }
