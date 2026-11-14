@@ -375,7 +375,8 @@ html.tv #console, html.tv #console * { animation: none !important; transition: n
   .gx-d2 { overflow-y: auto; padding: .6em 1.6em; }
   .gx-dbody { flex-direction: column; }
   .gx-dlist { width: auto; overflow: visible; }
-  .gx-dpanel { align-self: stretch; }
+  .gx-dpanel { align-self: stretch; flex: none; max-height: none; overflow: visible; }
+  .gx-dpanel .gx-desc { -webkit-line-clamp: 8; }
   .gx-dtt h1 { font-size: 2.4em; white-space: normal; }
 }
 

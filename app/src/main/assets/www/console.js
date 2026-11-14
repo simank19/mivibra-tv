@@ -51,6 +51,50 @@
     return NATIVE;
   }
   function natives() { var hv = MV.load('gamesHiddenView', []) || []; return nativeAll().filter(function (r) { return hv.indexOf(r.path) < 0; }); }
+  // Información de los juegos instalados: ficha pública de Google Play (Android) o de la tienda de Steam (PC). Se guarda 30 días.
+  var NI = null, niBusy = {};
+  function niCache() { if (!NI) { try { NI = JSON.parse(localStorage.getItem('mv:natInfo') || '{}'); } catch (e) { NI = {}; } } return NI; }
+  var PLAYCAT = { ACTION: 'Acción', ADVENTURE: 'Aventura', ARCADE: 'Arcade', BOARD: 'Mesa', CARD: 'Cartas', CASINO: 'Casino', CASUAL: 'Casual', EDUCATIONAL: 'Educativo', MUSIC: 'Música', PUZZLE: 'Rompecabezas', RACING: 'Carreras', ROLE_PLAYING: 'Rol', SIMULATION: 'Simulación', SPORTS: 'Deportes', STRATEGY: 'Estrategia', TRIVIA: 'Preguntas', WORD: 'Palabras' };
+  function unesc(t) { var d = document.createElement('textarea'); d.innerHTML = String(t || ''); return d.value; }
+  function playInfo(g) {
+    return MV.getText('https://play.google.com/store/apps/details?id=' + encodeURIComponent(g.pkg) + '&hl=es_419&gl=CO').then(function (h) {
+      var o = { shots: [] }, ld = null;
+      var m = h.match(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g) || [];
+      m.forEach(function (b) { try { var j = JSON.parse(b.replace(/^<script[^>]*>|<\/script>$/g, '')); if (j && /SoftwareApplication|VideoGame/.test(j['@type'])) ld = j; } catch (e) {} });
+      if (ld) {
+        o.name = ld.name; o.desc = ld.description; o.dev = ld.author && ld.author.name; o.icon = ld.image;
+        var cat = String(ld.applicationCategory || '').replace(/^GAME_/, ''); o.genre = PLAYCAT[cat] || '';
+        if (ld.aggregateRating) o.rating = (+ld.aggregateRating.ratingValue).toFixed(1).replace('.', ',') + ' ★' + (ld.aggregateRating.ratingCount ? ' · ' + (+ld.aggregateRating.ratingCount).toLocaleString('es-CO') + ' opiniones' : '');
+        o.age = ld.contentRating || '';
+      }
+      if (!o.desc) { var d = h.match(/<meta name="description" content="([^"]*)"/); if (d) o.desc = d[1]; }
+      if (!o.name) { var t = h.match(/<meta property="og:title" content="([^"]*)"/); if (t) o.name = t[1].replace(/\s+-\s+Apps en Google Play.*$/i, ''); }
+      var re = /<img[^>]+src="(https:\/\/play-lh\.googleusercontent\.com\/[^"=]+)(?:=[^"]*)?"[^>]*alt="([^"]*)"/g, x;
+      while ((x = re.exec(h)) && o.shots.length < 10) { if (/captura|screenshot|imagen/i.test(x[2]) && o.shots.indexOf(x[1] + '=w1280') < 0) o.shots.push(x[1] + '=w1280'); }
+      ['name', 'desc', 'dev'].forEach(function (k) { if (o[k]) o[k] = unesc(o[k]); });
+      return o;
+    });
+  }
+  function steamInfo(g) {
+    var id = g.id.split(':')[1];
+    return MV.getJSON('https://store.steampowered.com/api/appdetails?appids=' + id + '&l=spanish&cc=co').then(function (j) {
+      var d = j && j[id] && j[id].data; if (!d) return {};
+      return { name: d.name, desc: unesc(String(d.short_description || '').replace(/<[^>]+>/g, '')), dev: (d.developers || []).join(', '), pub: (d.publishers || []).join(', '),
+        genre: (d.genres || []).map(function (x) { return x.description; }).slice(0, 3).join(' · '), date: d.release_date && d.release_date.date, age: d.required_age ? '+' + d.required_age : '',
+        shots: (d.screenshots || []).map(function (x) { return x.path_full; }).slice(0, 10), hero: d.background_raw || '' };
+    });
+  }
+  function nativeInfo(r, cb) {
+    var g = r.native, c = niCache()[g.id];
+    if (c && Date.now() - c.t < 30 * 86400000) return c;
+    if (niBusy[g.id]) return c || null;
+    var job = g.pkg ? playInfo(g) : /^steam:/.test(g.id) ? steamInfo(g) : null;
+    if (!job) return null;
+    niBusy[g.id] = true;
+    job.then(function (o) { o = o || {}; o.t = Date.now(); niCache()[g.id] = o; try { localStorage.setItem('mv:natInfo', JSON.stringify(NI)); } catch (e) {} niBusy[g.id] = false; cb && cb(o); },
+      function () { niBusy[g.id] = false; });
+    return c || null;
+  }
   function launchNative(r) {
     var ok = false; try { ok = A.launchGame(JSON.stringify(r.native)); } catch (e) {}
     if (!ok) MV.toast('No se pudo abrir ' + r.native.name);
@@ -164,7 +208,7 @@
     var rec = (MV.load('recentGames', []) || []).filter(function (r) { return all.some(function (x) { return x.path === r.path; }); }).slice(0, 14);
     return topBar() +
       '<section class="gx-home">' +
-      '<div class="gx-watermark" id="gxMark"></div>' +
+
       (all.length || nat.length ? '<div class="crow gx-cards">' + cards.join('') + '</div><div class="gx-dots" id="gxDots"></div><div class="gx-sysname"><span class="gx-sysic" id="gxSysIc"></span><b id="ctitle"></b><span id="csys"></span></div>'
         : '<div class="crow gx-cards"><button class="cf gx-card" data-act="scan" data-title="Buscar juegos" data-sys="Conecta tu USB y presiona OK" style="--c:#FF6900"><span class="gx-ic">' + ic('usb') + '</span><b>Buscar juegos</b></button><button class="cf gx-card" data-act="send" data-title="Enviar desde el celular" data-sys="Pasa juegos por WiFi" style="--c:#4C8DFF"><span class="gx-ic">' + ic('send') + '</span><b>Desde el celular</b></button></div><div class="gx-sysname"><b id="ctitle"></b><span id="csys"></span></div>') +
       (rec.length ? '<h4 class="clabel">Jugados recientemente</h4><div class="crow gx-recent">' + rec.map(function (r) { return tile(r, false); }).join('') + '</div>' : '') +
@@ -278,21 +322,27 @@
   }
   function nativeDetail(r, k) {
     var g = r.native, gt = gTime(r), st = gStatus(r);
-    var sub = ['Instalado', g.src, gt.ms ? fmtTime(gt.ms) + ' jugadas' : ''].filter(Boolean).join(' · ');
-    var rows = [['Estado', STATUS[st]], ['Plataforma', g.src === 'Android' ? 'Android' : 'PC · ' + g.src], ['Última vez', ago(gt.last)],
+    var inf = nativeInfo(r, function () { if (box && tab === 'detail' && detailRom === r) { var a = document.activeElement, act = a && a.getAttribute && a.getAttribute('data-act'); heroRom = null; render(act ? '[data-act="' + act + '"]' : '.gx-play'); } }) || {};
+    var name = inf.name || g.name;
+    var sub = ['Instalado', g.src, inf.dev, gt.ms ? fmtTime(gt.ms) + ' jugadas' : ''].filter(Boolean).join(' · ');
+    var rows = [['Estado', STATUS[st]], ['Plataforma', g.src === 'Android' ? 'Android' : 'PC · ' + g.src], ['Género', inf.genre], ['Desarrollador', inf.dev], ['Editor', inf.pub && inf.pub !== inf.dev ? inf.pub : ''],
+      ['Lanzamiento', inf.date], ['Valoración', inf.rating], ['Clasificación', inf.age], ['Última vez', ago(gt.last)],
       ['Tiempo jugado', gt.ms ? fmtTime(gt.ms) + (gt.n ? ' · ' + gt.n + (gt.n === 1 ? ' sesión' : ' sesiones') : '') : ''], ['Instalado', g.installed ? ago(g.installed) : '']].filter(function (x) { return x[1]; });
+    var shots = (inf.shots || []).map(function (u, i) { return '<button class="cf gx-shot" data-act="shot" data-arg="' + i + '" data-title="Imagen ' + (i + 1) + '"><img loading="lazy" src="' + esc(u) + '" alt="" onerror="this.closest(\'.gx-shot\').remove()"></button>'; }).join('');
+    var loading = !inf.t && (g.pkg || /^steam:/.test(g.id));
     return topBar() +
       '<section class="gx-detail gx-d2">' +
       '<header class="gx-dhead"><div class="gx-dcover">' + cover(r, null) + '</div><div class="gx-dtt">' +
-      '<small>JUEGO · ' + esc(g.src.toUpperCase()) + '</small><h1 id="ctitle">' + esc(g.name) + '</h1><p class="gx-dsub">' + esc(sub) + '</p></div></header>' +
+      '<small>JUEGO · ' + esc(g.src.toUpperCase()) + '</small><h1 id="ctitle">' + esc(name) + '</h1><p class="gx-dsub">' + esc(sub) + '</p>' + (inf.genre ? '<p class="gx-dsub2">' + esc(inf.genre) + '</p>' : '') + '</div></header>' +
       '<div class="gx-dbody"><div class="gx-dlist">' +
-      drow('dplay', 'play', 'Jugar', (gt.last ? '<span class="gx-dr gx-acc">' + esc(ago(gt.last)) + '</span>' : '') + CHEV, ' gx-play" data-rom="' + k + '" data-title="' + esc(g.name)) +
+      drow('dplay', 'play', 'Jugar', (gt.last ? '<span class="gx-dr gx-acc">' + esc(ago(gt.last)) + '</span>' : '') + CHEV, ' gx-play" data-rom="' + k + '" data-title="' + esc(name)) +
       drow('dstatus', 'flag', 'Estado', '<span class="gx-dsel"><i>‹</i><b>' + STATUS[st] + '</b><i>›</i></span>') +
       drow('dfav', 'heart', 'Favorito', sw(isFav(r)), isFav(r) ? ' gx-favon' : '') +
       '<div class="gx-dsec">GESTIONAR</div>' +
       drow('dhide', 'eye', 'Ocultar de la biblioteca', sw(isHidden(r))) +
       '</div><aside class="gx-dpanel"><div class="gx-dgrid">' + rows.map(function (x) { return '<span>' + x[0] + '</span><b>' + esc(x[1]) + '</b>'; }).join('') + '</div>' +
-      '<p class="gx-desc" id="cdesc"></p></aside></div></section>' +
+      '<p class="gx-desc" id="cdesc">' + esc(inf.desc || (loading ? 'Buscando información del juego…' : '')) + '</p>' +
+      (shots ? '<div class="gx-dsec">IMÁGENES</div><div class="crow gx-dshots">' + shots + '</div>' : '') + '</aside></div></section>' +
       '<footer class="chint gx-dhint"><span><i>OK</i>Elegir</span><span><i>‹ ›</i>Cambiar</span><span><i>⟵</i>Volver</span></footer>';
   }
   function dStatus(dir) {
@@ -392,8 +442,8 @@
     heroRom = r;
     if (r.native) {
       var g = r.native, d1 = $('#cdesc', box), c1 = $('#csys', box), st1 = $('#gxStrip', box); if (st1) st1.innerHTML = '';
-      if (c1) c1.textContent = 'Instalado · ' + g.src; if (d1) d1.textContent = '';
-      var bg = g.hero || (g.banner ? g.img : '');
+      if (c1) c1.textContent = 'Instalado · ' + g.src;
+      var ic = niCache()[g.id] || {}, bg = ic.hero || (ic.shots && ic.shots[0]) || g.hero || (g.banner ? g.img : '');
       if (!bg) { setHeroBg(null); return; }
       var im0 = new Image(); im0.onload = function () { if (heroRom === r) setHeroBg(bg); }; im0.onerror = function () { if (heroRom === r) setHeroBg(null); }; im0.src = bg;
       return;
