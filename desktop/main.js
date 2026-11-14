@@ -16,6 +16,7 @@ const storage = require('./lib/storage');
 const gdrive = require('./lib/drive');
 const archives = require('./lib/archives');
 const remoteLib = require('./lib/remote');
+const pcgames = require('./lib/pcgames');
 
 const APP_PORT = 47800;   // fijo: el almacenamiento (perfiles, listas) queda guardado por dirección
 const VERSION = app.getVersion();                                   // 1.0.N
@@ -543,6 +544,8 @@ const SYNC = {
     return JSON.stringify({ tv: false, touch: false, desktop: true, ramMb: Math.round(os.totalmem() / 1048576), lowRam: false, model: 'PC ' + (process.platform === 'win32' ? 'Windows' : process.platform), sdk: 0, abi: process.arch, version: VERSION, versionCode: VERSION_CODE, external: os.homedir(), cores: os.cpus().length, maxMhz: Math.max(0, ...os.cpus().map((c) => c.speed || 0)) });
   },
   appsInstalled() { return '{}'; },
+  installedGames() { try { return JSON.stringify(pcgames.list()); } catch (e) { return '[]'; } },
+  launchGame(json) { try { return pcgames.launch(JSON.parse(json)); } catch (e) { return false; } },
   canInstallUpdates() { return process.platform === 'win32'; },
   toast() {},
   keepAwake(on) { keepAwake(!!on); },

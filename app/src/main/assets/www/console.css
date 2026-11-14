@@ -378,3 +378,11 @@ html.tv #console, html.tv #console * { animation: none !important; transition: n
   .gx-dpanel { align-self: stretch; }
   .gx-dtt h1 { font-size: 2.4em; white-space: normal; }
 }
+
+/* Juegos instalados en el equipo (Android / PC) */
+.cv.gx-nat { background: linear-gradient(160deg, #2E7DD7, #12355E); }
+.cv.gx-nat img { object-fit: cover; }
+.cv.gx-nat.gx-ban img { object-fit: contain; background: #0E0D0C; }
+.cv.gx-nat.gx-ico img { inset: 18% 22% 30%; width: 56%; height: auto; aspect-ratio: 1; margin: auto; background: transparent; object-fit: contain; filter: drop-shadow(0 .4em .8em rgba(0,0,0,.4)); }
+.cv.gx-nat.gx-ico.art .nm { visibility: visible; position: absolute; left: .8em; right: .8em; bottom: .8em; text-align: center; font-size: .95em; }
+.cv.gx-nat .gx-src { position: absolute; top: .6em; right: .6em; font-style: normal; font-size: .7em; font-weight: 800; padding: .25em .6em; border-radius: 99em; background: rgba(14,13,12,.7); color: #F3EFEA; z-index: 1; }

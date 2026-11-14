@@ -2209,6 +2209,7 @@
   MV.romTitle = function (r) { var cn = MV.romCustomName && MV.romCustomName(r); if (cn) return cn; var a = arcId(r); return a && a.title ? a.title.replace(/\s*\([^)]*\)\s*$/, '') : null; };
   var NEOGEO = function () { return D.SYSTEMS.find(function (s) { return s.id === 'neogeo'; }); };
   function romSystem(r) {
+    if (r && r.native) return null;   // juego instalado en el equipo (Android / PC), no es una ROM
     var ov = P.romSystem[r.path];
     // Juegos de Google Drive: la consola sale del nombre de su carpeta
     if (!ov && r.drive && r.sys) ov = r.sys;

@@ -1008,6 +1008,61 @@ class Bridge(private val a: MainActivity) {
         return best
     }
 
+    // ---------------- Juegos instalados en el equipo (para lanzarlos desde Juegos) ----------------
+
+    /**
+     * Juegos instalados (apps marcadas como juego por la tienda). Con all=true devuelve todas las apps que se pueden abrir,
+     * con "game" para saber cuáles son juegos. Cada una trae su ícono (o el banner de Android TV) como imagen.
+     */
+    @JavascriptInterface
+    fun installedGames(all: Boolean): String {
+        val pm = a.packageManager
+        val out = JSONArray()
+        val seen = HashSet<String>()
+        val intents = listOf(
+            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER),
+            Intent(Intent.ACTION_MAIN).addCategory("android.intent.category.LEANBACK_LAUNCHER"))
+        for (it in intents) {
+            val list = try { pm.queryIntentActivities(it, 0) } catch (_: Exception) { emptyList() }
+            for (ri in list) {
+                val ai = ri.activityInfo?.applicationInfo ?: continue
+                val pkg = ai.packageName
+                if (pkg == a.packageName || !seen.add(pkg)) continue
+                @Suppress("DEPRECATION")
+                val game = (android.os.Build.VERSION.SDK_INT >= 26 && ai.category == android.content.pm.ApplicationInfo.CATEGORY_GAME) ||
+                    (ai.flags and android.content.pm.ApplicationInfo.FLAG_IS_GAME) != 0
+                if (!game && !all) continue
+                val o = JSONObject().put("pkg", pkg).put("name", ai.loadLabel(pm).toString()).put("game", game)
+                try {
+                    val banner = ai.loadBanner(pm)
+                    val d = banner ?: ai.loadIcon(pm)
+                    val w = if (banner != null) 320 else 128
+                    val h = if (banner != null) 180 else 128
+                    val bmp = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+                    val c = android.graphics.Canvas(bmp)
+                    d.setBounds(0, 0, w, h); d.draw(c)
+                    val bo = java.io.ByteArrayOutputStream()
+                    bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 90, bo)
+                    o.put("img", "data:image/png;base64," + android.util.Base64.encodeToString(bo.toByteArray(), android.util.Base64.NO_WRAP))
+                    o.put("banner", banner != null)
+                } catch (_: Throwable) {}
+                try { o.put("installed", pm.getPackageInfo(pkg, 0).firstInstallTime) } catch (_: Exception) {}
+                out.put(o)
+            }
+        }
+        return out.toString()
+    }
+
+    /** Abre un juego instalado. */
+    @JavascriptInterface
+    fun launchGame(json: String): Boolean {
+        val o = try { JSONObject(json) } catch (_: Exception) { return false }
+        val pkg = o.optString("pkg"); if (pkg.isBlank()) return false
+        val pm = a.packageManager
+        val i = pm.getLeanbackLaunchIntentForPackage(pkg) ?: pm.getLaunchIntentForPackage(pkg) ?: return false
+        return try { a.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true } catch (_: Exception) { false }
+    }
+
     // ---------------- Otras apps (YouTube, música) ----------------
 
     /** Qué apps de la lista están instaladas: {"com.google.android.youtube": true, ...} */
