@@ -1687,7 +1687,28 @@
         // Temporada inicial: la del último episodio que viste, si no la primera
         var cur = keys[0], last = 0;
         eps.forEach(function (e) { var pr = MV.progressOf(it.key + '#' + e.season + 'x' + e.ep); if (pr && (pr.ts || 0) >= last) { last = pr.ts || 1; cur = String(e.season); } });
-        var tm = {}, absInfo = null, absTried = false;
+        var tm = {}, absInfo = null, absTried = false, allInfo = null, allTried = false;
+        // Anime: cada parte (cour) suele venir como "temporada 1" de otra ficha, y TMDB la numera distinto.
+        // Ahí la descripción se busca por fecha de emisión; si no se puede, se usa la de la propia fuente (nunca la de otro capítulo).
+        var isAnimeIt = /^(kitsu|mal|anilist|anidb)[:_]/i.test((it.st && it.st.id) || '') || it.genre && /anim/i.test(it.genre) && /japon|anime/i.test((it.group || '') + ' ' + (it.genre || '')) || /anime/i.test(it.group || '');
+        var hasDates = eps.some(function (e) { return e.date; });
+        function dayDiff(a, b) { return Math.abs((Date.parse(a) - Date.parse(b)) / 86400e3); }
+        function epInfo(e, info) {
+          if (e.date && allInfo && allInfo.length) {
+            var best = null, bd = 2;
+            allInfo.forEach(function (x) { if (x.date) { var d = dayDiff(x.date, e.date); if (d < bd) { bd = d; best = x; } } });
+            if (best) return best;
+            if (isAnimeIt) return {};
+          }
+          if (isAnimeIt) {
+            var listLen = (seasons[cur] || []).length;
+            if (absInfo && listLen > info.length + 2) return absInfo[(+e.ep) - 1] || {};
+            if (Math.abs(listLen - info.length) > 1) return {};   // otra cantidad de capítulos: la numeración no coincide
+          }
+          var t = info.filter(function (x) { return x.ep === +e.ep; })[0] || {};
+          if (!t.name && absInfo) t = absInfo[(+e.ep) - 1] || {};
+          return t;
+        }
         // Sin imagen del capítulo: se usa el fondo o la carátula de la serie
         var fbImg = (it._meta && (it._meta.backdrop || it._meta.poster)) || MV.poster(it) || '';
         function render(focusChip) {
@@ -1699,9 +1720,8 @@
           box.innerHTML = (keys.length > 1 ? '<div class="seasons">' + keys.map(function (k) { return '<button class="chip f' + (k === cur ? ' on' : '') + '" data-act="season" data-arg="' + k + '">Temporada ' + k + '</button>'; }).join('') + '</div>' : '') +
             '<h3 class="sh">Temporada ' + cur + ' <small>' + list.length + ' episodios' + (seen ? ' · ' + seen + ' vistos' : '') + '</small></h3>' +
             list.map(function (e) {
-              var k = it.key + '#' + e.season + 'x' + e.ep, pr = MV.progressOf(k), t = info.filter(function (x) { return x.ep === +e.ep; })[0] || {};
-              if (!t.name && absInfo) t = absInfo[(+e.ep) - 1] || {};
-              var still = t.still || e.img || '', ov = t.overview || e.plot || '';
+              var k = it.key + '#' + e.season + 'x' + e.ep, pr = MV.progressOf(k), t = epInfo(e, info);
+              var still = isAnimeIt ? (e.img || t.still || '') : (t.still || e.img || ''), ov = isAnimeIt ? (e.plot || t.overview || '') : (t.overview || e.plot || '');
               var pct = pr && pr.dur ? Math.round(pr.pos / pr.dur * 100) : 0, done = pct > 90;
               // "Dragon Ball Super - S01E01 - ¡El gran premio…" → "¡El gran premio…"
               var raw = String(e.title || '').replace(/^.*?\bS\d{1,2}\s*E\d{1,4}\b\s*[-–:.]?\s*/i, '').trim();
@@ -1730,6 +1750,7 @@
           if (!MV.tmdbSeason) return;
           // Anime (ficha de otra fuente): se busca la serie en TMDB solo para las imágenes de los capítulos
           if (!it._tvId) { if (!it._tvIdTried && MV.tmdbTvId) { it._tvIdTried = true; MV.tmdbTvId(it).then(function (id) { if (id) { it._tvId = id; fetchSeason(); } }); } return; }
+          if (hasDates && !allTried && MV.tmdbAllEps) { allTried = true; MV.tmdbAllEps(it._tvId).then(function (all) { if (all && all.length) { allInfo = all; rerender(); } }); }
           if (tm[cur]) return;
           var want = cur;
           MV.tmdbSeason(it._tvId, want).then(function (d) {

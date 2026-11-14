@@ -452,7 +452,7 @@
     }
     function eps(meta) {
       return (meta.videos || []).filter(function (v) { return (v.season || 0) > 0 || v.episode || v.number; }).map(function (v) {
-        return { season: +v.season || 1, ep: +(v.episode || v.number) || 0, title: v.title || v.name || ('Episodio ' + (v.episode || v.number)), url: '', stId: v.id, img: v.thumbnail || '', plot: v.overview || v.description || '' };
+        return { season: +v.season || 1, ep: +(v.episode || v.number) || 0, title: v.title || v.name || ('Episodio ' + (v.episode || v.number)), url: '', stId: v.id, img: v.thumbnail || '', plot: v.overview || v.description || '', date: /^\d{4}-\d{2}-\d{2}/.test(String(v.released || v.firstAired || '')) ? String(v.released || v.firstAired).slice(0, 10) : '' };
       });
     }
     // Se le pide la lista de capítulos a todos los que la dan (no solo al primero): algunos addons solo listan los capítulos que tienen
