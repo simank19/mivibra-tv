@@ -541,13 +541,7 @@
     var favs = MV.favs().map(MV.resolve), cont = MV.continueList();
     MV._heroIt = null;   // el Inicio ya no tiene recuadro grande: arranca con las categorías
     var html = seasonBanner() + loadingBlock();
-    // Continuar desde otro dispositivo
-    var other = cont.find(function (c) { return c.device && c.device !== P.deviceName && Date.now() - c.ts < 3 * 86400e3; });
-    if (other) {
-      reg(other);
-      html += '<div class="banner glass"><div class="t"><span class="badge">CONTINÚA DONDE LO DEJASTE</span><h3 style="margin:8px 0 2px;font:800 22px var(--brand)">' + esc(other.name) + '</h3><span class="muted">Lo estabas viendo en ' + esc(other.device) + ' ' + MV.ago(other.ts) + ' · ' + MV.fmtDur(other.pos) + ' de ' + MV.fmtDur(other.dur) + '</span></div>' +
-        '<button class="btn f" data-act="resume" data-key="' + esc(other.key) + '">Continuar aquí</button></div>';
-    }
+    // "Continúa donde lo dejaste" ya está en el widget Continuar viendo (no se repite arriba)
     // Inicio como en la maqueta: título, las 8 categorías en tarjetas de color y luego En vivo y Continuar viendo
     var anime = MV.visible(S.items.filter(function (i) { return i.anime && i.type !== 'live'; }));
     var kd = MV.visible(S.items.filter(function (i) { return i.kdrama && i.type !== 'live'; }));
