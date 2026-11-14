@@ -320,3 +320,61 @@ html.tv #console, html.tv #console * { animation: none !important; transition: n
 .gx-sysname .gx-sysic.haslogo { height: 3.4em; }
 .gx-home .gx-sysname .gx-sysic.haslogo { height: 3em; }
 .gx-libhead .gx-clogo.clr { height: 2.6em; }
+
+/* ---------- Ficha del juego v2: lista de acciones + panel de datos, vidrio claro con los colores de la app ---------- */
+#console.gxv-detail { background-size: cover; background-position: center; }
+#console.gxv-detail::before { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+  background: linear-gradient(90deg, rgba(14,13,12,.9) 0%, rgba(14,13,12,.7) 40%, rgba(14,13,12,.35) 75%, rgba(14,13,12,.25) 100%), linear-gradient(0deg, rgba(14,13,12,.75), transparent 30%); }
+#console.gxv-detail > * { position: relative; z-index: 1; }
+.gx-d2 { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: stretch; gap: 1.6em; padding: .6em 3.6em .4em; }
+.gx-dhead { display: flex; align-items: flex-end; gap: 1.8em; flex: none; }
+.gx-d2 .gx-dcover { width: 9em; height: 12.6em; border-radius: .9em; overflow: hidden; }
+.gx-dtt { min-width: 0; padding-bottom: .3em; }
+.gx-dtt small { display: block; font-size: .78em; font-weight: 800; letter-spacing: .14em; color: rgba(243,239,234,.62); }
+.gx-dtt h1 { font-family: var(--brand); font-weight: 900; font-size: 3.2em; line-height: 1.05; margin: .15em 0 .2em; text-shadow: 0 .1em .6em rgba(0,0,0,.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gx-dtt .gx-logo { justify-content: flex-start; max-height: 5em; }
+.gx-dtt .gx-logo.on ~ h1 { display: none; }
+.gx-dsub { margin: 0; font-size: 1.05em; color: #E9E2DA; }
+.gx-dsub2 { margin: .3em 0 0; font-size: .95em; color: rgba(243,239,234,.62); }
+.gx-dbody { flex: 1; min-height: 0; display: flex; gap: 2.6em; }
+.gx-dlist { width: 36em; flex: none; display: flex; flex-direction: column; gap: .15em; overflow-y: auto; scrollbar-width: none; padding: .3em .4em; }
+.gx-drow { overflow: visible; flex: none; }
+#console .gx-di { width: 100%; display: flex; align-items: center; gap: 1em; padding: .78em 1.2em; border-radius: .9em; font-size: 1.12em; font-weight: 700; text-align: left; color: #F3EFEA;
+  transition: background .2s, color .2s, transform .2s, box-shadow .2s; }
+#console .gx-di .gx-dic { width: 1.2em; height: 1.2em; flex: none; display: grid; place-items: center; font-style: normal; }
+#console .gx-di .gx-dic svg { width: 100%; height: 100%; }
+#console .gx-di .gx-dl { flex: 1; min-width: 0; }
+#console .gx-di .gx-dr { font-size: .82em; font-weight: 600; color: rgba(243,239,234,.6); white-space: nowrap; }
+#console .gx-di .gx-acc { color: var(--accent); font-weight: 800; }
+#console .gx-di .gx-chev { flex: none; opacity: .6; }
+#console .gx-di.gx-play { background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.22); box-shadow: inset 0 1px 0 rgba(255,255,255,.18); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+#console .gx-di:focus { background: #F4F5F6; color: #121314; box-shadow: 0 .5em 1.6em rgba(0,0,0,.35), 0 0 0 .18em rgba(255,255,255,.35); transform: scale(1.02); }
+#console .gx-di:focus .gx-dr { color: rgba(18,19,20,.6); }
+#console .gx-di:focus .gx-acc { color: rgba(18,19,20,.7); }
+#console .gx-favon .gx-dic { color: var(--accent); }
+.gx-dsel { display: flex; align-items: center; gap: .6em; }
+.gx-dsel i { font-style: normal; opacity: .55; font-size: 1.1em; }
+.gx-dsel b { min-width: 9em; text-align: center; }
+.gx-sw { width: 2.8em; height: 1.5em; border-radius: 99em; background: rgba(255,255,255,.18); position: relative; flex: none; transition: background .2s; }
+.gx-sw i { position: absolute; left: .18em; top: .18em; width: 1.14em; height: 1.14em; border-radius: 50%; background: #D7D9DC; transition: transform .2s, background .2s; }
+.gx-sw.on { background: var(--accent); }
+.gx-sw.on i { transform: translateX(1.3em); background: #fff; }
+#console .gx-di:focus .gx-sw:not(.on) { background: rgba(18,19,20,.18); }
+.gx-dsec { font-size: .72em; font-weight: 800; letter-spacing: .14em; color: rgba(243,239,234,.55); padding: 1.2em 1.6em .3em; }
+.gx-dpanel { flex: 1; min-width: 0; align-self: flex-start; max-height: 100%; overflow: hidden; display: flex; flex-direction: column; box-sizing: border-box; padding: 1.4em 1.8em 1.2em; border-radius: 1.3em;
+  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18); box-shadow: inset 0 1px 0 rgba(255,255,255,.16), 0 1.4em 3em rgba(0,0,0,.28); backdrop-filter: blur(22px) saturate(140%); -webkit-backdrop-filter: blur(22px) saturate(140%); }
+.gx-dgrid { display: grid; grid-template-columns: 11em 1fr; gap: .55em 1.2em; font-size: 1em; }
+.gx-dgrid span { color: rgba(243,239,234,.6); font-weight: 600; }
+.gx-dgrid b { font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gx-dpanel .gx-desc { margin: 1em 0 0; font-size: .95em; -webkit-line-clamp: 3; }
+.gx-dpanel .gx-dsec { padding: 1.1em 0 .5em; }
+.gx-dpanel .gx-dshots { padding: .2em .3em .4em; gap: .8em; }
+#console .gx-dpanel .gx-dshots .gx-shot { width: 11em; height: 6.2em; }
+.gx-dhint { justify-content: flex-start; padding: 1em 3.6em 1.3em; background: rgba(14,13,12,.55); border-top: 1px solid rgba(255,255,255,.08); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+@media (orientation: portrait) {
+  .gx-d2 { overflow-y: auto; padding: .6em 1.6em; }
+  .gx-dbody { flex-direction: column; }
+  .gx-dlist { width: auto; overflow: visible; }
+  .gx-dpanel { align-self: stretch; }
+  .gx-dtt h1 { font-size: 2.4em; white-space: normal; }
+}

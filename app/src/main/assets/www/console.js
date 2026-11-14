@@ -30,8 +30,9 @@
       var s = MV.romSystem(r), k = title(r).toLowerCase() + '|' + (s ? s.id : '?');
       if (seen[k]) return false; seen[k] = 1; return true;
     });
-    romsCache = { raw: raw, list: list };
-    return list;
+    var hv = MV.load('gamesHiddenView', []) || [];
+    romsCache = { raw: raw, list: list.filter(function (r) { return hv.indexOf(r.path) < 0; }), hidden: list.filter(function (r) { return hv.indexOf(r.path) >= 0; }) };
+    return romsCache.list;
   }
   function romsRaw() { try { return localStorage.getItem('mv:roms') || ''; } catch (e) { return ''; } }
   var titles = {};
@@ -142,7 +143,7 @@
   // ---------- Juegos: carátulas en fila, el juego elegido llena el fondo; abajo su nombre y capturas ----------
   function filtered() {
     var all = roms();
-    var list = sysFilter === 'all' ? all : sysFilter === 'fav' ? all.filter(isFav) : all.filter(function (r) { var s = MV.romSystem(r); return (s ? s.id : '?') === sysFilter; });
+    var list = sysFilter === 'all' ? all : sysFilter === 'hidden' ? (roms(), romsCache.hidden || []) : sysFilter === 'fav' ? all.filter(isFav) : all.filter(function (r) { var s = MV.romSystem(r); return (s ? s.id : '?') === sysFilter; });
     if (sysFilter === 'fav') { var f = favs(); list.sort(function (a, b) { return f.indexOf(a.path) - f.indexOf(b.path); }); }
     else list = list.map(function (r) { return [title(r).toLowerCase(), r]; }).sort(function (a, b) { return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0; }).map(function (x) { return x[1]; });
     return list;
@@ -154,6 +155,7 @@
     if (favs().length) chips.push(chip('fav', '★ Favoritos', roms().filter(isFav).length));
     systems().forEach(function (s) { if (by[s.id] || sysFilter === s.id) chips.push(chip(s.id, s.mono && s.mono.length <= 4 ? s.mono : s.name, by[s.id] ? by[s.id].length : 0)); });
     if (by['?']) chips.push(chip('?', 'Sin sistema', by['?'].length));
+    if ((romsCache.hidden || []).length || sysFilter === 'hidden') chips.push(chip('hidden', 'Ocultos', (romsCache.hidden || []).length));
     return topBar() +
       '<div class="crow gx-chips">' + chips.join('') + '</div>' +
       '<section class="gx-games">' +
@@ -171,22 +173,81 @@
       '</section>' + hints(delMode || editMode ? 'Terminar' : 'Consolas');
   }
 
-  // ---------- Ficha del juego: fondo grande, carátula, Jugar / Favorito / Opciones y galería ----------
+  // ---------- Ficha del juego (estilo lista de consola): carátula y nombre arriba, acciones a la izquierda, datos a la derecha ----------
+  var STATUS = ['Sin estado', 'Por jugar', 'Jugando', 'Terminado', 'Completado al 100%', 'Abandonado'];
+  function gStatus(r) { return (MV.load('gameStatus', {}) || {})[r.path] || 0; }
+  function setStatus(r, n) { var o = MV.load('gameStatus', {}) || {}; if (n) o[r.path] = n; else delete o[r.path]; MV.save('gameStatus', o); }
+  function gTime(r) { return (MV.load('gameTime', {}) || {})[r.path] || { ms: 0, n: 0, last: 0 }; }
+  function isHidden(r) { return (MV.load('gamesHiddenView', []) || []).indexOf(r.path) >= 0; }
+  function setHidden(r, on) { var h = (MV.load('gamesHiddenView', []) || []).filter(function (x) { return x !== r.path; }); if (on) h.push(r.path); MV.save('gamesHiddenView', h); romsCache.raw = null; }
+  function fmtTime(ms) { var m = Math.round(ms / 60000); if (m < 1) return 'Menos de 1 min'; var h = Math.floor(m / 60); return h ? h + ' h ' + (m % 60) + ' min' : m + ' min'; }
+  function ago(ts) {
+    if (!ts) return ''; var d = Math.floor((Date.now() - ts) / 86400000);
+    if (d <= 0) { var h = Math.floor((Date.now() - ts) / 3600000); return h <= 0 ? 'Hace un momento' : 'Hace ' + h + (h === 1 ? ' hora' : ' horas'); }
+    return d === 1 ? 'Ayer' : d < 30 ? 'Hace ' + d + ' días' : new Date(ts).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+  // Tiempo jugado: se cuenta desde que se abre el juego hasta que la app vuelve a verse
+  var playing = null;
+  function startPlay(r) { playing = { path: r.path, t: Date.now() }; var o = MV.load('gameTime', {}) || {}, g = o[r.path] || { ms: 0, n: 0 }; g.last = Date.now(); o[r.path] = g; MV.save('gameTime', o); }
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden || !playing) return;
+    var dt = Date.now() - playing.t, path = playing.path; playing = null;
+    if (dt < 20000) return;   // abrió y salió enseguida
+    var o = MV.load('gameTime', {}) || {}, g = o[path] || { ms: 0, n: 0 };
+    g.ms += Math.min(dt, 8 * 3600000); g.n++; g.last = Date.now(); o[path] = g; MV.save('gameTime', o);
+    if (gStatus({ path: path }) === 0 || gStatus({ path: path }) === 1) setStatus({ path: path }, 2);
+    if (box && tab === 'detail') render('.gx-play');
+  });
+  var CHEV = '<svg class="gx-chev" viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 6l6 6-6 6"/></svg>';
+  var DI = {
+    play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4l13 8-13 8z"/></svg>',
+    flag: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 3h2v18H5zM8 4h11l-2.5 4L19 12H8z"/></svg>',
+    heart: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-7-4.4-9.3-9C1 8.6 3.2 5 6.6 5c2 0 3.4 1.1 4.1 2.3h2.6C14 6.1 15.4 5 17.4 5 20.8 5 23 8.6 21.3 12 19 16.6 12 21 12 21z"/></svg>',
+    tune: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>',
+    info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>',
+    pad: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="6" width="18" height="12" rx="3"/><path d="M8 10v4M6 12h4M16 11h.01M18 13h.01"/></svg>',
+    eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 3l18 18M10.6 6.1A9.8 9.8 0 0 1 12 6c5 0 9 6 9 6a17 17 0 0 1-2.6 3.2M6.5 7.4A16.7 16.7 0 0 0 3 12s4 6 9 6a9 9 0 0 0 4-1"/></svg>'
+  };
+  function drow(act, icon, label, right, extra) {
+    return '<div class="crow gx-drow"><button class="cf gx-di' + (extra || '') + '" data-act="' + act + '"><i class="gx-dic">' + DI[icon] + '</i><span class="gx-dl">' + label + '</span>' + (right || '') + '</button></div>';
+  }
+  function sw(on) { return '<span class="gx-sw' + (on ? ' on' : '') + '"><i></i></span>'; }
   function detailHtml() {
     var r = detailRom, s = MV.romSystem(r), k = 'g' + Object.keys(reg).length; reg[k] = r;
-    var m = MV.gameMeta ? MV.gameMeta(r) : null, line = MV.gameMetaLine ? MV.gameMetaLine(m) : '';
+    var m = MV.gameMeta ? MV.gameMeta(r) : null; if (m && m.none) m = null;
     var where = r.drive ? 'Google Drive' : /^content:|\/storage\/(?!emulated)/.test(r.path || '') ? 'USB / carpeta' : 'En este equipo';
+    var eng = s ? (MV.gameEngine(s) === 'retroarch' ? 'RetroArch' : 'Emulador de MiVibra') : '';
+    var gt = gTime(r), st = gStatus(r);
+    var sub = [where, eng, gt.ms ? fmtTime(gt.ms) + ' jugadas' : ''].filter(Boolean).join(' · ');
+    var line2 = m ? [m.year, m.genre, m.modes].filter(Boolean).join(' · ') : '';
+    var rows = [['Estado', STATUS[st]], ['Sistema', s ? s.name : 'Sin elegir'], ['Año', m && m.year], ['Género', m && m.genre], ['Desarrollador', m && m.dev], ['Editor', m && m.pub], ['Modos', m && m.modes],
+      ['Última vez', ago(gt.last)], ['Tiempo jugado', gt.ms ? fmtTime(gt.ms) + (gt.n ? ' · ' + gt.n + (gt.n === 1 ? ' sesión' : ' sesiones') : '') : ''], ['Archivo', (r.name || '') + (r.size ? ' · ' + (r.size > 1048576 ? (r.size / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(r.size / 1024)) + ' KB') : '')]].filter(function (x) { return x[1]; });
     return topBar() +
-      '<section class="gx-detail">' +
-      '<div class="gx-dcover">' + cover(r, s) + '</div>' +
-      '<div class="gx-dinfo"><div class="gx-logo" id="gxLogo"></div><h1 id="ctitle">' + esc(title(r)) + '</h1>' +
-      '<div class="gx-meta"><span>' + esc(s ? s.name : 'Elegir sistema') + '</span>' + (line ? '<span>' + esc(line) + '</span>' : '') + '<span>' + where + '</span>' + (s && MV.gameEngine(s) === 'retroarch' ? '<span>RetroArch</span>' : '') + '</div>' +
-      '<div class="crow gx-dbtns"><button class="cf gx-btn gx-play" data-act="dplay" data-rom="' + k + '" data-title="' + esc(title(r)) + '">▶ Jugar</button>' +
-      '<button class="cf gx-btn" data-act="dfav">' + (isFav(r) ? '★ Quitar de favoritos' : '☆ Favorito') + '</button>' +
-      '<button class="cf gx-btn gx-more" data-act="dopts" aria-label="Opciones">☰</button></div>' +
-      '<p class="gx-desc" id="cdesc">' + esc(m && m.desc ? m.desc : '') + '</p></div></section>' +
-      '<h4 class="clabel">Imágenes</h4><div class="crow gx-dshots" id="gxShots"></div>' +
-      '<footer class="chint"><span><i>OK</i>Elegir</span><span><i>⟵</i>Volver</span></footer>';
+      '<section class="gx-detail gx-d2">' +
+      '<header class="gx-dhead"><div class="gx-dcover">' + cover(r, s) + '</div><div class="gx-dtt">' +
+      '<small>JUEGO' + (s ? ' · ' + esc(s.name.toUpperCase()) : '') + '</small><div class="gx-logo" id="gxLogo"></div><h1 id="ctitle">' + esc(title(r)) + '</h1>' +
+      '<p class="gx-dsub">' + esc(sub) + '</p>' + (line2 ? '<p class="gx-dsub2">' + esc(line2) + '</p>' : '') + '</div></header>' +
+      '<div class="gx-dbody"><div class="gx-dlist">' +
+      drow('dplay', 'play', 'Jugar', (gt.last ? '<span class="gx-dr gx-acc">' + esc(ago(gt.last)) + '</span>' : '') + CHEV, ' gx-play" data-rom="' + k + '" data-title="' + esc(title(r))) +
+      drow('dstatus', 'flag', 'Estado', '<span class="gx-dsel"><i>‹</i><b>' + STATUS[st] + '</b><i>›</i></span>') +
+      drow('dfav', 'heart', 'Favorito', sw(isFav(r)), isFav(r) ? ' gx-favon' : '') +
+      drow('dopts', 'tune', 'Ajustes del juego', '<span class="gx-dr">Nombre, carátula, emulador</span>' + CHEV) +
+      drow('dinfo', 'info', 'Ficha completa', CHEV) +
+      '<div class="gx-dsec">GESTIONAR</div>' +
+      drow('dsys', 'pad', 'Cambiar sistema', '<span class="gx-dr">' + esc(s ? s.name : 'Sin elegir') + '</span>' + CHEV) +
+      drow('dhide', 'eye', 'Ocultar de la biblioteca', sw(isHidden(r))) +
+      '</div><aside class="gx-dpanel"><div class="gx-dgrid">' + rows.map(function (x) { return '<span>' + x[0] + '</span><b>' + esc(x[1]) + '</b>'; }).join('') + '</div>' +
+      '<p class="gx-desc" id="cdesc">' + esc(m && m.desc ? m.desc : '') + '</p>' +
+      '<div class="gx-dsec">IMÁGENES</div><div class="crow gx-dshots" id="gxShots"></div></aside></div>' +
+      '</section>' +
+      '<footer class="chint gx-dhint"><span><i>OK</i>Elegir</span><span><i>‹ ›</i>Cambiar</span><span><i>☰</i>Opciones</span><span><i>⟵</i>Volver</span></footer>';
+  }
+  function dStatus(dir) {
+    var r = detailRom; if (!r) return;
+    var n = (gStatus(r) + (dir === 'left' ? STATUS.length - 1 : 1)) % STATUS.length;
+    setStatus(r, n); blip(700);
+    var b = $('[data-act="dstatus"] .gx-dsel b', box); if (b) b.textContent = STATUS[n];
+    var g = $$('.gx-dgrid b', box)[0]; if (g) g.textContent = STATUS[n];
   }
 
   function render(focusSel) {
@@ -331,6 +392,9 @@
     var cur = document.activeElement;
     if (!cur || !box.contains(cur) || !cur.classList.contains('cf')) { var f = $('.cf', box); if (f) focus(f); return; }
     var row = cur.closest('.crow'), items = $$('.cf', row), i = items.indexOf(cur);
+    if ((dir === 'left' || dir === 'right') && cur.getAttribute('data-act') === 'dstatus') { dStatus(dir); return; }
+    if ((dir === 'left' || dir === 'right') && tab === 'detail' && cur.closest('.gx-dlist')) { if (dir === 'right') { var sh = $('.gx-dshots .cf', box); if (sh) focus(sh); } return; }
+    if (dir === 'left' && tab === 'detail' && cur.closest('.gx-dshots') && i === 0) { var pl = $('.gx-play', box); if (pl) focus(pl); return; }
     if (dir === 'left' || dir === 'right') { var n = items[i + (dir === 'right' ? 1 : -1)]; if (n) focus(n); return; }
     var rows = $$('.crow', box).filter(function (r) { return $('.cf', r); }), ri = rows.indexOf(row) + (dir === 'down' ? 1 : -1), target = rows[ri];
     if (!target) return;
@@ -359,9 +423,13 @@
       blip(880); detailFrom = tab; detailRom = reg[k]; tab = 'detail'; render(); return;
     }
     switch (el.getAttribute('data-act')) {
-      case 'dplay': blip(990); MV.playRom(detailRom); break;
-      case 'dfav': var on = toggleFav(detailRom); el.textContent = on ? '★ Quitar de favoritos' : '☆ Favorito'; MV.toast(on ? 'Agregado a favoritos' : 'Quitado de favoritos'); break;
+      case 'dplay': blip(990); startPlay(detailRom); MV.playRom(detailRom); break;
+      case 'dfav': var on = toggleFav(detailRom); var w = el.querySelector('.gx-sw'); if (w) w.classList.toggle('on', on); el.classList.toggle('gx-favon', on); MV.toast(on ? 'Agregado a favoritos' : 'Quitado de favoritos'); break;
+      case 'dstatus': dStatus('right'); break;
       case 'dopts': var pb = $('.gx-play', box); if (pb) options(pb); break;
+      case 'dinfo': MV.gameInfo(detailRom, MV.romSystem(detailRom)); break;
+      case 'dsys': MV.chooseSystem(detailRom); break;
+      case 'dhide': var hd = !isHidden(detailRom); setHidden(detailRom, hd); var w2 = el.querySelector('.gx-sw'); if (w2) w2.classList.toggle('on', hd); MV.toast(hd ? 'Oculto: lo ves en Juegos › Ocultos' : 'Visible otra vez en la biblioteca'); break;
       case 'shot': var im = el.querySelector('img'); if (im) setHeroBg(im.src); break;
       case 'filter': sysFilter = el.getAttribute('data-arg'); render('.gx-chip.on'); break;
       case 'tab': if (tab !== el.getAttribute('data-arg')) { tab = el.getAttribute('data-arg'); editMode = delMode = false; render('.ctab.on'); } break;
@@ -456,7 +524,7 @@
     });
   }
   if (MV.ACT) {
-    MV.ACT.consolePlay = function () { MV.closeModal(true); MV.playRom(MV._consoleRom); };
+    MV.ACT.consolePlay = function () { MV.closeModal(true); startPlay(MV._consoleRom); MV.playRom(MV._consoleRom); };
     MV.ACT.consoleSwap = function () { var s = MV.romSystem(MV._consoleRom); MV.setGameEngine(s.id, MV.gameEngine(s) === 'retroarch' ? 'interno' : 'retroarch'); MV.closeModal(true); render(); };
     MV.ACT.consoleRename = function () { MV.closeModal(true); MV.renameRom(MV._consoleRom, function () { if (box) render(); }); };
     MV.ACT.consoleCover = function () {
