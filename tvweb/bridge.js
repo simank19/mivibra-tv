@@ -66,7 +66,7 @@
   }
 
   // ---------- Reproductor (el del PC dentro de un marco a pantalla completa) ----------
-  var playerFrame = null, playerReq = null;
+  var playerFrame = null, playerReq = null, closedOnce = true;
   window.MVTV = {
     platform: PLAT,
     playerApi: {
@@ -75,7 +75,9 @@
       stalker: function () { return Promise.reject(new Error('Los portales MAC no se pueden abrir en este TV')); },
       fullscreen: function () {},
       close: function (result) {
-        if (playerFrame) { try { playerFrame.parentNode.removeChild(playerFrame); } catch (e) {} playerFrame = null; }
+        if (!playerFrame && closedOnce) return;
+        closedOnce = true;
+        if (playerFrame) { var pf = playerFrame; playerFrame = null; try { pf.src = 'about:blank'; } catch (e) {} try { pf.parentNode.removeChild(pf); } catch (e) {} }
         keepAwake(false);
         try { if (window.MV && MV.onPlayerClosed) MV.onPlayerClosed(result || {}); } catch (e) {}
         setTimeout(function () { try { window.focus(); var a = document.activeElement; if (MV.focusFirst && (!a || a === document.body)) MV.focusFirst(); } catch (e) {} }, 60);
@@ -88,14 +90,34 @@
     var f = document.createElement('iframe');
     f.src = 'pc/player.html';
     f.setAttribute('allow', 'autoplay; fullscreen');
-    f.style.cssText = 'position:fixed;inset:0;left:0;top:0;width:100%;height:100%;border:0;z-index:9999;background:#000';
-    document.body.appendChild(f); playerFrame = f;
-    f.onload = function () { try { f.contentWindow.focus(); } catch (e) {} };
+    f.style.cssText = 'position:fixed;inset:0;left:0;top:0;width:100%;height:100%;border:0;z-index:2147483000;background:#000';
+    f.setAttribute('tabindex', '-1');
+    document.body.appendChild(f); playerFrame = f; closedOnce = false;
+    f.onload = function () {
+      // Si el TV no deja que el reproductor hable directo con la app, se usan mensajes
+      try { f.contentWindow.postMessage({ mvtv: 'req', req: playerReq }, '*'); } catch (e) {}
+      try { f.focus(); f.contentWindow.focus(); } catch (e) {}
+    };
     keepAwake(true);
   }
   function keepAwake(on) {
     try { if (isTizen && tizen.power) { if (on) tizen.power.request('SCREEN', 'SCREEN_NORMAL'); else tizen.power.release('SCREEN'); } } catch (e) {}
   }
+
+  /** Cierra el reproductor desde la app (tecla Atrás cuando el foco no está dentro del marco).
+      Primero le pide al reproductor que cierre (guarda la posición); si no responde, lo quita igual. */
+  function closePlayer() {
+    var f = playerFrame; if (!f) return;
+    try { var b = f.contentWindow.document.getElementById('bClose'); if (b) b.click(); } catch (e) {}
+    try { f.contentWindow.postMessage({ mvtv: 'close' }, '*'); } catch (e) {}
+    setTimeout(function () { if (playerFrame === f) window.MVTV.playerApi.close({}); }, 700);
+  }
+  window.MVTV.closePlayer = closePlayer;
+  window.addEventListener('message', function (e) {
+    var d = e.data; if (!d || typeof d !== 'object') return;
+    if (d.mvtv === 'close') window.MVTV.playerApi.close(d.result || {});
+    else if (d.mvtv === 'full') { /* el TV ya está a pantalla completa */ }
+  });
 
   // ---------- El puente ----------
   var NA = 'No disponible en este TV';
@@ -155,10 +177,19 @@
   }
   window.addEventListener('keydown', function (e) {
     var k = e.keyCode;
+    // Con el reproductor abierto, si el foco quedó en la app (pasa en LG) las teclas se le pasan al reproductor
+    if (playerFrame && k !== 10009 && k !== 461) {
+      e.preventDefault(); e.stopImmediatePropagation();
+      var w = playerFrame.contentWindow, done = false;
+      try { if (w.mvTvKey) { w.mvTvKey(k); done = true; } } catch (x) {}
+      if (!done) { try { w.postMessage({ mvtv: 'key', code: k }, '*'); } catch (x) {} }
+      try { playerFrame.focus(); w.focus(); } catch (x) {}
+      return;
+    }
     // Atrás: 10009 (Samsung), 461 (LG)
     if (k === 10009 || k === 461) {
       e.preventDefault();
-      if (playerFrame) return;
+      if (playerFrame) { e.stopImmediatePropagation(); closePlayer(); return; }
       var a = document.activeElement;
       if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) { a.blur(); return; }
       try { if (window.MV && MV.onBack) MV.onBack(); } catch (x) {}

@@ -289,16 +289,23 @@
   })();
   v.addEventListener('click', function () { if (listOpen()) hideList(); else if (!$('tracks').hidden) $('tracks').hidden = true; else toggle(); });
 
+  // Televisores viejos (LG/Samsung) no traen e.key: se traduce desde keyCode
+  var KN = { 13: 'Enter', 27: 'Escape', 8: 'Backspace', 32: ' ', 33: 'PageUp', 34: 'PageDown', 37: 'ArrowLeft', 38: 'ArrowUp', 39: 'ArrowRight', 40: 'ArrowDown' };
+  window.mvPlayerKey = function (k, target) { return handleKey(k, target || document.body); };
   window.addEventListener('keydown', function (e) {
-    var k = e.key, typing = document.activeElement === $('lq');
+    var k = e.key && e.key !== 'Unidentified' ? e.key : KN[e.keyCode];
+    if (handleKey(k, e.target)) e.preventDefault();
+  }, true);
+  function handleKey(k, target) {
+    var typing = document.activeElement === $('lq');
     if (listOpen()) {
-      if (k === 'Escape' || k === 'BrowserBack') { hideList(); e.preventDefault(); return; }
-      if (k === 'ArrowDown' || k === 'ArrowUp') { lsel = Math.max(0, Math.min(lrows.length - 1, lsel + (k === 'ArrowDown' ? 1 : -1))); renderList(); scrollSel(); e.preventDefault(); return; }
-      if (k === 'Enter') { var i = lrows[lsel]; if (i != null) { hideList(); playIndex(i, 0, true); } e.preventDefault(); return; }
-      if (typing) return;
+      if (k === 'Escape' || k === 'BrowserBack') { hideList(); return true; }
+      if (k === 'ArrowDown' || k === 'ArrowUp') { lsel = Math.max(0, Math.min(lrows.length - 1, lsel + (k === 'ArrowDown' ? 1 : -1))); renderList(); scrollSel(); return true; }
+      if (k === 'Enter') { var i = lrows[lsel]; if (i != null) { hideList(); playIndex(i, 0, true); } return true; }
+      if (typing) return false;
     }
-    if (!$('tracks').hidden && (k === 'Escape' || k === 'BrowserBack')) { $('tracks').hidden = true; e.preventDefault(); return; }
-    if (e.target && e.target.tagName === 'BUTTON' && (k === 'Enter' || k === ' ')) return;
+    if (!$('tracks').hidden && (k === 'Escape' || k === 'BrowserBack')) { $('tracks').hidden = true; return true; }
+    if (target && target.tagName === 'BUTTON' && (k === 'Enter' || k === ' ')) return false;
     switch (k) {
       case ' ': case 'k': case 'K': case 'Enter': case 'MediaPlayPause': toggle(); break;
       case 'ArrowLeft': if (live) showList(); else seekBy(-10); break;
@@ -312,10 +319,10 @@
       case 'l': case 'L': $('bList').click(); break;
       case 'a': case 'A': tracksMenu(); break;
       case 'Escape': case 'BrowserBack': case 'Backspace': close(); break;
-      default: return;
+      default: return false;
     }
-    e.preventDefault();
-  }, true);
+    return true;
+  }
   window.addEventListener('mouseup', function (e) { if (e.button === 3) { e.preventDefault(); if (listOpen()) hideList(); else close(); } });
 
   function close() {
