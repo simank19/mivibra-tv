@@ -123,6 +123,24 @@
     if (index < queue.length - 1) { osd('Siguiente: ' + (queue[index + 1].title || '')); playIndex(index + 1, 0, false); }
     else close();
   });
+  // ---------- Saltar intro, resumen y créditos (segmentos que manda Jellyfin) ----------
+  var SEG_TXT = { intro: 'Saltar intro', recap: 'Saltar resumen', outro: 'Saltar créditos', preview: 'Saltar avance', commercial: 'Saltar anuncio' };
+  var segNow = null;
+  function segCheck() {
+    var b = $('segSkip'), list = (cur() || {}).skips || [], t = v.currentTime, hit = null;
+    if (!live) for (var i = 0; i < list.length; i++) { var g = list[i]; if (t >= g.s && t < g.e - 1) { hit = g; break; } }
+    if (hit !== segNow) { segNow = hit; if (hit) { b.textContent = '⏭  ' + (SEG_TXT[hit.t] || 'Saltar'); b.hidden = false; wake(); } else b.hidden = true; }
+  }
+  function segSkip() {
+    var g = segNow; if (!g) return false;
+    $('segSkip').hidden = true; segNow = null;
+    if (g.t === 'outro' && index < queue.length - 1 && (!isFinite(v.duration) || g.e >= v.duration - 5)) { playIndex(index + 1, 0, true); return true; }
+    v.currentTime = Math.min(g.e, isFinite(v.duration) ? v.duration - 0.5 : g.e);
+    return true;
+  }
+  $('segSkip').addEventListener('click', segSkip);
+  window.mvSegSkip = segSkip;
+  v.addEventListener('timeupdate', segCheck);
   v.addEventListener('timeupdate', function () {
     if (live || !isFinite(v.duration)) return;
     var p = v.duration ? v.currentTime / v.duration * 1000 : 0;
@@ -307,7 +325,8 @@
     if (!$('tracks').hidden && (k === 'Escape' || k === 'BrowserBack')) { $('tracks').hidden = true; return true; }
     if (target && target.tagName === 'BUTTON' && (k === 'Enter' || k === ' ')) return false;
     switch (k) {
-      case ' ': case 'k': case 'K': case 'Enter': case 'MediaPlayPause': toggle(); break;
+      case 'Enter': if (segNow) { segSkip(); break; } toggle(); break;
+      case ' ': case 'k': case 'K': case 'MediaPlayPause': toggle(); break;
       case 'ArrowLeft': if (live) showList(); else seekBy(-10); break;
       case 'ArrowRight': if (live) showList(); else seekBy(10); break;
       case 'ArrowUp': if (live) chan(-1); else { v.volume = Math.min(1, v.volume + 0.1); osd('Volumen ' + Math.round(v.volume * 100) + '%'); } break;

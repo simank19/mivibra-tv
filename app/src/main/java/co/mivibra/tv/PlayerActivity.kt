@@ -157,6 +157,7 @@ class PlayerActivity : ComponentActivity() {
         setupPanel(req)
         if (panel == null) compactControls()
         if (!live && queue.length() > 1) ui.postDelayed(nextTick, 1000)
+        if (!live) ui.postDelayed(skipTick, 1000)
         applySubtitleStyle()
         setContentView(root)
 
@@ -400,6 +401,42 @@ class PlayerActivity : ComponentActivity() {
         }
         root.addView(t, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.END).apply { setMargins(0, 0, dp(28), dp(96)) })
         return t
+    }
+
+    // ---------- Saltar intro / resumen / créditos (segmentos de Jellyfin) ----------
+    private var skipCard: TextView? = null
+    private var skipSeg: JSONObject? = null
+    private val skipTick = object : Runnable {
+        override fun run() {
+            val p = player
+            val segs = current().optJSONArray("skips")
+            var hit: JSONObject? = null
+            if (p != null && segs != null && nextCard?.visibility != View.VISIBLE) {
+                val t = p.currentPosition / 1000.0
+                for (i in 0 until segs.length()) {
+                    val g = segs.optJSONObject(i) ?: continue
+                    if (t >= g.optDouble("s", 0.0) && t < g.optDouble("e", 0.0) - 1) { hit = g; break }
+                }
+            }
+            if (hit !== skipSeg) {
+                skipSeg = hit
+                val card = skipCard ?: makeNextCard().also { c -> c.setOnClickListener { doSkip() }; skipCard = c }
+                if (hit != null) {
+                    card.text = "⏭  " + when (hit.optString("t")) { "recap" -> "Saltar resumen"; "outro" -> "Saltar créditos"; "preview" -> "Saltar avance"; "commercial" -> "Saltar anuncio"; else -> "Saltar intro" }
+                    card.visibility = View.VISIBLE
+                    if (!view.isControllerFullyVisible && !panelShowing()) card.requestFocus()
+                } else card.visibility = View.GONE
+            }
+            ui.postDelayed(this, 500)
+        }
+    }
+    private fun doSkip() {
+        val g = skipSeg ?: return
+        val p = player ?: return
+        skipSeg = null; skipCard?.visibility = View.GONE
+        val end = (g.optDouble("e", 0.0) * 1000).toLong()
+        if (g.optString("t") == "outro" && hasNext() && (p.duration <= 0 || end >= p.duration - 5000)) { goNext(); return }
+        p.seekTo(if (p.duration > 0) minOf(end, p.duration - 500) else end)
     }
 
     private fun isFav(o: JSONObject) = o.optBoolean("fav")

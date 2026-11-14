@@ -2559,7 +2559,22 @@
     var nn = it.type === 'live' ? MV.nowNext(it) : {};
     return Object.assign({ id: it.key, url: it.url, title: it.name, subtitle: nn.now ? nn.now.t : (it.group || ''), num: it.num || '', ua: it.ua || '', ref: it.ref || '', alts: it.alts || [], poster: it.type === 'live' ? '' : MV.poster(it), logo: it.type === 'live' ? (it.logo || '') : '', cn: it.type === 'live' && it.country ? D.countryName(it.country) : '', sp: it.type === 'live' && (D.RX.sports.test(it.group || '') || /\b(espn|fox sports|tyc|dsports|directv sports|win sports|bein|gol ?tv|tudn|claro sports|sky sports|eurosport|dazn|nba|nfl|f1)\b/i.test(it.name || '')), fav: MV.isFav(it.key), private: !!it.adult, stk: it.stk || null }, it.type === 'live' ? {} : subInfo(it), extra || {});
   }
+  /** Jellyfin: antes de abrir, se piden los segmentos de intro/resumen/créditos (máx. 1,5 s; si no responde, se abre igual). */
+  function withSkips(req, ctx, go) {
+    if (req.live || !MV.jfSegments) return go();
+    var it = ctx.item || {}, items = (req.queue || []).slice(0, 40), jobs = [];
+    items.forEach(function (x, n) {
+      var ep = ctx.episodes ? ctx.episodes[(ctx.start || 0) + n] : null;
+      var id = ep ? ep.jfId : (n === 0 ? it.jfId : ''), lid = ep ? ep.jfList : it.list;
+      if (id && !x.skips) jobs.push(MV.jfSegments(lid, id).then(function (g) { if (g && g.length) x.skips = g; }));
+    });
+    if (!jobs.length) return go();
+    var sent = false, fire = function () { if (!sent) { sent = true; go(); } };
+    setTimeout(fire, 1500);
+    Promise.all(jobs).then(fire, fire);
+  }
   function launch(req, ctx) {
+    if (!ctx.skipsDone) { ctx.skipsDone = true; return withSkips(req, ctx, function () { launch(req, ctx); }); }
     var isRom = ctx.item && ctx.item.type === 'rom';
     // Reproductor externo (Ajustes › Reproducción): canales, películas y series se abren en otra app
     if (P.extPlayer === 'ext' && !isRom) { req.ext = true; ctx.hinted = true; }

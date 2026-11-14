@@ -715,11 +715,11 @@
     var img = function (id) { return s + '/Items/' + id + '/Images/Primary?maxHeight=450&quality=90&api_key=' + k; };
     var y4 = function (d) { return d.ProductionYear ? String(d.ProductionYear) : ''; };
     var grp = function (kind, d) { return (list.name || 'Mi servidor') + ' · ' + kind + ((d.Genres || [])[0] ? ' · ' + d.Genres[0] : ''); };
-    return Promise.all([jfItems(list, 'Movie'), jfItems(list, 'Series')]).then(function (r) {
-      var out = [];
+    return Promise.all([jfItems(list, 'Movie'), jfItems(list, 'Series'), list.liveTv === false ? [] : jfLive(list)]).then(function (r) {
+      var out = r[2] || [];
       r[0].forEach(function (d) {
         var tm = d.ProviderIds && (d.ProviderIds.Tmdb || d.ProviderIds.tmdb);
-        out.push(tags({ key: 'movie:' + MV.norm(d.Name + ' ' + y4(d)), type: 'movie', name: d.Name + (y4(d) ? ' (' + y4(d) + ')' : ''), year: y4(d), poster: img(d.Id), plot: d.Overview || '', genre: (d.Genres || []).join(', '), rating: d.CommunityRating ? String(d.CommunityRating) : '', group: grp('Películas', d), url: s + '/Videos/' + d.Id + '/stream?static=true&api_key=' + k, tid: tm ? 'movie:' + tm : undefined, langFixed: streamsLang(d.MediaStreams), tracks: streamsTracks(d.MediaStreams), added: d.DateCreated ? Date.parse(d.DateCreated) / 1000 : 0, list: list.id }));
+        out.push(tags({ key: 'movie:' + MV.norm(d.Name + ' ' + y4(d)), type: 'movie', name: d.Name + (y4(d) ? ' (' + y4(d) + ')' : ''), year: y4(d), poster: img(d.Id), plot: d.Overview || '', genre: (d.Genres || []).join(', '), rating: d.CommunityRating ? String(d.CommunityRating) : '', group: grp('Películas', d), url: s + '/Videos/' + d.Id + '/stream?static=true&api_key=' + k, jfId: d.Id, tid: tm ? 'movie:' + tm : undefined, langFixed: streamsLang(d.MediaStreams), tracks: streamsTracks(d.MediaStreams), added: d.DateCreated ? Date.parse(d.DateCreated) / 1000 : 0, list: list.id }));
       });
       r[1].forEach(function (d) {
         var tm = d.ProviderIds && (d.ProviderIds.Tmdb || d.ProviderIds.tmdb);
@@ -728,6 +728,37 @@
       return out;
     });
   }
+  /** TV en vivo de Jellyfin/Emby (sintonizador M3U o HDHomeRun). Si el canal viene de una M3U se abre directo; si no, a través del servidor. */
+  function jfLive(list) {
+    var s = list.server, k = encodeURIComponent(list.token);
+    return jfGet(list, '/LiveTv/Channels?UserId=' + list.uid + '&EnableImages=true&EnableUserData=false&Fields=MediaSources,ChannelInfo&Limit=5000').then(function (j) {
+      return (j.Items || []).map(function (c) {
+        var ms = (c.MediaSources || [])[0] || {}, direct = /^https?:\/\//i.test(ms.Path || '') && ms.Protocol !== 'File' ? ms.Path : '';
+        var via = s + '/Videos/' + c.Id + '/stream?static=true' + (ms.Id ? '&MediaSourceId=' + encodeURIComponent(ms.Id) : '') + '&api_key=' + k;
+        var logo = c.ImageTags && c.ImageTags.Primary ? s + '/Items/' + c.Id + '/Images/Primary?maxHeight=120&api_key=' + k : '';
+        return tags({ key: 'live:jf:' + list.id + ':' + c.Id, type: 'live', name: c.Name, logo: logo, group: (list.name || 'Mi servidor') + ' · TV en vivo', num: c.ChannelNumber || c.Number || '', url: direct || via, alts: direct ? [via] : [], list: list.id });
+      });
+    }).catch(function () { return []; });   // el servidor no tiene TV en vivo o el usuario no tiene permiso
+  }
+  /** Segmentos para "Saltar intro": Jellyfin 10.10+ (MediaSegments, lo llena Intro Skipper) o el Intro Skipper antiguo. */
+  var SEGS = {};
+  MV.jfSegments = function (listId, id) {
+    if (!listId || !id) return Promise.resolve([]);
+    if (SEGS[id]) return Promise.resolve(SEGS[id]);
+    var list = S.lists.find(function (l) { return l.id === listId; }); if (!list || !list.token) return Promise.resolve([]);
+    var T = { Intro: 'intro', Recap: 'recap', Outro: 'outro', Preview: 'preview', Commercial: 'commercial' };
+    var done = function (arr) { arr = arr.filter(function (g) { return g.e > g.s + 2; }); SEGS[id] = arr; return arr; };
+    return jfGet(list, '/MediaSegments/' + id).then(function (j) {
+      return done((j.Items || []).map(function (x) { return { t: T[x.Type] || 'intro', s: (x.StartTicks || 0) / 1e7, e: (x.EndTicks || 0) / 1e7 }; }));
+    }).catch(function () {
+      return jfGet(list, '/Episode/' + id + '/IntroSkipperSegments').then(function (j) {
+        var out = []; Object.keys(j || {}).forEach(function (k2) { var x = j[k2]; if (x && x.Valid !== false && x.IntroEnd > 0) out.push({ t: /credit|outro/i.test(k2) ? 'outro' : 'intro', s: x.IntroStart || x.Start || 0, e: x.IntroEnd || x.End }); });
+        return done(out);
+      });
+    }).catch(function () {
+      return jfGet(list, '/Episode/' + id + '/IntroTimestamps/v1').then(function (x) { return done(x && x.Valid !== false && x.IntroEnd > 0 ? [{ t: 'intro', s: x.IntroStart || 0, e: x.IntroEnd }] : []); });
+    }).catch(function () { SEGS[id] = []; return []; });
+  };
   function pxGet(list, path) {
     var sep = path.indexOf('?') >= 0 ? '&' : '?';
     return MV.getText(list.server + path + sep + 'X-Plex-Token=' + encodeURIComponent(list.token), { Accept: 'application/json', 'X-Plex-Client-Identifier': devId(), 'X-Plex-Product': 'MiVibra TV' }).then(function (t) { return JSON.parse(t).MediaContainer || {}; });
@@ -763,7 +794,7 @@
     var s = list.server, k = encodeURIComponent(list.token);
     var job = item.jf
       ? jfGet(list, '/Shows/' + ref.id + '/Episodes?UserId=' + list.uid + '&Fields=Overview,MediaStreams').then(function (j) {
-          return (j.Items || []).map(function (e) { return { season: e.ParentIndexNumber || 1, ep: e.IndexNumber || 0, title: e.Name || ('Episodio ' + e.IndexNumber), plot: e.Overview || '', url: s + '/Videos/' + e.Id + '/stream?static=true&api_key=' + k, img: s + '/Items/' + e.Id + '/Images/Primary?maxHeight=240&api_key=' + k }; });
+          return (j.Items || []).map(function (e) { return { season: e.ParentIndexNumber || 1, ep: e.IndexNumber || 0, title: e.Name || ('Episodio ' + e.IndexNumber), plot: e.Overview || '', url: s + '/Videos/' + e.Id + '/stream?static=true&api_key=' + k, jfId: e.Id, jfList: list.id, img: s + '/Items/' + e.Id + '/Images/Primary?maxHeight=240&api_key=' + k }; });
         })
       : pxGet(list, '/library/metadata/' + ref.id + '/allLeaves').then(function (mc) {
           return (mc.Metadata || []).map(function (e) { var p = e.Media && e.Media[0] && e.Media[0].Part && e.Media[0].Part[0]; return p ? { season: e.parentIndex || 1, ep: e.index || 0, title: e.title || ('Episodio ' + e.index), plot: e.summary || '', url: s + p.key + '?X-Plex-Token=' + k } : null; }).filter(Boolean);

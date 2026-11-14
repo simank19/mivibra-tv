@@ -53,3 +53,8 @@ body.single #bPrev, body.single #bNext { display: none; }
 #tracks button { display: block; width: 100%; text-align: left; padding: 8px 10px; border-radius: 8px; border: 0; background: none; color: #F3EFEA; font: inherit; cursor: pointer; }
 #tracks button:hover, #tracks button.on { background: rgba(255,105,0,.25); }
 ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.2); border-radius: 8px; }
+
+/* Saltar intro / resumen / créditos (Jellyfin con Intro Skipper) */
+#segSkip { position: fixed; right: 34px; bottom: 120px; z-index: 7; padding: 14px 24px; border-radius: 28px; border: 2px solid #FF6900; background: rgba(13,12,11,.9); color: #fff; font: 700 17px/1 system-ui, sans-serif; cursor: pointer; }
+#segSkip:hover, #segSkip:focus { background: #FF6900; outline: none; }
+#segSkip[hidden] { display: none; }
