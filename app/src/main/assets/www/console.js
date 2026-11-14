@@ -153,8 +153,8 @@
     var noG = systems().filter(function (s) { return !by[s.id] && !s.port && canHere(s); });
     var cards = withG.concat(noG).map(function (s) {
       var n = by[s.id] ? by[s.id].length : 0;
-      return '<button class="cf gx-card' + (n ? '' : ' gx-empty') + '" data-act="sys" data-arg="' + s.id + '" data-title="' + esc(s.name) + '" data-sys="' + (n ? n + (n === 1 ? ' juego' : ' juegos') : 'Sin juegos todavía · agrégalos desde el USB o el celular') + '" style="--c:' + s.color + '">' +
-        '<i class="gx-n">' + n + '</i><span class="gx-ic">' + sysIcon(s.id, s.mono) + '</span><b>' + esc(s.name) + '</b></button>';
+      return '<button class="cf gx-card' + (n ? '' : ' gx-empty') + (sysLogo(s.id) ? ' gx-haslogo' : '') + '" data-act="sys" data-arg="' + s.id + '" data-title="' + esc(s.name) + '" data-sys="' + (n ? n + (n === 1 ? ' juego' : ' juegos') : 'Sin juegos todavía · agrégalos desde el USB o el celular') + '" style="--c:' + s.color + '">' +
+        '<i class="gx-n">' + n + '</i>' + (sysLogo(s.id) ? '<span class="gx-ic gx-lg">' + sysLogo(s.id) + '</span><b class="gx-small">' : '<span class="gx-ic">' + sysIcon(s.id, s.mono) + '</span><b>') + esc(s.name) + '</b></button>';
     });
     if (by['?']) cards.push('<button class="cf gx-card" data-act="sys" data-arg="?" data-title="Sin sistema" data-sys="' + by['?'].length + ' por elegir" style="--c:#6B7280"><i class="gx-n">' + by['?'].length + '</i><span class="gx-ic">?</span><b>Sin sistema</b></button>');
     if (all.length) cards.unshift('<button class="cf gx-card gx-all" data-act="sys" data-arg="all" data-title="Todos tus juegos" data-sys="' + all.length + ' juegos" style="--c:#FF6900"><i class="gx-n">' + all.length + '</i><span class="gx-ic">' + ic('lib') + '</span><b>Todos</b></button>');
@@ -363,7 +363,7 @@
     if (!box || tab !== 'home') return;
     var id = el.getAttribute('data-arg'), s = systems().find(function (x) { return x.id === id; });
     var c = el.style.getPropertyValue('--c') || '#FF6900';
-    box.style.backgroundImage = 'radial-gradient(90% 120% at 80% 0%, ' + c + '55, transparent 60%), radial-gradient(70% 90% at 0% 100%, ' + c + '22, transparent 60%)';
+    box.style.backgroundImage = 'radial-gradient(90% 120% at 80% 0%, ' + c + '38, transparent 60%), radial-gradient(70% 90% at 0% 100%, ' + c + '18, transparent 60%)';
     box.style.backgroundSize = ''; box.style.backgroundPosition = ''; box.style.backgroundRepeat = '';
     var mk = $('#gxMark', box); if (mk) { mk.innerHTML = '<span class="gx-markic">' + (s ? sysIcon(s.id, s.mono) : el.querySelector('.gx-ic').innerHTML) + '</span><b>' + esc(s ? s.name : el.getAttribute('data-title')) + '</b>'; mk.style.setProperty('--c', c); }
     var si = $('#gxSysIc', box); if (si) { var lg = s ? sysLogo(s.id) : ''; si.classList.toggle('haslogo', !!lg); si.innerHTML = lg || (s ? sysIcon(s.id, s.mono) : ''); }

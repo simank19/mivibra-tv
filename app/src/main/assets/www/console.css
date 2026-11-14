@@ -324,7 +324,7 @@ html.tv #console, html.tv #console * { animation: none !important; transition: n
 /* ---------- Ficha del juego v2: lista de acciones + panel de datos, vidrio claro con los colores de la app ---------- */
 #console.gxv-detail { background-size: cover; background-position: center; }
 #console.gxv-detail::before { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
-  background: linear-gradient(90deg, rgba(14,13,12,.9) 0%, rgba(14,13,12,.7) 40%, rgba(14,13,12,.35) 75%, rgba(14,13,12,.25) 100%), linear-gradient(0deg, rgba(14,13,12,.75), transparent 30%); }
+  background: linear-gradient(90deg, rgba(20,21,23,.72) 0%, rgba(20,21,23,.5) 40%, rgba(20,21,23,.2) 75%, rgba(20,21,23,.12) 100%), linear-gradient(0deg, rgba(20,21,23,.5), transparent 30%); }
 #console.gxv-detail > * { position: relative; z-index: 1; }
 .gx-d2 { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: stretch; gap: 1.6em; padding: .6em 3.6em .4em; }
 .gx-dhead { display: flex; align-items: flex-end; gap: 1.8em; flex: none; }
@@ -386,3 +386,19 @@ html.tv #console, html.tv #console * { animation: none !important; transition: n
 .cv.gx-nat.gx-ico img { inset: 18% 22% 30%; width: 56%; height: auto; aspect-ratio: 1; margin: auto; background: transparent; object-fit: contain; filter: drop-shadow(0 .4em .8em rgba(0,0,0,.4)); }
 .cv.gx-nat.gx-ico.art .nm { visibility: visible; position: absolute; left: .8em; right: .8em; bottom: .8em; text-align: center; font-size: .95em; }
 .cv.gx-nat .gx-src { position: absolute; top: .6em; right: .6em; font-style: normal; font-size: .7em; font-weight: 800; padding: .25em .6em; border-radius: 99em; background: rgba(14,13,12,.7); color: #F3EFEA; z-index: 1; }
+
+/* ---------- Vidrio claro con los colores de la app (fondo del modo Juegos y tarjetas de consolas) ---------- */
+#console { background: radial-gradient(120% 90% at 30% 0%, rgba(255,255,255,.10), rgba(255,255,255,0) 55%), linear-gradient(180deg, rgba(0,0,0,.05), rgba(0,0,0,.28)) !important; background-color: transparent !important; }
+html.console-open body { background-attachment: fixed; }
+#console .gx-card { background: linear-gradient(165deg, rgba(255,255,255,.18), rgba(255,255,255,.05) 70%), linear-gradient(165deg, color-mix(in srgb, var(--c) 22%, transparent), transparent 80%) !important;
+  border: 1px solid rgba(255,255,255,.26) !important; box-shadow: inset 0 1px 0 rgba(255,255,255,.28), 0 1.2em 2.6em rgba(0,0,0,.28);
+  -webkit-backdrop-filter: blur(18px) saturate(140%); backdrop-filter: blur(18px) saturate(140%); filter: none; }
+#console .gx-card:focus { background: linear-gradient(165deg, rgba(255,255,255,.30), rgba(255,255,255,.10) 70%), linear-gradient(165deg, color-mix(in srgb, var(--c) 30%, transparent), transparent 80%) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.4), 0 0 0 .2em rgba(255,255,255,.85), 0 2em 4em rgba(0,0,0,.4); }
+#console .gx-card.gx-empty { filter: none; opacity: .55; }
+#console .gx-card.gx-empty:focus { opacity: .9; }
+#console .gx-card.gx-haslogo { justify-content: center; }
+.gx-card .gx-ic.gx-lg { width: 9em; height: 6em; }
+.gx-card .gx-ic.gx-lg .gx-clogo { width: 100%; height: 100%; max-width: none; object-fit: contain; }
+.gx-card > b.gx-small { position: absolute; left: 0; right: 0; bottom: 1.1em; font-size: .85em; font-weight: 700; opacity: .75; }
+#console .gx-card .gx-n { background: rgba(255,255,255,.92); }
