@@ -3714,6 +3714,7 @@
     },
     bookTab: function (k) { BOOKF = k; BOOKLIM = 120; MV.rerender(); },
     bookMore: function () { BOOKLIM += 120; MV.rerender(); },
+    bookView: function (v) { P.bookGrid = v === 'grid'; MV.savePrefs(); MV.rerender(); },
     myLibrary: function () { MV.openLibrary(); },
     bookGroup: function (g) { BOOKG = g || ''; BOOKLIM = 120; MV.rerender(); },
     bookWebSearch: function () { var i = document.getElementById('bookQ'); if (i) BOOKQ = i.value; bookSearchWeb(BOOKQ); },
@@ -4540,6 +4541,7 @@
   };
   ACT.rcScanOnly = function () { MV.call('remoteScan', []).then(function (raw) { rcConnect(raw); }).catch(function (e) { if (e.message !== 'cancelado') MV.toast(e.message, 6000); }); };
   // ---------- Lectura: libros, mangas, cómics y revistas de tus listas ----------
+  var BOOKSHELF = null;
   var BOOKF = 'all', BOOKLIM = 120, BOOKQ = '', BOOKG = '', WEBB = { q: '', loading: false, items: [], done: false };
   function webBookLists() { return S.lists.filter(function (l) { return l.type === 'web' && l.enabled !== false; }); }
   function bookSearchWeb(q) {
@@ -4585,18 +4587,24 @@
       else if (extra.length) html += '<section class="row"><h3>Encontrado en tus páginas <small>' + extra.length + '</small></h3><div class="bookgrid">' + extra.slice(0, 60).map(bookCard).join('') + '</div></section>';
       else if (WEBB.done && !list.length) html += '<p class="muted">Tampoco lo encontré en tus páginas.</p>';
     }
+    var shelf = !P.bookGrid && MV.bookShelf && list.length && !(webs.length && BOOKQ.trim() && WEBB.q === BOOKQ.trim() && WEBB.loading);
+    BOOKSHELF = shelf ? list : null;
+    if (shelf) html += MV.bookShelf.html(list);
     if (rr.length) html += '<section class="row"><h3>Seguir leyendo</h3><div class="strip">' + rr.slice(0, 20).map(bookCard).join('') + '</div></section>';
     if (!all.length) {
       html += '<div class="panel glass" style="text-align:center;padding:40px 24px"><h2>Tu biblioteca de lectura</h2><p class="muted">Ninguna de tus listas trae libros, mangas o cómics todavía. Cuando una lista los incluya (PDF, EPUB, CBZ, CBR o CB7) aparecen aquí solos. También puedes agregar la página web donde publicas tus libros: MiVibra los encuentra y los ordena por las categorías de tu página.</p>' +
         '<div class="btns" style="justify-content:center">' + (canWeb ? '<button class="btn f" data-act="bookWebAdd" data-autofocus>' + IC.plus + 'Agregar tu página de libros</button>' : '') + '<button class="btn ghost f" data-act="bookFile">Abrir un archivo de tu equipo</button></div></div>';
       return html;
     }
+    if (shelf) { html += '<div class="btns" style="justify-content:center;margin:6px 0 18px"><button class="btn ghost sm f" data-act="bookView" data-arg="grid">' + IC.grid + 'Ver todos en cuadrícula (' + list.length + ')</button></div>'; return html; }
+    html += '<div class="btns" style="margin:0 0 12px"><button class="btn ghost sm f" data-act="bookView" data-arg="shelf">Ver como estante</button></div>';
     html += '<div class="bookgrid">' + list.slice(0, BOOKLIM).map(bookCard).join('') + '</div>';
     if (list.length > BOOKLIM) html += '<button class="btn ghost more f" data-act="bookMore">Ver más (' + (list.length - BOOKLIM) + ')</button>';
     if (!list.length && !(webs.length && BOOKQ.trim())) html += '<p class="muted">Nada coincide con tu búsqueda.</p>';
     return html;
   };
   VIEWS.books.after = function () {
+    if (MV.bookShelf) MV.bookShelf.mount(BOOKSHELF || []);
     var q = document.getElementById('bookQ');
     if (q) q.addEventListener('keydown', function (e) { if (e.key === 'Enter') { MV._typedAt = Date.now(); BOOKQ = q.value; bookSearchWeb(q.value); } });
     if (q) q.addEventListener('input', function () { clearTimeout(q.t); q.t = setTimeout(function () { BOOKQ = q.value; BOOKLIM = 120; MV.rerender(); var n = document.getElementById('bookQ'); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } }, 350); });
