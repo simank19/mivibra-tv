@@ -62,6 +62,7 @@ object Books {
                 val h = HashMap<String, String>()
                 o.optString("ua").takeIf { it.isNotBlank() }?.let { h["User-Agent"] = it }
                 o.optString("ref").takeIf { it.isNotBlank() }?.let { h["Referer"] = it }
+                o.optString("auth").takeIf { it.isNotBlank() }?.let { h["Authorization"] = it }
                 val code = Net.download(src, f, h) { tick(it) }
                 if (code >= 400) { f.delete(); throw IllegalStateException("El servidor respondió con error $code") }
             }

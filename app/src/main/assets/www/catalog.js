@@ -1111,6 +1111,117 @@
   function parseHtml(t) { return new DOMParser().parseFromString(t, 'text/html'); }
   // Enlaces que en la página funcionan como filtro o categoría (/categoria/…, ?tipo=…, etiquetas, listas de reproducción…)
   var CAT_URL = /[\/?&](categor[iy]a?s?|category|categories|genero|g[eé]nero|genre|tipo|type|tag|etiqueta|seccion|secci[oó]n|section|coleccion|colecci[oó]n|collection|materia|tema|temas|filtro|filter)[\/=_-]/i;   // (las páginas de una serie, curso o playlist no son categorías: son series)
+  // ---------- Enlaces de libros: catálogos OPDS (Calibre, Kavita, Komga…), listas de enlaces, archivos sueltos o páginas ----------
+  var BOOK_TYPES = /epub|pdf|cbz|cbr|comic|x-cbr|x-cbz|x-cb7|x-mobipocket/i;
+  function fileTitle(u) {
+    var n = String(u).split(/[?#]/)[0].split('/').pop() || 'Libro';
+    try { n = decodeURIComponent(n); } catch (e) {}
+    return n.replace(/\.[a-z0-9]{2,5}$/i, '').replace(/[_+]+/g, ' ').trim() || 'Libro';
+  }
+  function fmtOf(u, type) {
+    var m = String(u).split(/[?#]/)[0].match(/\.(pdf|epub|cbz|cbr|cb7)$/i);
+    if (m) return m[1].toLowerCase();
+    type = String(type || '');
+    return /epub/i.test(type) ? 'epub' : /pdf/i.test(type) ? 'pdf' : /cbr/i.test(type) ? 'cbr' : /cbz|comic|zip/i.test(type) ? 'cbz' : /cb7/i.test(type) ? 'cb7' : '';
+  }
+  function linkBook(list, b, group) {
+    var it = bookItem({ url: b.url, title: b.title || fileTitle(b.url), img: b.img || '', desc: b.desc || '', author: b.author || '', fmt: b.fmt || fmtOf(b.url) }, list, group || list.name || 'Enlaces', '');
+    if (list.user) it.auth = 'Basic ' + btoa(unescape(encodeURIComponent(list.user + ':' + (list.pass || ''))));
+    it.links = 1;
+    return it;
+  }
+  /** OPDS 1 (Atom): sigue las secciones y las páginas siguientes; cada libro trae portada, sinopsis y autor. */
+  function parseOpds(xml, base) {
+    var d = new DOMParser().parseFromString(xml, 'application/xml');
+    var feedTitle = ((d.getElementsByTagName('title')[0] || {}).textContent || '').trim();
+    var abs = function (h) { try { return new URL(h, base).href; } catch (e) { return h; } };
+    var out = { title: feedTitle, books: [], feeds: [] };
+    Array.prototype.forEach.call(d.getElementsByTagName('link'), function (l) {
+      if (l.parentNode && l.parentNode.nodeName === 'feed' && /next/.test(l.getAttribute('rel') || '')) out.feeds.push({ url: abs(l.getAttribute('href')), title: feedTitle, next: 1 });
+    });
+    Array.prototype.forEach.call(d.getElementsByTagName('entry'), function (e) {
+      var title = ((e.getElementsByTagName('title')[0] || {}).textContent || '').trim();
+      var au = e.getElementsByTagName('author')[0], author = au ? ((au.getElementsByTagName('name')[0] || au).textContent || '').trim() : '';
+      var sm = e.getElementsByTagName('summary')[0] || e.getElementsByTagName('content')[0], dv = document.createElement('div');
+      dv.innerHTML = sm ? sm.textContent : ''; var desc = (dv.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 1500);
+      var acq = null, img = '', thumb = '', nav = null;
+      Array.prototype.forEach.call(e.getElementsByTagName('link'), function (l) {
+        var rel = l.getAttribute('rel') || '', type = l.getAttribute('type') || '', href = l.getAttribute('href');
+        if (!href) return;
+        if (/opds-spec\.org\/image\/thumbnail|thumbnail/.test(rel)) thumb = abs(href);
+        else if (/opds-spec\.org\/image|cover/.test(rel)) img = abs(href);
+        else if (/acquisition/.test(rel) || BOOK_TYPES.test(type)) { if (BOOK_TYPES.test(type) || !acq) { if (!acq || (/epub/i.test(type) && !/epub/i.test(acq.type))) acq = { url: abs(href), type: type }; } }
+        else if (/atom\+xml|opds/.test(type) || /subsection|collection|start/.test(rel)) { if (!nav) nav = abs(href); }
+      });
+      if (acq) out.books.push({ url: acq.url, title: title, img: img || thumb, desc: desc, author: author, fmt: fmtOf(acq.url, acq.type) });
+      else if (nav) out.feeds.push({ url: nav, title: title });
+    });
+    return out;
+  }
+  /** OPDS 2 (JSON): publicaciones y navegación. */
+  function parseOpds2(j, base) {
+    var abs = function (h) { try { return new URL(h, base).href; } catch (e) { return h; } };
+    var out = { title: (j.metadata && j.metadata.title) || '', books: [], feeds: [] };
+    var pubs = (j.publications || []).concat.apply([], (j.groups || []).map(function (g) { return g.publications || []; }));
+    pubs.forEach(function (p) {
+      var m = p.metadata || {}, acq = (p.links || []).filter(function (l) { return /acquisition/.test(l.rel || '') || BOOK_TYPES.test(l.type || ''); })[0];
+      if (!acq) return;
+      var im = (p.images || [])[0], au = m.author; if (Array.isArray(au)) au = au[0]; if (au && au.name) au = au.name;
+      out.books.push({ url: abs(acq.href), title: m.title || '', img: im ? abs(im.href) : '', desc: String(m.description || '').replace(/<[^>]+>/g, ' ').trim().slice(0, 1500), author: au || '', fmt: fmtOf(acq.href, acq.type) });
+    });
+    (j.navigation || []).concat.apply([], (j.groups || []).map(function (g) { return g.navigation || []; })).forEach(function (n) { if (n.href) out.feeds.push({ url: abs(n.href), title: n.title || '' }); });
+    (j.links || []).forEach(function (l) { if (/next/.test(l.rel || '') && l.href) out.feeds.push({ url: abs(l.href), title: out.title, next: 1 }); });
+    return out;
+  }
+  function buildFromBookLinks(list) {
+    var hdr = list.user ? { Authorization: 'Basic ' + btoa(unescape(encodeURIComponent(list.user + ':' + (list.pass || '')))), Accept: 'application/atom+xml,application/opds+json,application/json,text/html,*/*' } : { Accept: 'application/atom+xml,application/opds+json,application/json,text/html,*/*' };
+    var out = [], seen = {};
+    var push = function (b, group) { if (!b.url || seen[b.url]) return; seen[b.url] = 1; out.push(linkBook(list, b, group)); };
+    // Enlaces pegados (uno por línea)
+    (list.links || []).forEach(function (u) { if (/^https?:\/\//i.test(u)) push({ url: u }); });
+    var start = String(list.url || '').trim();
+    if (!start) return Promise.resolve(out);
+    if (!/^https?:\/\//i.test(start)) start = 'https://' + start;
+    // Un archivo suelto
+    if (BOOK_EXT.test(start)) { push({ url: start }); return Promise.resolve(out); }
+    S.loadMsg = (list.name || 'Enlaces') + ': buscando libros…'; MV.emit('catalog');
+    var visited = {}, queue = [{ url: start, title: '', depth: 0 }], pages = 0;
+    function step() {
+      var job = queue.shift();
+      if (!job || pages >= 80 || out.length >= 5000) return Promise.resolve();
+      if (visited[job.url]) return step();
+      visited[job.url] = 1; pages++;
+      return MV.getText(job.url, hdr).then(function (t) {
+        var txt = String(t || '').trim(), res = null;
+        if (/^</.test(txt) && /<feed[\s>]/i.test(txt.slice(0, 2000))) res = parseOpds(txt, job.url);
+        else if (/^[\[{]/.test(txt)) {
+          var j = JSON.parse(txt);
+          if (j.publications || j.navigation || j.groups) res = parseOpds2(j, job.url);
+          else if (Array.isArray(j) || Array.isArray(j.books)) {
+            (Array.isArray(j) ? j : j.books).forEach(function (b) { if (typeof b === 'string') push({ url: b }); else if (b && (b.url || b.link || b.file)) push({ url: b.url || b.link || b.file, title: b.title || b.name, img: b.cover || b.img || b.image, desc: b.description || b.desc || b.sinopsis, author: b.author || b.autor }, b.category || b.group || b.categoria); });
+            return;
+          }
+        } else if (/^<|<html/i.test(txt.slice(0, 500))) {
+          // Una página web normal: se revisa como "Página web" (con sus categorías)
+          if (job.depth === 0) return buildFromWeb(Object.assign({}, list, { url: job.url })).then(function (arr) { arr.forEach(function (it) { if (!seen[it.url]) { seen[it.url] = 1; if (list.user) it.auth = hdr.Authorization; out.push(it); } }); });
+          return;
+        } else {
+          // Texto o M3U con enlaces
+          (txt.match(/https?:\/\/[^\s"'<>]+/g) || []).forEach(function (u) { if (BOOK_EXT.test(u)) push({ url: u }); });
+          return;
+        }
+        if (!res) return;
+        var group = job.depth === 0 ? (list.name || res.title) : (job.title || res.title);
+        res.books.forEach(function (b) { push(b, group); });
+        res.feeds.forEach(function (f) { if (job.depth < 4) queue.push({ url: f.url, title: f.next ? job.title : f.title, depth: f.next ? job.depth : job.depth + 1 }); });
+        S.loadMsg = (list.name || 'Enlaces') + ': ' + out.length + ' libros…'; MV.emit('catalog');
+      }).catch(function (e) { if (job.depth === 0) throw new Error(/401|403/.test(e.message) ? 'Pide usuario y contraseña' : e.message); }).then(step);
+    }
+    return step().then(function () {
+      if (!out.length) throw new Error('No encontré libros en ese enlace');
+      return out;
+    });
+  }
   function buildFromWeb(list) {
     var start = list.url.trim(); if (!/^https?:\/\//i.test(start)) start = 'https://' + start;
     var origin = (start.match(/^(https?:\/\/[^\/]+)/i) || [start])[0];
@@ -1207,7 +1318,7 @@
     var ck = 'list:' + list.id;
     return MV.idbGet(ck).then(function (cached) {
       // Las páginas web se actualizan cada hora (tus series nuevas aparecen solas); lo demás cada 12 horas
-      var fresh = cached && cached.ts > Date.now() - (list.type === 'web' || list.type === 'fb' ? 3600e3 : 12 * 3600e3) && cached.v === 8;
+      var fresh = cached && cached.ts > Date.now() - (list.type === 'web' || list.type === 'fb' || list.type === 'books' ? 3600e3 : 12 * 3600e3) && cached.v === 8;
       // Addons: si quedaron vacíos o se guardaron con una versión anterior de la app, se vuelven a pedir
       if (fresh && (list.type === 'stremio' || list.type === 'mvplugin') && (!cached.items.length || cached.sv !== ST_V)) fresh = false;
       // "Actualizar addons al abrir la app": la primera carga de cada sesión se pide de nuevo
@@ -1223,6 +1334,7 @@
       else if (list.type === 'jellyfin') job = buildFromJellyfin(list);
       else if (list.type === 'plex') job = buildFromPlex(list);
       else if (list.type === 'web') job = buildFromWeb(list);
+      else if (list.type === 'books') job = buildFromBookLinks(list);
       else if (list.type === 'fb') job = buildFromFirebase(list);
       else if (list.type === 'mvplugin') job = MV.buildFromMvPlugin(list).then(function (arr) { return arr.map(retag); });
       else if (list.type === 'stremio') job = MV.buildFromStremio(list, deep).then(function (arr) {
@@ -1673,7 +1785,7 @@
       var extra = [];
       if (dup) extra.push(dup + ' ya estaban en otras listas');
       if (lang) extra.push(lang + ' ocultos por "Solo español latino"');
-      if (list.count != null && list.type !== 'fb') MV.toast('“' + list.name + '”: ' + (list.count || 0) + ' elementos' + (parts.length ? ' · nuevos visibles: ' + parts.join(', ') : ' · nada nuevo visible') + (extra.length ? ' (' + extra.join('; ') + ')' : ''), 7000);
+      if (list.count != null && list.type !== 'fb' && list.type !== 'books') MV.toast('“' + list.name + '”: ' + (list.count || 0) + ' elementos' + (parts.length ? ' · nuevos visibles: ' + parts.join(', ') : ' · nada nuevo visible') + (extra.length ? ' (' + extra.join('; ') + ')' : ''), 7000);
     });
   };
   /** Lee un .txt (o texto pegado) con varias direcciones: una por línea.

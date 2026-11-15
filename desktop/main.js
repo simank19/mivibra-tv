@@ -325,7 +325,7 @@ const ASYNC = {
     if (!file) {
       if (/^https?:/i.test(src)) {
         file = path.join(BOOKS, key + '.bin');
-        const h = {}; if (o.ua) h['User-Agent'] = o.ua; if (o.ref) h.Referer = o.ref;
+        const h = {}; if (o.ua) h['User-Agent'] = o.ua; if (o.ref) h.Referer = o.ref; if (o.auth) h.Authorization = o.auth;
         const code = await net.download(src, file, h, (p) => progress(id, p), false);
         if (code >= 400) return reply(id, false, 'El servidor respondió con error ' + code);
       } else file = src;

@@ -210,30 +210,56 @@
     var q = splitTitle(b); if (!q.t) return Promise.resolve({ d: '', c: '' });
     var out = { d: '', c: '' };
     var gq = 'intitle:' + q.t + (q.a ? ' inauthor:' + q.a : '');
-    var google = getJSON('https://www.googleapis.com/books/v1/volumes?maxResults=6&printType=books&q=' + encodeURIComponent(gq)).then(function (j) {
+    var google = function () { return getJSON('https://www.googleapis.com/books/v1/volumes?maxResults=6&printType=books&q=' + encodeURIComponent(gq)).then(function (j) {
       var best = '', es = '', cov = '', covEs = '';
       (j.items || []).forEach(function (it) {
         var v = it.volumeInfo || {}, d = stripTags(v.description), cv = gbCover(v);
         if (d.length > 60) { if (!best) best = d; if (!es && v.language === 'es') es = d; }
         if (cv) { if (!cov) cov = cv; if (!covEs && v.language === 'es') covEs = cv; }
       });
-      out.d = es || best; out.c = covEs || cov;
-    });
+      if (!out.d) out.d = es || best;
+      if (!out.c && !out.lc) out.c = covEs || cov;
+    }); };
     var openlib = function () {
       return getJSON('https://openlibrary.org/search.json?limit=3&fields=key,cover_i&title=' + encodeURIComponent(q.t) + (q.a ? '&author=' + encodeURIComponent(q.a) : '')).then(function (j) {
         var doc = (j.docs || []).filter(function (x) { return x.cover_i; })[0] || (j.docs || [])[0]; if (!doc) return;
-        if (!out.c && doc.cover_i) out.c = 'https://covers.openlibrary.org/b/id/' + doc.cover_i + '-L.jpg';
+        if (!out.c && !out.lc && doc.cover_i) out.c = 'https://covers.openlibrary.org/b/id/' + doc.cover_i + '-L.jpg';
         if (out.d || !doc.key) return;
         return getJSON('https://openlibrary.org' + doc.key + '.json').then(function (x) { var d = x.description; out.d = stripTags(typeof d === 'string' ? d : d && d.value); });
       });
     };
-    PEND[k] = google.catch(function () {}).then(function () { if (!out.d || !out.c) return openlib().catch(function () {}); }).then(function () {
+    // Libros de tu equipo: primero lo que trae el propio archivo (portada y sinopsis exactas); luego internet
+    var local = b.path && MV.bookInfo ? MV.bookInfo(b).then(function (fi) { if (fi.desc) out.d = fi.desc; if (fi.cover) out.lc = 1; if (fi.author) out.a = fi.author; }).catch(function () {}) : Promise.resolve();
+    var need = function () { return !out.d || (!out.c && !out.lc); };
+    PEND[k] = local.then(function () { if (need()) return google().catch(function () {}); }).then(function () { if (need()) return openlib().catch(function () {}); }).then(function () {
       out.d = (out.d || '').replace(/\s*\(?(Source|Fuente):.*$/i, '').slice(0, 1200);
       delete PEND[k];
-      if (out.d || out.c) { var ks = Object.keys(c); if (ks.length > 400) delete c[ks[0]]; c[k] = out; MV.save('bookMeta', c); }
+      if (out.d || out.c || out.lc) { var ks = Object.keys(c); if (ks.length > 400) delete c[ks[0]]; c[k] = out; MV.save('bookMeta', c); }
       return out;
     });
     return PEND[k];
+  }
+  /** Tarjetas de libros sin portada: se busca en segundo plano (de a dos) y se pone apenas llega. */
+  var WQ = [], WBUSY = 0, WSEEN = {};
+  api.coverOf = function (b) { return cover(b); };
+  api.want = function (b) {
+    if (!b || !b.key || WSEEN[b.key] || metaOf(b)) return;
+    WSEEN[b.key] = 1; WQ.push(b); wNext();
+  };
+  function wNext() {
+    while (WBUSY < 2 && WQ.length) {
+      var b = WQ.shift(); WBUSY++;
+      fetchMeta(b).then(function (m) { return m; }, function () { return {}; }).then((function (bb) { return function (m) {
+        WBUSY--;
+        var src = (MV.bookCover && MV.bookCover(bb.key)) || (m && m.c) || '';
+        if (src) Array.prototype.forEach.call(document.querySelectorAll('.bcard[data-arg="' + (window.CSS && CSS.escape ? CSS.escape(bb.key) : bb.key) + '"] .bc'), function (bc) {
+          if (bc.querySelector('img')) return;
+          var im = document.createElement('img'); im.src = src; im.alt = ''; im.onerror = function () { im.remove(); }; bc.insertBefore(im, bc.firstChild);
+        });
+        if (src && !bb.poster) bb.poster = src;
+        wNext();
+      }; })(b));
+    }
   }
   function fetchDesc(b) { return fetchMeta(b).then(function (m) { return m.d || ''; }); }
   // Pide carátulas de los libros sin portada, de a dos a la vez, y repinta el estante
@@ -244,7 +270,7 @@
       var b = q.shift(); busy++;
       fetchMeta(b).then(function (m) {
         busy--;
-        if (m && m.c && sh === mySh) { sh.slots.forEach(function (sl) { if (sl.idx != null && sh.list[sl.idx] === b) sl.idx = null; }); frame(performance.now()); }
+        if (m && (m.c || m.lc) && sh === mySh) { sh.slots.forEach(function (sl) { if (sl.idx != null && sh.list[sl.idx] === b) sl.idx = null; }); frame(performance.now()); }
         next();
       });
       next();

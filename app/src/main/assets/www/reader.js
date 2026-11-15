@@ -41,7 +41,7 @@
     document.body.appendChild(box);
     document.documentElement.classList.add('reader-open');
     showBar();
-    MV.call('openBook', [JSON.stringify({ url: item.url || '', path: item.path || '', ua: item.ua || '', ref: item.ref || '' })], function (p) {
+    MV.call('openBook', [JSON.stringify({ url: item.url || '', path: item.path || '', ua: item.ua || '', ref: item.ref || '', auth: item.auth || '' })], function (p) {
       var m = $('#rdMsg'); if (m) m.textContent = p >= 0 ? 'Descargando… ' + p + '%' : 'Descargando…';
     }).then(function (d) {
       if (!box) return;
@@ -295,6 +295,63 @@
     };
     im.src = url;
   }
+  /** Guarda una portada (achicada) para un libro, sin abrirlo. */
+  function storeCover(key, url) {
+    return new Promise(function (res) {
+      var all = MV.load('bookCovers', {}) || {};
+      if (all[key]) return res(all[key]);
+      var im = new Image();
+      im.onload = function () {
+        try {
+          var w = 260, h = Math.round(im.naturalHeight * w / (im.naturalWidth || 1)) || 390, c = document.createElement('canvas');
+          c.width = w; c.height = Math.min(h, 520); c.getContext('2d').drawImage(im, 0, 0, w, h);
+          all = MV.load('bookCovers', {}) || {};
+          var keys = Object.keys(all); if (keys.length > 300) delete all[keys[0]];
+          all[key] = c.toDataURL('image/jpeg', 0.78); MV.save('bookCovers', all); coverMem = null; res(all[key]);
+        } catch (e) { res(''); }
+      };
+      im.onerror = function () { res(''); };
+      im.src = url;
+    });
+  }
+  function pdfCover(url) {
+    return (window.pdfjsLib ? Promise.resolve() : loadScript(PDFJS + 'pdf.min.js')).then(function () {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.js';
+      return pdfjsLib.getDocument({ url: url, isEvalSupported: false }).promise;
+    }).then(function (pdf) {
+      return pdf.getPage(1).then(function (pg) {
+        var v = pg.getViewport({ scale: 1 }), sc = 300 / v.width, vp = pg.getViewport({ scale: sc }), c = document.createElement('canvas');
+        c.width = vp.width; c.height = vp.height;
+        return pg.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise.then(function () { var u = c.toDataURL('image/jpeg', 0.8); pdf.destroy(); return u; });
+      });
+    });
+  }
+  /** Lee la portada, la sinopsis y el autor que trae el propio archivo (EPUB: su ficha OPF; cómic: la primera página; PDF: la primera hoja). */
+  MV.bookInfo = function (item) {
+    if (!MV.native || !item || (!item.url && !item.path)) return Promise.resolve({});
+    return MV.call('openBook', [JSON.stringify({ url: item.url || '', path: item.path || '', ua: item.ua || '', ref: item.ref || '', auth: item.auth || '' })]).then(function (d) {
+      var out = {};
+      if (d.fmt === 'comic' && d.pages && d.pages[0]) return storeCover(item.key, d.pages[0]).then(function (c) { out.cover = c; return out; });
+      if (d.fmt === 'pdf' && d.url) return pdfCover(d.url).then(function (u) { return storeCover(item.key, u); }).then(function (c) { out.cover = c; return out; }).catch(function () { return out; });
+      if (d.fmt !== 'epub' || !d.base) return out;
+      return txt(d.base + 'META-INF/container.xml').then(function (t) {
+        var x = new DOMParser().parseFromString(t, 'application/xml'), rf = x.getElementsByTagName('rootfile')[0];
+        var opf = resolve(rf ? rf.getAttribute('full-path') : 'content.opf', d.base);
+        return txt(opf).then(function (ot) {
+          var o = new DOMParser().parseFromString(ot, 'application/xml'), man = {}, cover = '';
+          var items = o.getElementsByTagName('item');
+          Array.prototype.forEach.call(items, function (it) { man[it.getAttribute('id')] = resolve(it.getAttribute('href'), opf); if (!cover && /cover-image/.test(it.getAttribute('properties') || '')) cover = man[it.getAttribute('id')]; });
+          if (!cover) { var cm = Array.prototype.filter.call(o.getElementsByTagName('meta'), function (m2) { return m2.getAttribute('name') === 'cover'; })[0]; if (cm && man[cm.getAttribute('content')]) cover = man[cm.getAttribute('content')]; }
+          if (!cover) Array.prototype.forEach.call(items, function (it) { if (!cover && /^image\//.test(it.getAttribute('media-type') || '') && /cover|portada/i.test((it.getAttribute('id') || '') + (it.getAttribute('href') || ''))) cover = man[it.getAttribute('id')]; });
+          var tag = function (n) { var e = o.getElementsByTagName('dc:' + n)[0] || o.getElementsByTagNameNS('http://purl.org/dc/elements/1.1/', n)[0]; return e ? e.textContent.trim() : ''; };
+          var dv = document.createElement('div'); dv.innerHTML = tag('description').replace(/<br\s*\/?>/gi, ' ');
+          out.desc = (dv.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 1500);
+          out.author = tag('creator');
+          return (cover ? storeCover(item.key, cover) : Promise.resolve('')).then(function (c) { out.cover = c; return out; });
+        });
+      }).catch(function () { return out; });
+    }).catch(function () { return {}; });
+  };
   // Se lee una sola vez (no en cada tarjeta) y se refresca al guardar una portada nueva
   var coverMem = null;
   MV.bookCover = function (key) { if (!coverMem) coverMem = MV.load('bookCovers', {}) || {}; return coverMem[key] || ''; };
