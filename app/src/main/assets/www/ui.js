@@ -4587,10 +4587,12 @@
       else if (extra.length) html += '<section class="row"><h3>Encontrado en tus páginas <small>' + extra.length + '</small></h3><div class="bookgrid">' + extra.slice(0, 60).map(bookCard).join('') + '</div></section>';
       else if (WEBB.done && !list.length) html += '<p class="muted">Tampoco lo encontré en tus páginas.</p>';
     }
-    var shelf = !P.bookGrid && MV.bookShelf && list.length && !(webs.length && BOOKQ.trim() && WEBB.q === BOOKQ.trim() && WEBB.loading);
-    BOOKSHELF = shelf ? list : null;
-    if (shelf) html += MV.bookShelf.html(list);
-    if (rr.length) html += '<section class="row"><h3>Seguir leyendo</h3><div class="strip">' + rr.slice(0, 20).map(bookCard).join('') + '</div></section>';
+    // Sin libros en listas: el estante muestra lo que abriste de tu equipo
+    var shelfList = all.length ? list : rr;
+    var shelf = !P.bookGrid && MV.bookShelf && shelfList.length && !(webs.length && BOOKQ.trim() && WEBB.q === BOOKQ.trim() && WEBB.loading);
+    BOOKSHELF = shelf ? shelfList : null;
+    if (shelf) html += MV.bookShelf.html(shelfList);
+    if (rr.length && !(shelf && !all.length)) html += '<section class="row"><h3>Seguir leyendo</h3><div class="strip">' + rr.slice(0, 20).map(bookCard).join('') + '</div></section>';
     if (!all.length) {
       html += '<div class="panel glass" style="text-align:center;padding:40px 24px"><h2>Tu biblioteca de lectura</h2><p class="muted">Ninguna de tus listas trae libros, mangas o cómics todavía. Cuando una lista los incluya (PDF, EPUB, CBZ, CBR o CB7) aparecen aquí solos. También puedes agregar la página web donde publicas tus libros: MiVibra los encuentra y los ordena por las categorías de tu página.</p>' +
         '<div class="btns" style="justify-content:center">' + (canWeb ? '<button class="btn f" data-act="bookWebAdd" data-autofocus>' + IC.plus + 'Agregar tu página de libros</button>' : '') + '<button class="btn ghost f" data-act="bookFile">Abrir un archivo de tu equipo</button></div></div>';

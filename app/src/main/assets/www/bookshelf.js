@@ -186,6 +186,40 @@
   }, true);
   window.addEventListener('resize', function () { if (sh && sh.root.isConnected) { measure(); kick(); frame(performance.now()); } });
 
+  // ---------- Descripción: Google Books y, si no, Open Library ----------
+  var DESC = null;
+  function descCache() { if (!DESC) DESC = MV.load('bookDesc', {}) || {}; return DESC; }
+  function stripTags(s) { var d = document.createElement('div'); d.innerHTML = String(s || '').replace(/<br\s*\/?>/gi, ' ').replace(/<\/p>/gi, ' '); return (d.textContent || '').replace(/\s+/g, ' ').trim(); }
+  function splitTitle(b) {
+    var t = clean(b.name || '').replace(/\.(pdf|epub|cbz|cbr|cb7|mobi|azw3?)$/i, '').replace(/[_]+/g, ' ').replace(/\[[^\]]*\]|\([^)]*\)/g, ' ').trim(), a = b.author || '';
+    var m = t.split(/\s+[-–—]\s+/);
+    if (!a && m.length > 1) { a = m.slice(1).join(' '); t = m[0]; }
+    return { t: t.replace(/\s+/g, ' ').trim(), a: a.trim() };
+  }
+  function getJSON(u) { return fetch(u).then(function (r) { if (!r.ok) throw 0; return r.json(); }); }
+  function fetchDesc(b) {
+    var c = descCache(), k = b.key;
+    if (c[k] != null) return Promise.resolve(c[k]);
+    var q = splitTitle(b); if (!q.t) return Promise.resolve('');
+    var gq = 'intitle:' + q.t + (q.a ? ' inauthor:' + q.a : '');
+    var google = getJSON('https://www.googleapis.com/books/v1/volumes?maxResults=5&printType=books&q=' + encodeURIComponent(gq)).then(function (j) {
+      var best = '', es = '';
+      (j.items || []).forEach(function (it) { var v = it.volumeInfo || {}, d = stripTags(v.description); if (d.length > 60) { if (!best) best = d; if (!es && v.language === 'es') es = d; } });
+      return es || best;
+    });
+    var openlib = function () {
+      return getJSON('https://openlibrary.org/search.json?limit=3&fields=key&title=' + encodeURIComponent(q.t) + (q.a ? '&author=' + encodeURIComponent(q.a) : '')).then(function (j) {
+        var w = j.docs && j.docs[0] && j.docs[0].key; if (!w) return '';
+        return getJSON('https://openlibrary.org' + w + '.json').then(function (x) { var d = x.description; return stripTags(typeof d === 'string' ? d : d && d.value); });
+      });
+    };
+    return google.catch(function () { return ''; }).then(function (d) { return d || openlib().catch(function () { return ''; }); }).then(function (d) {
+      d = (d || '').replace(/\s*\(?(Source|Fuente):.*$/i, '').slice(0, 1200);
+      c[k] = d; MV.save('bookDesc', c); return d;
+    });
+  }
+  api.fetchDesc = fetchDesc;
+
   // ---------- Ficha: crece desde la portada ----------
   function openDetail() {
     var b = current(); if (!b) return;
@@ -194,12 +228,13 @@
     var rect = slot ? slot.cv.getBoundingClientRect() : null;
     var pct = pctOf(b), sub = [b.author, b.group].filter(Boolean).join(' / ').toUpperCase() || (KINDS[b.kind] || 'LIBRO').toUpperCase();
     MV.reg[b.key] = b;
-    var syn = b.plot || b.desc || b.description || '';
+    var syn = b.plot || b.desc || b.description || (descCache()[b.key] || '');
+    var need = !syn && descCache()[b.key] == null;
     var html = '<button class="bsclose f" data-act="closeModal">CERRAR</button>' +
       '<div class="bsdl"><div class="m"><div class="s">' + esc(sub) + '</div></div>' +
       '<div class="m"><h2>' + esc(clean(b.name)) + '</h2></div>' +
       '<div class="m"><div class="y">' + esc((KINDS[b.kind] || 'Libro') + (b.fmt ? ' · ' + String(b.fmt).toUpperCase() : '') + ' · ' + (pct ? (pct >= 99 ? 'Terminado' : pct + '% leído') : 'Sin empezar')) + '</div></div>' +
-      (syn ? '<div class="m"><p>' + esc(syn) + '</p></div>' : '') +
+      (syn ? '<div class="m"><p>' + esc(syn) + '</p></div>' : need ? '<div class="m" id="bsDescM"><p class="bswait">Buscando descripción…</p></div>' : '') +
       (pct ? '<div class="m"><div class="bsbar"><i style="width:' + pct + '%"></i></div></div>' : '') +
       '<div class="m"><div class="btns"><button class="btn f" data-act="openBook" data-arg="' + esc(b.key) + '" data-autofocus>' + IC.play + (pct && pct < 99 ? 'Continuar leyendo · ' + pct + '%' : 'Leer ahora') + '</button>' +
       (pct ? '<button class="btn ghost f" data-act="bookStart" data-arg="' + esc(b.key) + '">Desde el inicio</button>' : '') + '</div></div></div>' +
@@ -213,6 +248,12 @@
           [].forEach.call(d.querySelectorAll('.bsdl .m > *'), function (el, i) { el.animate([{ transform: 'translateY(110%)' }, { transform: 'none' }], { duration: 900, delay: 620 + i * 75, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'both' }); });
           var p = d.querySelector('.bsdp'); if (p) p.animate([{ transform: 'scale(.86)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 900, delay: 520, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'both' });
         }
+        if (need) fetchDesc(b).then(function (txt) {
+          var m = document.getElementById('bsDescM'); if (!m || !m.isConnected) return;
+          if (!txt) { m.remove(); return; }
+          m.innerHTML = '<p>' + esc(txt) + '</p>';
+          var pp = m.firstChild; if (pp.animate) pp.animate([{ transform: 'translateY(40%)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 700, easing: 'cubic-bezier(.2,.8,.2,1)' });
+        });
       },
       onClose: function () { document.getElementById('modal').classList.remove('bsm'); var st = document.getElementById('bsStage'); if (st) setTimeout(function () { st.focus({ preventScroll: true }); }, 0); }
     });

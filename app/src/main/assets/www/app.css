@@ -1415,5 +1415,6 @@ body.np-inhead .mini { display: none !important; }
   .bsdp { order: -1; width: min(60vw, 260px); justify-self: center; }
 }
 html.tv .bss > img, html.lite .bss > img { filter: none; }
+.bsdl p.bswait { font-family: inherit; font-size: 15px; opacity: .6; }
 .bsdl .m:last-child { padding: 8px; margin: -8px; }
 @media (max-width: 760px) { .bshelf { margin-bottom: 90px; } }
