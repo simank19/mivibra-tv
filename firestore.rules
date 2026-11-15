@@ -29,6 +29,16 @@ service cloud.firestore {
       allow read, delete: if admin();
       allow update: if admin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
     }
+    // Listas propias de cada usuario: él las guarda en su documento; el superadministrador las lee para decidir si las usa.
+    match /userLists/{uid} {
+      allow read: if admin() || (signedIn() && request.auth.uid == uid);
+      allow create, update: if signedIn() && request.auth.uid == uid && request.resource.data.uid == uid
+        && request.resource.data.keys().hasOnly(['uid', 'email', 'name', 'lists', 'at'])
+        && request.resource.data.lists is list && request.resource.data.lists.size() <= 50
+        && request.resource.data.at is number
+        && str(request.resource.data, 'email', 200) && str(request.resource.data, 'name', 100);
+      allow delete: if admin() || (signedIn() && request.auth.uid == uid);
+    }
     // Panel web: buzón donde llegan las listas para cada TV (la TV las borra apenas llegan).
     // Solo se aceptan listas con los campos y tamaños esperados, y códigos de TV con el formato correcto.
     match /inbox/{code}/lists/{id} {

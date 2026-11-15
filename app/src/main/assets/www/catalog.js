@@ -26,6 +26,9 @@
 
   MV.setPref = function (k, v) { P[k] = v; MV.savePrefs(); };
   MV.savePrefs = function (silent) { P.updatedAt = Date.now(); MV.save('prefs', P); if (!silent) MV.sync.later(); if (MV.acct) MV.acct.changed(); };
+  /** ¿Se carga esta lista? Apagada a mano, o es del servicio y el cliente apagó las listas incluidas. */
+  MV.provList = function (l) { return !!(l && l.type !== 'file' && !l.own && MV.acct && MV.acct.managed() && !MV.acct.isAdmin()); };
+  MV.listOn = function (l) { return l.enabled !== false && !(S.prefs.provOff && MV.provList(l)); };
   MV.saveLists = function () { MV.save('lists', S.lists); MV.sync.later(); if (MV.acct) MV.acct.changed(); };
   /** Listas borradas: se recuerdan (id → fecha) para que se borren también en los otros equipos y no vuelvan a aparecer. */
   MV.listTombs = function () { return MV.load('listsDel', {}) || {}; };
@@ -951,7 +954,7 @@
   }
   /** Busca un libro directamente en tu página (lo nuevo aparece aunque todavía no se haya vuelto a revisar la página). */
   MV.webBookSearch = function (q) {
-    var lists = S.lists.filter(function (l) { return l.type === 'web' && l.enabled !== false; });
+    var lists = S.lists.filter(function (l) { return l.type === 'web' && MV.listOn(l); });
     if (!lists.length || !q) return Promise.resolve([]);
     var words = MV.norm(q).split(/\s+/).filter(function (w) { return w.length > 2; });
     var hit = function (s) { var n = MV.norm(s || ''); return !words.length || words.some(function (w) { return n.indexOf(w) >= 0; }); };
@@ -1255,7 +1258,7 @@
 
   MV.reloadCatalog = function (force) {
     S.loading = true; S.loadMsg = 'Cargando tus listas…'; MV.emit('catalog');
-    var lists = S.lists.filter(function (l) { return l.enabled !== false; });
+    var lists = S.lists.filter(function (l) { return MV.listOn(l); });
     var failed = [];
     return Promise.all(lists.map(function (l) {
       return loadList(l, typeof force === 'function' ? force(l) : force).catch(function (e) { failed.push(l.name + ': ' + e.message); if (!l.count) l.zeroLoads = (l.zeroLoads || 0) + 1; return []; });
@@ -1299,7 +1302,7 @@
    */
   var bgRunning = false;
   MV.startCatalog = function () {
-    var lists = S.lists.filter(function (l) { return l.enabled !== false; });
+    var lists = S.lists.filter(function (l) { return MV.listOn(l); });
     if (!lists.length) return Promise.resolve();
     return openSnap().then(function (fast) {
       if (!fast) return startFull(lists);
@@ -1485,7 +1488,7 @@
   function listStamp(id) { var m = MV.load('listTs', {}) || {}; m[id] = Date.now(); MV.save('listTs', m); }
   function snapSig() {
     var ts = MV.load('listTs', {}) || {};
-    var ls = S.lists.filter(function (l) { return l.enabled !== false; }).map(function (l) { return [l.id, l.url || '', l.host || '', l.user || '', l.updatedAt || 0, ts[l.id] || 0]; });
+    var ls = S.lists.filter(function (l) { return MV.listOn(l); }).map(function (l) { return [l.id, l.url || '', l.host || '', l.user || '', l.updatedAt || 0, ts[l.id] || 0]; });
     return JSON.stringify([SNAP_V, (MV.device && (MV.device.versionCode || MV.device.version)) || '', ls, MV.CONTENT_PREFS.map(function (k) { return P[k]; }), P.dedupe !== false, P.adultOn || false]);
   }
   var snapT = null;
@@ -1724,7 +1727,7 @@
   };
   // Revisión cada hora de las páginas web (sin interrumpir lo que estés viendo)
   setInterval(function () {
-    if (S.loading || !S.lists.some(function (l) { return (l.type === 'web' || l.type === 'fb') && l.enabled !== false; })) return;
+    if (S.loading || !S.lists.some(function (l) { return (l.type === 'web' || l.type === 'fb') && MV.listOn(l); })) return;
     MV.reloadCatalog(false);
   }, 3600e3 + 30e3);
   MV.removeList = function (id) {
@@ -1736,7 +1739,7 @@
 
   // ---------- Guía EPG ----------
   MV.loadEpg = function (force) {
-    var lists = S.lists.filter(function (l) { return l.enabled !== false && l.epg; });
+    var lists = S.lists.filter(function (l) { return MV.listOn(l) && l.epg; });
     if (!lists.length || !MV.native) return Promise.resolve();
     return MV.idbGet('epg').then(function (c) {
       if (c && !force && c.ts > Date.now() - 6 * 3600e3) { S.epg = c.data; MV.emit('epg'); return; }

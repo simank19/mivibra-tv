@@ -11,7 +11,7 @@
   function base(url) { return String(url || '').trim().replace(/^stremio:\/\//i, 'https://').replace(/\/manifest\.json(\?.*)?$/i, '').replace(/\/+$/, ''); }
   MV.stremioBase = base;
   function manifestUrl(url) { return base(url) + '/manifest.json'; }
-  function lists() { return (S.lists || []).filter(function (l) { return l.type === 'stremio' && l.enabled !== false; }); }
+  function lists() { return (S.lists || []).filter(function (l) { return l.type === 'stremio' && (MV.listOn ? MV.listOn(l) : l.enabled !== false); }); }
   function res(man, name) {
     return (man.resources || []).some(function (r) { return r === name || (r && r.name === name); });
   }

@@ -280,6 +280,9 @@
     return S.loading ? '<div class="panel glass" style="display:flex;align-items:center;gap:14px"><div class="spinner"></div><b>' + esc(S.loadMsg || 'Cargando…') + '</b></div>' : '';
   }
   function emptyLists() {
+    if (P.provOff && S.lists.some(MV.provList)) return '<div class="empty glass"><img src="img/isotipo.svg" alt="" style="width:64px;height:64px"><h2>Solo tus listas</h2>' +
+      '<p class="muted">Apagaste las listas incluidas en tu servicio. Agrega tu propia lista o vuelve a activar las incluidas.</p>' +
+      '<div class="btns" style="justify-content:center"><button class="btn f" data-act="addList" data-autofocus>' + IC.plus + 'Agregar mi lista</button><button class="btn ghost f" data-act="provToggle">Usar las incluidas</button></div></div>';
     if (!MV.acct.canEdit()) return '<div class="empty glass"><img src="img/isotipo.svg" alt="" style="width:64px;height:64px"><h2>Preparando tu contenido</h2>' +
       '<p class="muted">El administrador aún no ha enviado listas a tu cuenta' + (MV.acct.user() ? ' (' + esc(MV.acct.user().email) + ')' : '') + '. Cuando lo haga, todo aparecerá aquí automáticamente.</p>' +
       '<div class="btns" style="justify-content:center"><button class="btn f" data-act="recheck" data-autofocus>' + IC.refresh + 'Revisar de nuevo</button><button class="btn ghost f" data-act="addList">' + IC.plus + 'Agregar mi propia lista</button></div></div>';
@@ -550,7 +553,7 @@
 
   // ---------- Inicio ----------
   VIEWS.home = function () {
-    if (!S.lists.length) return top('Hola' + (MV.profile() ? ', ' + MV.profile().name : '')) + emptyLists();
+    if (!S.lists.some(MV.listOn)) return top('Hola' + (MV.profile() ? ', ' + MV.profile().name : '')) + emptyLists();
     var live = MV.visible(S.live), movies = MV.visible(S.movies), series = MV.visible(S.series);
     var favs = MV.favs().map(MV.resolve), cont = MV.continueList();
     MV._heroIt = null;   // el Inicio ya no tiene recuadro grande: arranca con las categorías
@@ -1023,7 +1026,7 @@
     }).join('') + '</div>';
   }
   VIEWS.live = function () {
-    if (!S.lists.length) return top('En vivo', tvTabs('live')) + emptyLists();
+    if (!S.lists.some(MV.listOn)) return top('En vivo', tvTabs('live')) + emptyLists();
     var filt = secChips() + countryChips();
     var all = liveBase();
     var cats = [{ name: 'Todos', count: all.length }].concat(MV.groups(all));
@@ -1052,7 +1055,7 @@
 
   // ---------- Guía ----------
   VIEWS.guide = function () {
-    if (!S.lists.length) return top('Guía') + emptyLists();
+    if (!S.lists.some(MV.listOn)) return top('Guía') + emptyLists();
     var filt = secChips() + countryChips();
     var all = liveBase();
     if (liveCat !== 'Todos' && !all.some(function (i) { return i.group === liveCat; })) liveCat = 'Todos';
@@ -1226,7 +1229,7 @@
   var WEST_RX = /\b(western|westerns|wéstern|vaqueros?|cowboys?|del oeste|lejano oeste|far west|pistoleros?)\b/i;
   function isWestern(i) { return (i.genres || []).indexOf('western') >= 0 || WEST_RX.test(i.group || '') || WEST_RX.test(i.name || ''); }
   function catalogView(vkey, title, items, kind) {
-    if (!S.lists.length) return top(title) + emptyLists();
+    if (!S.lists.some(MV.listOn)) return top(title) + emptyLists();
     var all = MV.visible(items);
     // "Solo títulos con enlaces": los de esta sección se revisan primero; mientras tanto se avisa cuántos faltan
     var stPend = 0;
@@ -1328,7 +1331,7 @@
       brandTh(p.id, p.name) + '<div class="meta"><b>' + esc(p.name) + '</b><span>' + p.count + ' títulos</span></div></button>';
   }
   VIEWS.platforms = function (id) {
-    if (!S.lists.length) return top('Plataformas') + emptyLists();
+    if (!S.lists.some(MV.listOn)) return top('Plataformas') + emptyLists();
     if (id) {
       var items = S.items.filter(function (i) { return (i.platform === id || (id === 'crunchyroll' && i.anime)) && i.type !== 'live'; });
       return '<div class="top"><button class="iconbtn f" data-act="back" aria-label="Volver">' + IC.back + '</button></div>' + catalogView('pl-' + id, D.platformName(id), items);
@@ -2343,11 +2346,59 @@
   }
   /** Listas que este equipo puede cambiar: todas (sin cuenta o superadministrador) o solo las propias del cliente. */
   function edLists() { return MV.acct.canEdit() ? S.lists : S.lists.filter(function (l) { return MV.acct.isOwn(l); }); }
+  var UL_ACTS = {};
+  /** Superadministrador: listas que agregaron tus usuarios (apagadas hasta que decidas usarlas). */
+  function ulKey(d, l) { return d.uid + ':' + l.id; }
+  function ulCopy(k) { return S.lists.find(function (x) { return x.srcKey === k; }); }
+  function userListsBlock() {
+    var A2 = MV.acct;
+    if (A2.userLists == null && !A2.userListsLoading) setTimeout(function () { A2.loadUserLists(); }, 0);
+    var head = '<div class="panel glass"><h2>Listas de tus usuarios</h2><p>Las listas que cada usuario agrega para él. Aquí aparecen apagadas: actívalas para usarlas en este equipo y, si quieres, compártelas con todos.</p>';
+    if (A2.userListsLoading || A2.userLists == null) return head + '<div style="display:flex;gap:12px;align-items:center"><div class="spinner"></div><span class="muted">Buscando…</span></div></div>';
+    var rows = [];
+    (A2.userLists || []).forEach(function (d) {
+      (d.lists || []).forEach(function (l) {
+        var k = ulKey(d, l), c = ulCopy(k), on = !!(c && c.enabled !== false);
+        rows.push('<div class="line"><div class="t"><b>' + esc(l.name || 'Lista') + '</b><span>' + esc(listKind(l)) + (l.url ? ' · ' + esc(l.url) : l.host ? ' · ' + esc(l.host) : l.server ? ' · ' + esc(l.server) : '') + ' · de ' + esc(d.name || d.email) + (d.name ? ' (' + esc(d.email) + ')' : '') + (c && !c.own ? ' · compartida con todos' : c ? ' · solo para ti' : '') + '</span></div>' +
+          (c && c.own ? '<button class="btn ghost sm f" data-act="ulShare" data-arg="' + esc(k) + '">Compartir con todos</button>' : '') +
+          '<button class="toggle f' + (on ? ' on' : '') + '" data-act="ulToggle" data-arg="' + esc(k) + '" aria-label="Usar esta lista"></button></div>');
+      });
+    });
+    return head + (A2.userListsErr ? '<p style="color:#FF8A80">' + esc(A2.userListsErr) + '</p>' : '') + (rows.length ? rows.join('') : '<p class="muted">Ningún usuario ha agregado listas propias todavía.</p>') +
+      '<div class="btns"><button class="btn ghost sm f" data-act="ulReload">' + IC.refresh + 'Actualizar</button></div></div>';
+  }
+  UL_ACTS.ulReload = function () { MV.acct.userLists = null; MV.acct.loadUserLists(); MV.rerender(); };
+  UL_ACTS.ulToggle = function (k) {
+    var c = ulCopy(k);
+    if (c) { c.enabled = c.enabled === false; c.updatedAt = Date.now(); }
+    else {
+      var src = null, who = null;
+      (MV.acct.userLists || []).forEach(function (d) { (d.lists || []).forEach(function (l) { if (ulKey(d, l) === k) { src = l; who = d; } }); });
+      if (!src) return;
+      c = Object.assign(JSON.parse(JSON.stringify(src)), { id: 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), own: true, fromUser: who.email, srcKey: k, enabled: true, added: Date.now(), updatedAt: Date.now() });
+      S.lists.push(c);
+    }
+    MV.saveLists(); MV.reloadCatalog(false).then(MV.rerender); MV.rerender();
+    MV.toast(c.enabled !== false ? 'Lista activada' + (c.own ? ' (solo para ti)' : '') : 'Lista apagada');
+  };
+  UL_ACTS.ulShare = function (k) {
+    var c = ulCopy(k); if (!c) return;
+    MV.confirm('¿Compartir «' + c.name + '» con todos?', 'Todos tus usuarios la recibirán con sus listas incluidas.', 'Compartir').then(function (ok) {
+      if (!ok) return;
+      c.own = false; c.enabled = true; c.updatedAt = Date.now(); MV.saveLists(); MV.rerender(); MV.toast('Compartida con todos');
+    });
+  };
+  UL_ACTS.provToggle = function () {
+    P.provOff = !P.provOff; MV.savePrefs();
+    MV.toast(P.provOff ? 'Listas incluidas apagadas: ves solo tus listas' : 'Listas incluidas activadas', 3500);
+    MV.reloadCatalog(false).then(MV.rerender); MV.rerender();
+  };
   SETTINGS.lists = function () {
     var provBlock = '';
     if (!MV.acct.canEdit()) {
       var prov = S.lists.filter(function (l) { return !MV.acct.isOwn(l); });
       provBlock = '<div class="panel glass"><h2>Incluidas en tu servicio</h2><p>Estas listas las envía ' + esc((window.MV_CONFIG || {}).admin ? 'el superadministrador' : 'el administrador') + ' y se actualizan solas.</p>' +
+        '<div class="line"><div class="t"><b>Usar las listas incluidas</b><span>' + (P.provOff ? 'Apagadas: solo ves el contenido de tus propias listas.' : 'Apágalo si prefieres ver solo el contenido de tus propias listas.') + '</span></div><button class="toggle f' + (P.provOff ? '' : ' on') + '" data-act="provToggle" aria-label="Usar las listas incluidas"></button></div>' +
         (prov.length ? prov.map(function (l) { return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + esc(listKind(l)) + ' · ' + (l.count || 0) + ' elementos</span></div></div>'; }).join('') : '<p class="muted">Aún no hay listas incluidas.</p>') + '</div>';
     }
     var ED = edLists();
@@ -2358,7 +2409,8 @@
         '<div class="line"><div class="t"><b>' + (MV.acct.pushing ? 'Enviando…' : MV.acct.pushError ? 'No se pudo enviar' : cl === mineN ? '✓ ' + cl + (cl === 1 ? ' lista en la nube' : ' listas en la nube') : 'En la nube hay ' + cl + ' de ' + mineN + ' listas') + '</b><span>' + esc(MV.acct.pushError || (MV.acct.pushedAt ? 'Último envío: ' + MV.fmtTime(MV.acct.pushedAt) : 'Tus usuarios reciben estas listas, las claves y el orden del menú')) + '</span></div>' +
         '<button class="btn sm f" data-act="pushNow">' + IC.refresh + 'Enviar a todos ahora</button></div></div>';
     }
-    return provBlock + share + '<div class="panel glass"><h2>' + (provBlock ? 'Mis listas' : 'Tus listas') + '</h2><p>' + (provBlock ? 'Agrega también tus propias listas: se suman a las incluidas y solo las ves tú. ' : '') + 'Todo el contenido de tus listas se combina: los canales repetidos aparecen una sola vez y se queda la señal que funciona.' + (MV.acct.isAdmin() ? ' <b>Eres superadministrador:</b> lo que cambies aquí llega a todos los usuarios (las listas en archivo solo quedan en este equipo; usa enlaces para compartirlas).' : '') + '</p>' +
+    if (MV.acct.isAdmin()) share += userListsBlock();
+    return provBlock + share + '<div class="panel glass"><h2>' + (provBlock ? 'Mis listas' : 'Tus listas') + '</h2><p>' + (provBlock ? 'Agrega también tus propias listas: se suman a las incluidas (o las reemplazan si apagas las incluidas) y las usas cuando quieras. El administrador del servicio puede verlas y decidir si las incluye para todos. ' : '') + 'Todo el contenido de tus listas se combina: los canales repetidos aparecen una sola vez y se queda la señal que funciona.' + (MV.acct.isAdmin() ? ' <b>Eres superadministrador:</b> lo que cambies aquí llega a todos los usuarios (las listas en archivo solo quedan en este equipo; usa enlaces para compartirlas).' : '') + '</p>' +
       selBar() +
       (ED.length ? ED.map(function (l) {
         if (LSEL) {
@@ -2376,7 +2428,7 @@
       '<div class="line"><div class="t"><b>Actualizar addons ahora</b><span>Vuelve a cargar todos los addons y plugins (catálogos nuevos, cambios de configuración).</span></div><button class="btn ghost f" data-act="stRefreshNow">Actualizar</button></div>' +
       (function () {
         // Addon preferido para reproducir (solo los que dan enlaces)
-        var sl = S.lists.filter(function (l) { return l.type === 'stremio' && l.enabled !== false && (!l.man || !l.man.resources || (l.man.resources || []).some(function (r) { return r === 'stream' || (r && r.name === 'stream'); })); });
+        var sl = S.lists.filter(function (l) { return l.type === 'stremio' && MV.listOn(l) && (!l.man || !l.man.resources || (l.man.resources || []).some(function (r) { return r === 'stream' || (r && r.name === 'stream'); })); });
         if (!sl.length) return '';
         return '<div class="line" style="flex-wrap:wrap"><div class="t"><b>Addon preferido para reproducir</b><span>Al darle Reproducir se busca primero en este y, si tiene enlace, empieza de una sin mostrar la lista. Si no tiene, se buscan todos como siempre.</span></div><div class="chips" style="margin-top:8px">' +
           '<button class="chip f' + (!P.stPref ? ' on' : '') + '" data-act="stPrefSet" data-arg="">Ninguno (elegir siempre)</button>' +
@@ -3926,6 +3978,7 @@
   };
   ACT.consoleOpen = function () { MV.save('gamesClassic', false); if (MV.console) MV.console.open(); };
   Object.assign(ACT, ACT_EXTRA);
+  Object.assign(ACT, UL_ACTS);
   MV.ACT = ACT;
   // Búsqueda por voz con el botón del control: en Juegos busca juegos, en lo demás busca películas, series y canales
   MV.voiceSearch = function (q) {
@@ -4567,7 +4620,7 @@
   // ---------- Lectura: libros, mangas, cómics y revistas de tus listas ----------
   var BOOKSHELF = null;
   var BOOKF = 'all', BOOKLIM = 120, BOOKQ = '', BOOKG = '', WEBB = { q: '', loading: false, items: [], done: false };
-  function webBookLists() { return S.lists.filter(function (l) { return l.type === 'web' && l.enabled !== false; }); }
+  function webBookLists() { return S.lists.filter(function (l) { return l.type === 'web' && MV.listOn(l); }); }
   function bookSearchWeb(q) {
     q = (q || '').trim(); if (!q || !webBookLists().length) return;
     if (WEBB.q === q && (WEBB.loading || WEBB.done)) return;

@@ -65,7 +65,40 @@
       MV.toast('No se pudo enviar a tus usuarios: ' + acct.pushError, 6000); MV.emit('acct');
     });
   };
-  acct.changed = MV.debounce(function () { acct.push(); }, 1500);
+  var pushAdmin = MV.debounce(function () { acct.push(); }, 1500);
+  acct.changed = function () { if (acct.isAdmin()) pushAdmin(); else acct.pushOwn(); };
+
+  // ---------- Listas propias de cada usuario: se guardan en su cuenta y el superadministrador las ve ----------
+  function ulDoc(uid) { return firebase.firestore().collection('userLists').doc(uid); }
+  function cleanList(l) {
+    var c = JSON.parse(JSON.stringify(l));
+    ['error', 'count', 'epgAuto', 'zeroLoads', 'own'].forEach(function (k) { delete c[k]; });
+    return c;
+  }
+  var lastOwn = null;
+  acct.pushOwn = MV.debounce(function () {
+    var u = MV.sync.user;
+    if (!u || acct.isAdmin() || acct.status !== 'ok') return;
+    var own = S.lists.filter(function (l) { return l.own && l.type !== 'file'; }).slice(0, 50).map(cleanList);
+    var text = JSON.stringify(own);
+    if (text === lastOwn) return;
+    ulDoc(u.uid).set({ uid: u.uid, email: lower(u.email), name: String(u.displayName || '').slice(0, 100), lists: own, at: Date.now() }, { merge: true })
+      .then(function () { lastOwn = text; }).catch(function () { lastOwn = null; });
+  }, 2500);
+
+  /** Superadministrador: listas que agregaron tus usuarios. */
+  acct.userLists = null;
+  acct.loadUserLists = function () {
+    if (!acct.isAdmin()) return Promise.resolve([]);
+    acct.userListsLoading = true;
+    return firebase.firestore().collection('userLists').orderBy('at', 'desc').limit(300).get().then(function (q) {
+      acct.userLists = q.docs.map(function (d) { return d.data(); }).filter(function (d) { return (d.lists || []).length; });
+      acct.userListsErr = '';
+    }).catch(function (e) {
+      acct.userLists = [];
+      acct.userListsErr = /permission/i.test(e.code || e.message) ? 'Firebase no dejó leerlas: publica las reglas nuevas (incluyen userLists).' : (e.message || e.code);
+    }).then(function () { acct.userListsLoading = false; MV.emit('acct'); return acct.userLists; });
+  };
 
   function apply(cfg) {
     acct.config = cfg;
@@ -87,7 +120,8 @@
       var tombs = MV.listTombs ? MV.listTombs() : {};
       var alive = function (l) { return !tombs[l.id] || (l.added || 0) > tombs[l.id]; };
       // Se conservan siempre las listas propias del cliente (y los archivos de este equipo) junto a las tuyas
-      var mine = S.lists.filter(function (l) { return (l.type === 'file' || (!admin && l.own)) && alive(l); });
+      // (al superadministrador también se le quedan las listas de usuarios que activó solo para él)
+      var mine = S.lists.filter(function (l) { return (l.type === 'file' || (l.own && (!admin || l.fromUser))) && alive(l); });
       var remote = (cfg.lists || []).filter(alive).map(function (rl) {
         var ll = S.lists.find(function (l) { return l.id === rl.id; });
         return ll ? Object.assign({}, ll, rl) : rl;
@@ -103,6 +137,7 @@
       lastPushed = missing.length ? '' : JSON.stringify(payload());
       if (listsChanged) MV.reloadCatalog(false);
     } finally { applying = false; }
+    if (!acct.isAdmin()) setTimeout(function () { acct.pushOwn(); }, 3000);
     if (missing.length || (acct.isAdmin() && (cfg.lists || []).some(function (l) { var t = MV.listTombs ? MV.listTombs() : {}; return t[l.id] && (l.added || 0) <= t[l.id]; }))) setTimeout(function () { acct.push(); }, 500);
     MV.emit('acct');
   }
