@@ -1170,7 +1170,7 @@
     // Anime: primero lo que está en emisión esta temporada
     if (vkey === 'anime') {
       loadAiring();
-      var air = airingMatches(list);
+      var air = []; // «En emisión» quitado: no cruzaba bien con las listas
       if (air.length) html += '<section class="row"><h3>En emisión <small>' + air.length + '</small></h3><div class="strip">' + air.slice(0, 24).map(function (it, i) { return card(it, K, i); }).join('') +
         (air.length > 6 ? '<button class="card poster f seeall" data-act="animeMode" data-arg="airing"><div class="th"><b>Ver todo ›</b><span>' + air.length + ' en emisión</span></div></button>' : '') + '</div></section>';
     }
@@ -1254,7 +1254,7 @@
     var cats = groupsClean(all);
     var nEst = vkey === 'anime' ? 0 : all.filter(isEstreno).length;
     if (nEst) cats = [{ name: 'Estrenos', count: nEst }].concat(cats.filter(function (c) { return c.name !== 'Estrenos'; }));
-    var airAll = vkey === 'anime' ? (loadAiring(), airingMatches(all)) : [];
+    var airAll = [];
     if (airAll.length) cats = [{ name: 'En emisión', count: airAll.length }].concat(cats.filter(function (c) { return c.name !== 'En emisión'; }));
     var cur = catSel[vkey] || '', gen = genreSel[vkey] || '', plat = platSel[vkey] || '', sort = sortSel[vkey] || 'rec';
     if (cur && !cats.some(function (c) { return c.name === cur; })) cur = catSel[vkey] = '';
@@ -1444,13 +1444,14 @@
   }
   VIEWS.anime = function () {
     var items = S.items.filter(function (i) { return i.anime && i.type !== 'live'; });
-    var modes = '<div class="chips filt" style="margin-bottom:10px"><span class="flabel">VER</span>' + [['all', 'Todo'], ['airing', 'En emisión'], ['year', 'Por año']].map(function (m) {
+    var modes = '<div class="chips filt" style="margin-bottom:10px"><span class="flabel">VER</span>' + [['all', 'Todo'], ['year', 'Por año']].map(function (m) {
       return '<button class="chip f' + (animeMode === m[0] ? ' on' : '') + '" data-act="animeMode" data-arg="' + m[0] + '">' + m[1] + '</button>'; }).join('') + '</div>';
     if (animeMode === 'all' || !S.lists.length) {
-      MV._fbarPre = [['all', 'Todo'], ['airing', 'En emisión'], ['year', 'Por año']].map(function (m) { return '<button class="fbtn f' + (animeMode === m[0] ? ' on' : '') + '" data-act="animeMode" data-arg="' + m[0] + '">' + m[1] + '</button>'; }).join('');
+      MV._fbarPre = [['all', 'Todo'], ['year', 'Por año']].map(function (m) { return '<button class="fbtn f' + (animeMode === m[0] ? ' on' : '') + '" data-act="animeMode" data-arg="' + m[0] + '">' + m[1] + '</button>'; }).join('');
       return catalogView('anime', 'Anime', items);
     }
     var vis = MV.visible(items);
+    if (animeMode === 'airing') animeMode = 'all';
     if (animeMode === 'airing') {
       loadAiring();
       var head = top('Anime') + modes + '<p class="muted" style="margin:0 0 12px">Lo que se está emitiendo esta temporada (según MyAnimeList) y ya está en tus listas.</p>';
