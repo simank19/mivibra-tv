@@ -550,6 +550,17 @@ class Bridge(private val a: MainActivity) {
         }
     }
 
+    /** Colecciones comprimidas (.zip/.rar/.7z con libros adentro): lista y saca un libro. */
+    @JavascriptInterface
+    fun bookPack(id: String, json: String) {
+        io.execute {
+            try {
+                val o = JSONObject(json)
+                reply(id, true, if (o.optString("entry").isNotBlank()) Books.packEntry(a, o) { progress(id, it) } else Books.packList(a, o) { progress(id, it) })
+            } catch (e: Exception) { reply(id, false, e.message ?: "No se pudo abrir el comprimido") }
+        }
+    }
+
     /** Abre un libro, manga o cómic (descarga y prepara las páginas). */
     @JavascriptInterface
     fun openBook(id: String, json: String) {

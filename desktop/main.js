@@ -318,6 +318,37 @@ const ASYNC = {
   /** Libros y mangas: descarga y deja listas las páginas (PDF, EPUB, CBZ, CBR, CB7). */
   /** Archivos de una carpeta o archivo compartido de MEGA. */
   async megaList(id, link) { try { reply(id, true, await mega.list(link)); } catch (e) { reply(id, false, e.message || 'No se pudo leer el enlace de MEGA'); } },
+  /** Colecciones comprimidas (.zip/.rar/.7z con libros): lista sus libros o saca uno. */
+  async bookPack(id, json) {
+    try {
+      const o = JSON.parse(json), src = o.url || o.path;
+      const PK = path.join(DATA, 'cache', 'packs'); fs.mkdirSync(PK, { recursive: true });
+      const key = crypto.createHash('md5').update(src).digest('hex').slice(0, 16);
+      let file = ['zip', 'rar', '7z'].map((e) => path.join(PK, key + '.' + e)).find((f) => fs.existsSync(f));
+      if (!file) {
+        const tmp = path.join(PK, key + '.bin');
+        if (/^mega:/.test(src) || mega.parse(src)) await mega.download(src, tmp, (p) => progress(id, p));
+        else if (/^https?:/i.test(src)) {
+          const h = {}; if (o.ua) h['User-Agent'] = o.ua; if (o.ref) h.Referer = o.ref; if (o.auth) h.Authorization = o.auth;
+          const code = await net.download(src, tmp, h, (p) => progress(id, p), false);
+          if (code >= 400) throw new Error('El servidor respondió con error ' + code);
+        } else fs.copyFileSync(src, tmp);
+        const head = Buffer.alloc(4); const fd = fs.openSync(tmp, 'r'); fs.readSync(fd, head, 0, 4, 0); fs.closeSync(fd);
+        const kind = head.toString('latin1', 0, 3) === 'Rar' ? 'rar' : head.toString('latin1', 0, 2) === '7z' ? '7z' : head.toString('latin1', 0, 2) === 'PK' ? 'zip' : '';
+        if (!kind) { fs.unlinkSync(tmp); throw new Error('No es un comprimido .zip, .rar o .7z'); }
+        file = path.join(PK, key + '.' + kind); fs.renameSync(tmp, file);
+      }
+      if (!o.entry) {
+        const entries = (await archives.list(file)).filter((x) => /\.(pdf|epub|cbz|cbr|cb7)$/i.test(x.name) && !/__MACOSX/.test(x.name)).map((x) => ({ name: x.name, size: x.size || 0 }));
+        return reply(id, true, { entries });
+      }
+      const out = path.join(PK, key + '_x' + crypto.createHash('md5').update(o.entry).digest('hex').slice(0, 10));
+      const target = path.join(out, path.basename(o.entry));
+      if (!fs.existsSync(target)) await archives.extract(file, [o.entry], out, (p) => progress(id, p));
+      if (!fs.existsSync(target)) throw new Error('No se encontró el libro dentro del comprimido');
+      reply(id, true, { path: target });
+    } catch (e) { reply(id, false, e.message || 'No se pudo abrir el comprimido'); }
+  },
   async openBook(id, json) {
     const o = JSON.parse(json), src = o.url || o.path;
     if (!src) return reply(id, false, 'Falta el archivo');

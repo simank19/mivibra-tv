@@ -216,6 +216,8 @@
         var v = it.volumeInfo || {}, d = stripTags(v.description), cv = gbCover(v);
         if (d.length > 60) { if (!best) best = d; if (!es && v.language === 'es') es = d; }
         if (cv) { if (!cov) cov = cv; if (!covEs && v.language === 'es') covEs = cv; }
+        if (!out.a && v.authors && v.authors[0]) out.a = v.authors[0];
+        if (!out.g && v.categories && v.categories.length) out.g = v.categories.slice(0, 3);
       });
       if (!out.d) out.d = es || best;
       if (!out.c && !out.lc) out.c = covEs || cov;
@@ -230,13 +232,13 @@
     };
     // Libros de tu equipo: primero lo que trae el propio archivo (portada y sinopsis exactas); luego internet
     var local = b.path && MV.bookInfo ? MV.bookInfo(b).then(function (fi) { if (fi.desc) out.d = fi.desc; if (fi.cover) out.lc = 1; if (fi.author) out.a = fi.author; }).catch(function () {}) : Promise.resolve();
-    var need = function () { return !out.d || (!out.c && !out.lc); };
+    var need = function () { return !out.d || (!out.c && !out.lc) || !out.g; };
     // Libros por enlace (MEGA, Drive, MediaFire, OPDS…): si internet no tiene portada, se toma del propio archivo
     var fromFile = function () { if (!(b.links && b.url && !b.path && MV.bookInfo && (!out.c && !out.lc || !out.d))) return; return MV.bookInfo(b).then(function (fi) { if (fi.desc && !out.d) out.d = fi.desc; if (fi.cover) out.lc = 1; }).catch(function () {}); };
-    PEND[k] = local.then(function () { if (need()) return google().catch(function () {}); }).then(function () { if (need()) return openlib().catch(function () {}); }).then(fromFile).then(function () {
+    PEND[k] = local.then(function () { if (need()) return google().catch(function () {}); }).then(function () { if (!out.d || (!out.c && !out.lc)) return openlib().catch(function () {}); }).then(fromFile).then(function () {
       out.d = (out.d || '').replace(/\s*\(?(Source|Fuente):.*$/i, '').slice(0, 1200);
       delete PEND[k];
-      if (out.d || out.c || out.lc) { var ks = Object.keys(c); if (ks.length > 400) delete c[ks[0]]; c[k] = out; MV.save('bookMeta', c); }
+      if (out.d || out.c || out.lc || out.a || out.g) { var ks = Object.keys(c); if (ks.length > 400) delete c[ks[0]]; c[k] = out; MV.save('bookMeta', c); }
       return out;
     });
     return PEND[k];
@@ -244,6 +246,7 @@
   /** Tarjetas de libros sin portada: se busca en segundo plano (de a dos) y se pone apenas llega. */
   var WQ = [], WBUSY = 0, WSEEN = {};
   api.coverOf = function (b) { return cover(b); };
+  api.metaOf = function (b) { return metaOf(b); };
   api.want = function (b) {
     if (!b || !b.key || WSEEN[b.key] || metaOf(b)) return;
     WSEEN[b.key] = 1; WQ.push(b); wNext();
@@ -287,7 +290,7 @@
     sh.T = Math.round(sh.T); kick();
     var slot = sh.slots.filter(function (x) { return x.idx === mod(Math.round(sh.T), sh.n) && Math.abs(x.r) < .5; })[0];
     var rect = slot ? slot.cv.getBoundingClientRect() : null;
-    var pct = pctOf(b), sub = [b.author, b.group].filter(Boolean).join(' / ').toUpperCase() || (KINDS[b.kind] || 'LIBRO').toUpperCase();
+    var mt0 = metaOf(b), pct = pctOf(b), sub = [b.author || (mt0 && mt0.a), b.group].filter(Boolean).join(' / ').toUpperCase() || (KINDS[b.kind] || 'LIBRO').toUpperCase();
     MV.reg[b.key] = b;
     var mt = metaOf(b), syn = b.plot || b.desc || b.description || (mt && mt.d) || '';
     var need = !syn && !mt;
@@ -297,9 +300,11 @@
       '<div class="m"><div class="y">' + esc((KINDS[b.kind] || 'Libro') + (b.fmt ? ' · ' + String(b.fmt).toUpperCase() : '') + ' · ' + (pct ? (pct >= 99 ? 'Terminado' : pct + '% leído') : 'Sin empezar')) + '</div></div>' +
       (syn ? '<div class="m"><p>' + esc(syn) + '</p></div>' : need ? '<div class="m" id="bsDescM"><p class="bswait">Buscando descripción…</p></div>' : '') +
       (pct ? '<div class="m"><div class="bsbar"><i style="width:' + pct + '%"></i></div></div>' : '') +
-      '<div class="m"><div class="btns"><button class="btn f" data-act="openBook" data-arg="' + esc(b.key) + '" data-autofocus>' + IC.play + (pct && pct < 99 ? 'Continuar leyendo · ' + pct + '%' : 'Leer ahora') + '</button>' +
+      '<div class="m"><div class="btns"><button class="btn f" data-act="openBook" data-arg="' + esc(b.key) + '" data-autofocus>' + IC.play + (b.kind === 'pack' ? 'Abrir colección' : pct && pct < 99 ? 'Continuar leyendo · ' + pct + '%' : 'Leer ahora') + '</button>' +
       (pct ? '<button class="btn ghost f" data-act="bookStart" data-arg="' + esc(b.key) + '">Desde el inicio</button>' : '') +
-      (MV.myBooks && MV.myBooks().some(function (x) { return x.key === b.key; }) ? '<button class="btn ghost f" data-act="bookForget" data-arg="' + esc(b.key) + '">Quitar</button>' : '') + '</div></div></div>' +
+      (MV.bookFlags ? '<button class="btn ghost f" data-act="bookFav" data-arg="' + esc(b.key) + '">' + (MV.bookFlags.fav(b.key) ? '★ En favoritos' : '☆ Favorito') + '</button>' +
+        (b.kind === 'pack' ? '' : '<button class="btn ghost f" data-act="bookRead" data-arg="' + esc(b.key) + '">' + (MV.bookFlags.read(b) ? '✓ Leído' : 'Marcar como leído') + '</button>') +
+        '<button class="btn ghost f" data-act="bookDel" data-arg="' + esc(b.key) + '">' + IC.trash + 'Borrar</button>' : '') + '</div></div></div>' +
       '<div class="bsdp">' + coverHtml(b, true) + '</div>';
     MV.modal(html, {
       onOpen: function (d) {

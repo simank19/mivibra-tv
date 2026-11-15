@@ -1418,3 +1418,9 @@ html.tv .bss > img, html.lite .bss > img { filter: none; }
 .bsdl p.bswait { font-family: inherit; font-size: 15px; opacity: .6; }
 .bsdl .m:last-child { padding: 8px; margin: -8px; }
 @media (max-width: 760px) { .bshelf { margin-bottom: 90px; } }
+/* Lectura: selección para borrar varios */
+.bookgrid.selmode .bcard { position: relative; }
+.bcard .bchk { position: absolute; z-index: 3; top: 10px; right: 10px; width: 30px; height: 30px; border-radius: 50%; border: 2px solid rgba(255,255,255,.85); background: rgba(0,0,0,.35); color: #2A2C2E; display: flex; align-items: center; justify-content: center; font: 800 17px/1 var(--ui); font-style: normal; }
+.bcard.sel .bchk { background: #F4F5F6; border-color: #F4F5F6; }
+.bcard.sel .bc { outline: 3px solid #F4F5F6; outline-offset: 2px; }
+.bookgrid.selmode .bcard:not(.sel) .bc { opacity: .72; }

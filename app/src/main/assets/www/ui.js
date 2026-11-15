@@ -3776,6 +3776,7 @@
     /** Elegir uno o varios juegos con el selector de archivos (celular y PC; no necesita permisos especiales). */
     openBook: function (key) {
       var b = (S.bookByKey && S.bookByKey[key]) || MV.reg[key];
+      if (b && b.kind === 'pack') { MV.closeModal(true); return MV.openPack(b); }
       if (!b) { var r = (MV.readRecent ? MV.readRecent() : []).filter(function (x) { return x.key === key; })[0]; if (r) b = r; }
       if (b) MV.openBook(b);
     },
@@ -4671,6 +4672,7 @@
   ACT.rcScanOnly = function () { MV.call('remoteScan', []).then(function (raw) { rcConnect(raw); }).catch(function (e) { if (e.message !== 'cancelado') MV.toast(e.message, 6000); }); };
   // ---------- Lectura: libros, mangas, cómics y revistas de tus listas ----------
   var BOOKSHELF = null;
+  var BOOKV = 'all', BOOKA = '', BOOKGEN = '', BSEL = null;
   var BOOKF = 'all', BOOKLIM = 120, BOOKQ = '', BOOKG = '', WEBB = { q: '', loading: false, items: [], done: false };
   function webBookLists() { return S.lists.filter(function (l) { return l.type === 'web' && MV.listOn(l); }); }
   function bookSearchWeb(q) {
@@ -4681,18 +4683,63 @@
   }
   var BOOK_ADULT = /\+18|adult|xxx|hentai|ecchi|erotic|er[oó]tic/i;
   function myBooks() { return MV.load('myBooks', []) || []; }
+  // ---------- Leídos, favoritos, ocultos y colecciones comprimidas ----------
+  function bookFavs() { return MV.load('bookFavs', {}) || {}; }
+  function bookReadSet() { return MV.load('bookRead', {}) || {}; }
+  function bookHidden() { return MV.load('bookHidden', {}) || {}; }
+  function packStore() { return MV.load('packBooks', {}) || {}; }
+  function bookPctOf(b) { var pr = MV.readProgress ? MV.readProgress(b.key) : null; return pr && pr.pct != null ? Math.round(pr.pct * 100) : pr && pr.total ? Math.round(((b.fmt === 'epub' ? pr.chap : pr.page) + 1) / pr.total * 100) : 0; }
+  function isRead(b) { var r = bookReadSet()[b.key]; return r === 1 || (r !== 0 && bookPctOf(b) >= 97); }
+  MV.bookFlags = { fav: function (k) { return !!bookFavs()[k]; }, read: function (b) { return isRead(b); } };
+  function bookMeta(b) { return MV.bookShelf && MV.bookShelf.metaOf ? MV.bookShelf.metaOf(b) : null; }
+  function bookAuthor(b) { var m = bookMeta(b); return String(b.author || (m && m.a) || '').trim(); }
+  function bookGenres(b) { var m = bookMeta(b); return (b.genres && b.genres.length ? b.genres : (m && m.g) || []).map(function (g) { return String(g).split('/')[0].trim(); }).filter(Boolean); }
+  function entryTitle(n) { n = String(n).split('/').pop(); return n.replace(/\.[a-z0-9]{2,5}$/i, '').replace(/[_+]+/g, ' ').trim() || 'Libro'; }
+  /** Libros de las colecciones (.zip/.rar/.7z) que ya se abrieron: cada uno se saca del comprimido al leerlo. */
+  function packBooks() {
+    var st = packStore(), out = [];
+    Object.keys(st).forEach(function (pk) {
+      var p = st[pk];
+      (p.books || []).forEach(function (e) {
+        var fx = (String(e[0]).match(/\.(pdf|epub|cbz|cbr|cb7)$/i) || ['', ''])[1].toLowerCase();
+        var b = { key: 'pk:' + MV.hash(pk) + ':' + e[0], name: entryTitle(e[0]), group: p.name, type: 'book', fmt: fx, kind: /^cb/.test(fx) ? 'comic' : 'libro', entry: e[0], packUrl: p.url, auth: p.auth || '', packOf: pk, links: 1 };
+        MV.reg[b.key] = b; out.push(b);
+      });
+    });
+    return out;
+  }
+  MV.openPack = function (b) {
+    if (!A || !A.bookPack) return MV.toast('Las colecciones comprimidas se abren en la app instalada');
+    MV.modal('<h2>Abriendo «' + esc(b.name) + '»</h2><p class="muted">Descargando la colección para ver qué libros trae. Puede tardar si es grande.</p><div class="spinner" style="margin:18px auto"></div><p class="muted" id="pkPct" style="text-align:center">0%</p>');
+    var src = MV.bookSrc ? MV.bookSrc(b) : Promise.resolve(b.url);
+    src.then(function (u) { return MV.call('bookPack', [JSON.stringify({ url: u, auth: b.auth || '', ua: b.ua || '', ref: b.ref || '' })], function (p) { var e = document.getElementById('pkPct'); if (e) e.textContent = p >= 0 ? p + '%' : 'Descargando…'; }); }).then(function (d) {
+      MV.closeModal(true);
+      var es = (d.entries || []).slice(0, 5000);
+      if (!es.length) return MV.toast('Ese comprimido no trae libros (PDF, EPUB, CBZ, CBR o CB7)', 5000);
+      var st = packStore(); st[b.key] = { name: b.name, url: b.url, auth: b.auth || '', books: es.map(function (e) { return [e.name, e.size || 0]; }), at: Date.now() };
+      try { MV.save('packBooks', st); } catch (e) {}
+      BOOKG = b.name; BOOKF = 'all'; MV.rerender();
+      MV.toast(es.length + (es.length === 1 ? ' libro' : ' libros') + ' de «' + b.name + '»', 4500);
+    }).catch(function (e) { MV.closeModal(true); MV.toast(e.message || 'No se pudo abrir la colección', 5000); });
+  };
+  /** Saca un libro de su colección y devuelve la ruta en el equipo. */
+  MV.packPath = function (b) {
+    var src = MV.bookSrc ? MV.bookSrc({ url: b.packUrl }) : Promise.resolve(b.packUrl);
+    return src.then(function (u) { return MV.call('bookPack', [JSON.stringify({ url: u, auth: b.auth || '', entry: b.entry })]); }).then(function (d) { return d.path; });
+  };
   MV.myBooks = myBooks;
   function visibleBooks() {
     var kids = MV.isKids && MV.isKids(), have = {};
     (S.books || []).forEach(function (b) { have[b.key] = 1; });
     var mine = myBooks().filter(function (b) { if (have[b.key]) return false; MV.reg[b.key] = b; return true; });
-    return (S.books || []).concat(mine).filter(function (b) { var a = BOOK_ADULT.test((b.group || '') + ' ' + b.name); return !a && (!kids || b.kind === 'comic' || b.kind === 'manga'); });
+    var hid = bookHidden(), packs = packStore(), packed = packBooks();
+    return (S.books || []).filter(function (b) { return !(b.kind === 'pack' && packs[b.key]); }).concat(mine, packed).filter(function (b) { return !hid[b.key]; }).filter(function (b) { var a = BOOK_ADULT.test((b.group || '') + ' ' + b.name); return !a && (!kids || b.kind === 'comic' || b.kind === 'manga'); });
   }
-  var BOOK_KINDS = { manga: 'Manga', comic: 'Cómic', libro: 'Libro', revista: 'Revista' };
+  var BOOK_KINDS = { manga: 'Manga', comic: 'Cómic', libro: 'Libro', revista: 'Revista', pack: 'Colección' };
   function bookCard(b) {
     var prog = MV.readProgress ? MV.readProgress(b.key) : null, pct = prog && prog.pct != null ? Math.round(prog.pct * 100) : prog && prog.total ? Math.round(((b.fmt === 'epub' ? prog.chap : prog.page) + 1) / prog.total * 100) : 0;
     MV.reg[b.key] = b;
-    return '<button class="bcard f" style="--h:' + MV.hue(b.name) + '" data-act="openBook" data-arg="' + esc(b.key) + '">' +
+    return '<button class="bcard f' + (BSEL && BSEL[b.key] ? ' sel' : '') + '" style="--h:' + MV.hue(b.name) + '" data-act="' + (BSEL ? 'bookSel' : 'openBook') + '" data-arg="' + esc(b.key) + '">' + (BSEL ? '<i class="bchk">' + (BSEL[b.key] ? '✓' : '') + '</i>' : '') +
       (b.poster || (b.poster = (MV.bookShelf && MV.bookShelf.coverOf(b)) || (MV.bookCover && MV.bookCover(b.key))), b.poster || !MV.bookShelf || setTimeout(function () { MV.bookShelf.want(b); }, 0), '') + '<div class="bc">' + (b.poster ? '<img src="' + esc(b.poster) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '<i>' + esc(b.name) + '</i><em>' + (BOOK_KINDS[b.kind] || 'Libro') + (b.fmt ? ' · ' + esc(String(b.fmt).toUpperCase()) : '') + '</em>' +
       (pct ? '<div class="bp"><b style="width:' + pct + '%"></b></div>' : '') + '</div><b>' + esc(b.name) + '</b><span>' + esc(b.group || '') + '</span></button>';
   }
@@ -4703,14 +4750,22 @@
     var groups = {}; all.forEach(function (b) { if (BOOKF === 'all' || b.kind === BOOKF) groups[b.group || ''] = (groups[b.group || ''] || 0) + 1; });
     var gnames = Object.keys(groups).filter(Boolean).sort(function (a, b) { return groups[b] - groups[a]; });
     if (BOOKG && !groups[BOOKG]) BOOKG = '';
-    var list = all.filter(function (b) { return (!BOOKG || (b.group || '') === BOOKG) && (BOOKF === 'all' || b.kind === BOOKF) && (!q || (MV.norm ? MV.norm(b.name + ' ' + (b.group || '')) : (b.name + ' ' + b.group).toLowerCase()).indexOf(q) >= 0); });
+    var favs = bookFavs();
+    var vcount = { reading: 0, read: 0, fav: 0 };
+    all.forEach(function (b) { if (favs[b.key]) vcount.fav++; if (b.kind !== 'pack') { if (isRead(b)) vcount.read++; else if (bookPctOf(b) > 0) vcount.reading++; } });
+    var viewOk = function (b) { return BOOKV === 'all' || (BOOKV === 'fav' ? !!favs[b.key] : BOOKV === 'read' ? b.kind !== 'pack' && isRead(b) : b.kind !== 'pack' && !isRead(b) && bookPctOf(b) > 0); };
+    var list = all.filter(function (b) { return viewOk(b) && (!BOOKA || bookAuthor(b) === BOOKA) && (!BOOKGEN || bookGenres(b).indexOf(BOOKGEN) >= 0) && (!BOOKG || (b.group || '') === BOOKG) && (BOOKF === 'all' || b.kind === BOOKF) && (!q || (MV.norm ? MV.norm(b.name + ' ' + (b.group || '')) : (b.name + ' ' + b.group).toLowerCase()).indexOf(q) >= 0); });
     var rr = (MV.readRecent ? MV.readRecent() : []).map(function (r) { return (S.bookByKey && S.bookByKey[r.key]) || (r.path ? { key: r.key, name: r.name, path: r.path, kind: r.kind, type: 'book', group: 'De tu equipo' } : null); }).filter(Boolean);
-    var tabs = [['all', 'Todo', all.length], ['manga', 'Mangas', counts.manga], ['comic', 'Cómics', counts.comic], ['libro', 'Libros', counts.libro], ['revista', 'Revistas', counts.revista]].filter(function (t) { return t[0] === 'all' || t[2]; });
+    var tabs = [['all', 'Todo', all.length], ['manga', 'Mangas', counts.manga], ['comic', 'Cómics', counts.comic], ['libro', 'Libros', counts.libro], ['revista', 'Revistas', counts.revista], ['pack', 'Colecciones', counts.pack]].filter(function (t) { return t[0] === 'all' || t[2]; });
     var webs = webBookLists(), canWeb = MV.acct.canAdd ? MV.acct.canAdd() : MV.acct.canEdit();
     var html = top('Lectura', (MV.acct.isAdmin() ? '<button class="pill f" data-act="myLibrary">' + IC.lock.replace('<svg', '<svg width="18" height="18"') + 'Mi biblioteca</button>' : '') + '<button class="pill f" data-act="bookAdd">' + IC.plus + 'Agregar libros</button>') +
       (all.length ? '<div class="chips">' + tabs.map(function (t) { return '<button class="chip f' + (BOOKF === t[0] ? ' on' : '') + '" data-act="bookTab" data-arg="' + t[0] + '">' + t[1] + ' <small>' + (t[2] || 0) + '</small></button>'; }).join('') +
         '<input class="in f" id="bookQ" placeholder="' + (webs.length ? 'Buscar libro (también en tus páginas)…' : 'Buscar título…') + '" value="' + esc(BOOKQ) + '" style="max-width:320px;margin-left:auto" autocomplete="off" enterkeyhint="search"></div>' +
-        (gnames.length > 1 && gnames.length <= 40 ? '<div class="chips"><button class="chip f' + (!BOOKG ? ' on' : '') + '" data-act="bookGroup" data-arg="">Todas las categorías</button>' + gnames.map(function (g) { return '<button class="chip f' + (BOOKG === g ? ' on' : '') + '" data-act="bookGroup" data-arg="' + esc(g) + '">' + esc(g.replace(/^[^·]+·\s*/, '') || g) + ' <small>' + groups[g] + '</small></button>'; }).join('') + '</div>' : '') : '');
+        (gnames.length > 1 && gnames.length <= 40 ? '<div class="chips"><button class="chip f' + (!BOOKG ? ' on' : '') + '" data-act="bookGroup" data-arg="">Todas las categorías</button>' + gnames.map(function (g) { return '<button class="chip f' + (BOOKG === g ? ' on' : '') + '" data-act="bookGroup" data-arg="' + esc(g) + '">' + esc(g.replace(/^[^·]+·\s*/, '') || g) + ' <small>' + groups[g] + '</small></button>'; }).join('') + '</div>' : '') +
+        '<div class="chips">' + [['all', 'Todos', 0], ['reading', 'Leyendo', vcount.reading], ['read', 'Leídos', vcount.read], ['fav', 'Favoritos', vcount.fav]].map(function (t) { return '<button class="chip f' + (BOOKV === t[0] ? ' on' : '') + '" data-act="bookV" data-arg="' + t[0] + '">' + (t[0] === 'fav' ? '★ ' : t[0] === 'read' ? '✓ ' : '') + t[1] + (t[0] !== 'all' ? ' <small>' + t[2] + '</small>' : '') + '</button>'; }).join('') +
+        '<button class="chip f' + (BOOKA || BOOKGEN || (BOOKG && gnames.length > 40) ? ' on' : '') + '" data-act="bookFilter">' + IC.filter.replace('<svg', '<svg width="16" height="16"') + 'Filtrar' + (BOOKA ? ': ' + esc(BOOKA) : BOOKGEN ? ': ' + esc(BOOKGEN) : BOOKG && gnames.length > 40 ? ': ' + esc(BOOKG) : '') + '</button>' +
+        '<button class="chip f' + (BSEL ? ' on' : '') + '" data-act="bookSelMode">' + IC.trash.replace('<svg', '<svg width="16" height="16"') + (BSEL ? 'Cancelar selección' : 'Seleccionar para borrar') + '</button></div>' +
+        (BSEL ? '<div class="panel glass" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="flex:1">' + Object.keys(BSEL).length + ' seleccionados</b><button class="btn ghost sm f" data-act="bookSelAll">Seleccionar todos los que se ven</button><button class="btn danger sm f" data-act="bookSelDel"' + (Object.keys(BSEL).length ? '' : ' disabled') + '>' + IC.trash + 'Borrar</button></div>' : '') : '');
     // Búsqueda directa en tus páginas (trae también lo que subiste hace poco)
     if (webs.length && BOOKQ.trim()) {
       var have = {}; all.forEach(function (b) { have[b.url] = 1; });
@@ -4722,7 +4777,7 @@
     }
     // Sin libros en listas: el estante muestra lo que abriste de tu equipo
     var shelfList = all.length ? list : rr;
-    var shelf = !P.bookGrid && MV.bookShelf && shelfList.length && !(webs.length && BOOKQ.trim() && WEBB.q === BOOKQ.trim() && WEBB.loading);
+    var shelf = !BSEL && !P.bookGrid && MV.bookShelf && shelfList.length && !(webs.length && BOOKQ.trim() && WEBB.q === BOOKQ.trim() && WEBB.loading);
     BOOKSHELF = shelf ? shelfList : null;
     if (shelf) html += MV.bookShelf.html(shelfList);
     if (rr.length && !(shelf && !all.length)) html += '<section class="row"><h3>Seguir leyendo</h3><div class="strip">' + rr.slice(0, 20).map(bookCard).join('') + '</div></section>';
@@ -4732,12 +4787,77 @@
       return html;
     }
     if (shelf) { html += '<div class="btns" style="justify-content:center;margin:6px 0 18px"><button class="btn ghost sm f" data-act="bookView" data-arg="grid">' + IC.grid + 'Ver todos en cuadrícula (' + list.length + ')</button></div>'; return html; }
-    html += '<div class="btns" style="margin:0 0 12px"><button class="btn ghost sm f" data-act="bookView" data-arg="shelf">Ver como estante</button></div>';
-    html += '<div class="bookgrid">' + list.slice(0, BOOKLIM).map(bookCard).join('') + '</div>';
+    if (!BSEL) html += '<div class="btns" style="margin:0 0 12px"><button class="btn ghost sm f" data-act="bookView" data-arg="shelf">Ver como estante</button></div>';
+    html += '<div class="bookgrid' + (BSEL ? ' selmode' : '') + '">' + list.slice(0, BOOKLIM).map(bookCard).join('') + '</div>';
     if (list.length > BOOKLIM) html += '<button class="btn ghost more f" data-act="bookMore">Ver más (' + (list.length - BOOKLIM) + ')</button>';
     if (!list.length && !(webs.length && BOOKQ.trim())) html += '<p class="muted">Nada coincide con tu búsqueda.</p>';
     return html;
   };
+  ACT.bookV = function (v) { BOOKV = v; BOOKLIM = 120; MV.rerender(); };
+  ACT.bookFav = function (k) {
+    var f = bookFavs(); if (f[k]) delete f[k]; else f[k] = Date.now(); MV.save('bookFavs', f);
+    MV.toast(f[k] ? 'Agregado a favoritos' : 'Quitado de favoritos'); MV.closeModal(true); MV.rerender();
+  };
+  ACT.bookRead = function (k) {
+    var b = MV.reg[k] || (S.bookByKey || {})[k]; if (!b) return;
+    var r = bookReadSet(), was = isRead(b); r[k] = was ? 0 : 1; MV.save('bookRead', r);
+    MV.toast(was ? 'Marcado como no leído' : 'Marcado como leído'); MV.closeModal(true); MV.rerender();
+  };
+  /** Borrar: los libros de tu equipo y de colecciones se quitan; los de listas y enlaces se ocultan (no se borran para los demás). */
+  function delBooks(keys) {
+    var mine = myBooks(), st = packStore(), hid = bookHidden(), n = 0;
+    keys.forEach(function (k) {
+      var b = MV.reg[k] || (S.bookByKey || {})[k];
+      if (mine.some(function (x) { return x.key === k; })) { mine = mine.filter(function (x) { return x.key !== k; }); n++; }
+      else if (b && b.packOf && st[b.packOf]) { st[b.packOf].books = st[b.packOf].books.filter(function (e) { return e[0] !== b.entry; }); if (!st[b.packOf].books.length) delete st[b.packOf]; n++; }
+      else if (b && b.kind === 'pack' && st[k]) { delete st[k]; hid[k] = Date.now(); n++; }
+      else { hid[k] = Date.now(); n++; }
+    });
+    MV.save('myBooks', mine); try { MV.save('packBooks', st); } catch (e) {} MV.save('bookHidden', hid);
+    return n;
+  }
+  ACT.bookDel = function (k) {
+    var b = MV.reg[k] || (S.bookByKey || {})[k];
+    MV.confirm('¿Borrar «' + (b ? b.name : 'este libro') + '»?', b && b.path ? 'Se quita de tu Lectura; el archivo sigue en tu equipo.' : 'Se quita de tu Lectura.', 'Borrar').then(function (ok) {
+      if (!ok) return; delBooks([k]); MV.closeModal(true); MV.toast('Libro borrado'); MV.rerender();
+    });
+  };
+  ACT.bookSelMode = function () { BSEL = BSEL ? null : {}; MV.rerender(); };
+  ACT.bookSel = function (k) {
+    if (!BSEL) return; if (BSEL[k]) delete BSEL[k]; else BSEL[k] = 1;
+    var el = document.querySelector('.bcard[data-arg="' + (window.CSS && CSS.escape ? CSS.escape(k) : k) + '"]');
+    if (el) { el.classList.toggle('sel', !!BSEL[k]); var c = el.querySelector('.bchk'); if (c) c.textContent = BSEL[k] ? '✓' : ''; }
+    var bar = document.querySelector('[data-act="bookSelDel"]'), lb = bar && bar.parentNode.querySelector('b');
+    if (lb) lb.textContent = Object.keys(BSEL).length + ' seleccionados';
+    if (bar) bar.disabled = !Object.keys(BSEL).length;
+  };
+  ACT.bookSelAll = function () { Array.prototype.forEach.call(document.querySelectorAll('.bookgrid .bcard[data-arg]'), function (el) { BSEL[el.getAttribute('data-arg')] = 1; }); MV.rerender(); };
+  ACT.bookSelDel = function () {
+    var ks = Object.keys(BSEL || {}); if (!ks.length) return;
+    MV.confirm('¿Borrar ' + ks.length + (ks.length === 1 ? ' libro?' : ' libros?'), 'Se quitan de tu Lectura. Los archivos de tu equipo no se borran.', 'Borrar').then(function (ok) {
+      if (!ok) return; var n = delBooks(ks); BSEL = null; MV.toast(n + (n === 1 ? ' libro borrado' : ' libros borrados')); MV.rerender();
+    });
+  };
+  ACT.bookFilter = function () {
+    var all = visibleBooks(), au = {}, ge = {}, gr = {};
+    all.forEach(function (b) { var a = bookAuthor(b); if (a) au[a] = (au[a] || 0) + 1; bookGenres(b).forEach(function (g) { ge[g] = (ge[g] || 0) + 1; }); if (b.group) gr[b.group] = (gr[b.group] || 0) + 1; });
+    var chips = function (obj, act, cur, max) {
+      var ks = Object.keys(obj).sort(function (a, b) { return obj[b] - obj[a] || a.localeCompare(b); }).slice(0, max);
+      if (!ks.length) return '<p class="muted">Aún no hay datos (se completan a medida que se cargan las fichas).</p>';
+      return '<div class="chips" style="flex-wrap:wrap"><button class="chip f' + (!cur ? ' on' : '') + '" data-act="' + act + '" data-arg="">Todos</button>' + ks.map(function (k) { return '<button class="chip f' + (cur === k ? ' on' : '') + '" data-act="' + act + '" data-arg="' + esc(k) + '">' + esc(k) + ' <small>' + obj[k] + '</small></button>'; }).join('') + '</div>';
+    };
+    var nh = Object.keys(bookHidden()).length;
+    MV.modal('<h2>Filtrar libros</h2>' +
+      '<h3 style="margin:10px 0 6px">Categorías</h3>' + chips(gr, 'bookFltG', BOOKG, 80) +
+      '<h3 style="margin:14px 0 6px">Autores</h3>' + chips(au, 'bookFltA', BOOKA, 80) +
+      '<h3 style="margin:14px 0 6px">Géneros</h3>' + chips(ge, 'bookFltGen', BOOKGEN, 60) +
+      '<div class="btns" style="margin-top:14px"><button class="btn f" data-act="bookFltClear">Quitar filtros</button>' + (nh ? '<button class="btn ghost f" data-act="bookUnhide">Mostrar los ' + nh + ' borrados de listas</button>' : '') + '<button class="btn ghost f" data-act="confirmNo">Cerrar</button></div>');
+  };
+  ACT.bookFltG = function (v) { BOOKG = v || ''; BOOKLIM = 120; MV.closeModal(true); MV.rerender(); };
+  ACT.bookFltA = function (v) { BOOKA = v || ''; BOOKLIM = 120; MV.closeModal(true); MV.rerender(); };
+  ACT.bookFltGen = function (v) { BOOKGEN = v || ''; BOOKLIM = 120; MV.closeModal(true); MV.rerender(); };
+  ACT.bookFltClear = function () { BOOKG = ''; BOOKA = ''; BOOKGEN = ''; BOOKV = 'all'; MV.closeModal(true); MV.rerender(); };
+  ACT.bookUnhide = function () { MV.save('bookHidden', {}); MV.closeModal(true); MV.toast('Libros restaurados'); MV.rerender(); };
   VIEWS.books.after = function () {
     if (MV.bookShelf) MV.bookShelf.mount(BOOKSHELF || []);
     var q = document.getElementById('bookQ');

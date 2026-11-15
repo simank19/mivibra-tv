@@ -35,6 +35,12 @@
   }
   MV.bookSrc = bookSrc;
   MV.openBook = function (item) {
+    // Libro dentro de una colección comprimida: primero se saca del comprimido
+    if (item && item.entry && item.packUrl && !item.path) {
+      if (!MV.packPath) return;
+      MV.toast('Sacando «' + item.name + '» de la colección…', 3000);
+      return MV.packPath(item).then(function (p) { MV.openBook(Object.assign({}, item, { path: p, url: '' })); }).catch(function (e) { MV.toast(e.message || 'No se pudo sacar el libro', 5000); });
+    }
     if (!item || (!item.url && !item.path)) return;
     if (!MV.native) return MV.toast('El lector está disponible en la app instalada');
     closeMb(); close(true);
@@ -339,6 +345,7 @@
   }
   /** Lee la portada, la sinopsis y el autor que trae el propio archivo (EPUB: su ficha OPF; cómic: la primera página; PDF: la primera hoja). */
   MV.bookInfo = function (item) {
+    if (item && item.entry && item.packUrl && !item.path) return MV.packPath ? MV.packPath(item).then(function (p) { return MV.bookInfo(Object.assign({}, item, { path: p, url: '' })); }).catch(function () { return {}; }) : Promise.resolve({});
     if (!MV.native || !item || (!item.url && !item.path)) return Promise.resolve({});
     return bookSrc(item).then(function (src) { return MV.call('openBook', [JSON.stringify({ url: src, path: item.path || '', ua: item.ua || '', ref: item.ref || '', auth: item.auth || '' })]); }).then(function (d) {
       var out = {};

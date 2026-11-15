@@ -126,6 +126,57 @@ object Books {
         }
     }
 
+    // ---------- Colecciones: comprimidos (.zip, .rar, .7z) con muchos libros adentro ----------
+    private val BOOKF = Regex("\\.(pdf|epub|cbz|cbr|cb7)$", RegexOption.IGNORE_CASE)
+    private fun packDir(ctx: Context) = File(ctx.cacheDir, "packs").apply { mkdirs() }
+
+    /** Baja (o reutiliza) el comprimido de la colección. Se guardan los últimos 3. */
+    private fun packFile(ctx: Context, o: JSONObject, tick: (Int) -> Unit): File {
+        val src = o.optString("url").ifBlank { o.optString("path") }
+        if (src.isBlank()) throw IllegalArgumentException("Falta el archivo")
+        val d = packDir(ctx); val key = md5(src)
+        listOf("zip", "rar", "7z").map { File(d, "$key.$it") }.firstOrNull { it.isFile && it.length() > 0 }?.let { it.setLastModified(System.currentTimeMillis()); return it }
+        val f = File(d, "$key.bin")
+        when {
+            src.startsWith("mega:") || Mega.parse(src) != null -> Mega.download(src, f, tick)
+            src.startsWith("http") -> {
+                val h = HashMap<String, String>()
+                o.optString("ua").takeIf { it.isNotBlank() }?.let { h["User-Agent"] = it }
+                o.optString("ref").takeIf { it.isNotBlank() }?.let { h["Referer"] = it }
+                o.optString("auth").takeIf { it.isNotBlank() }?.let { h["Authorization"] = it }
+                val code = Net.download(src, f, h) { tick(it) }
+                if (code >= 400) { f.delete(); throw IllegalStateException("El servidor respondió con error $code") }
+            }
+            else -> File(src).copyTo(f, true)
+        }
+        val kind = sniff(f)
+        if (kind !in setOf("zip", "rar", "7z")) { f.delete(); throw IllegalStateException("No es un comprimido .zip, .rar o .7z") }
+        val out = File(d, "$key.$kind"); f.renameTo(out)
+        // Solo las 3 colecciones más recientes
+        val groups = (d.listFiles() ?: emptyArray()).groupBy { it.name.substringBefore('.').substringBefore('_') }
+        groups.filterKeys { it != key }.entries.sortedByDescending { e -> e.value.maxOf { it.lastModified() } }.drop(2).forEach { e -> e.value.forEach { it.deleteRecursively() } }
+        return out
+    }
+
+    /** Libros que trae el comprimido (si no trae libros, es un cómic: se abre como siempre). */
+    fun packList(ctx: Context, o: JSONObject, tick: (Int) -> Unit): JSONObject {
+        val f = packFile(ctx, o, tick)
+        val arr = JSONArray()
+        for ((n, size) in Archives.list(f.path)) if (BOOKF.containsMatchIn(n) && !n.contains("__MACOSX")) arr.put(JSONObject().put("name", n).put("size", size))
+        return JSONObject().put("entries", arr)
+    }
+
+    /** Saca un libro del comprimido y devuelve su ruta para abrirlo. */
+    fun packEntry(ctx: Context, o: JSONObject, tick: (Int) -> Unit): JSONObject {
+        val f = packFile(ctx, o, tick)
+        val entry = o.optString("entry")
+        val out = File(packDir(ctx), f.name.substringBefore('.') + "_x" + md5(entry))
+        val t = File(out, File(entry).name)
+        if (!t.isFile || t.length() == 0L) { out.deleteRecursively(); Archives.extract(f.path, setOf(entry), out) }
+        if (!t.isFile) throw IllegalStateException("No se encontró el libro dentro del comprimido")
+        return JSONObject().put("path", t.absolutePath)
+    }
+
     /** Deja solo los últimos 6 libros en la caché. */
     private fun clean(base: File, keep: String) {
         val groups = (base.listFiles() ?: return).groupBy { it.name.substringBefore('.') }
