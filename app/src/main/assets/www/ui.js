@@ -145,6 +145,8 @@
     if (MV.stopHeroPreview) MV.stopHeroPreview(view.name !== 'home');
     MV.applyLook();
     var app = document.getElementById('app');
+    // En el celular la barra de abajo se desliza: se guarda dónde estaba para no volver al inicio
+    var oldSide = document.querySelector('.side'), sideX = oldSide ? oldSide.scrollLeft : 0;
     var full = view.name === 'profiles' || view.name === 'profileEdit' || view.name === 'boot' || view.name === 'login';
     var body = (VIEWS[view.name] || VIEWS.home)(view.arg);
     if (full) {
@@ -168,6 +170,16 @@
     if (MV.headMode) MV.headMode();
     if (!full) {
       var sd = document.querySelector('.side');
+      if (sd && window.innerWidth <= 760) {
+        sd.scrollLeft = sideX;
+        // Si la sección activa quedó fuera de la vista, se desliza lo justo para mostrarla
+        var on = sd.querySelector('.nav.on');
+        if (on) {
+          var l = on.offsetLeft, r = l + on.offsetWidth;
+          if (l < sd.scrollLeft) sd.scrollLeft = l - 8;
+          else if (r > sd.scrollLeft + sd.clientWidth) sd.scrollLeft = r - sd.clientWidth + 8;
+        }
+      }
       pillFx('nav', sd, sd && sd.querySelector('.nav.on'), window.innerWidth > 760);
       var vc = document.querySelector('.vchips');
       pillFx('chips', vc, vc && vc.querySelector('.chip.on'), false);
