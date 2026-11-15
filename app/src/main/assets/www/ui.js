@@ -2312,8 +2312,8 @@
     if (MV.acct.managed()) {
       tabs = tabs.map(function (t) { return t[0] === 'sync' ? ['account', 'Cuenta'] : t; });
       if (MV.acct.isAdmin()) tabs.splice(1, 0, ['users', 'Usuarios'], ['menu', 'Menú']);
-      // Las listas solo las ve y maneja el superadministrador
-      else { tabs = tabs.filter(function (t) { return t[0] !== 'lists' && t[0] !== 'meta'; }); if (setTab === 'lists' || setTab === 'users' || setTab === 'meta') setTab = 'profiles'; }
+      // Usuarios: ven Listas (las incluidas, con su interruptor, y las suyas); las claves de Sinopsis solo el superadministrador
+      else { tabs = tabs.filter(function (t) { return t[0] !== 'meta'; }); if (setTab === 'users' || setTab === 'meta') setTab = 'lists'; }
       if (setTab === 'sync') setTab = 'account';
     }
     var html = top('Ajustes') + '<div class="chips">' + tabs.map(function (t) { return '<button class="chip f' + (setTab === t[0] ? ' on' : '') + '" data-act="setTab" data-arg="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>';
