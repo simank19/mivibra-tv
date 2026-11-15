@@ -23,6 +23,7 @@ sub init()
         { id: "favs", t: "Favoritos" }
         { id: "recent", t: "Continuar viendo" }
         { id: "search", t: "Buscar" }
+        { id: "ach", t: "Logros" }
         { id: "settings", t: "Ajustes" }
     ]
     nc = CreateObject("roSGNode", "ContentNode")
@@ -75,12 +76,33 @@ sub init()
     m.listMode = "eps"
     m.kbdMode = "all"
     m.aList = invalid
+    m.lastKey = nowSec()
+    m.appMin = 0
+    m.segs = []
+    m.segShown = ""
+
+    ' Vidrio gris: imágenes desde GitHub Pages (si no cargan, quedan los rectángulos de respaldo)
+    img = mvImg()
+    m.top.FindNode("bgImg").uri = img + "bg.jpg"
+    m.top.FindNode("glow2").uri = img + "bg.jpg"
+    glassOn("side", "sideFb", img + "glass.9.png")
+    glassOn("lvlBg", "lvlFb", img + "glass.9.png")
+    glassOn("skipBg", "skipFb", img + "pill.9.png")
+    glassOn("toastBg", "toastFb", img + "dark.9.png")
+    m.top.FindNode("gPanel").uri = img + "glass.9.png"
+    m.top.FindNode("cPanel").uri = img + "glass.9.png"
+    m.top.FindNode("minT").ObserveField("fire", "onMinute")
+    m.skipG = m.top.FindNode("skipG")
+    m.video.notificationInterval = 1
+    m.video.ObserveField("position", "onPos")
 
 end sub
 
 ' La pantalla principal (Shell) avisa cuando la app ya está en pantalla
 sub onGo()
     m.nav.SetFocus(true)
+    m.top.FindNode("minT").control = "start"
+    if introOn() then playIntro()
     if m.top.apiName = "Api" then
         startWork()
         return
@@ -134,6 +156,20 @@ function done(ev as Object) as Object
     if r <> invalid and r.id <> invalid then m.tasks.Delete(toS(r.id))
     return r
 end function
+
+' ---------- Vidrio ----------
+sub glassOn(pid as String, fbId as String, uri as String)
+    p = m.top.FindNode(pid)
+    p.ObserveField("loadStatus", "onGlassLoad")
+    p.uri = uri
+end sub
+
+sub onGlassLoad(ev as Object)
+    p = ev.GetRoSGNode()
+    map = { side: "sideFb", lvlbg: "lvlFb", skipbg: "skipFb", toastbg: "toastFb" }
+    fb = map[p.id]
+    if fb <> invalid and ev.GetData() = "ready" then m.top.FindNode(fb).visible = false
+end sub
 
 ' ---------- Mensajes ----------
 sub toast(t as String)
@@ -201,6 +237,11 @@ sub onLoad(ev as Object)
     if r.ytKey <> invalid and r.ytKey <> "" then
         m.ytKey = r.ytKey
         regSet("ytKey", m.ytKey)
+    end if
+    showLevel()
+    if m.auth <> invalid and m.pid <> "" and regGet("achDay", "") <> achDate(0) then
+        regSet("achDay", achDate(0))
+        achSend([{ k: "day" }])
     end if
     nl = countAll(m.cat.live)
     nm = countAll(m.cat.movie)
@@ -476,6 +517,9 @@ sub showSection(i as Integer)
     else if s.id = "settings" then
         showSettings()
         return
+    else if s.id = "ach" then
+        showAch()
+        return
     end if
     gc = CreateObject("roSGNode", "ContentNode")
     for each g in m.groupsData
@@ -515,10 +559,15 @@ sub onGroupFocus()
         settingsInfo(m.groups.itemFocused)
         return
     end if
+    if m.sec = "ach" then
+        achInfo(m.groups.itemFocused)
+        return
+    end if
     fillGrid(m.groups.itemFocused)
 end sub
 
 sub onGroupSelect()
+    if m.sec = "ach" then return
     if m.sec = "settings" then
         settingsAct(m.groups.itemSelected)
         return
@@ -902,7 +951,12 @@ end sub
 sub playEp(i as Integer)
     e = m.epsArr[i]
     sn = toS(m.curSeries.n)
-    it = { t: "ep", n: sn + " · T" + toS(Int(e.s)) + " E" + toS(Int(e.e)), u: toS(e.u), p: toS(m.curSeries.p), series: sn, s: e.s, e: e.e }
+    it = { t: "ep", n: sn + " · T" + toS(Int(e.s)) + " E" + toS(Int(e.e)), u: toS(e.u), p: toS(m.curSeries.p), series: sn, s: e.s, e: e.e, last: (i = m.epsArr.Count() - 1) }
+    if e.jfid <> invalid and m.curSeries.jfs <> invalid then
+        it.jfid = e.jfid
+        it.jfs = m.curSeries.jfs
+        it.jfk = m.curSeries.jfk
+    end if
     if it.u = "" and e.vid <> invalid then
         ' Capítulo de un addon: primero se buscan sus enlaces
         sty = toS(e.sty)
@@ -963,6 +1017,57 @@ sub play(it as Object, list as Object, idx as Integer)
     if m.audio.state = "playing" or m.audio.state = "paused" then m.audio.control = "stop"
     showOsd(it.n, hint)
     if live then askEpg(toS(it.u))
+    m.segs = []
+    m.segShown = ""
+    hideSkip()
+    if it.jfid <> invalid and it.jfs <> invalid then api({ cmd: "segs", s: it.jfs, k: toS(it.jfk), vid: toS(it.jfid) }, "onSegs")
+end sub
+
+' ---------- Saltar intro / resumen / créditos (Jellyfin) ----------
+sub onSegs(ev as Object)
+    r = done(ev)
+    if r = invalid or m.playing = invalid or r.segs = invalid then return
+    if toS(m.playing.it.jfid) <> toS(r.vid) then return
+    m.segs = r.segs
+end sub
+
+function segName(t as String) as String
+    if t = "recap" then return "Saltar resumen"
+    if t = "outro" then return "Saltar créditos"
+    if t = "preview" then return "Saltar avance"
+    if t = "commercial" then return "Saltar comercial"
+    return "Saltar intro"
+end function
+
+sub onPos()
+    if m.playing = invalid or m.segs = invalid or m.segs.Count() = 0 then return
+    p = m.video.position
+    cur = invalid
+    for each g in m.segs
+        if p >= g.s and p < g.e - 1 then cur = g
+    end for
+    if cur = invalid then
+        if m.skipG.visible then hideSkip()
+        return
+    end if
+    id = toS(cur.t) + toS(Int(cur.s))
+    if m.skipG.visible or m.segShown = id then return
+    m.segShown = id
+    m.curSeg = cur
+    m.top.FindNode("skipTxt").text = segName(toS(cur.t)) + "  ›"
+    m.skipG.visible = true
+    m.skipG.SetFocus(true)
+end sub
+
+sub hideSkip()
+    had = m.skipG.HasFocus()
+    m.skipG.visible = false
+    if had and m.video.visible then m.video.SetFocus(true)
+end sub
+
+sub doSkip()
+    if m.curSeg <> invalid then m.video.seek = m.curSeg.e
+    hideSkip()
 end sub
 
 sub showOsd(t as String, hint as String)
@@ -1009,6 +1114,8 @@ end sub
 sub closePlayer()
     if m.playing = invalid then return
     record(false)
+    m.segs = []
+    hideSkip()
     m.video.control = "stop"
     m.video.visible = false
     m.top.FindNode("vbg").visible = false
@@ -1053,6 +1160,16 @@ sub record(ended as Boolean)
             m.resume[k] = posMs
         end if
         regSet("resume", m.resume)
+    end if
+    ' Logros: película o capítulo terminado (90% visto o faltan menos de 4 minutos)
+    fin = ended or (durMs > 0 and (posMs >= durMs * 0.9 or durMs - posMs < 240000))
+    if fin and not live and durMs > 60000 then
+        if it.t = "ep" then
+            sk = "series:" + norm(toS(it.series))
+            achSend([{ k: "ep", key: sk + "#" + toS(Int(it.s)) + "x" + toS(Int(it.e)), sk: "S:" + sk, last: isTrue(it.last), name: toS(it.series) }])
+        else if it.t = "movie" then
+            achSend([{ k: "movie", key: k }])
+        end if
     end if
     if m.auth <> invalid and m.pid <> "" then
         req = { cmd: "push", auth: m.auth, pid: m.pid, entry: entry }
@@ -1192,6 +1309,9 @@ sub showSettings()
     if profiles().Count() > 1 then items.Push({ id: "profile", t: "Cambiar perfil" })
     if m.lists.Count() > 0 then items.Push({ id: "clear", t: "Quitar las listas de este Roku" })
     if m.auth <> invalid then items.Push({ id: "logout", t: "Cerrar sesión" })
+    introTxt = "Animación de inicio: sí"
+    if not introOn() then introTxt = "Animación de inicio: no"
+    items.Push({ id: "intro", t: introTxt })
     items.Push({ id: "about", t: "Acerca de MiVibra TV" })
     m.setItems = items
     gc = CreateObject("roSGNode", "ContentNode")
@@ -1230,6 +1350,8 @@ sub settingsInfo(i as Integer)
         t = "Quita las " + m.lists.Count().ToStr() + " listas que llegaron desde el panel web a este Roku. Las de tu cuenta no se tocan."
     else if id = "logout" then
         t = "Cierra la sesión en este Roku. Tus datos siguen en la cuenta."
+    else if id = "intro" then
+        t = "La animación de vidrio con los logos al abrir MiVibra TV." + Chr(10) + Chr(10) + "OK: activarla o quitarla. Se puede saltar con OK o Atrás."
     else if id = "about" then
         t = "MiVibra TV para Roku · " + toS(m.top.libInfo) + Chr(10) + "Reproductor de listas: no incluye ni vende contenido." + Chr(10) + Chr(10) + "Control: OK abre · * agrega a favoritos · ▲▼ cambia de canal mientras ves TV en vivo." + Chr(10) + Chr(10) + "Las listas, favoritos y Continuar viendo se sincronizan con tu cuenta MiVibra."
     end if
@@ -1262,6 +1384,16 @@ sub settingsAct(i as Integer)
         regSet("lists", m.lists)
         toast("Listas quitadas")
         load()
+    else if id = "intro" then
+        regSet("intro", not introOn())
+        showSettings()
+        m.groups.jumpToItem = i
+        if introOn() then
+            toast("Animación de inicio activada")
+            playIntro()
+        else
+            toast("Animación de inicio quitada")
+        end if
     else if id = "logout" then
         m.auth = invalid
         m.user = invalid
@@ -1304,6 +1436,24 @@ end sub
 ' ---------- Control remoto ----------
 function onKeyEvent(key as String, press as Boolean) as Boolean
     if not press then return false
+    m.lastKey = nowSec()
+    iv = m.top.FindNode("intro")
+    if iv <> invalid and iv.visible then
+        endIntro()
+        return true
+    end if
+    if m.skipG.visible and m.skipG.HasFocus() then
+        if key = "OK" then
+            doSkip()
+        else if key = "back" then
+            closePlayer()
+        else
+            ' Cualquier otra tecla devuelve el control al video (el botón sigue a la vista)
+            m.video.SetFocus(true)
+            return false
+        end if
+        return true
+    end if
     if m.mus.visible then
         if key = "back" then
             hideMus()
@@ -1416,3 +1566,130 @@ function onKeyEvent(key as String, press as Boolean) as Boolean
     end if
     return false
 end function
+
+' ---------- Logros y niveles ----------
+function achNow() as Object
+    d = pdata()
+    return achFix(d["ach"])
+end function
+
+sub showLevel()
+    lsub = m.top.FindNode("lvlSub")
+    if m.auth = invalid then
+        m.top.FindNode("lvlTxt").text = "NIVEL 1"
+        lsub.text = "Entra con tu cuenta para ganar XP"
+        m.top.FindNode("lvlBar").width = 0
+        return
+    end if
+    a = achNow()
+    xp = a["xp"]
+    n = achLvl(xp)
+    lo = achNeed(n)
+    upto = achNeed(n + 1)
+    m.top.FindNode("lvlTxt").text = "NIVEL " + n.ToStr() + "  ·  " + UCase(achTitle(n))
+    lsub.text = fmtNum(xp) + " XP · faltan " + fmtNum(upto - xp)
+    pct = (xp - lo) / (upto - lo)
+    if pct < 0 then pct = 0
+    if pct > 1 then pct = 1
+    m.top.FindNode("lvlBar").width = Int(300 * pct)
+end sub
+
+sub achSend(events as Object)
+    if m.auth = invalid or m.pid = "" then return
+    api({ cmd: "ach", auth: m.auth, pid: m.pid, events: events }, "onAch")
+end sub
+
+sub onAch(ev as Object)
+    r = done(ev)
+    if r = invalid then return
+    if r.auth <> invalid then
+        m.auth = r.auth
+        regSet("auth", r.auth)
+    end if
+    if r.ach <> invalid and m.user <> invalid and m.pid <> "" then
+        if m.user.pdata = invalid then m.user.pdata = {}
+        d = m.user.pdata[m.pid]
+        if d = invalid then d = {}
+        d["ach"] = r.ach
+        m.user.pdata[m.pid] = d
+    end if
+    showLevel()
+    if m.sec = "ach" and not m.video.visible then showAch()
+    if r.notes <> invalid and r.notes.Count() > 0 then
+        t = achNoteText(r.notes)
+        if t <> "" then toast(t)
+    end if
+end sub
+
+' Minutos usando la app (alguien tocó el control en los últimos 10 minutos o está viendo algo)
+sub onMinute()
+    iv = m.top.FindNode("intro")
+    if iv <> invalid and iv.visible then return
+    if nowSec() - m.lastKey > 600 and m.video.state <> "playing" and m.audio.state <> "playing" then return
+    m.appMin = m.appMin + 1
+    if m.appMin >= 5 then
+        m.appMin = 0
+        achSend([{ k: "app", min: 5 }])
+    end if
+end sub
+
+sub showAch()
+    m.grid.visible = false
+    m.eps.visible = false
+    m.info.visible = true
+    m.groupsData = []
+    gc = CreateObject("roSGNode", "ContentNode")
+    if m.auth = invalid then
+        c = gc.CreateChild("ContentNode")
+        c.title = "Entrar con tu cuenta"
+        m.achList = []
+        m.groups.content = gc
+        m.info.text = "Los logros y niveles van con tu cuenta MiVibra: entra en Ajustes con el celular y lo que veas aquí suma XP en todos tus equipos."
+        return
+    end if
+    a = achNow()
+    lv = achLvl(a["xp"])
+    m.achList = achBadges()
+    for each b in m.achList
+        c = gc.CreateChild("ContentNode")
+        if a["got"][b[0]] <> invalid then
+            c.title = b[1] + "   (logrado)"
+        else
+            v = 0
+            if b[3] = "level" then v = lv else v = achNum(a["st"][b[3]])
+            if v > b[4] then v = b[4]
+            c.title = b[1] + "   " + fmtNum(v) + "/" + fmtNum(b[4])
+        end if
+    end for
+    m.groups.content = gc
+    achInfo(0)
+end sub
+
+sub achInfo(i as Integer)
+    if m.auth = invalid then return
+    a = achNow()
+    st = a["st"]
+    xp = a["xp"]
+    n = achLvl(xp)
+    got = 0
+    for each b in achBadges()
+        if a["got"][b[0]] <> invalid then got = got + 1
+    end for
+    upto = achNeed(n + 1)
+    nl = Chr(10)
+    t = "Nivel " + n.ToStr() + " · " + achTitle(n) + nl
+    t = t + fmtNum(xp) + " XP · faltan " + fmtNum(upto - xp) + " para el nivel " + (n + 1).ToStr() + nl
+    t = t + got.ToStr() + " de " + achBadges().Count().ToStr() + " medallas · racha: " + st["streak"].ToStr() + " días" + nl + nl
+    t = t + "Películas " + fmtNum(st["movies"]) + "  ·  Capítulos " + fmtNum(st["episodes"]) + "  ·  Series completas " + fmtNum(st["seriesDone"]) + nl
+    t = t + "Minutos jugando " + fmtNum(st["gameMin"]) + "  ·  Minutos en MiVibra " + fmtNum(st["appMin"]) + "  ·  Mejor racha " + st["bestStreak"].ToStr() + nl + nl
+    if m.achList <> invalid and i >= 0 and i < m.achList.Count() then
+        b = m.achList[i]
+        if a["got"][b[0]] <> invalid then
+            t = t + b[1] + ": desbloqueado" + nl + b[2] + nl + nl
+        else
+            t = t + b[1] + ": " + b[2] + nl + nl
+        end if
+    end if
+    t = t + "Película terminada +100 · capítulo +30 · serie completa +300 · cada 5 minutos usando la app +5 (hasta 60 al día) · visita diaria +20 · cada medalla +50. Lo que juegues en la app del celular, TV Android o PC también suma."
+    m.info.text = t
+end sub

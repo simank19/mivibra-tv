@@ -74,6 +74,7 @@ jobs:
           cd "$GITHUB_WORKSPACE" && python3 .github/scripts/tvpack.py site site/tv ${{ github.run_number }}
           # Roku: la app se publica como librería; el Roku la descarga al abrir y así se actualiza solo
           python3 .github/scripts/rokupack.py site/roku/lib.zip ${{ github.run_number }} lib
+          cp -r roku/web site/roku/img
       - uses: actions/configure-pages@v5
         with:
           enablement: true

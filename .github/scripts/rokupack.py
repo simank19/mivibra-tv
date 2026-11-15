@@ -14,6 +14,8 @@ src = os.path.join(ROOT, 'roku')
 tmp = tempfile.mkdtemp()
 dst = os.path.join(tmp, 'roku')
 shutil.copytree(src, dst)
+# roku/web: imágenes del vidrio y la intro; se publican en GitHub Pages (site/roku/img), no van en el canal
+shutil.rmtree(os.path.join(dst, 'web'), ignore_errors=True)
 
 # Versión
 man = open(os.path.join(dst, 'manifest')).read()

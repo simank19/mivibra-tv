@@ -30,6 +30,10 @@ sub work()
         out = cmdYtPlay(r)
     else if c = "music" then
         out = cmdMusic(r)
+    else if c = "ach" then
+        out = cmdAch(r)
+    else if c = "segs" then
+        out = cmdSegs(r)
     end if
     if out = invalid then out = {}
     out.cmd = c
@@ -476,6 +480,75 @@ function cmdPush(r as Object) as Object
     return { ok: res.code = 200, auth: auth, history: nh, progress: prog }
 end function
 
+' ---------- Logros: lee el estado del perfil en la cuenta, suma lo nuevo y lo guarda ----------
+function cmdAch(r as Object) as Object
+    auth = fbAuth(r.auth)
+    if auth = invalid or auth.revoked = true then return { error: "sin cuenta" }
+    pid = r.pid
+    fp = "pdata.`" + pid + "`.ach"
+    cur = fsGet("mivibra/" + auth.uid, auth, "&mask.fieldPaths=" + enc(fp))
+    if cur.code <> 200 or cur.j = invalid then return { error: "no se pudo leer", auth: auth }
+    d = fsMap(cur.j.fields)
+    a = invalid
+    if d.pdata <> invalid and d.pdata[pid] <> invalid then a = d.pdata[pid]["ach"]
+    a = achFix(a)
+    notes = []
+    for each ev in r.events
+        achApply(a, ev, notes)
+    end for
+    achCheck(a, notes)
+    body = { "fields": { "pdata": { "mapValue": { "fields": {} } } } }
+    body.fields.pdata.mapValue.fields[pid] = { "mapValue": { "fields": { "ach": fsEnc(a) } } }
+    mask = "?updateMask.fieldPaths=" + enc(fp) + "&currentDocument.exists=true&key=" + mvConfig().apiKey
+    res = http("PATCH", fsUrl("mivibra/" + auth.uid) + mask, FormatJson(body), { "Content-Type": "application/json", "Authorization": "Bearer " + auth.id })
+    return { ok: res.code = 200, auth: auth, ach: a, notes: notes }
+end function
+
+' ---------- Jellyfin: partes para saltar (intro, resumen, créditos) ----------
+function cmdSegs(r as Object) as Object
+    s = toS(r.s)
+    k = "api_key=" + enc(toS(r.k))
+    id = toS(r.vid)
+    out = []
+    names = { "intro": "intro", "recap": "recap", "outro": "outro", "preview": "preview", "commercial": "commercial" }
+    res = httpJson("GET", s + "/MediaSegments/" + id + "?" + k)
+    if res.j <> invalid and type(res.j.Items) = "roArray" then
+        for each x in res.j.Items
+            t = names[LCase(toS(x.Type))]
+            if t = invalid then t = "intro"
+            out.Push({ t: t, s: achNum(x.StartTicks) / 10000000.0, e: achNum(x.EndTicks) / 10000000.0 })
+        end for
+    else
+        res = httpJson("GET", s + "/Episode/" + id + "/IntroSkipperSegments?" + k)
+        if res.j <> invalid and type(res.j) = "roAssociativeArray" then
+            for each kk in res.j
+                x = res.j[kk]
+                if type(x) = "roAssociativeArray" and (x.Valid = invalid or x.Valid = true) and x.IntroEnd <> invalid and x.IntroEnd > 0 then
+                    t = "intro"
+                    lk = LCase(kk)
+                    if Instr(1, lk, "credit") > 0 or Instr(1, lk, "outro") > 0 then t = "outro"
+                    st = 0
+                    if x.IntroStart <> invalid then st = x.IntroStart
+                    out.Push({ t: t, s: st, e: x.IntroEnd })
+                end if
+            end for
+        else
+            res = httpJson("GET", s + "/Episode/" + id + "/IntroTimestamps/v1?" + k)
+            x = res.j
+            if type(x) = "roAssociativeArray" and (x.Valid = invalid or x.Valid = true) and x.IntroEnd <> invalid and x.IntroEnd > 0 then
+                st = 0
+                if x.IntroStart <> invalid then st = x.IntroStart
+                out.Push({ t: "intro", s: st, e: x.IntroEnd })
+            end if
+        end if
+    end if
+    good = []
+    for each g in out
+        if g.e > g.s + 2 then good.Push(g)
+    end for
+    return { segs: good, vid: id }
+end function
+
 ' ---------- Capítulos (Xtream, Plex, Jellyfin y addons de Stremio) ----------
 function cmdEps(r as Object) as Object
     it = r.item
@@ -514,7 +587,7 @@ function cmdEps(r as Object) as Object
             if e.ParentIndexNumber <> invalid then sn = e.ParentIndexNumber
             en = 0
             if e.IndexNumber <> invalid then en = e.IndexNumber
-            eps.Push({ n: toS(e.Name), u: it.jfs + "/Videos/" + toS(e.Id) + "/stream?static=true&api_key=" + enc(it.jfk), s: sn, e: en })
+            eps.Push({ n: toS(e.Name), u: it.jfs + "/Videos/" + toS(e.Id) + "/stream?static=true&api_key=" + enc(it.jfk), s: sn, e: en, jfid: toS(e.Id) })
         end for
     else if it.st <> invalid then
         res = httpJson("GET", it.sb + "/meta/" + it.sty + "/" + it.st + ".json")
@@ -715,7 +788,7 @@ sub loadJellyfin(l as Object, acc as Object, errors as Object)
             nm = toS(d.Name)
             if kind = "Movie" then
                 if d.ProductionYear <> invalid then nm = nm + " (" + toS(d.ProductionYear) + ")"
-                addItem(acc, "movie", g, { t: "movie", n: nm, p: pic, u: s + "/Videos/" + id + "/stream?static=true&api_key=" + enc(k) })
+                addItem(acc, "movie", g, { t: "movie", n: nm, p: pic, u: s + "/Videos/" + id + "/stream?static=true&api_key=" + enc(k), jfid: id, jfs: s, jfk: k })
             else
                 addItem(acc, "series", g, { t: "series", n: nm, p: pic, jf: id, jfs: s, jfk: k, jfu: uid })
             end if

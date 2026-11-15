@@ -9,38 +9,53 @@
     <field id="libInfo" type="string"/>
   </interface>
   <script type="text/brightscript" uri="pkg:/components/Util.brs"/>
+  <script type="text/brightscript" uri="pkg:/components/Ach.brs"/>
+  <script type="text/brightscript" uri="pkg:/components/Intro.brs"/>
   <script type="text/brightscript" uri="pkg:/components/MVApp.brs"/>
   <children>
-    <Rectangle id="bg" width="1920" height="1080" color="0x0D0C0BFF"/>
-    <Poster id="glow" uri="pkg:/images/glow.png" width="1920" height="1080" opacity="0.9"/>
-    <Rectangle id="side" width="400" height="1080" color="0xFFFFFF0C"/>
+    <!-- Vidrio gris (como la app): fondo, menú y paneles translúcidos; las imágenes llegan de GitHub Pages -->
+    <Rectangle id="bg" width="1920" height="1080" color="0x45484CFF"/>
+    <Poster id="bgImg" width="1920" height="1080"/>
+    <Poster id="side" translation="[24,24]" width="380" height="1032"/>
+    <Rectangle id="sideFb" translation="[24,24]" width="380" height="1032" color="0xFFFFFF10"/>
+    <Poster id="gPanel" translation="[420,150]" width="452" height="906"/>
+    <Poster id="cPanel" translation="[886,150]" width="1010" height="906"/>
 
-    <Poster id="logo" uri="pkg:/images/logo.png" translation="[50,46]" width="64" height="64"/>
-    <Label id="brand" text="MiVibra TV" translation="[128,58]" font="font:MediumBoldSystemFont" color="0xF3EFEAFF"/>
-    <Label id="title" translation="[440,52]" width="900" font="font:LargeBoldSystemFont" color="0xF3EFEAFF"/>
-    <Label id="status" translation="[1060,64]" width="800" horizAlign="right" font="font:SmallSystemFont" color="0xA39C94FF"/>
+    <Poster id="logo" uri="pkg:/images/logo.png" translation="[56,52]" width="64" height="64"/>
+    <Label id="brand" text="MiVibra TV" translation="[134,66]" font="font:MediumBoldSystemFont" color="0xFFFFFFFF"/>
+    <Label id="title" translation="[440,52]" width="900" font="font:LargeBoldSystemFont" color="0xFFFFFFFF"/>
+    <Label id="status" translation="[1060,64]" width="800" horizAlign="right" font="font:SmallSystemFont" color="0xD6D9DCFF"/>
 
-    <LabelList id="nav" translation="[30,170]" itemSize="[340,76]" numRows="9" itemSpacing="[0,8]"
-      color="0xF3EFEAFF" focusedColor="0x0D0C0BFF" focusBitmapBlendColor="0xFF6900FF"
+    <LabelList id="nav" translation="[40,160]" itemSize="[348,68]" numRows="10" itemSpacing="[0,6]"
+      color="0xEEF0F2FF" focusedColor="0x2A2C2EFF" focusBitmapBlendColor="0xF4F5F6FF"
       font="font:MediumSystemFont" focusedFont="font:MediumBoldSystemFont" vertFocusAnimationStyle="floatingFocus"/>
 
-    <LabelList id="groups" translation="[430,170]" itemSize="[420,62]" numRows="13" itemSpacing="[0,4]"
-      color="0xD9D2CAFF" focusedColor="0x0D0C0BFF" focusBitmapBlendColor="0xFF6900FF"
+    <Group id="lvlG" translation="[40,926]">
+      <Poster id="lvlBg" width="348" height="112"/>
+      <Rectangle id="lvlFb" width="348" height="112" color="0xFFFFFF14"/>
+      <Label id="lvlTxt" translation="[24,16]" width="300" font="font:SmallBoldSystemFont" color="0xFFFFFFFF" text="NIVEL 1"/>
+      <Label id="lvlSub" translation="[24,48]" width="300" font="font:SmallestSystemFont" color="0xD6D9DCFF" text="Entra con tu cuenta para ganar XP"/>
+      <Rectangle translation="[24,88]" width="300" height="8" color="0xFFFFFF2E"/>
+      <Rectangle id="lvlBar" translation="[24,88]" width="0" height="8" color="0xF4F5F6FF"/>
+    </Group>
+
+    <LabelList id="groups" translation="[432,166]" itemSize="[428,62]" numRows="13" itemSpacing="[0,4]"
+      color="0xEEF0F2FF" focusedColor="0x2A2C2EFF" focusBitmapBlendColor="0xF4F5F6FF"
       font="font:SmallSystemFont" focusedFont="font:SmallBoldSystemFont" vertFocusAnimationStyle="floatingFocus"/>
 
-    <PosterGrid id="grid" translation="[890,170]" basePosterSize="[290,163]" numColumns="3" numRows="3"
-      itemSpacing="[26,74]" caption1NumLines="1" posterDisplayMode="scaleToFit"
+    <PosterGrid id="grid" translation="[912,180]" basePosterSize="[290,163]" numColumns="3" numRows="3"
+      itemSpacing="[26,74]" caption1NumLines="1" posterDisplayMode="scaleToFit" focusBitmapBlendColor="0xF4F5F6FF"
       loadingBitmapUri="pkg:/images/tile.png" failedBitmapUri="pkg:/images/tile.png"/>
 
-    <LabelList id="eps" translation="[890,170]" itemSize="[980,62]" numRows="13" itemSpacing="[0,4]" visible="false"
-      color="0xD9D2CAFF" focusedColor="0x0D0C0BFF" focusBitmapBlendColor="0xFF6900FF"
+    <LabelList id="eps" translation="[902,166]" itemSize="[978,62]" numRows="13" itemSpacing="[0,4]" visible="false"
+      color="0xEEF0F2FF" focusedColor="0x2A2C2EFF" focusBitmapBlendColor="0xF4F5F6FF"
       font="font:SmallSystemFont" focusedFont="font:SmallBoldSystemFont"/>
 
-    <Label id="info" translation="[890,180]" width="960" height="820" wrap="true" visible="false"
-      font="font:MediumSystemFont" color="0xF3EFEAFF" lineSpacing="10"/>
+    <Label id="info" translation="[920,186]" width="940" height="840" wrap="true" visible="false"
+      font="font:MediumSystemFont" color="0xFFFFFFFF" lineSpacing="10"/>
 
     <Group id="kbd" visible="false">
-      <Rectangle width="1920" height="1080" color="0x0D0C0BFF"/>
+      <Rectangle width="1920" height="1080" color="0x3A3D40FF"/>
       <Label text="Buscar canales, películas y series" translation="[460,180]" font="font:LargeBoldSystemFont" color="0xF3EFEAFF"/>
       <Keyboard id="keyboard" translation="[460,280]"/>
       <Button id="searchBtn" text="Buscar" translation="[460,860]" minWidth="300"/>
@@ -52,10 +67,10 @@
 
     <Audio id="audio"/>
     <Group id="mus" visible="false">
-      <Rectangle width="1920" height="1080" color="0x0D0C0BFF"/>
-      <Poster id="glow2" uri="pkg:/images/glow.png" width="1920" height="1080"/>
+      <Rectangle width="1920" height="1080" color="0x45484CFF"/>
+      <Poster id="glow2" width="1920" height="1080"/>
       <Poster id="musArt" translation="[200,290]" width="500" height="500" loadDisplayMode="scaleToFit" loadingBitmapUri="pkg:/images/tile.png" failedBitmapUri="pkg:/images/tile.png"/>
-      <Label id="musKind" translation="[780,330]" width="1000" font="font:SmallBoldSystemFont" color="0xFF6900FF"/>
+      <Label id="musKind" translation="[780,330]" width="1000" font="font:SmallBoldSystemFont" color="0xD6D9DCFF"/>
       <Label id="musTitle" translation="[780,380]" width="1000" wrap="true" maxLines="3" font="font:LargeBoldSystemFont" color="0xF3EFEAFF"/>
       <Label id="musSub" translation="[780,560]" width="1000" font="font:MediumSystemFont" color="0xA39C94FF"/>
       <Label id="musState" translation="[780,640]" width="1000" font="font:MediumBoldSystemFont" color="0xF3EFEAFF"/>
@@ -68,8 +83,16 @@
       <Label id="osdHint" translation="[80,1010]" width="1760" font="font:SmallSystemFont" color="0xA39C94FF"/>
     </Group>
 
+    <!-- Saltar intro / resumen / créditos (Jellyfin) -->
+    <Group id="skipG" visible="false" translation="[1500,880]" focusable="true">
+      <Rectangle id="skipFb" width="360" height="84" color="0xF4F5F6F2"/>
+      <Poster id="skipBg" width="360" height="84"/>
+      <Label id="skipTxt" width="360" height="84" horizAlign="center" vertAlign="center" font="font:MediumBoldSystemFont" color="0x2A2C2EFF" text="Saltar intro  ›"/>
+    </Group>
+
     <Group id="toastG" visible="false">
-      <Rectangle id="toastBg" width="1200" height="84" translation="[360,950]" color="0x181614F0"/>
+      <Rectangle id="toastFb" width="1200" height="84" translation="[360,950]" color="0x2A2C2EF0"/>
+      <Poster id="toastBg" width="1200" height="84" translation="[360,950]"/>
       <Label id="toast" translation="[380,950]" width="1160" height="84" horizAlign="center" vertAlign="center" font="font:SmallBoldSystemFont" color="0xF3EFEAFF" wrap="true"/>
     </Group>
 
@@ -78,5 +101,9 @@
     <Timer id="toastT" repeat="false" duration="4"/>
     <Timer id="epgT" repeat="false" duration="0.8"/>
     <Timer id="taskT" repeat="false" duration="3"/>
+    <Timer id="minT" repeat="true" duration="60"/>
+    <Timer id="introT" repeat="false" duration="11.3"/>
+
+    <Group id="intro" visible="false"/>
   </children>
 </component>

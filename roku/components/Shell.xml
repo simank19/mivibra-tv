@@ -8,11 +8,11 @@
   <script type="text/brightscript" uri="pkg:/components/Config.brs"/>
   <script type="text/brightscript" uri="pkg:/components/Shell.brs"/>
   <children>
-    <Rectangle width="1920" height="1080" color="0x0D0C0BFF"/>
+    <Rectangle width="1920" height="1080" color="0x45484CFF"/>
     <Poster uri="pkg:/images/glow.png" width="1920" height="1080"/>
     <Group id="splash">
       <Poster uri="pkg:/images/logo.png" translation="[928,440]" width="64" height="64"/>
-      <Label text="Cargando MiVibra TV…" translation="[0,530]" width="1920" horizAlign="center" font="font:MediumSystemFont" color="0xA39C94FF"/>
+      <Label text="Cargando MiVibra TV…" translation="[0,530]" width="1920" horizAlign="center" font="font:MediumSystemFont" color="0xD6D9DCFF"/>
     </Group>
     <Timer id="libT" repeat="false" duration="12"/>
   </children>
