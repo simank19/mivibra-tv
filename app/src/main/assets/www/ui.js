@@ -2430,7 +2430,8 @@
       (function () {
         // Addon preferido para reproducir (solo los que dan enlaces)
         var sl = S.lists.filter(function (l) { return l.type === 'stremio' && MV.listOn(l) && (!l.man || !l.man.resources || (l.man.resources || []).some(function (r) { return r === 'stream' || (r && r.name === 'stream'); })); });
-        if (!sl.length) return '';
+        // Los usuarios no lo ven: así no se muestran los addons del servicio
+        if (!sl.length || !MV.acct.canEdit()) return '';
         return '<div class="line" style="flex-wrap:wrap"><div class="t"><b>Addon preferido para reproducir</b><span>Al darle Reproducir se busca primero en este y, si tiene enlace, empieza de una sin mostrar la lista. Si no tiene, se buscan todos como siempre.</span></div><div class="chips" style="margin-top:8px">' +
           '<button class="chip f' + (!P.stPref ? ' on' : '') + '" data-act="stPrefSet" data-arg="">Ninguno (elegir siempre)</button>' +
           sl.map(function (l) { return '<button class="chip f' + (P.stPref === l.id ? ' on' : '') + '" data-act="stPrefSet" data-arg="' + esc(l.id) + '">' + esc(l.name || 'Addon') + '</button>'; }).join('') + '</div></div>';
