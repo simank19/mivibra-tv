@@ -22,15 +22,15 @@
     var p = MV.readProgress ? MV.readProgress(b.key) : null;
     return p && p.pct != null ? Math.round(p.pct * 100) : p && p.total ? Math.round(((b.fmt === 'epub' ? p.chap : p.page) + 1) / p.total * 100) : 0;
   }
-  function cover(b) { if (!b.poster && MV.bookCover) b.poster = MV.bookCover(b.key); return b.poster || ''; }
+  function cover(b) { if (!b.poster && MV.bookCover) b.poster = MV.bookCover(b.key); if (b.poster) return b.poster; var m = metaOf(b); return (m && m.c) || ''; }
   function coverHtml(b, big) {
     var c = colors(b), img = cover(b);
     return '<div class="bsc' + (big ? ' big' : '') + '" style="--c1:' + c[0] + ';--c2:' + c[1] + '"><span class="k">' + esc((KINDS[b.kind] || 'Libro').toUpperCase()) + '</span><i></i><b>' + esc(clean(b.name)) + '</b><em>' + esc(b.group || '') + '</em>' +
-      (img ? '<img src="' + esc(img) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '</div>';
+      (img ? '<img src="' + esc(img) + '" alt="" decoding="async" onerror="this.remove()">' : '') + '</div>';
   }
   function spineHtml(b) {
     var c = colors(b), img = cover(b);
-    return '<div class="bss" style="--c1:' + c[0] + ';--c2:' + c[1] + '">' + (img ? '<img src="' + esc(img) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '<i></i><b>' + esc(clean(b.name)) + '</b><em>' + esc((b.group || KINDS[b.kind] || '').toUpperCase()) + '</em></div>';
+    return '<div class="bss" style="--c1:' + c[0] + ';--c2:' + c[1] + '">' + (img ? '<img src="' + esc(img) + '" alt="" decoding="async" onerror="this.remove()">' : '') + '<i></i><b>' + esc(clean(b.name)) + '</b><em>' + esc((b.group || KINDS[b.kind] || '').toUpperCase()) + '</em></div>';
   }
 
   var api = MV.bookShelf = {};
@@ -68,7 +68,10 @@
       sh.slots.push({ el: el, sp: el.firstChild, cv: el.lastChild, idx: null });
     }
     bindInput();
+    // Al entrar, el libro llega de lado y gira hasta mostrar su portada
+    if (!keep && !document.documentElement.classList.contains('reduce')) sh.s = start - 1.35;
     frame(performance.now()); kick();
+    coverQueue(list);
   };
   function mod(a, n) { return ((a % n) + n) % n; }
   function measure() {
@@ -88,7 +91,7 @@
     if (!sh || !sh.root.isConnected) { stop(); return; }
     var dt = Math.min(.05, (now - (sh.lastT || now)) / 1000); sh.lastT = now;
     var k = sh.drag ? 18 : 5.2;
-    if (MV.lite || document.documentElement.classList.contains('reduce')) sh.s = sh.T; else sh.s += (sh.T - sh.s) * (1 - Math.exp(-k * dt));
+    if (document.documentElement.classList.contains('reduce')) sh.s = sh.T; else sh.s += (sh.T - sh.s) * (1 - Math.exp(-k * dt));
     if (Math.abs(sh.T - sh.s) < .0005) sh.s = sh.T;
     if (!sh.loop) { sh.T = Math.max(0, Math.min(sh.n - 1, sh.T)); }
     var base = Math.round(sh.s), H = sh.H;
@@ -109,7 +112,7 @@
       sl.sp.style.setProperty('--shade', Math.min(.6, o * .55 + (1 - sc) * .32).toFixed(3));
       sl.cv.style.setProperty('--shade', ((1 - o) * .82).toFixed(3));
     }
-    var a = mod(Math.round(sh.s), sh.n);
+    var a = sh.loop ? mod(Math.round(sh.s), sh.n) : Math.max(0, Math.min(sh.n - 1, Math.round(sh.s)));
     if (a !== sh.act) caption(a, sh.act < 0 ? 0 : (sh.T > sh.s ? 1 : -1));
     var moving = Math.abs(sh.T - sh.s) > .0005 || sh.drag;
     sh.raf = moving ? requestAnimationFrame(frame) : 0;
@@ -129,7 +132,7 @@
   }
   function swap(id, text, dir) {
     var el = document.getElementById(id); if (!el) return;
-    if (!dir || MV.lite) { el.textContent = text; return; }
+    if (!dir || document.documentElement.classList.contains('reduce')) { el.textContent = text; return; }
     var old = el.cloneNode(true); old.removeAttribute('id'); old.classList.add('old');
     el.parentNode.appendChild(old); el.textContent = text;
     try {
@@ -187,8 +190,10 @@
   window.addEventListener('resize', function () { if (sh && sh.root.isConnected) { measure(); kick(); frame(performance.now()); } });
 
   // ---------- Descripción: Google Books y, si no, Open Library ----------
-  var DESC = null;
-  function descCache() { if (!DESC) DESC = MV.load('bookDesc', {}) || {}; return DESC; }
+  // Ficha y carátula oficial: Google Books y, si no, Open Library (se guarda en caché)
+  var META = null, PEND = {};
+  function metaCache() { if (!META) META = MV.load('bookMeta', {}) || {}; return META; }
+  function metaOf(b) { return metaCache()[b.key] || null; }
   function stripTags(s) { var d = document.createElement('div'); d.innerHTML = String(s || '').replace(/<br\s*\/?>/gi, ' ').replace(/<\/p>/gi, ' '); return (d.textContent || '').replace(/\s+/g, ' ').trim(); }
   function splitTitle(b) {
     var t = clean(b.name || '').replace(/\.(pdf|epub|cbz|cbr|cb7|mobi|azw3?)$/i, '').replace(/[_]+/g, ' ').replace(/\[[^\]]*\]|\([^)]*\)/g, ' ').trim(), a = b.author || '';
@@ -197,26 +202,54 @@
     return { t: t.replace(/\s+/g, ' ').trim(), a: a.trim() };
   }
   function getJSON(u) { return fetch(u).then(function (r) { if (!r.ok) throw 0; return r.json(); }); }
-  function fetchDesc(b) {
-    var c = descCache(), k = b.key;
-    if (c[k] != null) return Promise.resolve(c[k]);
-    var q = splitTitle(b); if (!q.t) return Promise.resolve('');
+  function gbCover(v) { var il = v.imageLinks || {}, u = il.extraLarge || il.large || il.medium || il.thumbnail || il.smallThumbnail || ''; return u ? u.replace(/^http:/, 'https:').replace(/&edge=curl/, '').replace(/zoom=\d/, 'zoom=1') : ''; }
+  function fetchMeta(b) {
+    var c = metaCache(), k = b.key;
+    if (c[k]) return Promise.resolve(c[k]);
+    if (PEND[k]) return PEND[k];
+    var q = splitTitle(b); if (!q.t) return Promise.resolve({ d: '', c: '' });
+    var out = { d: '', c: '' };
     var gq = 'intitle:' + q.t + (q.a ? ' inauthor:' + q.a : '');
-    var google = getJSON('https://www.googleapis.com/books/v1/volumes?maxResults=5&printType=books&q=' + encodeURIComponent(gq)).then(function (j) {
-      var best = '', es = '';
-      (j.items || []).forEach(function (it) { var v = it.volumeInfo || {}, d = stripTags(v.description); if (d.length > 60) { if (!best) best = d; if (!es && v.language === 'es') es = d; } });
-      return es || best;
+    var google = getJSON('https://www.googleapis.com/books/v1/volumes?maxResults=6&printType=books&q=' + encodeURIComponent(gq)).then(function (j) {
+      var best = '', es = '', cov = '', covEs = '';
+      (j.items || []).forEach(function (it) {
+        var v = it.volumeInfo || {}, d = stripTags(v.description), cv = gbCover(v);
+        if (d.length > 60) { if (!best) best = d; if (!es && v.language === 'es') es = d; }
+        if (cv) { if (!cov) cov = cv; if (!covEs && v.language === 'es') covEs = cv; }
+      });
+      out.d = es || best; out.c = covEs || cov;
     });
     var openlib = function () {
-      return getJSON('https://openlibrary.org/search.json?limit=3&fields=key&title=' + encodeURIComponent(q.t) + (q.a ? '&author=' + encodeURIComponent(q.a) : '')).then(function (j) {
-        var w = j.docs && j.docs[0] && j.docs[0].key; if (!w) return '';
-        return getJSON('https://openlibrary.org' + w + '.json').then(function (x) { var d = x.description; return stripTags(typeof d === 'string' ? d : d && d.value); });
+      return getJSON('https://openlibrary.org/search.json?limit=3&fields=key,cover_i&title=' + encodeURIComponent(q.t) + (q.a ? '&author=' + encodeURIComponent(q.a) : '')).then(function (j) {
+        var doc = (j.docs || []).filter(function (x) { return x.cover_i; })[0] || (j.docs || [])[0]; if (!doc) return;
+        if (!out.c && doc.cover_i) out.c = 'https://covers.openlibrary.org/b/id/' + doc.cover_i + '-L.jpg';
+        if (out.d || !doc.key) return;
+        return getJSON('https://openlibrary.org' + doc.key + '.json').then(function (x) { var d = x.description; out.d = stripTags(typeof d === 'string' ? d : d && d.value); });
       });
     };
-    return google.catch(function () { return ''; }).then(function (d) { return d || openlib().catch(function () { return ''; }); }).then(function (d) {
-      d = (d || '').replace(/\s*\(?(Source|Fuente):.*$/i, '').slice(0, 1200);
-      c[k] = d; MV.save('bookDesc', c); return d;
+    PEND[k] = google.catch(function () {}).then(function () { if (!out.d || !out.c) return openlib().catch(function () {}); }).then(function () {
+      out.d = (out.d || '').replace(/\s*\(?(Source|Fuente):.*$/i, '').slice(0, 1200);
+      delete PEND[k];
+      if (out.d || out.c) { var ks = Object.keys(c); if (ks.length > 400) delete c[ks[0]]; c[k] = out; MV.save('bookMeta', c); }
+      return out;
     });
+    return PEND[k];
+  }
+  function fetchDesc(b) { return fetchMeta(b).then(function (m) { return m.d || ''; }); }
+  // Pide carátulas de los libros sin portada, de a dos a la vez, y repinta el estante
+  function coverQueue(list) {
+    var q = list.filter(function (b) { return !(b.poster || (MV.bookCover && MV.bookCover(b.key))) && !metaOf(b); }).slice(0, 40), busy = 0, mySh = sh;
+    function next() {
+      if (sh !== mySh || !q.length || busy >= 2) return;
+      var b = q.shift(); busy++;
+      fetchMeta(b).then(function (m) {
+        busy--;
+        if (m && m.c && sh === mySh) { sh.slots.forEach(function (sl) { if (sl.idx != null && sh.list[sl.idx] === b) sl.idx = null; }); frame(performance.now()); }
+        next();
+      });
+      next();
+    }
+    next();
   }
   api.fetchDesc = fetchDesc;
 
@@ -228,8 +261,8 @@
     var rect = slot ? slot.cv.getBoundingClientRect() : null;
     var pct = pctOf(b), sub = [b.author, b.group].filter(Boolean).join(' / ').toUpperCase() || (KINDS[b.kind] || 'LIBRO').toUpperCase();
     MV.reg[b.key] = b;
-    var syn = b.plot || b.desc || b.description || (descCache()[b.key] || '');
-    var need = !syn && descCache()[b.key] == null;
+    var mt = metaOf(b), syn = b.plot || b.desc || b.description || (mt && mt.d) || '';
+    var need = !syn && !mt;
     var html = '<button class="bsclose f" data-act="closeModal">CERRAR</button>' +
       '<div class="bsdl"><div class="m"><div class="s">' + esc(sub) + '</div></div>' +
       '<div class="m"><h2>' + esc(clean(b.name)) + '</h2></div>' +
@@ -242,13 +275,15 @@
     MV.modal(html, {
       onOpen: function (d) {
         d.classList.add('bsdlg'); document.getElementById('modal').classList.add('bsm');
-        if (rect && d.animate && !MV.lite) {
+        if (rect && d.animate && !document.documentElement.classList.contains('reduce')) {
           var W = window.innerWidth, Hh = window.innerHeight;
           d.animate([{ clipPath: 'inset(' + rect.top + 'px ' + (W - rect.right) + 'px ' + (Hh - rect.bottom) + 'px ' + rect.left + 'px round 8px)' }, { clipPath: 'inset(0 round 0)' }], { duration: 1050, easing: 'cubic-bezier(.76,0,.18,1)' });
           [].forEach.call(d.querySelectorAll('.bsdl .m > *'), function (el, i) { el.animate([{ transform: 'translateY(110%)' }, { transform: 'none' }], { duration: 900, delay: 620 + i * 75, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'both' }); });
           var p = d.querySelector('.bsdp'); if (p) p.animate([{ transform: 'scale(.86)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 900, delay: 520, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'both' });
         }
-        if (need) fetchDesc(b).then(function (txt) {
+        if (need) fetchMeta(b).then(function (mm) {
+          var txt = mm.d, pc = d.querySelector('.bsdp .bsc');
+          if (mm.c && pc && !pc.querySelector('img')) pc.insertAdjacentHTML('beforeend', '<img src="' + esc(mm.c) + '" alt="" onerror="this.remove()">');
           var m = document.getElementById('bsDescM'); if (!m || !m.isConnected) return;
           if (!txt) { m.remove(); return; }
           m.innerHTML = '<p>' + esc(txt) + '</p>';
