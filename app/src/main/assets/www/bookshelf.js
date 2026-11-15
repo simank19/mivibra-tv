@@ -231,7 +231,9 @@
     // Libros de tu equipo: primero lo que trae el propio archivo (portada y sinopsis exactas); luego internet
     var local = b.path && MV.bookInfo ? MV.bookInfo(b).then(function (fi) { if (fi.desc) out.d = fi.desc; if (fi.cover) out.lc = 1; if (fi.author) out.a = fi.author; }).catch(function () {}) : Promise.resolve();
     var need = function () { return !out.d || (!out.c && !out.lc); };
-    PEND[k] = local.then(function () { if (need()) return google().catch(function () {}); }).then(function () { if (need()) return openlib().catch(function () {}); }).then(function () {
+    // Libros por enlace (MEGA, Drive, MediaFire, OPDS…): si internet no tiene portada, se toma del propio archivo
+    var fromFile = function () { if (!(b.links && b.url && !b.path && MV.bookInfo && (!out.c && !out.lc || !out.d))) return; return MV.bookInfo(b).then(function (fi) { if (fi.desc && !out.d) out.d = fi.desc; if (fi.cover) out.lc = 1; }).catch(function () {}); };
+    PEND[k] = local.then(function () { if (need()) return google().catch(function () {}); }).then(function () { if (need()) return openlib().catch(function () {}); }).then(fromFile).then(function () {
       out.d = (out.d || '').replace(/\s*\(?(Source|Fuente):.*$/i, '').slice(0, 1200);
       delete PEND[k];
       if (out.d || out.c || out.lc) { var ks = Object.keys(c); if (ks.length > 400) delete c[ks[0]]; c[k] = out; MV.save('bookMeta', c); }

@@ -54,7 +54,14 @@ object Books {
         val key = md5(src)
         val base = dir(ctx)
         // Descarga (o archivo del equipo)
-        val file: File = if (src.startsWith("http")) {
+        val isMega = src.startsWith("mega:") || Mega.parse(src) != null
+        val file: File = if (isMega) {
+            // MEGA: se descarga y se descifra con la clave del enlace
+            val prev = listOf("pdf", "epub", "zip", "rar", "7z").map { File(base, "$key.$it") }.firstOrNull { it.isFile && it.length() > 0 }
+            val f = prev ?: File(base, "$key.bin")
+            if (prev == null && (!f.isFile || f.length() == 0L)) Mega.download(src, f) { tick(it) }
+            f
+        } else if (src.startsWith("http")) {
             // Si ya se descargó antes (con su formato ya reconocido) no se vuelve a bajar
             val prev = listOf("pdf", "epub", "zip", "rar", "7z").map { File(base, "$key.$it") }.firstOrNull { it.isFile && it.length() > 0 }
             val f = prev ?: File(base, "$key.bin")

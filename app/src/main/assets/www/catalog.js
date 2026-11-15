@@ -1173,17 +1173,82 @@
     (j.links || []).forEach(function (l) { if (/next/.test(l.rel || '') && l.href) out.feeds.push({ url: abs(l.href), title: out.title, next: 1 }); });
     return out;
   }
+  // ---------- MEGA, MediaFire y Google Drive (carpetas y archivos públicos) ----------
+  var BOOKISH = /\.(pdf|epub|cbz|cbr|cb7)$/i;
+  function isCloud(u) { return /mega(\.co)?\.nz\/|mediafire\.com\/|drive\.google\.com\/|docs\.google\.com\//i.test(u); }
+  MV.cloudBook = isCloud;
+  function megaBooks(u) {
+    if (!MV.native) return Promise.reject(new Error('MEGA funciona en la app instalada'));
+    return MV.call('megaList', [u]).then(function (arr) {
+      return (arr || []).filter(function (f) { return BOOKISH.test(f.name || ''); }).map(function (f) { return { url: f.url, title: fileTitle(f.name), fmt: fmtOf(f.name), path: f.path || '' }; });
+    });
+  }
+  function driveId(u) { var m = String(u).match(/\/(?:file\/d|folders)\/([\w-]{10,})/) || String(u).match(/[?&]id=([\w-]{10,})/); return m ? m[1] : ''; }
+  function driveFile(id) { return 'https://drive.usercontent.google.com/download?id=' + id + '&export=download&confirm=t'; }
+  function driveBooks(u, path, depth, out) {
+    out = out || []; path = path || ''; depth = depth || 0;
+    var id = driveId(u); if (!id) return Promise.resolve(out);
+    if (!/\/folders\//.test(u) && !/embeddedfolderview/.test(u)) {
+      // Un archivo: el nombre sale del título de su página
+      return MV.getText('https://drive.google.com/file/d/' + id + '/view', UA_WEB).then(function (h) {
+        var t = (String(h).match(/<title>([^<]+?)(?: - Google Drive)?<\/title>/i) || [])[1] || 'Libro';
+        out.push({ url: driveFile(id), title: fileTitle(t.replace(/&amp;/g, '&')), fmt: fmtOf(t), path: path }); return out;
+      }).catch(function () { out.push({ url: driveFile(id), title: 'Libro', path: path }); return out; });
+    }
+    return MV.getText('https://drive.google.com/embeddedfolderview?id=' + id, UA_WEB).then(function (h) {
+      var re = /<a href="([^"]+)"[^>]*>[\s\S]*?<div class="flip-entry-title">([^<]+)<\/div>/g, m, subs = [];
+      while ((m = re.exec(h))) {
+        var href = m[1].replace(/&amp;/g, '&'), name = m[2].replace(/&amp;/g, '&').trim();
+        if (/\/folders\//.test(href)) { if (depth < 3) subs.push({ u: href, p: (path ? path + ' / ' : '') + name }); }
+        else if (BOOKISH.test(name)) { var fid = driveId(href); if (fid) out.push({ url: driveFile(fid), title: fileTitle(name), fmt: fmtOf(name), path: path }); }
+      }
+      return subs.reduce(function (pr, sb) { return pr.then(function () { return driveBooks(sb.u, sb.p, depth + 1, out); }); }, Promise.resolve()).then(function () { return out; });
+    });
+  }
+  function mfBooks(u, path, depth, out) {
+    out = out || []; path = path || ''; depth = depth || 0;
+    var fm = String(u).match(/mediafire\.com\/(?:file|view|download)\/([a-z0-9]+)(?:\/([^\/?#]+))?/i);
+    if (fm) { var nm = fm[2] ? decodeURIComponent(fm[2]) : ''; out.push({ url: 'https://www.mediafire.com/file/' + fm[1] + (fm[2] ? '/' + fm[2] : '') + '/file', title: fileTitle(nm || 'Libro'), fmt: fmtOf(nm), path: path }); return Promise.resolve(out); }
+    var km = String(u).match(/mediafire\.com\/folder\/([a-z0-9]+)/i) || String(u).match(/mediafire\.com\/\?([a-z0-9]+)/i);
+    if (!km) return Promise.resolve(out);
+    var api = function (type, chunk) { return MV.getJSON('https://www.mediafire.com/api/1.5/folder/get_content.php?folder_key=' + km[1] + '&content_type=' + type + '&chunk=' + chunk + '&chunk_size=1000&response_format=json'); };
+    var files = function (chunk) {
+      return api('files', chunk).then(function (j) {
+        var c = (j.response || {}).folder_content || {};
+        (c.files || []).forEach(function (f) { if (BOOKISH.test(f.filename || '')) out.push({ url: 'https://www.mediafire.com/file/' + f.quickkey + '/' + encodeURIComponent(f.filename) + '/file', title: fileTitle(f.filename), fmt: fmtOf(f.filename), path: path }); });
+        if (c.more_chunks === 'yes' && chunk < 20) return files(chunk + 1);
+      });
+    };
+    return files(1).then(function () {
+      if (depth >= 3) return out;
+      return api('folders', 1).then(function (j) {
+        var fs2 = (((j.response || {}).folder_content || {}).folders || []);
+        return fs2.reduce(function (pr, f) { return pr.then(function () { return mfBooks('https://www.mediafire.com/folder/' + f.folderkey, (path ? path + ' / ' : '') + f.name, depth + 1, out); }); }, Promise.resolve());
+      }).then(function () { return out; });
+    });
+  }
+  function cloudBooks(u) {
+    return /mega(\.co)?\.nz\//i.test(u) ? megaBooks(u) : /mediafire\.com\//i.test(u) ? mfBooks(u) : driveBooks(u);
+  }
   function buildFromBookLinks(list) {
     var hdr = list.user ? { Authorization: 'Basic ' + btoa(unescape(encodeURIComponent(list.user + ':' + (list.pass || '')))), Accept: 'application/atom+xml,application/opds+json,application/json,text/html,*/*' } : { Accept: 'application/atom+xml,application/opds+json,application/json,text/html,*/*' };
     var out = [], seen = {};
     var push = function (b, group) { if (!b.url || seen[b.url]) return; seen[b.url] = 1; out.push(linkBook(list, b, group)); };
     // Enlaces pegados (uno por línea)
-    (list.links || []).forEach(function (u) { if (/^https?:\/\//i.test(u)) push({ url: u }); });
+    var clouds = [];
+    (list.links || []).forEach(function (u) { if (isCloud(u)) clouds.push(u); else if (/^https?:\/\//i.test(u)) push({ url: u }); });
     var start = String(list.url || '').trim();
-    if (!start) return Promise.resolve(out);
+    if (start && isCloud(start)) { clouds.unshift(start); start = ''; }
+    var cloudJob = clouds.reduce(function (pr, u) {
+      return pr.then(function () {
+        S.loadMsg = (list.name || 'Enlaces') + ': leyendo ' + (/mega/i.test(u) ? 'MEGA' : /mediafire/i.test(u) ? 'MediaFire' : 'Google Drive') + '…'; MV.emit('catalog');
+        return cloudBooks(u).then(function (arr) { arr.forEach(function (b) { push(b, b.path ? b.path.split(' / ').pop() : ''); }); });
+      }).catch(function (e) { if (clouds.length === 1 && !start) throw e; });
+    }, Promise.resolve());
+    if (!start) return cloudJob.then(function () { if (!out.length) throw new Error('No encontré libros (PDF, EPUB, CBZ, CBR o CB7) en ese enlace'); return out; });
     if (!/^https?:\/\//i.test(start)) start = 'https://' + start;
     // Un archivo suelto
-    if (BOOK_EXT.test(start)) { push({ url: start }); return Promise.resolve(out); }
+    if (BOOK_EXT.test(start)) { push({ url: start }); return cloudJob.then(function () { return out; }); }
     S.loadMsg = (list.name || 'Enlaces') + ': buscando libros…'; MV.emit('catalog');
     var visited = {}, queue = [{ url: start, title: '', depth: 0 }], pages = 0;
     function step() {
@@ -1217,7 +1282,7 @@
         S.loadMsg = (list.name || 'Enlaces') + ': ' + out.length + ' libros…'; MV.emit('catalog');
       }).catch(function (e) { if (job.depth === 0) throw new Error(/401|403/.test(e.message) ? 'Pide usuario y contraseña' : e.message); }).then(step);
     }
-    return step().then(function () {
+    return cloudJob.then(step).then(function () {
       if (!out.length) throw new Error('No encontré libros en ese enlace');
       return out;
     });

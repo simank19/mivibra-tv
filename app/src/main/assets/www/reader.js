@@ -23,6 +23,17 @@
   MV.readProgress = function (key) { return positions()[key] || null; };
 
   // ---------- Abrir ----------
+  /** MediaFire: la página del archivo trae el enlace directo de descarga (cambia con el tiempo, por eso se pide al abrir). */
+  function bookSrc(item) {
+    var u = item.url || '';
+    if (!/mediafire\.com\/(file|view|download)\//i.test(u)) return Promise.resolve(u);
+    return MV.getText(u, { 'User-Agent': 'Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Mobile Safari/537.36' }).then(function (h) {
+      var m = String(h).match(/href="(https?:\/\/download\d*\.mediafire\.com\/[^"]+)"/i) || String(h).match(/"(https?:\/\/download\d*\.mediafire\.com\/[^"\s]+)"/i);
+      if (!m) throw new Error('MediaFire no dio el enlace de descarga (el archivo puede estar borrado)');
+      return m[1].replace(/&amp;/g, '&');
+    });
+  }
+  MV.bookSrc = bookSrc;
   MV.openBook = function (item) {
     if (!item || (!item.url && !item.path)) return;
     if (!MV.native) return MV.toast('El lector está disponible en la app instalada');
@@ -41,9 +52,9 @@
     document.body.appendChild(box);
     document.documentElement.classList.add('reader-open');
     showBar();
-    MV.call('openBook', [JSON.stringify({ url: item.url || '', path: item.path || '', ua: item.ua || '', ref: item.ref || '', auth: item.auth || '' })], function (p) {
+    bookSrc(item).then(function (src) { return MV.call('openBook', [JSON.stringify({ url: src, path: item.path || '', ua: item.ua || '', ref: item.ref || '', auth: item.auth || '' })], function (p) {
       var m = $('#rdMsg'); if (m) m.textContent = p >= 0 ? 'Descargando… ' + p + '%' : 'Descargando…';
-    }).then(function (d) {
+    }); }).then(function (d) {
       if (!box) return;
       st.fmt = d.fmt;
       if (d.fmt === 'comic') { st.pages = d.pages; st.total = d.pages.length; renderComic(); if (d.pages[0]) saveCover(d.pages[0]); }
@@ -329,7 +340,7 @@
   /** Lee la portada, la sinopsis y el autor que trae el propio archivo (EPUB: su ficha OPF; cómic: la primera página; PDF: la primera hoja). */
   MV.bookInfo = function (item) {
     if (!MV.native || !item || (!item.url && !item.path)) return Promise.resolve({});
-    return MV.call('openBook', [JSON.stringify({ url: item.url || '', path: item.path || '', ua: item.ua || '', ref: item.ref || '', auth: item.auth || '' })]).then(function (d) {
+    return bookSrc(item).then(function (src) { return MV.call('openBook', [JSON.stringify({ url: src, path: item.path || '', ua: item.ua || '', ref: item.ref || '', auth: item.auth || '' })]); }).then(function (d) {
       var out = {};
       if (d.fmt === 'comic' && d.pages && d.pages[0]) return storeCover(item.key, d.pages[0]).then(function (c) { out.cover = c; return out; });
       if (d.fmt === 'pdf' && d.url) return pdfCover(d.url).then(function (u) { return storeCover(item.key, u); }).then(function (c) { out.cover = c; return out; }).catch(function () { return out; });

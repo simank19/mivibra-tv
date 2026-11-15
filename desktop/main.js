@@ -9,6 +9,7 @@ const crypto = require('crypto');
 const { spawn } = require('child_process');
 
 const net = require('./lib/net');
+const mega = require('./lib/mega');
 const server = require('./lib/server');
 const epg = require('./lib/epg');
 const stalker = require('./lib/stalker');
@@ -315,6 +316,8 @@ const ASYNC = {
     catch (e) { reply(id, false, errMsg(e) || 'No se pudo sacar una imagen de este video'); }
   },
   /** Libros y mangas: descarga y deja listas las páginas (PDF, EPUB, CBZ, CBR, CB7). */
+  /** Archivos de una carpeta o archivo compartido de MEGA. */
+  async megaList(id, link) { try { reply(id, true, await mega.list(link)); } catch (e) { reply(id, false, e.message || 'No se pudo leer el enlace de MEGA'); } },
   async openBook(id, json) {
     const o = JSON.parse(json), src = o.url || o.path;
     if (!src) return reply(id, false, 'Falta el archivo');
@@ -323,7 +326,10 @@ const ASYNC = {
     const served = (f) => BASE + '/books/' + path.relative(BOOKS, f).split(path.sep).map(encodeURIComponent).join('/');
     let file = ['pdf', 'epub', 'zip', 'rar', '7z'].map((e) => path.join(BOOKS, key + '.' + e)).find((f) => storage.exists(f));
     if (!file) {
-      if (/^https?:/i.test(src)) {
+      if (/^mega:/.test(src) || mega.parse(src)) {
+        file = path.join(BOOKS, key + '.bin');
+        try { await mega.download(src, file, (p) => progress(id, p)); } catch (e) { return reply(id, false, e.message); }
+      } else if (/^https?:/i.test(src)) {
         file = path.join(BOOKS, key + '.bin');
         const h = {}; if (o.ua) h['User-Agent'] = o.ua; if (o.ref) h.Referer = o.ref; if (o.auth) h.Authorization = o.auth;
         const code = await net.download(src, file, h, (p) => progress(id, p), false);

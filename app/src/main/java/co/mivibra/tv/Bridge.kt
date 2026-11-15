@@ -541,6 +541,15 @@ class Bridge(private val a: MainActivity) {
         }
     }
 
+    /** Archivos de una carpeta (o archivo) compartida de MEGA: nombre, tamaño y enlace interno para descargarlo. */
+    @JavascriptInterface
+    fun megaList(id: String, link: String) {
+        io.execute {
+            try { reply(id, true, Mega.list(link)) }
+            catch (e: Exception) { reply(id, false, e.message ?: "No se pudo leer el enlace de MEGA") }
+        }
+    }
+
     /** Abre un libro, manga o cómic (descarga y prepara las páginas). */
     @JavascriptInterface
     fun openBook(id: String, json: String) {

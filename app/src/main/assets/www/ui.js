@@ -3790,16 +3790,16 @@
       var adm = MV.acct.isAdmin(), canWeb = MV.acct.canAdd ? MV.acct.canAdd() : MV.acct.canEdit();
       MV.modal('<h2>Agregar libros</h2><p class="muted">' + (adm ? 'Lo que agregues con enlaces se sincroniza con todos tus usuarios.' : 'Quedan en tu Lectura; puedes agregar varios a la vez.') + '</p><div class="btns" style="flex-direction:column;align-items:stretch">' +
         '<button class="btn f" data-act="bookFile" data-autofocus>Archivos de tu equipo (varios a la vez)</button>' +
-        '<button class="btn ghost f" data-act="bookLinks">Enlaces: biblioteca virtual, lista o archivos</button>' +
+        '<button class="btn ghost f" data-act="bookLinks">Enlaces: MEGA, Drive, MediaFire o biblioteca virtual</button>' +
         (canWeb ? '<button class="btn ghost f" data-act="listTab" data-arg="web">Una página web con libros</button><button class="btn ghost f" data-act="listTab" data-arg="fb">Mi página hecha con Firebase</button>' : '') +
         '<button class="btn ghost f" data-act="confirmNo">Cancelar</button></div>');
     },
     bookLinks: function () {
       MV.closeModal(true);
       var adm = MV.acct.isAdmin();
-      MV.modal('<h2>Libros por enlace</h2><p class="muted">Pega el enlace de tu biblioteca virtual (catálogo <b>OPDS</b> de Calibre, Calibre-Web, Kavita, Komga…), de una página, de una lista (.txt o .json) o de un archivo. MiVibra trae todos los libros con su portada y sinopsis' + (adm ? ' y los sincroniza con tus usuarios' : '') + '. Solo agrega libros de dominio público o que te pertenezcan.</p>' +
+      MV.modal('<h2>Libros por enlace</h2><p class="muted">Pega el enlace de una carpeta o archivo de <b>MEGA</b>, <b>Google Drive</b> o <b>MediaFire</b> (compartido como público), de tu biblioteca virtual (catálogo <b>OPDS</b> de Calibre, Kavita, Komga…), de una página o de una lista (.txt o .json). MiVibra trae todos los libros con su portada y sinopsis' + (adm ? ' y los sincroniza con tus usuarios' : '') + '. Solo agrega libros de dominio público o que te pertenezcan.</p>' +
         '<label class="field">Nombre<input class="in f" id="blName" placeholder="Mi biblioteca" autocomplete="off" data-autofocus></label>' +
-        '<label class="field">Enlace<input class="in f" id="blUrl" placeholder="https://mi-calibre.com/opds" inputmode="url" autocomplete="off"></label>' +
+        '<label class="field">Enlace<input class="in f" id="blUrl" placeholder="https://mega.nz/folder/…  ·  drive.google.com/…" inputmode="url" autocomplete="off"></label>' +
         '<label class="field">O pega varios enlaces a archivos (uno por línea)<textarea class="in f" id="blLinks" rows="4" placeholder="https://…/libro1.epub&#10;https://…/libro2.pdf" style="resize:vertical;min-height:90px"></textarea></label>' +
         '<details style="margin:0 0 10px"><summary class="muted" style="cursor:pointer">Si tu biblioteca pide usuario y contraseña</summary><label class="field">Usuario<input class="in f" id="blUser" autocomplete="off"></label><label class="field">Contraseña<input class="in f" id="blPass" type="password" autocomplete="off"></label></details>' +
         '<p id="blErr" style="color:#FF8A80;font-size:14px;margin:0 0 8px"></p>' +
