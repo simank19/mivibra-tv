@@ -84,6 +84,7 @@
   function play() { var p = v.play(); if (p && p.catch) p.catch(function () {}); }
 
   function playIndex(i, from, announce) {
+    if (typeof endT !== 'undefined' && endT) { clearInterval(endT); endT = null; } if ($('nextBtn')) $('nextBtn').hidden = true;
     index = (i + queue.length) % Math.max(1, queue.length);
     var item = cur(); if (!item.url && !item.stk) return;
     showInfo(item); if (announce) osd((item.num ? item.num + ' · ' : '') + item.title);
@@ -118,10 +119,28 @@
   v.addEventListener('waiting', function () { spin(true); });
   v.addEventListener('pause', function () { $('bPlay').textContent = '▶'; wake(); });
   v.addEventListener('error', function () { if (attempts[att] && attempts[att].eng === 'native') next(v.error && v.error.code === 4 ? 'Este formato no se puede reproducir en el PC.' : 'No se pudo abrir el video.'); });
+  // ---------- Siguiente episodio: botón en los últimos 30 s y paso automático a los 3 s de terminar ----------
+  var wantNext = false, endT = null;
+  function nextName() { var n = queue[index + 1] || {}; return n.subtitle || n.title || ''; }
+  function goNextNow() {
+    clearInterval(endT); endT = null; $('nextBtn').hidden = true;
+    if (index >= queue.length - 1) return close();
+    if (!queue[index + 1].url) { wantNext = true; return close(); }
+    playIndex(index + 1, 0, false);
+  }
+  function nextCheck() {
+    var b = $('nextBtn'); if (!b || endT) return;
+    var left = (v.duration || 0) - (v.currentTime || 0);
+    var show = !live && index < queue.length - 1 && isFinite(v.duration) && v.duration > 60 && left <= 30;
+    if (show) { b.textContent = 'Siguiente episodio  ›  ' + nextName(); if (b.hidden) b.hidden = false; } else if (!b.hidden) b.hidden = true;
+  }
+  v.addEventListener('timeupdate', nextCheck);
   v.addEventListener('ended', function () {
     if (live) return;
-    if (index < queue.length - 1) { osd('Siguiente: ' + (queue[index + 1].title || '')); playIndex(index + 1, 0, false); }
-    else close();
+    if (index >= queue.length - 1) return close();
+    var n = 3, b = $('nextBtn'); b.hidden = false; try { b.focus(); } catch (e) {}
+    b.textContent = 'Siguiente: ' + nextName() + '  ·  en ' + n + ' s';
+    endT = setInterval(function () { n--; if (n <= 0) return goNextNow(); b.textContent = 'Siguiente: ' + nextName() + '  ·  en ' + n + ' s'; }, 1000);
   });
   // ---------- Saltar intro, resumen y créditos (segmentos que manda Jellyfin) ----------
   var SEG_TXT = { intro: 'Saltar intro', recap: 'Saltar resumen', outro: 'Saltar créditos', preview: 'Saltar avance', commercial: 'Saltar anuncio' };
@@ -139,6 +158,7 @@
     return true;
   }
   $('segSkip').addEventListener('click', segSkip);
+  $('nextBtn').addEventListener('click', function () { goNextNow(); });
   window.mvSegSkip = segSkip;
   v.addEventListener('timeupdate', segCheck);
   v.addEventListener('timeupdate', function () {
@@ -325,7 +345,7 @@
     if (!$('tracks').hidden && (k === 'Escape' || k === 'BrowserBack')) { $('tracks').hidden = true; return true; }
     if (target && target.tagName === 'BUTTON' && (k === 'Enter' || k === ' ')) return false;
     switch (k) {
-      case 'Enter': if (segNow) { segSkip(); break; } toggle(); break;
+      case 'Enter': if (segNow) { segSkip(); break; } if (!$('nextBtn').hidden) { goNextNow(); break; } toggle(); break;
       case ' ': case 'k': case 'K': case 'MediaPlayPause': toggle(); break;
       case 'ArrowLeft': if (live) showList(); else seekBy(-10); break;
       case 'ArrowRight': if (live) showList(); else seekBy(10); break;
@@ -350,7 +370,7 @@
     var r = {
       id: item.id || '', url: item.url || '', index: index,
       position: Math.round((v.currentTime || 0) * 1000), duration: isFinite(v.duration) ? Math.round(v.duration * 1000) : 0,
-      live: live, replaced: false, favToggles: Object.keys(favToggles).filter(function (k) { return favToggles[k]; }), tracks: trackLog, worked: worked
+      live: live, replaced: false, wantNext: wantNext, favToggles: Object.keys(favToggles).filter(function (k) { return favToggles[k]; }), tracks: trackLog, worked: worked
     };
     stopEngines();
     P.close(r);

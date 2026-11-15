@@ -55,6 +55,7 @@ body.single #bPrev, body.single #bNext { display: none; }
 ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.2); border-radius: 8px; }
 
 /* Saltar intro / resumen / créditos (Jellyfin con Intro Skipper) */
-#segSkip { position: fixed; right: 34px; bottom: 120px; z-index: 7; padding: 14px 24px; border-radius: 28px; border: 2px solid #FF6900; background: rgba(13,12,11,.9); color: #fff; font: 700 17px/1 system-ui, sans-serif; cursor: pointer; }
-#segSkip:hover, #segSkip:focus { background: #FF6900; outline: none; }
-#segSkip[hidden] { display: none; }
+#segSkip, #nextBtn { position: fixed; right: 34px; bottom: 120px; z-index: 7; padding: 14px 24px; border-radius: 28px; border: 2px solid rgba(255,255,255,.4); background: rgba(42,44,46,.92); color: #fff; font: 700 17px/1 system-ui, sans-serif; cursor: pointer; }
+#segSkip:hover, #segSkip:focus, #nextBtn:hover, #nextBtn:focus { background: #F4F5F6; color: #2A2C2E; outline: none; }
+#segSkip[hidden], #nextBtn[hidden] { display: none; }
+#nextBtn { bottom: 186px; }

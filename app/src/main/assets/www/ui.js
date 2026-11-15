@@ -2717,12 +2717,51 @@
     else if (it.st && MV.stremioPick && (MV.stAlt(it.st.id, it._meta && it._meta.imdb), true)) MV.stremioPick(it.st.type, it.st.id, MV.cleanTitle(it.name) || it.name, false, false, { year: it.year || '', alt: it.orig || '', olang: it.olang || '' }).then(function (s) { if (s.ua) it.ua = s.ua; if (s.ref) it.ref = s.ref; it.alts = s.rest || []; go(s.url); }).catch(function (e) { if (e.message !== 'cancelado') MV.toast(e.message, 6000); });
     else MV.toast('Este contenido ya no está disponible en tus listas');
   };
+  /** Siguiente capítulo de un addon: se busca en el mismo addon que funcionó, con la misma fuente si está (sin preguntar). */
+  function sameAddonLink(series, e) {
+    var lid = series._stLid; if (!lid || !e.stId || !MV.stremioStreams) return Promise.reject(new Error('sin addon'));
+    if (series._meta && series._meta.imdb && !/^tt/.test(e.stId)) MV.stAlt(e.stId, series._meta.imdb + ':' + e.season + ':' + e.ep);
+    return MV.stremioStreams('series', e.stId, lid).then(function (st) {
+      st = (st || []).filter(function (x) { return x.url; });
+      if (!st.length) throw new Error('sin enlaces');
+      var same = st.filter(function (x) { return x.src === series._stSrc; });
+      var lat = S.prefs.latOnly && MV.stLatLink ? (same.length ? same : st).filter(function (x) { return MV.stLatLink(x, MV.isAnimeIt && MV.isAnimeIt(series), series.olang === 'es'); }) : [];
+      var pick = (lat.length ? lat : same.length ? same : st)[0];
+      e.url = pick.url; e.ua = pick.ua; e.ref = pick.ref; e.alts = st.filter(function (x) { return x !== pick; }).map(function (x) { return x.url; }).slice(0, 6);
+      return e;
+    });
+  }
+  /** Mientras se ve un capítulo de addon, se deja listo el enlace del siguiente en el reproductor. */
+  var nextWatch = null;
+  function watchNextEp(series, eps, start) {
+    clearInterval(nextWatch);
+    if (!A || !A.playerQueue || !series._stLid) return;
+    var busy = {}, ticks = 0;
+    nextWatch = setInterval(function () {
+      var q; try { q = JSON.parse(A.playerQueue()); } catch (e) { q = null; }
+      if (!q || !q.open) { if (++ticks > 5) clearInterval(nextWatch); return; }
+      ticks = 0;
+      var ni = q.index + 1;
+      if (ni >= q.len || (q.empty || []).indexOf(ni) < 0 || busy[ni]) return;
+      var e = eps[start + ni]; if (!e) return;
+      busy[ni] = 1;
+      (e.url ? Promise.resolve(e) : sameAddonLink(series, e)).then(function (x) {
+        A.playerSetUrl(ni, JSON.stringify({ url: x.url, ua: x.ua || '', ref: x.ref || '', alts: x.alts || [] }));
+      }).catch(function () { busy[ni] = 0; busy[ni] = 'fail'; });
+    }, 4000);
+  }
   MV.playEpisode = function (series, i, resume) {
     var eps = series.episodes || []; var e = eps[i]; if (!e) return;
     // Capítulo de un addon de Stremio: primero se pide el enlace (y se elige si hay varios)
     if (!e.url && e.stId && MV.stremioPick && !MV.dlLocal(series.key + '#' + e.season + 'x' + e.ep)) {
       if (series._meta && series._meta.imdb && !/^tt/.test(e.stId)) MV.stAlt(e.stId, series._meta.imdb + ':' + e.season + ':' + e.ep);
-      MV.stremioPick('series', e.stId, (MV.cleanTitle(series.name) || series.name) + ' T' + e.season + ' E' + e.ep, false, false, { name: MV.cleanTitle(series.name) || series.name, alt: series.orig || '', olang: series.olang || '' }).then(function (s) { e.url = s.url; e.ua = s.ua; e.ref = s.ref; MV.playEpisode(series, i, resume); }).catch(function (er) { if (er.message !== 'cancelado') MV.toast(er.message, 6000); });
+      // Si el capítulo anterior abrió bien con un addon, se usa el mismo sin preguntar
+      if (series._stLid && series._stAuto) {
+        series._stAuto = false;
+        MV.toast('Siguiente capítulo: T' + e.season + ' E' + e.ep + '…', 3000);
+        return sameAddonLink(series, e).then(function () { MV.playEpisode(series, i, resume); }).catch(function () { series._stLid = ''; MV.playEpisode(series, i, resume); });
+      }
+      MV.stremioPick('series', e.stId, (MV.cleanTitle(series.name) || series.name) + ' T' + e.season + ' E' + e.ep, false, false, { name: MV.cleanTitle(series.name) || series.name, alt: series.orig || '', olang: series.olang || '' }).then(function (s) { e.url = s.url; e.ua = s.ua; e.ref = s.ref; series._stLid = s.lid || ''; series._stSrc = s.src || ''; MV.playEpisode(series, i, resume); }).catch(function (er) { if (er.message !== 'cancelado') MV.toast(er.message, 6000); });
       return;
     }
     var poster = MV.poster(series);
@@ -2732,6 +2771,7 @@
     var dls = {}; MV.dlList().forEach(function (d) { if (d.status === 'done') dls[d.key] = 'file://' + d.file; });
     queue.forEach(function (x) { if (dls[x.id]) x.url = dls[x.id]; });
     launch({ queue: queue, index: 0, live: false, startMs: prog ? prog.pos : 0 }, { item: series, episodes: eps, start: i });
+    if (series._stLid) setTimeout(function () { watchNextEp(series, eps, i); }, 3000);
   };
   /** Desde "Continuar viendo" del inicio de Android TV: sigue donde iba (espera a que cargue el catálogo). */
   MV.openFromHome = function (id, tries, detail) {
@@ -2854,6 +2894,10 @@
       if (e) MV.recordPlay({ key: ctx.item.key + '#' + e.season + 'x' + e.ep, type: 'episode', name: ctx.item.name + ' · T' + e.season + ' E' + e.ep, poster: MV.poster(ctx.item), url: e.url, group: ctx.item.group, parent: ctx.item.key }, r);
       MV.recordPlay(ctx.item, null);
     } else MV.recordPlay(ctx.item, r);
+    if (r && r.wantNext && ctx.episodes && ctx.item) {
+      var nx = ctx.start + (r.index || 0) + 1;
+      if (ctx.episodes[nx]) { ctx.item._stAuto = true; setTimeout(function () { MV.playEpisode(ctx.item, nx, false); }, 300); }
+    }
     if (r.live && ctx.list && ctx.list[r.index]) { var ch = ctx.list[r.index]; var el = document.querySelector('[data-key="' + ch.key.replace(/"/g, '\\"') + '"]'); }
     MV.rerender();
   };

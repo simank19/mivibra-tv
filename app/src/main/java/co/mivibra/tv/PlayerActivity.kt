@@ -55,6 +55,22 @@ class PlayerActivity : ComponentActivity() {
         @Volatile var pendingRequest: String? = null
         /** Solo un reproductor a la vez: si hay uno en la ventana flotante, se cierra al abrir otro. */
         private var active: java.lang.ref.WeakReference<PlayerActivity>? = null
+        /** Para la app: en qué capítulo va y cuáles todavía no tienen enlace (capítulos de addons). */
+        fun queueInfo(): String {
+            val a = active?.get() ?: return "{\"open\":false}"
+            val empty = org.json.JSONArray()
+            for (i in 0 until a.queue.length()) if (a.queue.optJSONObject(i)?.optString("url").isNullOrBlank()) empty.put(i)
+            return JSONObject().put("open", !a.isFinishing).put("index", a.index).put("len", a.queue.length()).put("empty", empty).toString()
+        }
+        /** La app consiguió el enlace de un capítulo (del mismo addon): se guarda en la cola. */
+        fun setQueueUrl(i: Int, json: String) {
+            val a = active?.get() ?: return
+            a.runOnUiThread {
+                val o = a.queue.optJSONObject(i) ?: return@runOnUiThread
+                val n = try { JSONObject(json) } catch (_: Exception) { return@runOnUiThread }
+                for (k in listOf("url", "ua", "ref", "alts")) if (n.has(k)) o.put(k, n.get(k))
+            }
+        }
     }
     private var replacedBy = false
     private var session: androidx.media3.session.MediaSession? = null
@@ -363,22 +379,51 @@ class PlayerActivity : ComponentActivity() {
 
     // ---------- Siguiente episodio automático ----------
     private var nextCard: TextView? = null
+    private var endWait = -1
+    private var wantNext = false
     private fun hasNext() = !live && index < queue.length() - 1
+    private fun nextReady() = hasNext() && !queue.optJSONObject(index + 1)?.optString("url").isNullOrBlank()
+    private fun nextName(): String { val n = queue.optJSONObject(index + 1); return n?.optString("subtitle")?.ifBlank { null } ?: n?.optString("title") ?: "" }
     private fun goNext() {
-        ui.removeCallbacks(nextTick)
+        ui.removeCallbacks(endTick); endWait = -1
         nextCard?.visibility = View.GONE
-        if (hasNext()) { playIndex(index + 1, 0); panel?.setCurrent(index) }
+        if (!hasNext()) return
+        if (!nextReady()) { onEnded(); return }
+        playIndex(index + 1, 0); panel?.setCurrent(index)
     }
-    /** En los últimos 20 s aparece "Siguiente capítulo en N s" (OK para verlo ya); al terminar pasa solo. */
+    /** Al terminar: 3 s y pasa solo al siguiente. Si su enlace aún se está buscando (addons), espera hasta 25 s. */
+    private fun onEnded() {
+        if (!hasNext()) { finishWithResult(); return }
+        val card = nextCard ?: makeNextCard().also { nextCard = it }
+        card.visibility = View.VISIBLE; card.requestFocus()
+        endWait = if (nextReady()) 3 else 25
+        ui.removeCallbacks(endTick); ui.post(endTick)
+    }
+    private val endTick = object : Runnable {
+        override fun run() {
+            val card = nextCard ?: return
+            if (endWait < 0) return
+            if (nextReady()) {
+                if (endWait > 3) endWait = 3
+                if (endWait <= 0) { endWait = -1; card.visibility = View.GONE; playIndex(index + 1, 0); panel?.setCurrent(index); return }
+                card.text = "▶  Siguiente: " + nextName() + "  ·  en " + endWait + " s"
+            } else {
+                if (endWait <= 0) { endWait = -1; wantNext = true; finishWithResult(); return }
+                card.text = "Buscando el enlace del siguiente capítulo…"
+            }
+            endWait--
+            ui.postDelayed(this, 1000)
+        }
+    }
+    /** En los últimos 30 s aparece el botón "Siguiente episodio" (OK para pasar ya). */
     private val nextTick = object : Runnable {
         override fun run() {
             val p = player
-            if (p != null && hasNext() && p.duration > 0) {
+            if (p != null && hasNext() && p.duration > 0 && endWait < 0) {
                 val left = (p.duration - p.currentPosition) / 1000
                 val card = nextCard ?: makeNextCard().also { nextCard = it }
-                if (left in 0..20) {
-                    val n = queue.optJSONObject(index + 1)
-                    card.text = "▶  Siguiente: " + (n?.optString("subtitle")?.ifBlank { null } ?: n?.optString("title") ?: "") + "  ·  en " + left + " s"
+                if (left in 0..30) {
+                    card.text = if (nextReady()) "Siguiente episodio  ›   " + nextName() else "Buscando el siguiente capítulo…"
                     if (card.visibility != View.VISIBLE) { card.visibility = View.VISIBLE; card.requestFocus() }
                 } else card.visibility = View.GONE
             }
@@ -387,14 +432,14 @@ class PlayerActivity : ComponentActivity() {
     }
     private fun makeNextCard(): TextView {
         val t = TextView(this).apply {
-            setTextColor(Color.WHITE)
+            setTextColor(android.content.res.ColorStateList(arrayOf(intArrayOf(android.R.attr.state_focused), intArrayOf()), intArrayOf(0xFF2A2C2E.toInt(), Color.WHITE)))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             typeface = Typeface.DEFAULT_BOLD
             setPadding(dp(22), dp(14), dp(22), dp(14))
             isFocusable = true; isClickable = true
             background = android.graphics.drawable.StateListDrawable().apply {
-                addState(intArrayOf(android.R.attr.state_focused), android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(26).toFloat(); setColor(0xFFFF6900.toInt()) })
-                addState(intArrayOf(), android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(26).toFloat(); setColor(0xE60D0C0B.toInt()); setStroke(dp(2), 0xFFFF6900.toInt()) })
+                addState(intArrayOf(android.R.attr.state_focused), android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(26).toFloat(); setColor(0xFFF4F5F6.toInt()) })
+                addState(intArrayOf(), android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(26).toFloat(); setColor(0xE62A2C2E.toInt()); setStroke(dp(2), 0x66FFFFFF) })
             }
             visibility = View.GONE
             setOnClickListener { goNext() }
@@ -703,10 +748,7 @@ class PlayerActivity : ComponentActivity() {
                         if (id.isNotBlank()) worked.put(id, JSONObject().put("url", at.url).put("orig", current().optString("url")).put("tries", attemptIndex))
                     }
                 }
-                if (state == Player.STATE_ENDED && !live && hasNext()) { goNext(); return }
-                if (state == Player.STATE_ENDED && !live) {
-                    if (index < queue.length() - 1) playIndex(index + 1, 0) else finishWithResult()
-                }
+                if (state == Player.STATE_ENDED && !live) { onEnded(); return }
             }
         })
         view.player = p
@@ -748,7 +790,7 @@ class PlayerActivity : ComponentActivity() {
         cancelWatchdog()
         val p = player ?: return
         // Si falla en los últimos 90 s de un episodio (créditos cortados), pasa al siguiente
-        if (!live && hasNext() && p.duration > 0 && p.duration - p.currentPosition < 90_000) { goNext(); return }
+        if (!live && hasNext() && p.duration > 0 && p.duration - p.currentPosition < 90_000) { onEnded(); return }
 
         if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
             p.seekToDefaultPosition(); p.prepare(); return
@@ -1264,6 +1306,7 @@ class PlayerActivity : ComponentActivity() {
             .put("favToggles", JSONArray(favToggles.toList()))
             .put("tracks", trackLog)
             .put("worked", worked)
+            .put("wantNext", wantNext)
         setResult(RESULT_OK, Intent().putExtra("result", result.toString()))
         finish()
     }

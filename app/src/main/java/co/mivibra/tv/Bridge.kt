@@ -561,6 +561,14 @@ class Bridge(private val a: MainActivity) {
         }
     }
 
+    /** Reproductor abierto: capítulo actual y capítulos sin enlace (para buscar el siguiente en el mismo addon). */
+    @JavascriptInterface
+    fun playerQueue(): String = PlayerActivity.queueInfo()
+
+    /** Pone el enlace de un capítulo de la cola del reproductor abierto. */
+    @JavascriptInterface
+    fun playerSetUrl(i: Int, json: String) { PlayerActivity.setQueueUrl(i, json) }
+
     /** Abre un libro, manga o cómic (descarga y prepara las páginas). */
     @JavascriptInterface
     fun openBook(id: String, json: String) {
