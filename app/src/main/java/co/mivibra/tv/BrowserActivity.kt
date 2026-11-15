@@ -73,12 +73,18 @@ class BrowserActivity : ComponentActivity() {
         desktop = prefs.getBoolean("desktop", isTv)
         hideBars()
 
-        root = FrameLayout(this).apply { setBackgroundColor(Color.parseColor("#0D0C0B")) }
+        root = FrameLayout(this).apply { setBackgroundColor(Color.parseColor("#3A3D40")) }
         web = WebView(this)
         root.addView(web, FrameLayout.LayoutParams(-1, -1))
 
         bar = buildBar()
         root.addView(bar, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
+        // En el celular la barra queda fija arriba y la página empieza debajo (no la tapa)
+        if (!isTv) bar.addOnLayoutChangeListener { _, _, top, _, bottom, _, _, _, _ ->
+            val lp = web.layoutParams as FrameLayout.LayoutParams
+            val h = if (bar.visibility == View.VISIBLE) bottom - top else 0
+            if (lp.topMargin != h) { lp.topMargin = h; web.layoutParams = lp }
+        }
 
         cursor = CursorView(this)
         root.addView(cursor, FrameLayout.LayoutParams(-1, -1))
@@ -125,7 +131,7 @@ class BrowserActivity : ComponentActivity() {
             }
 
             override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
-                if (url != null && !url.startsWith("data:")) urlBox.setText(url)
+                if (url != null && !url.startsWith("data:")) setUrl(url)
                 blockedCount = 0; updateShield()
             }
 
@@ -140,7 +146,7 @@ class BrowserActivity : ComponentActivity() {
                     error.errorCode == ERROR_CONNECT || error.errorCode == ERROR_TIMEOUT -> "El sitio no respondió. Puede estar caído o bloqueado por tu red o tu DNS."
                     else -> "El sitio no se pudo abrir (" + error.description + ")."
                 }
-                val html = "<!doctype html><html><head><meta name=viewport content='width=device-width,initial-scale=1'><style>body{margin:0;background:#0D0C0B;color:#F3EFEA;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px;box-sizing:border-box;text-align:center}h1{font-size:28px;margin:0 0 10px}p{color:#A39C94;max-width:620px;line-height:1.5}code{color:#FFB98A;word-break:break-all;font-size:13px}a{margin-top:18px;background:#FF6900;color:#0D0C0B;font-weight:800;padding:14px 28px;border-radius:40px;text-decoration:none}</style></head><body>" +
+                val html = "<!doctype html><html><head><meta name=viewport content='width=device-width,initial-scale=1'><style>body{margin:0;background:radial-gradient(1400px 800px at 30% -10%,#5A5E62,#46494D 45%,#323538);color:#F4F5F6;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px;box-sizing:border-box;text-align:center}h1{font-size:28px;margin:0 0 10px}p{color:rgba(255,255,255,.72);max-width:620px;line-height:1.5}code{color:rgba(255,255,255,.55);word-break:break-all;font-size:13px}a{margin-top:18px;background:#F4F5F6;color:#2A2C2E;font-weight:800;padding:14px 28px;border-radius:40px;text-decoration:none}</style></head><body>" +
                     "<h1>" + (if (ad) "Anuncio evitado" else "No se pudo abrir") + "</h1><p>" + why + "</p><code>" + esc(url.take(120)) + "</code>" +
                     "<a href='javascript:history.back()'>Volver</a></body></html>"
                 view.loadDataWithBaseURL(url, html, "text/html", "utf-8", url)
@@ -174,11 +180,18 @@ class BrowserActivity : ComponentActivity() {
                 customView = null
                 customCallback?.onCustomViewHidden()
                 web.visibility = View.VISIBLE
+                if (!isTv) bar.visibility = View.VISIBLE
                 cursor.visibility = if (cursorOn) View.VISIBLE else View.GONE
                 hideBars()
             }
 
             override fun onReceivedTitle(view: WebView, title: String?) {}
+            override fun onProgressChanged(view: WebView, p: Int) {
+                if (!::prog.isInitialized) return
+                prog.animate().cancel()
+                if (p >= 100) prog.animate().scaleX(1f).alpha(0f).setDuration(260).start()
+                else { prog.alpha = 1f; prog.animate().scaleX(p / 100f).setDuration(160).start() }
+            }
 
             /** Ventanas nuevas: sin toque del usuario se bloquean; con toque, se mira a dónde van y los anuncios se descartan. */
             override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: android.os.Message): Boolean {
@@ -222,64 +235,138 @@ class BrowserActivity : ComponentActivity() {
         })
     }
 
-    // ---------- Barra ----------
-    private fun pill(color: Int, stroke: Int = 0) = GradientDrawable().apply { cornerRadius = 60f; setColor(color); if (stroke != 0) setStroke(2, stroke) }
+    // ---------- Barra (vidrio gris, como la app) ----------
+    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+    private fun pill(color: Int, stroke: Int = 0, r: Int = 60) = GradientDrawable().apply { cornerRadius = dp(r).toFloat(); setColor(color); if (stroke != 0) setStroke(dp(1), stroke) }
+    private val FG = 0xFFF4F5F6.toInt()
+    private val INK = 0xFF2A2C2E.toInt()
 
-    private fun btn(label: String, onClick: () -> Unit): TextView = TextView(this).apply {
+    /** Botón redondo: blanco con letra oscura cuando tiene el foco (igual que en la app). */
+    private fun btn(label: String, round: Boolean = true, onClick: () -> Unit): TextView = TextView(this).apply {
         text = label
-        setTextColor(Color.WHITE)
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
+        setTextColor(android.content.res.ColorStateList(arrayOf(intArrayOf(android.R.attr.state_focused), intArrayOf(android.R.attr.state_pressed), intArrayOf()), intArrayOf(INK, INK, FG)))
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, if (round) 17f else 14f)
         typeface = Typeface.DEFAULT_BOLD
         gravity = Gravity.CENTER
-        setPadding(30, 16, 30, 16)
         isFocusable = true; isClickable = true
         background = android.graphics.drawable.StateListDrawable().apply {
-            addState(intArrayOf(android.R.attr.state_focused), pill(0xFFFF6900.toInt()))
-            addState(intArrayOf(android.R.attr.state_pressed), pill(0xFFFF6900.toInt()))
-            addState(intArrayOf(), pill(0x33FFFFFF))
+            addState(intArrayOf(android.R.attr.state_focused), pill(FG))
+            addState(intArrayOf(android.R.attr.state_pressed), pill(FG))
+            addState(intArrayOf(), pill(0x1AFFFFFF, 0x26FFFFFF))
         }
         setOnClickListener { onClick() }
-        layoutParams = LinearLayout.LayoutParams(-2, -2).apply { setMargins(6, 0, 6, 0) }
+        if (round) { minWidth = dp(42); minHeight = dp(42); setPadding(0, 0, 0, 0); layoutParams = LinearLayout.LayoutParams(dp(42), dp(42)).apply { setMargins(dp(3), 0, dp(3), 0) } }
+        else { setPadding(dp(14), 0, dp(14), 0); layoutParams = LinearLayout.LayoutParams(-2, dp(42)).apply { setMargins(dp(3), 0, dp(3), 0) } }
     }
 
+    private lateinit var prog: View
+    private var curUrl = ""
+
+    /** Dirección corta (solo el sitio) mientras no se está escribiendo. */
+    private fun pretty(u: String): String = try {
+        val h = Uri.parse(u).host ?: u
+        (if (u.startsWith("https://")) "🔒 " else "") + h.removePrefix("www.")
+    } catch (_: Exception) { u }
+
+    private fun setUrl(u: String) { curUrl = u; if (!urlBox.hasFocus()) urlBox.setText(if (u.isEmpty()) "" else pretty(u)) }
+
     private fun buildBar(): LinearLayout {
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0xFA3F4246.toInt(), 0xF5383B3E.toInt()))
+        }
         val b = LinearLayout(this)
         b.orientation = LinearLayout.HORIZONTAL
         b.gravity = Gravity.CENTER_VERTICAL
-        b.setPadding(18, 14, 18, 14)
-        b.background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0xF20D0C0B.toInt(), 0xCC0D0C0B.toInt()))
+        b.setPadding(dp(10), dp(8), dp(10), dp(8))
         b.addView(btn("✕") { finish() })
-        b.addView(btn("◀") { if (web.canGoBack()) web.goBack() })
-        b.addView(btn("▶") { if (web.canGoForward()) web.goForward() })
-        b.addView(btn("⟳") { web.reload() })
-        b.addView(btn("⌂") { showHome() })
+        val nav = listOf(btn("◀") { if (web.canGoBack()) web.goBack() }, btn("▶") { if (web.canGoForward()) web.goForward() }, btn("⟳") { web.reload() }, btn("⌂") { showHome() })
+        if (isTv) nav.forEach { b.addView(it) }
         urlBox = EditText(this).apply {
             setSingleLine(true)
             hint = "Buscar o escribir dirección"
             setHintTextColor(0x99FFFFFF.toInt())
-            setTextColor(Color.WHITE)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-            setPadding(30, 14, 30, 14)
+            setTextColor(FG)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+            setPadding(dp(16), 0, dp(16), 0)
+            gravity = Gravity.CENTER_VERTICAL
             inputType = InputType.TYPE_TEXT_VARIATION_URI
             imeOptions = EditorInfo.IME_ACTION_GO
             setSelectAllOnFocus(true)
-            background = pill(0x22FFFFFF, 0x55FFFFFF)
+            background = android.graphics.drawable.StateListDrawable().apply {
+                addState(intArrayOf(android.R.attr.state_focused), pill(0x33FFFFFF, FG))
+                addState(intArrayOf(), pill(0x14FFFFFF, 0x26FFFFFF))
+            }
+            setOnFocusChangeListener { v, has -> (v as EditText).setText(if (has) curUrl else if (curUrl.isEmpty()) "" else pretty(curUrl)); if (has) v.selectAll() }
             setOnEditorActionListener { v, _, _ ->
                 web.loadUrl(fixUrl(v.text.toString()))
                 (getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(v.windowToken, 0)
                 if (isTv) showBar(false)
                 web.requestFocus(); true
             }
-            layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(10, 0, 10, 0) }
+            layoutParams = LinearLayout.LayoutParams(0, dp(42), 1f).apply { setMargins(dp(6), 0, dp(6), 0) }
         }
         b.addView(urlBox)
-        b.addView(btn("★") { addBookmark() })
-        shield = btn("Bloqueo") { toggleAdblock() }
-        b.addView(shield)
-        b.addView(btn("PC") { desktop = !desktop; prefs.edit().putBoolean("desktop", desktop).apply(); applyUserAgent(); web.reload(); toast(if (desktop) "Modo escritorio" else "Modo celular") })
-        b.addView(btn("Cursor") { setCursor(!cursorOn); toast(if (cursorOn) "Cursor activado: muévelo con las flechas, OK hace clic" else "Cursor desactivado: las flechas desplazan la página") })
+        shield = btn("Bloqueo", false) { toggleAdblock() }
+        if (isTv) {
+            b.addView(btn("★") { addBookmark() })
+            b.addView(shield)
+            b.addView(btn("PC", false) { toggleDesktop() })
+            b.addView(btn("Cursor", false) { toggleCursor() })
+        } else {
+            b.addView(btn("⟳") { web.reload() })
+            val menuBtn = btn("⋮") {}
+            menuBtn.setOnClickListener { showMenu(menuBtn) }
+            b.addView(menuBtn)
+        }
+        box.addView(b)
+        // Barra fina de carga
+        prog = View(this).apply { setBackgroundColor(FG); pivotX = 0f; scaleX = 0f; alpha = 0f }
+        box.addView(prog, LinearLayout.LayoutParams(-1, dp(2)))
         updateShield()
-        return b
+        return box
+    }
+
+    private fun toggleDesktop() { desktop = !desktop; prefs.edit().putBoolean("desktop", desktop).apply(); applyUserAgent(); web.reload(); toast(if (desktop) "Modo escritorio" else "Modo celular") }
+    private fun toggleCursor() { setCursor(!cursorOn); toast(if (cursorOn) "Cursor activado: muévelo con las flechas, OK hace clic" else "Cursor desactivado: las flechas desplazan la página") }
+
+    /** Menú del celular: navegación, favoritos, bloqueador, escritorio y cursor. */
+    private fun showMenu(anchor: View) {
+        val list = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            background = pill(0xFA3A3D40.toInt(), 0x33FFFFFF, 22)
+            elevation = dp(12).toFloat()
+        }
+        val pop = android.widget.PopupWindow(list, dp(270), ViewGroup.LayoutParams.WRAP_CONTENT, true)
+        pop.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
+        pop.elevation = dp(12).toFloat()
+        fun row(icon: String, label: String, sub: String = "", act: () -> Unit) {
+            val r = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(12), dp(10), dp(12), dp(10)); isClickable = true; isFocusable = true
+                background = android.graphics.drawable.StateListDrawable().apply {
+                    addState(intArrayOf(android.R.attr.state_pressed), pill(0x26FFFFFF, 0, 14))
+                    addState(intArrayOf(android.R.attr.state_focused), pill(0x26FFFFFF, 0, 14))
+                    addState(intArrayOf(), pill(Color.TRANSPARENT, 0, 14))
+                }
+                setOnClickListener { pop.dismiss(); act() }
+            }
+            r.addView(TextView(this).apply { text = icon; setTextColor(FG); setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f); gravity = Gravity.CENTER; layoutParams = LinearLayout.LayoutParams(dp(30), -2) })
+            val t = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(10), 0, 0, 0) }
+            t.addView(TextView(this).apply { text = label; setTextColor(FG); setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f); typeface = Typeface.DEFAULT_BOLD })
+            if (sub.isNotEmpty()) t.addView(TextView(this).apply { text = sub; setTextColor(0xB3FFFFFF.toInt()); setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f) })
+            r.addView(t)
+            list.addView(r)
+        }
+        row("◀", "Atrás") { if (web.canGoBack()) web.goBack() }
+        row("▶", "Adelante") { if (web.canGoForward()) web.goForward() }
+        row("⌂", "Inicio") { showHome() }
+        row("★", "Guardar en favoritos", "Aparece en el inicio del navegador") { addBookmark() }
+        row("🛡", "Bloqueador de anuncios", if (adblock) "Activado · $blockedCount bloqueados en esta página" else "Desactivado") { toggleAdblock() }
+        row("🖥", "Versión de escritorio", if (desktop) "Activada" else "Desactivada") { toggleDesktop() }
+        row("➤", "Cursor", if (cursorOn) "Activado" else "Desactivado") { toggleCursor() }
+        pop.showAsDropDown(anchor, -dp(228), dp(6))
     }
 
     private fun showBar(focus: Boolean) {
@@ -346,22 +433,23 @@ class BrowserActivity : ComponentActivity() {
             tiles.append("<a class='t fav' href=\"${esc(o.optString("u"))}\"><b>★</b><span>${esc(t.take(28))}</span></a>")
         }
         val html = """<!doctype html><html><head><meta name=viewport content="width=device-width,initial-scale=1"><style>
-            body{margin:0;background:radial-gradient(1200px 600px at 70% -10%,#5a2a00,#0D0C0B 60%);color:#F3EFEA;font-family:sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:7vh 24px;box-sizing:border-box}
-            h1{font-size:34px;margin:0 0 6px}h1 i{color:#FF6900;font-style:normal}p{color:#A39C94;margin:0 0 26px}
+            body{margin:0;background:radial-gradient(1400px 800px at 30% -10%,#5A5E62,#46494D 45%,#323538);color:#F4F5F6;font-family:sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:7vh 22px;box-sizing:border-box}
+            h1{font-size:32px;margin:0 0 6px;letter-spacing:-.5px}h1 i{font-style:normal;opacity:.75;font-weight:400}p{color:rgba(255,255,255,.7);margin:0 0 26px;font-size:15px}
             form{display:flex;width:min(760px,100%);gap:10px;margin-bottom:34px}
-            input{flex:1;font-size:20px;padding:16px 22px;border-radius:40px;border:2px solid #444;background:#1b1916;color:#fff;outline:none}input:focus{border-color:#FF6900}
-            button{font-size:18px;padding:0 26px;border-radius:40px;border:0;background:#FF6900;color:#0D0C0B;font-weight:800}
-            .g{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;width:min(900px,100%)}
-            .t{display:flex;flex-direction:column;align-items:center;gap:10px;padding:18px 10px;border-radius:20px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#fff;text-decoration:none;outline:none}
-            .t:focus,.t:hover{background:#FF6900;color:#0D0C0B}.t b{width:54px;height:54px;border-radius:16px;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;font-size:24px}
-            .t span{font-size:15px;text-align:center;overflow:hidden;text-overflow:ellipsis;max-width:100%;white-space:nowrap}
-            small{color:#A39C94;margin-top:28px;text-align:center;max-width:640px;line-height:1.5}
-            </style></head><body><h1>Mi<i>Vibra</i> · Navegador</h1><p>Con bloqueador de anuncios ${if (adblock) "activado" else "desactivado"}</p>
+            input{flex:1;min-width:0;font-size:18px;padding:15px 22px;border-radius:40px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);color:#fff;outline:none;-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px)}input:focus{border-color:#F4F5F6;background:rgba(255,255,255,.14)}
+            button{font-size:16px;padding:0 24px;border-radius:40px;border:0;background:#F4F5F6;color:#2A2C2E;font-weight:800}
+            .g{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:14px;width:min(900px,100%)}
+            .t{display:flex;flex-direction:column;align-items:center;gap:10px;padding:18px 10px;border-radius:22px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);color:#fff;text-decoration:none;outline:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.12)}
+            .t:focus,.t:active{background:#F4F5F6;color:#2A2C2E}.t b{width:52px;height:52px;border-radius:16px;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;font-size:22px}
+            .t:focus b,.t:active b{background:rgba(0,0,0,.08)}
+            .t span{font-size:14px;text-align:center;overflow:hidden;text-overflow:ellipsis;max-width:100%;white-space:nowrap}
+            small{color:rgba(255,255,255,.6);margin-top:28px;text-align:center;max-width:640px;line-height:1.5}
+            </style></head><body><h1>MiVibra <i>Navegador</i></h1><p>Con bloqueador de anuncios ${if (adblock) "activado" else "desactivado"}</p>
             <form action="https://www.google.com/search"><input name=q placeholder="Buscar en Google o escribir una dirección" autofocus><button>Buscar</button></form>
             <div class=g>$tiles</div>
             <small>${if (isTv) "Control remoto: flechas mueven el cursor y OK hace clic · MENÚ muestra la barra · Atrás vuelve" else "Toca ★ en la barra para guardar una página en esta pantalla"}</small></body></html>"""
         web.loadDataWithBaseURL("https://mivibra.home/", html, "text/html", "utf-8", null)
-        urlBox.setText("")
+        setUrl("")
     }
 
     // ---------- Cursor para control remoto ----------
@@ -447,10 +535,10 @@ class BrowserActivity : ComponentActivity() {
 
         val keys = ArrayList<TextView>()
         fun key(label: String, weight: Float = 1f, onClick: () -> Unit) = TextView(this).apply {
-            text = label; gravity = Gravity.CENTER; textSize = 18f; setTextColor(Color.WHITE)
+            text = label; gravity = Gravity.CENTER; textSize = 18f; setTextColor(android.content.res.ColorStateList(arrayOf(intArrayOf(android.R.attr.state_focused), intArrayOf()), intArrayOf(0xFF2A2C2E.toInt(), Color.WHITE)))
             isFocusable = true; isClickable = true
             background = android.graphics.drawable.StateListDrawable().apply {
-                addState(intArrayOf(android.R.attr.state_focused), GradientDrawable().apply { cornerRadius = dp(8).toFloat(); setColor(0xFFFF6900.toInt()) })
+                addState(intArrayOf(android.R.attr.state_focused), GradientDrawable().apply { cornerRadius = dp(8).toFloat(); setColor(0xFFF4F5F6.toInt()) })
                 addState(intArrayOf(), GradientDrawable().apply { cornerRadius = dp(8).toFloat(); setColor(0x33FFFFFF) })
             }
             layoutParams = LinearLayout.LayoutParams(0, dp(44), weight).apply { setMargins(dp(3), dp(3), dp(3), dp(3)) }
@@ -611,11 +699,11 @@ class BrowserActivity : ComponentActivity() {
         override fun onTouchEvent(event: MotionEvent?) = false
         override fun onDraw(c: Canvas) {
             val r = if (down) 14f else 18f
-            p.style = Paint.Style.FILL; p.color = if (down) 0xFFFF6900.toInt() else 0xCCFFFFFF.toInt()
+            p.style = Paint.Style.FILL; p.color = if (down) 0xFFF4F5F6.toInt() else 0xCCFFFFFF.toInt()
             c.drawCircle(px, py, r, p)
             p.style = Paint.Style.STROKE; p.strokeWidth = 4f; p.color = 0xFF0D0C0B.toInt()
             c.drawCircle(px, py, r, p)
-            p.color = 0xFFFF6900.toInt(); p.strokeWidth = 3f
+            p.color = 0xFF2A2C2E.toInt(); p.strokeWidth = 3f
             c.drawCircle(px, py, r + 6f, p)
         }
     }
