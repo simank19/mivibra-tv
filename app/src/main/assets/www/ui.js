@@ -2397,9 +2397,10 @@
     var provBlock = '';
     if (!MV.acct.canEdit()) {
       var prov = S.lists.filter(function (l) { return !MV.acct.isOwn(l); });
-      provBlock = '<div class="panel glass"><h2>Incluidas en tu servicio</h2><p>Estas listas las envía ' + esc((window.MV_CONFIG || {}).admin ? 'el superadministrador' : 'el administrador') + ' y se actualizan solas.</p>' +
-        '<div class="line"><div class="t"><b>Usar las listas incluidas</b><span>' + (P.provOff ? 'Apagadas: solo ves el contenido de tus propias listas.' : 'Apágalo si prefieres ver solo el contenido de tus propias listas.') + '</span></div><button class="toggle f' + (P.provOff ? '' : ' on') + '" data-act="provToggle" aria-label="Usar las listas incluidas"></button></div>' +
-        (prov.length ? prov.map(function (l) { return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + esc(listKind(l)) + ' · ' + (l.count || 0) + ' elementos</span></div></div>'; }).join('') : '<p class="muted">Aún no hay listas incluidas.</p>') + '</div>';
+      // El usuario no ve cuáles son las listas incluidas: solo decide si las usa o no
+      provBlock = '<div class="panel glass"><h2>Contenido incluido</h2><p>' + (prov.length ? 'El contenido que trae tu servicio se actualiza solo.' : 'Tu servicio aún no trae contenido incluido.') + '</p>' +
+        '<div class="line"><div class="t"><b>Usar el contenido incluido</b><span>' + (P.provOff ? 'Apagadas: solo ves el contenido de tus propias listas.' : 'Apágalo si prefieres ver solo el contenido de tus propias listas.') + '</span></div><button class="toggle f' + (P.provOff ? '' : ' on') + '" data-act="provToggle" aria-label="Usar el contenido incluido"></button></div>' +
+        '</div>';
     }
     var ED = edLists();
     var share = '';
