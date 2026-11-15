@@ -585,8 +585,10 @@
 
   /** Pantalla de Plugins: addons instalados, repositorios guardados y agregar nuevos. */
   MV.pluginsDialog = function () {
-    var ad = (S.lists || []).filter(function (l) { return l.type === 'stremio'; }), rp = repos();
-    var mv = (S.lists || []).filter(function (l) { return l.type === 'mvplugin'; });
+    // Los usuarios solo ven los suyos: los del servicio no se muestran
+    var mine = function (l) { return !(MV.provList && MV.provList(l)); };
+    var ad = (S.lists || []).filter(function (l) { return l.type === 'stremio' && mine(l); }), rp = repos();
+    var mv = (S.lists || []).filter(function (l) { return l.type === 'mvplugin' && mine(l); });
     MV.modal('<h2>Plugins</h2><p>Pega un <b>plugin de MiVibra</b> (<code>usuario/repositorio</code> de GitHub), un <b>addon de Stremio</b> (enlace que termina en manifest.json) o un <b>repositorio</b> con varios plugins para instalar desde un menú. Solo agrega fuentes legales o que te pertenezcan.</p>' +
       '<label class="field">Plugin, addon o repositorio<input class="in f" id="plUrl" placeholder="usuario/repositorio  ó  https://…/manifest.json" autocomplete="off" inputmode="url" data-autofocus></label>' +
       (mv.length ? '<h3 style="margin:14px 0 6px">Plugins de MiVibra</h3>' + mv.map(function (l) { return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + esc(l.ref || '') + ' · ' + (l.count || 0) + ' elementos' + (l.error ? ' · ' + esc(l.error) : '') + '</span></div></div>'; }).join('') : '') +
