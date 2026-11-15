@@ -302,8 +302,9 @@ const ASYNC = {
   },
   async readLocalFile(id, p) { const buf = net.maybeGunzip(fs.readFileSync(p)); const f = netFile('local:' + p); fs.writeFileSync(f, buf); reply(id, true, { path: served(f), text: buf.length < 200000 ? buf.toString('utf8') : undefined }); },
   /** Elegir uno o varios juegos (se usan donde están, sin copiarlos). */
-  async pickFiles(id) {
-    const r = await dialog.showOpenDialog(win, { title: 'Elegir juegos', properties: ['openFile', 'multiSelections'],
+  async pickFiles(id, kind) {
+    const r = await dialog.showOpenDialog(win, kind === 'books' ? { title: 'Elegir libros', properties: ['openFile', 'multiSelections'],
+      filters: [{ name: 'Libros y cómics', extensions: ['pdf', 'epub', 'cbz', 'cbr', 'cb7', 'zip', 'rar', '7z'] }, { name: 'Todos los archivos', extensions: ['*'] }] } : { title: 'Elegir juegos', properties: ['openFile', 'multiSelections'],
       filters: [{ name: 'Juegos', extensions: ['nes', 'fds', 'sfc', 'smc', 'gb', 'gbc', 'gba', 'n64', 'z64', 'v64', 'nds', 'md', 'gen', 'smd', 'bin', 'sms', 'gg', 'cue', 'chd', 'iso', 'cso', 'pbp', 'img', 'a26', 'a78', 'lnx', 'pce', 'ngp', 'ngc', 'ws', 'wsc', 'neo', 'wad', 'zip', '7z', 'rar'] }, { name: 'Todos los archivos', extensions: ['*'] }] });
     if (r.canceled || !r.filePaths.length) return reply(id, false, 'cancel');
     reply(id, true, r.filePaths.map((f) => { let size = 0; try { size = fs.statSync(f).size; } catch (e) {} const name = path.basename(f); return { name, path: f, size, ext: (name.includes('.') ? name.split('.').pop() : '').toLowerCase() }; }));

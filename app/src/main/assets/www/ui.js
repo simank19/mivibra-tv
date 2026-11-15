@@ -3724,14 +3724,38 @@
         '<button class="btn ghost f" data-act="listTab" data-arg="web">Otra página web (con enlaces a los EPUB)</button>' +
         '<button class="btn ghost f" data-act="confirmNo">Cancelar</button></div>');
     },
+    // Agregar uno o varios libros del equipo a tu biblioteca de Lectura
     bookFile: function () {
       if (!A || !A.pickFiles) return MV.toast('Disponible en la app instalada');
-      MV.call('pickFiles', []).then(function (items) {
-        var f = (items || []).filter(function (x) { return /^(pdf|epub|cbz|cbr|cb7|zip|rar|7z)$/i.test(x.ext || ''); })[0];
-        if (!f) return MV.toast('Elige un PDF, EPUB, CBZ, CBR o CB7', 4500);
-        var name = String(f.name).replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ');
-        MV.openBook({ key: 'file:' + f.path, name: name, path: f.path, type: 'book', fmt: f.ext, kind: /^cb|zip|rar|7z/i.test(f.ext) ? 'comic' : 'libro' });
-      }).catch(function (e) { if (e.message !== 'cancel') MV.toast(e.message, 4500); });
+      MV.closeModal(true);
+      var pctEl = null;
+      MV.call('pickFiles', MV.device.desktop ? ['books'] : [], function (p) {
+        if (!pctEl) { MV.modal('<h2>Agregando libros…</h2><div class="spinner" style="margin:20px auto"></div><p class="muted" id="pgPct">0%</p>'); pctEl = document.getElementById('pgPct'); }
+        if (pctEl) pctEl.textContent = p + '%';
+      }).then(function (items) {
+        if (pctEl) MV.closeModal(true);
+        var ok = (items || []).filter(function (x) { return /^(pdf|epub|cbz|cbr|cb7|zip|rar|7z)$/i.test(x.ext || ''); });
+        if (!ok.length) return MV.toast('Elige archivos PDF, EPUB, CBZ, CBR o CB7', 4500);
+        var mine = myBooks(), added = 0, last = null;
+        ok.forEach(function (f) {
+          var b = { key: 'file:' + f.path, name: String(f.name).replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').trim(), path: f.path, type: 'book', fmt: String(f.ext).toLowerCase(), kind: /^(cb|zip|rar|7z)/i.test(f.ext) ? 'comic' : 'libro', group: 'De tu equipo', at: Date.now() };
+          if (!mine.some(function (x) { return x.key === b.key; })) { mine.unshift(b); added++; }
+          last = b;
+        });
+        MV.save('myBooks', mine.slice(0, 2000));
+        var skip = ok.length - added, bad = (items || []).length - ok.length;
+        if (ok.length === 1 && !bad) { MV.rerender(); return MV.openBook(last); }
+        MV.toast((added === 1 ? '1 libro agregado' : added + ' libros agregados') + (skip ? ' · ' + skip + ' ya estaban' : '') + (bad ? ' · ' + bad + ' no son libros' : ''), 5000);
+        BOOKF = 'all'; BOOKG = ''; BOOKQ = '';
+        if (view.name === 'books') MV.rerender(); else MV.go('books');
+      }).catch(function (e) {
+        if (pctEl) MV.closeModal(true);
+        if (e.message !== 'cancel') MV.toast(e.message === 'nopicker' ? 'Este equipo no tiene selector de archivos' : String(e.message).replace('el juego', 'el libro'), 5000);
+      });
+    },
+    bookForget: function (key) {
+      MV.save('myBooks', myBooks().filter(function (x) { return x.key !== key; }));
+      MV.closeModal(true); MV.toast('Quitado de tu biblioteca (el archivo sigue en tu equipo)'); MV.rerender();
     },
     pickGames: function () {
       if (!A || !A.pickFiles) return MV.toast('Disponible en la app instalada');
@@ -4551,9 +4575,13 @@
     MV.webBookSearch(q).then(function (r) { if (WEBB.q !== q) return; WEBB.items = r; }).catch(function () {}).then(function () { if (WEBB.q !== q) return; WEBB.loading = false; WEBB.done = true; if (view.name === 'books') { var a = document.activeElement, id = a && a.id; MV.rerender(); var n = id && document.getElementById(id); if (n) n.focus(); } });
   }
   var BOOK_ADULT = /\+18|adult|xxx|hentai|ecchi|erotic|er[oó]tic/i;
+  function myBooks() { return MV.load('myBooks', []) || []; }
+  MV.myBooks = myBooks;
   function visibleBooks() {
-    var kids = MV.isKids && MV.isKids();
-    return (S.books || []).filter(function (b) { var a = BOOK_ADULT.test((b.group || '') + ' ' + b.name); return !a && (!kids || b.kind === 'comic' || b.kind === 'manga'); });
+    var kids = MV.isKids && MV.isKids(), have = {};
+    (S.books || []).forEach(function (b) { have[b.key] = 1; });
+    var mine = myBooks().filter(function (b) { if (have[b.key]) return false; MV.reg[b.key] = b; return true; });
+    return (S.books || []).concat(mine).filter(function (b) { var a = BOOK_ADULT.test((b.group || '') + ' ' + b.name); return !a && (!kids || b.kind === 'comic' || b.kind === 'manga'); });
   }
   var BOOK_KINDS = { manga: 'Manga', comic: 'Cómic', libro: 'Libro', revista: 'Revista' };
   function bookCard(b) {
@@ -4574,7 +4602,7 @@
     var rr = (MV.readRecent ? MV.readRecent() : []).map(function (r) { return (S.bookByKey && S.bookByKey[r.key]) || (r.path ? { key: r.key, name: r.name, path: r.path, kind: r.kind, type: 'book', group: 'De tu equipo' } : null); }).filter(Boolean);
     var tabs = [['all', 'Todo', all.length], ['manga', 'Mangas', counts.manga], ['comic', 'Cómics', counts.comic], ['libro', 'Libros', counts.libro], ['revista', 'Revistas', counts.revista]].filter(function (t) { return t[0] === 'all' || t[2]; });
     var webs = webBookLists(), canWeb = MV.acct.canAdd ? MV.acct.canAdd() : MV.acct.canEdit();
-    var html = top('Lectura', (MV.acct.isAdmin() ? '<button class="pill f" data-act="myLibrary">' + IC.lock.replace('<svg', '<svg width="18" height="18"') + 'Mi biblioteca</button>' : '') + (canWeb ? '<button class="pill f" data-act="bookWebAdd">' + IC.plus + 'Agregar página</button>' : '') + '<button class="pill f" data-act="bookFile">' + IC.book.replace('<svg', '<svg width="18" height="18"') + 'Abrir un archivo</button>') +
+    var html = top('Lectura', (MV.acct.isAdmin() ? '<button class="pill f" data-act="myLibrary">' + IC.lock.replace('<svg', '<svg width="18" height="18"') + 'Mi biblioteca</button>' : '') + (canWeb ? '<button class="pill f" data-act="bookWebAdd">' + IC.plus + 'Agregar página</button>' : '') + '<button class="pill f" data-act="bookFile">' + IC.plus + 'Agregar libros del equipo</button>') +
       (all.length ? '<div class="chips">' + tabs.map(function (t) { return '<button class="chip f' + (BOOKF === t[0] ? ' on' : '') + '" data-act="bookTab" data-arg="' + t[0] + '">' + t[1] + ' <small>' + (t[2] || 0) + '</small></button>'; }).join('') +
         '<input class="in f" id="bookQ" placeholder="' + (webs.length ? 'Buscar libro (también en tus páginas)…' : 'Buscar título…') + '" value="' + esc(BOOKQ) + '" style="max-width:320px;margin-left:auto" autocomplete="off" enterkeyhint="search"></div>' +
         (gnames.length > 1 && gnames.length <= 40 ? '<div class="chips"><button class="chip f' + (!BOOKG ? ' on' : '') + '" data-act="bookGroup" data-arg="">Todas las categorías</button>' + gnames.map(function (g) { return '<button class="chip f' + (BOOKG === g ? ' on' : '') + '" data-act="bookGroup" data-arg="' + esc(g) + '">' + esc(g.replace(/^[^·]+·\s*/, '') || g) + ' <small>' + groups[g] + '</small></button>'; }).join('') + '</div>' : '') : '');
@@ -4594,8 +4622,8 @@
     if (shelf) html += MV.bookShelf.html(shelfList);
     if (rr.length && !(shelf && !all.length)) html += '<section class="row"><h3>Seguir leyendo</h3><div class="strip">' + rr.slice(0, 20).map(bookCard).join('') + '</div></section>';
     if (!all.length) {
-      html += '<div class="panel glass" style="text-align:center;padding:40px 24px"><h2>Tu biblioteca de lectura</h2><p class="muted">Ninguna de tus listas trae libros, mangas o cómics todavía. Cuando una lista los incluya (PDF, EPUB, CBZ, CBR o CB7) aparecen aquí solos. También puedes agregar la página web donde publicas tus libros: MiVibra los encuentra y los ordena por las categorías de tu página.</p>' +
-        '<div class="btns" style="justify-content:center">' + (canWeb ? '<button class="btn f" data-act="bookWebAdd" data-autofocus>' + IC.plus + 'Agregar tu página de libros</button>' : '') + '<button class="btn ghost f" data-act="bookFile">Abrir un archivo de tu equipo</button></div></div>';
+      html += '<div class="panel glass" style="text-align:center;padding:40px 24px"><h2>Tu biblioteca de lectura</h2><p class="muted">Ninguna de tus listas trae libros, mangas o cómics todavía. Puedes elegir varios archivos de tu equipo a la vez y quedan guardados aquí. Cuando una lista los incluya (PDF, EPUB, CBZ, CBR o CB7) aparecen aquí solos. También puedes agregar la página web donde publicas tus libros: MiVibra los encuentra y los ordena por las categorías de tu página.</p>' +
+        '<div class="btns" style="justify-content:center">' + (canWeb ? '<button class="btn f" data-act="bookWebAdd" data-autofocus>' + IC.plus + 'Agregar tu página de libros</button>' : '') + '<button class="btn ghost f" data-act="bookFile">Agregar libros de tu equipo</button></div></div>';
       return html;
     }
     if (shelf) { html += '<div class="btns" style="justify-content:center;margin:6px 0 18px"><button class="btn ghost sm f" data-act="bookView" data-arg="grid">' + IC.grid + 'Ver todos en cuadrícula (' + list.length + ')</button></div>'; return html; }

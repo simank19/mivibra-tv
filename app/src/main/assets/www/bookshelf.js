@@ -270,7 +270,8 @@
       (syn ? '<div class="m"><p>' + esc(syn) + '</p></div>' : need ? '<div class="m" id="bsDescM"><p class="bswait">Buscando descripción…</p></div>' : '') +
       (pct ? '<div class="m"><div class="bsbar"><i style="width:' + pct + '%"></i></div></div>' : '') +
       '<div class="m"><div class="btns"><button class="btn f" data-act="openBook" data-arg="' + esc(b.key) + '" data-autofocus>' + IC.play + (pct && pct < 99 ? 'Continuar leyendo · ' + pct + '%' : 'Leer ahora') + '</button>' +
-      (pct ? '<button class="btn ghost f" data-act="bookStart" data-arg="' + esc(b.key) + '">Desde el inicio</button>' : '') + '</div></div></div>' +
+      (pct ? '<button class="btn ghost f" data-act="bookStart" data-arg="' + esc(b.key) + '">Desde el inicio</button>' : '') +
+      (MV.myBooks && MV.myBooks().some(function (x) { return x.key === b.key; }) ? '<button class="btn ghost f" data-act="bookForget" data-arg="' + esc(b.key) + '">Quitar</button>' : '') + '</div></div></div>' +
       '<div class="bsdp">' + coverHtml(b, true) + '</div>';
     MV.modal(html, {
       onOpen: function (d) {
