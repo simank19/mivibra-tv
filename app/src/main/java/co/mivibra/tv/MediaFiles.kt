@@ -10,13 +10,16 @@ import java.io.File
 /**
  * Sirve tus archivos de música/video del equipo o de una USB a la interfaz:
  * https://appassets.androidplatform.net/media/<ruta en base64>.<ext>
- * Solo entrega archivos de audio y video.
+ * Solo entrega archivos de audio, video e imágenes.
  */
 class MediaFiles(private val ctx: Context) : WebViewAssetLoader.PathHandler {
     private val mimes = mapOf(
         "mp3" to "audio/mpeg", "m4a" to "audio/mp4", "aac" to "audio/aac", "flac" to "audio/flac",
         "ogg" to "audio/ogg", "opus" to "audio/ogg", "wav" to "audio/wav", "wma" to "audio/x-ms-wma",
-        "mp4" to "video/mp4", "webm" to "video/webm"
+        "mp4" to "video/mp4", "webm" to "video/webm",
+        // Fotos (widget de fotos)
+        "jpg" to "image/jpeg", "jpeg" to "image/jpeg", "png" to "image/png", "webp" to "image/webp", "gif" to "image/gif",
+        "bmp" to "image/bmp", "heic" to "image/heic", "heif" to "image/heif"
     )
 
     override fun handle(path: String): WebResourceResponse? {

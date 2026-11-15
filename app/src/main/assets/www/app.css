@@ -1424,3 +1424,34 @@ html.tv .bss > img, html.lite .bss > img { filter: none; }
 .bcard.sel .bchk { background: #F4F5F6; border-color: #F4F5F6; }
 .bcard.sel .bc { outline: 3px solid #F4F5F6; outline-offset: 2px; }
 .bookgrid.selmode .bcard:not(.sel) .bc { opacity: .72; }
+/* ---------- Fotos: widget del Inicio, cuadrícula y visor ---------- */
+.phw { display: flex; gap: 18px; align-items: center; border-radius: 24px; padding: 14px; margin: 0 0 22px; }
+.phw.empty { padding: 20px 22px; justify-content: space-between; }
+.phwf { position: relative; flex: 0 0 auto; width: min(46%, 420px); aspect-ratio: 16 / 9; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); background: rgba(0,0,0,.25); padding: 0; cursor: pointer; }
+.phwf img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 1.2s ease; transform: scale(1.06); }
+.phwf img.on { opacity: 1; animation: phkb 8s ease-out both; }
+@keyframes phkb { from { transform: scale(1.12); } to { transform: scale(1.02); } }
+.phwf .cap { position: absolute; left: 10px; bottom: 10px; padding: 4px 10px; border-radius: 20px; background: rgba(0,0,0,.45); font: 600 12px var(--ui); color: #fff; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.phwt { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.phwt b { font: 700 20px var(--ui); }
+.phwt span { color: var(--muted); font-size: 14px; }
+.phwt .btns { margin-top: 10px; }
+@media (max-width: 760px) { .phw { flex-direction: column; align-items: stretch; } .phwf { width: 100%; } .phw.empty { align-items: flex-start; } }
+.phgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.pht { position: relative; aspect-ratio: 1; border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: rgba(255,255,255,.06); padding: 0; cursor: pointer; }
+.pht img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pht .ld { position: absolute; inset: 0; background: linear-gradient(110deg, rgba(255,255,255,.04) 30%, rgba(255,255,255,.12) 50%, rgba(255,255,255,.04) 70%); background-size: 200% 100%; animation: phld 1.4s linear infinite; }
+@keyframes phld { to { background-position: -200% 0; } }
+.pht .chk { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; border-radius: 50%; border: 2px solid #fff; background: rgba(0,0,0,.35); color: #2A2C2E; display: flex; align-items: center; justify-content: center; font: 800 16px/1 var(--ui); font-style: normal; }
+.pht.sel .chk { background: #F4F5F6; }
+.pht.sel { outline: 3px solid #F4F5F6; outline-offset: 1px; }
+.phgrid.selmode .pht:not(.sel) img { opacity: .7; }
+@media (max-width: 760px) { .phgrid { grid-template-columns: repeat(3, 1fr); gap: 4px; } .pht { border-radius: 6px; } }
+.phv { position: fixed; inset: 0; z-index: 9000; background: #000; outline: none; }
+.phv img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0; transition: opacity .7s ease; }
+.phv img.on { opacity: 1; }
+.phvbar { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 40px; background: rgba(42,44,46,.72); border: 1px solid rgba(255,255,255,.18); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); opacity: 0; transition: opacity .3s; max-width: 92vw; }
+.phv.ui .phvbar { opacity: 1; }
+.phvbar button { width: 48px; height: 48px; border-radius: 50%; border: 0; background: rgba(255,255,255,.1); color: #fff; font: 700 22px/1 var(--ui); cursor: pointer; }
+.phvbar button:focus, .phvbar button:hover { background: #F4F5F6; color: #2A2C2E; outline: none; }
+.phvbar .t { color: #fff; font: 600 14px var(--ui); padding: 0 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 46vw; }

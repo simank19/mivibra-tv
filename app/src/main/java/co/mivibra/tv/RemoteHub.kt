@@ -67,6 +67,11 @@ object RemoteHub {
         ui.post { main?.js("window.MV&&MV.onRomReceived&&MV.onRomReceived(" + json + ")") }
     }
 
+    /** Fotos enviadas desde el celular (página /fotos de la TV). */
+    fun photoReceived(json: String) {
+        ui.post { main?.js("window.MV&&MV.onPhotoReceived&&MV.onPhotoReceived(" + json + ")") }
+    }
+
     /** Modo control remoto: simula la tecla en la pantalla actual. */
     fun navKey(name: String, down: Boolean?) {
         if (name == "HOME") {

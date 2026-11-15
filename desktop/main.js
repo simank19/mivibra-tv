@@ -304,7 +304,8 @@ const ASYNC = {
   async readLocalFile(id, p) { const buf = net.maybeGunzip(fs.readFileSync(p)); const f = netFile('local:' + p); fs.writeFileSync(f, buf); reply(id, true, { path: served(f), text: buf.length < 200000 ? buf.toString('utf8') : undefined }); },
   /** Elegir uno o varios juegos (se usan donde están, sin copiarlos). */
   async pickFiles(id, kind) {
-    const r = await dialog.showOpenDialog(win, kind === 'books' ? { title: 'Elegir libros', properties: ['openFile', 'multiSelections'],
+    const r = await dialog.showOpenDialog(win, kind === 'photos' ? { title: 'Elegir fotos', properties: ['openFile', 'multiSelections'],
+      filters: [{ name: 'Fotos', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'avif'] }] } : kind === 'books' ? { title: 'Elegir libros', properties: ['openFile', 'multiSelections'],
       filters: [{ name: 'Libros y cómics', extensions: ['pdf', 'epub', 'cbz', 'cbr', 'cb7', 'zip', 'rar', '7z'] }, { name: 'Todos los archivos', extensions: ['*'] }] } : { title: 'Elegir juegos', properties: ['openFile', 'multiSelections'],
       filters: [{ name: 'Juegos', extensions: ['nes', 'fds', 'sfc', 'smc', 'gb', 'gbc', 'gba', 'n64', 'z64', 'v64', 'nds', 'md', 'gen', 'smd', 'bin', 'sms', 'gg', 'cue', 'chd', 'iso', 'cso', 'pbp', 'img', 'a26', 'a78', 'lnx', 'pce', 'ngp', 'ngc', 'ws', 'wsc', 'neo', 'wad', 'zip', '7z', 'rar'] }, { name: 'Todos los archivos', extensions: ['*'] }] });
     if (r.canceled || !r.filePaths.length) return reply(id, false, 'cancel');
@@ -316,6 +317,15 @@ const ASYNC = {
     catch (e) { reply(id, false, errMsg(e) || 'No se pudo sacar una imagen de este video'); }
   },
   /** Libros y mangas: descarga y deja listas las páginas (PDF, EPUB, CBZ, CBR, CB7). */
+  /** Foto de una carpeta de MEGA: se descarga y descifra una vez (caché de 300). */
+  async megaPhoto(id, src) {
+    try {
+      const dir = path.join(DATA, 'cache', 'photos'); fs.mkdirSync(dir, { recursive: true });
+      const f = path.join(dir, crypto.createHash('md5').update(src).digest('hex').slice(0, 16) + '.jpg');
+      if (!fs.existsSync(f)) await mega.download(src, f);
+      reply(id, true, { url: romUrl(f) });
+    } catch (e) { reply(id, false, e.message || 'No se pudo traer la foto de MEGA'); }
+  },
   /** Archivos de una carpeta o archivo compartido de MEGA. */
   async megaList(id, link) { try { reply(id, true, await mega.list(link)); } catch (e) { reply(id, false, e.message || 'No se pudo leer el enlace de MEGA'); } },
   /** Colecciones comprimidas (.zip/.rar/.7z con libros): lista sus libros o saca uno. */
@@ -582,6 +592,8 @@ const SYNC = {
     return JSON.stringify({ tv: false, touch: false, desktop: true, ramMb: Math.round(os.totalmem() / 1048576), lowRam: false, model: 'PC ' + (process.platform === 'win32' ? 'Windows' : process.platform), sdk: 0, abi: process.arch, version: VERSION, versionCode: VERSION_CODE, external: os.homedir(), cores: os.cpus().length, maxMhz: Math.max(0, ...os.cpus().map((c) => c.speed || 0)) });
   },
   appsInstalled() { return '{}'; },
+  /** Dirección para ver un archivo del equipo en la interfaz (fotos). */
+  fileUrl(p) { return romUrl(String(p || '')); },
   installedGames() { try { return JSON.stringify(pcgames.list()); } catch (e) { return '[]'; } },
   launchGame(json) { try { return pcgames.launch(JSON.parse(json)); } catch (e) { return false; } },
   canInstallUpdates() { return process.platform === 'win32'; },

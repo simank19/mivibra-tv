@@ -79,7 +79,9 @@ class RemoteServer(private val ctx: Context, port: Int = PORT) : NanoWSD(port) {
         if (path == "/pair") { RemoteHub.pairRequest(); return NanoHTTPD.newFixedLengthResponse(Response.Status.OK, "application/json", "{\"ok\":true}") }
         if (path == "/auth") return if (authed(session)) NanoHTTPD.newFixedLengthResponse(Response.Status.OK, "application/json", "{\"ok\":true}") else denied()
         // Todo lo que manda datos o archivos a la TV exige la clave
-        if (path.startsWith("/roms/") || path.startsWith("/listas/")) { if (!authed(session)) return denied() }
+        if (path.startsWith("/roms/") || path.startsWith("/listas/") || path.startsWith("/fotos/")) { if (!authed(session)) return denied() }
+        // Fotos desde el celular
+        if (path == "/fotos/upload" && session.method == NanoHTTPD.Method.POST) return photoUpload(session)
         // Enviar ROMs y BIOS desde el celular
         if (path == "/roms/info") return romInfo()
         if (path == "/roms/upload" && session.method == NanoHTTPD.Method.POST) return romUpload(session)
@@ -92,7 +94,8 @@ class RemoteServer(private val ctx: Context, port: Int = PORT) : NanoWSD(port) {
             path == "/" || path == "/index.html" -> "www/pad.html"
             path == "/roms" || path == "/roms/" -> "www/roms.html"
             path == "/listas" || path == "/listas/" -> "www/listas.html"
-            path == "/isotipo.svg" || path == "/listas/isotipo.svg" -> "www/img/isotipo.svg"
+            path == "/fotos" || path == "/fotos/" -> "www/fotos.html"
+            path == "/isotipo.svg" || path == "/listas/isotipo.svg" || path == "/fotos/isotipo.svg" -> "www/img/isotipo.svg"
             else -> null
         } ?: return NanoHTTPD.newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "No encontrado")
         return try {
@@ -242,6 +245,37 @@ class RemoteServer(private val ctx: Context, port: Int = PORT) : NanoWSD(port) {
             .put("size", target.length()).put("sys", sys).put("bios", isBios)
         RemoteHub.romReceived(info.toString())
         return NanoHTTPD.newFixedLengthResponse(Response.Status.OK, "application/json", JSONObject().put("ok", true).put("bios", bios).toString())
+    }
+
+    /** Una foto del celular: se guarda en la carpeta de fotos de la app y aparece en el widget de Fotos. */
+    private fun photoUpload(session: IHTTPSession): Response {
+        fun err(msg: String) = NanoHTTPD.newFixedLengthResponse(Response.Status.BAD_REQUEST, "application/json", JSONObject().put("ok", false).put("error", msg).toString())
+        val raw = java.io.File(session.parameters["name"]?.firstOrNull() ?: "").name.trim()
+        val ext = raw.substringAfterLast('.', "").lowercase()
+        if (ext !in setOf("jpg", "jpeg", "png", "webp", "gif", "heic", "heif", "bmp")) return err("Solo fotos (JPG, PNG, WEBP, GIF o HEIC)")
+        val len = session.headers["content-length"]?.toLongOrNull() ?: return err("Falta el tamaño")
+        if (len > 40L * 1024 * 1024) return err("La foto es muy grande")
+        val dir = java.io.File(ctx.filesDir, "photos").apply { mkdirs() }
+        if (len > dir.usableSpace - 50L * 1024 * 1024) return err("No hay espacio en la TV")
+        val safe = raw.replace(Regex("[^\\w.\\- ]"), "_").take(80)
+        val target = java.io.File(dir, System.currentTimeMillis().toString(36) + "_" + safe)
+        val part = java.io.File(target.path + ".part")
+        try {
+            val inp = session.inputStream
+            part.outputStream().buffered(256 * 1024).use { out ->
+                val buf = ByteArray(256 * 1024); var left = len
+                while (left > 0) {
+                    val r = inp.read(buf, 0, if (left < buf.size) left.toInt() else buf.size)
+                    if (r <= 0) break
+                    out.write(buf, 0, r); left -= r
+                }
+                if (left > 0) throw IOException("Se cortó la subida")
+            }
+            if (!part.renameTo(target)) throw IOException("No se pudo guardar")
+        } catch (e: Exception) { part.delete(); return err(e.message ?: "Error al recibir") }
+        val info = JSONObject().put("name", raw).put("file", target.name).put("url", "https://appassets.androidplatform.net/photos/" + android.net.Uri.encode(target.name)).put("size", target.length()).put("at", System.currentTimeMillis())
+        RemoteHub.photoReceived(info.toString())
+        return NanoHTTPD.newFixedLengthResponse(Response.Status.OK, "application/json", JSONObject().put("ok", true).toString())
     }
 
     override fun openWebSocket(handshake: IHTTPSession): WebSocket = Pad(handshake)

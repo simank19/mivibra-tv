@@ -561,6 +561,56 @@ class Bridge(private val a: MainActivity) {
         }
     }
 
+    // ---------------- Fotos ----------------
+    /** Elige una o varias fotos de la galería. No se copian: se guarda el permiso para verlas siempre. */
+    @JavascriptInterface
+    fun pickPhotos(id: String) {
+        a.runOnUiThread {
+            val i = Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*").putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+            try {
+                a.startForResult(i) { res, data ->
+                    if (res != android.app.Activity.RESULT_OK || data == null) { reply(id, false, "cancel"); return@startForResult }
+                    val uris = ArrayList<android.net.Uri>()
+                    data.clipData?.let { c -> for (n in 0 until c.itemCount) uris.add(c.getItemAt(n).uri) } ?: data.data?.let { uris.add(it) }
+                    io.execute {
+                        val arr = JSONArray()
+                        for (u in uris) {
+                            try { a.contentResolver.takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
+                            var name = u.lastPathSegment ?: "foto.jpg"
+                            try { a.contentResolver.query(u, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c -> if (c.moveToFirst()) name = c.getString(0) ?: name } } catch (_: Exception) {}
+                            val mime = try { a.contentResolver.getType(u) } catch (_: Exception) { null } ?: ""
+                            arr.put(JSONObject().put("uri", u.toString()).put("name", name).put("mime", mime))
+                        }
+                        reply(id, true, arr)
+                    }
+                }
+            } catch (_: ActivityNotFoundException) { reply(id, false, "nopicker") }
+        }
+    }
+
+    /** Foto de una carpeta de MEGA: se descarga y descifra una vez y queda en caché. */
+    @JavascriptInterface
+    fun megaPhoto(id: String, src: String) {
+        io.execute {
+            try {
+                val dir = java.io.File(a.filesDir, "photos/mega").apply { mkdirs() }
+                val key = java.security.MessageDigest.getInstance("MD5").digest(src.toByteArray()).joinToString("") { "%02x".format(it) }.take(16)
+                val f = java.io.File(dir, "$key.jpg")
+                if (!f.isFile || f.length() == 0L) Mega.download(src, f) {}
+                // Solo las 300 más recientes
+                (dir.listFiles() ?: emptyArray()).sortedByDescending { it.lastModified() }.drop(300).forEach { it.delete() }
+                reply(id, true, JSONObject().put("url", "https://appassets.androidplatform.net/photos/mega/" + f.name))
+            } catch (e: Exception) { reply(id, false, e.message ?: "No se pudo traer la foto de MEGA") }
+        }
+    }
+
+    /** Borra una foto que llegó desde el celular. */
+    @JavascriptInterface
+    fun deletePhoto(name: String) {
+        val f = java.io.File(java.io.File(a.filesDir, "photos"), java.io.File(name).name)
+        if (f.isFile) f.delete()
+    }
+
     /** Reproductor abierto: capítulo actual y capítulos sin enlace (para buscar el siguiente en el mismo addon). */
     @JavascriptInterface
     fun playerQueue(): String = PlayerActivity.queueInfo()

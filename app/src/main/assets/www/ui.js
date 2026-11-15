@@ -285,6 +285,7 @@
     return '<button class="qbtn bell f' + (u ? ' has' : '') + '" data-act="showUpdate" data-fid="q-upd" aria-label="' + (u ? 'Actualización disponible' : 'Buscar actualizaciones') + '" title="' + (u ? 'Actualizar a la versión ' + esc(u.version) : 'Buscar actualizaciones') + '">' + IC.bell + (u ? '<i class="dot"></i>' : '') + '</button>';
   };
   MV.topHtml = function (t, r) { return top(t, r); };
+  MV.viewName = function () { return view.name; };
   function top(title, right) {
     return '<div class="top"><h1>' + esc(title) + '</h1><div class="sp"></div>' + (right || '') + '</div>';
   }
@@ -759,6 +760,7 @@
         '<button class="vall f" data-act="nav" data-arg="movies">' + IC.movie + 'Elegir una película</button></section>';
     }
     out += homeWidgets() + '</div></div>';
+    if (MV.photoWidget && !MV.isKids()) out += MV.photoWidget();
     out += '<div class="vchips chips" role="tablist" aria-label="Categorías">' + HCHIPS.map(function (c) {
       return '<button class="chip f' + (homeChip === c[0] ? ' on' : '') + '" role="tab" aria-selected="' + (homeChip === c[0]) + '" data-act="homeChip" data-arg="' + c[0] + '" data-fid="hc-' + c[0] + '">' + c[1] + '</button>';
     }).join('') + '<button class="chip f" data-act="nav" data-arg="utils">' + IC.grid + 'Todas las secciones</button></div>';
@@ -4917,6 +4919,7 @@
       '<button class="utile glass f" data-act="nav" data-arg="webvids" data-fid="u-webvids"><span class="uic">' + IC.globe + '</span><b>Mis páginas</b><span>Videos de tus páginas web</span></button>' +
       '<button class="utile glass f" data-act="nav" data-arg="streams" data-fid="u-streams"><span class="uic">' + IC.play + '</span><b>Twitch y Kick</b><span>Transmisiones en vivo aquí mismo</span></button>' +
       '<button class="utile glass f" data-act="openDiag" data-fid="u-diag"><span class="uic">' + IC.settings + '</span><b>' + (MV.device.desktop ? 'Soporte MiVibra PC' : MV.device.tv ? 'Soporte MiVibra · TV box' : 'Diagnóstico MiVibra') + '</b><span>' + (MV.device.desktop ? 'Diagnóstico, limpieza y optimización de Windows' : 'Revisa y optimiza este equipo') + '</span></button>' +
+      '<button class="utile glass f" data-act="nav" data-arg="photos" data-fid="u-photos"><span class="uic">' + IC.image + '</span><b>Fotos</b><span>Galería, USB, Drive, MEGA o desde el celular</span></button>' +
       '<button class="utile glass f" data-act="nav" data-arg="achievements" data-fid="u-ach"><span class="uic">' + IC.trophy + '</span><b>Logros</b><span>' + (MV.ach ? 'Nivel ' + MV.ach.level().n + ' · ' + MV.ach.level().title : 'Tu nivel y medallas') + '</span></button>' +
       '<button class="utile glass f" data-act="adultOpen" data-fid="u-adult"><span class="uic">' + IC.lock + '</span><b>+18</b><span>' + (MV.adultOk() ? 'Desbloqueado' : 'Protegido con PIN') + '</span></button>' +
       (A && A.remoteFind && !(MV.device && MV.device.tv) ? '<button class="utile glass f" data-act="nav" data-arg="phoneRemote" data-fid="u-phremote"><span class="uic">' + IC.phone + '</span><b>Control de la TV</b><span>Usa este celular como control de tu TV</span></button>' : '') +
