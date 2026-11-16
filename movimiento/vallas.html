@@ -120,10 +120,15 @@ const smooth = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
 const lerp = (a, b, k) => a + (b - a) * k;
 
 // ================= Motor =================
-const R = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-R.setPixelRatio(Math.min(devicePixelRatio, 1.75));
+// Calidad: 2 alta (PC), 1 media, 0 baja (TV). En TV empieza en baja; en los demás baja sola si va lenta. ?q=0|1|2 la fija.
+const IS_TV = /Tizen|Web0S|webOS|SMART-TV|SmartTV|NetCast|HbbTV|BRAVIA|AFT[A-Z]|Android TV|GoogleTV|MiTV|Mi TV|TCL|Hisense|Roku|CrKey/i.test(navigator.userAgent)
+  || (/Android/i.test(navigator.userAgent) && !/Mobile/i.test(navigator.userAgent) && !('ontouchstart' in window));
+const QP = new URLSearchParams(location.search).get('q');
+let Q = QP !== null ? clamp(+QP | 0, 0, 2) : IS_TV ? 0 : (navigator.hardwareConcurrency || 4) <= 4 ? 1 : 2;
+const QFIX = QP !== null;
+const R = new THREE.WebGLRenderer({ antialias: Q === 2, powerPreference: 'high-performance' });
 R.setSize(innerWidth, innerHeight);
-R.shadowMap.enabled = true; R.shadowMap.type = THREE.PCFSoftShadowMap;
+R.shadowMap.enabled = true;
 R.toneMapping = THREE.ACESFilmicToneMapping; R.toneMappingExposure = 1.05;
 document.body.prepend(R.domElement);
 const S = new THREE.Scene();
@@ -132,7 +137,7 @@ const composer = new EffectComposer(R);
 composer.addPass(new RenderPass(S, cam));
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.55, 0.5, 0.82);
 composer.addPass(bloom); composer.addPass(new OutputPass());
-addEventListener('resize', () => { R.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
+addEventListener('resize', () => { R.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); applyQ(); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
 
 const Mt = (c, o = {}) => new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.6, metalness: 0 }, o));
 function box(w, h, d, m, x = 0, y = 0, z = 0) { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.set(x, y, z); b.castShadow = b.receiveShadow = true; return b; }
@@ -148,6 +153,18 @@ S.add(new THREE.HemisphereLight('#a9b8ff', '#4a3a2a', 0.55));
 const sun = new THREE.DirectionalLight('#ffd2a1', 2.4); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -16, right: 16, top: 16, bottom: -16, near: 1, far: 120 }); sun.shadow.bias = -0.0004;
 S.add(sun, sun.target);
+// Aplica el nivel de calidad: resolución interna, sombras, brillo (bloom) y la pantalla gigante
+function applyQ() {
+  const maxW = [1280, 1600, 2600][Q];
+  R.setPixelRatio(Math.min(devicePixelRatio, Q === 2 ? 1.75 : 1, maxW / innerWidth));
+  composer.setPixelRatio(R.getPixelRatio()); composer.setSize(innerWidth, innerHeight);
+  const sm = Q === 2 ? 2048 : 1024;
+  R.shadowMap.type = Q === 2 ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+  sun.castShadow = Q > 0;
+  if (sun.shadow.mapSize.x !== sm) { sun.shadow.mapSize.set(sm, sm); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
+  R.shadowMap.needsUpdate = true;
+  if (window.blobs) blobs.forEach((b) => (b.visible = Q === 0));
+}
 const fill = new THREE.DirectionalLight('#9fb4ff', 0.6); fill.position.set(30, 25, -60); S.add(fill);
 
 // ================= Estadio =================
@@ -706,7 +723,7 @@ function update(dt, t) {
   const focus = phase === 'podium' ? POD : (phase === 'race' || phase === 'finish') ? ME.A.position : new THREE.Vector3(0, 0, 0);
   sun.position.set(focus.x - 22, 26, focus.z + 18); sun.target.position.copy(focus);
   SND.crowd(clamp(excite, 0, 1.3) / 1.3);
-  crowdTick(t);
+  if (Q === 2 || (liveTick & 1)) crowdTick(t);
   fireworksTick(dt); confettiTick(dt, t);
 }
 function showResults() {
@@ -779,13 +796,21 @@ $('goCam').onclick = () => { $('main').classList.add('off'); $('cam').classList.
 $('camBack').onclick = () => { $('main').classList.remove('off'); $('cam').classList.remove('on'); $('cam').parentNode.classList.remove('camOn'); };
 
 // ================= Bucle =================
-const clock = new THREE.Clock(); let T = 0, liveTick = 0;
+const clock = new THREE.Clock(); let T = 0, liveTick = 0, fpsN = 0, fpsT = 0, fpsSlow = 0;
+// Sombra redonda bajo cada atleta (en calidad baja reemplaza las sombras reales)
+const blobTex = tex(64, 64, (g, w, h) => { const r = g.createRadialGradient(32, 32, 0, 32, 32, 32); r.addColorStop(0, 'rgba(0,0,0,.55)'); r.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = r; g.fillRect(0, 0, w, h); });
+window.blobs = RUNNERS.map(() => { const m = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1), new THREE.MeshBasicMaterial({ map: blobTex, transparent: true, depthWrite: false })); m.rotation.x = -Math.PI / 2; m.renderOrder = 1; S.add(m); return m; });
+applyQ();
 function frame() {
   const real = Math.min(clock.getDelta(), 0.05), dt = real * slow; T += dt;
+  // Medidor: si en 3 s seguidos va a menos de 40 cuadros por segundo, baja la calidad un nivel
+  fpsN++; fpsT += real;
+  if (fpsT > 1) { const fps = fpsN / fpsT; fpsN = 0; fpsT = 0; fpsSlow = fps < 40 ? fpsSlow + 1 : 0; if (fpsSlow >= 3 && Q > 0 && !QFIX) { Q--; fpsSlow = 0; applyQ(); } window.MVFPS = Math.round(fps); }
+  if (Q === 0) RUNNERS.forEach((r, i) => { const a = r.vrm ? r.vrm.scene : r.A; a.getWorldPosition(blobs[i].position); blobs[i].position.y = 0.02; });
   if (phase !== 'wait') { update(dt, T); driveVRM(dt); } else { const a = T * 0.05; setCam(new THREE.Vector3(Math.cos(a) * 110, 55, -50 + Math.sin(a) * 110), new THREE.Vector3(0, 0, -50), 1); crowdTick(T); }
   // Pantalla gigante en vivo: primer plano del jugador (cada 2 cuadros)
-  if ((liveTick++ & 1) === 0) { const f = phase === 'podium' ? new THREE.Vector3(POD.x, 1.8, POD.z) : ME.A.position.clone().add(new THREE.Vector3(0, 1.3, 0)); liveCam.position.set(f.x + 2.2, f.y + 0.4, f.z - 4.2); liveCam.lookAt(f); R.setRenderTarget(liveRT); R.render(S, liveCam); R.setRenderTarget(null); }
-  composer.render();
+  if ((liveTick++ % [6, 3, 2][Q]) === 0) { const f = phase === 'podium' ? new THREE.Vector3(POD.x, 1.8, POD.z) : ME.A.position.clone().add(new THREE.Vector3(0, 1.3, 0)); liveCam.position.set(f.x + 2.2, f.y + 0.4, f.z - 4.2); liveCam.lookAt(f); R.setRenderTarget(liveRT); R.render(S, liveCam); R.setRenderTarget(null); }
+  if (Q === 0) R.render(S, cam); else composer.render();
 }
 R.setAnimationLoop(frame);
 
