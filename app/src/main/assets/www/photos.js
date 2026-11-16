@@ -31,13 +31,19 @@
     return '';
   }
   /** Fotos de MEGA: se descargan y descifran la primera vez (después quedan en caché). */
+  // De a una a la vez (las demás esperan en fila), para no ocupar la conexión de la app
+  var megaQ = [], megaRun = 0;
   function needMega(p, cb) {
     if (!p.mega || megaMem[p.mega] || megaBusy[p.mega] || !A || !A.megaPhoto) return;
-    megaBusy[p.mega] = 1;
+    megaBusy[p.mega] = 1; megaQ.push([p, cb]); megaNext();
+  }
+  function megaNext() {
+    if (megaRun || !megaQ.length) return;
+    var job = megaQ.shift(), p = job[0], cb = job[1]; megaRun = 1;
     MV.call('megaPhoto', [p.mega]).then(function (r) {
       megaMem[p.mega] = r.url; var ks = Object.keys(megaMem); if (ks.length > 300) delete megaMem[ks[0]];
-      MV.save('megaPhotoUrl', megaMem); delete megaBusy[p.mega]; if (cb) cb(r.url);
-    }).catch(function () { delete megaBusy[p.mega]; });
+      MV.save('megaPhotoUrl', megaMem); if (cb) cb(r.url);
+    }).catch(function () {}).then(function () { delete megaBusy[p.mega]; megaRun = 0; megaNext(); });
   }
 
   /** Todas las fotos, las más nuevas primero. */
@@ -273,7 +279,7 @@
   MV.VIEWS.photos.after = function () {
     // Las de MEGA se traen de a pocas al mostrarse
     var list = MV._phList || [];
-    list.slice(0, 120).forEach(function (p) {
+    list.slice(0, 40).forEach(function (p) {
       if (!p.mega || megaMem[p.mega]) return;
       needMega(p, function (u) { var b = document.querySelector('.pht[data-k="' + p.k + '"]'); if (b && !b.querySelector('img')) { var ld = b.querySelector('.ld'); if (ld) ld.remove(); var im = document.createElement('img'); im.src = u; im.alt = ''; b.insertBefore(im, b.firstChild); } });
     });

@@ -2403,6 +2403,11 @@
       c.own = false; c.enabled = true; c.updatedAt = Date.now(); MV.saveLists(); MV.rerender(); MV.toast('Compartida con todos');
     });
   };
+  UL_ACTS.myListsToggle = function () {
+    var off = !MV.myOff(); try { localStorage.setItem('mv:myOff', off ? '1' : '0'); } catch (e) {}
+    MV.toast(off ? 'Tus listas apagadas en este equipo (modo de prueba)' : 'Tus listas activadas de nuevo', 3500);
+    MV.reloadCatalog(false).then(MV.rerender); MV.rerender();
+  };
   UL_ACTS.provToggle = function () {
     P.provOff = !P.provOff; MV.savePrefs();
     MV.toast(P.provOff ? 'Listas incluidas apagadas: ves solo tus listas' : 'Listas incluidas activadas', 3500);
@@ -2425,7 +2430,7 @@
         '<div class="line"><div class="t"><b>' + (MV.acct.pushing ? 'Enviando…' : MV.acct.pushError ? 'No se pudo enviar' : cl === mineN ? '✓ ' + cl + (cl === 1 ? ' lista en la nube' : ' listas en la nube') : 'En la nube hay ' + cl + ' de ' + mineN + ' listas') + '</b><span>' + esc(MV.acct.pushError || (MV.acct.pushedAt ? 'Último envío: ' + MV.fmtTime(MV.acct.pushedAt) : 'Tus usuarios reciben estas listas, las claves y el orden del menú')) + '</span></div>' +
         '<button class="btn sm f" data-act="pushNow">' + IC.refresh + 'Enviar a todos ahora</button></div></div>';
     }
-    if (MV.acct.isAdmin()) share += userListsBlock();
+    if (MV.acct.isAdmin()) share += '<div class="panel glass"><h2>Modo de prueba</h2><div class="line"><div class="t"><b>Usar mis listas en este equipo</b><span>' + (MV.myOff() ? 'Apagadas solo aquí: ves las listas de tus usuarios que activaste y las de este equipo. Tus usuarios no notan nada.' : 'Apágalo para probar solo con las listas de tus usuarios. No cambia nada para tus usuarios.') + '</span></div><button class="toggle f' + (P.myOff ? '' : ' on') + '" data-act="myListsToggle" aria-label="Usar mis listas en este equipo"></button></div></div>' + userListsBlock();
     return provBlock + share + '<div class="panel glass"><h2>' + (provBlock ? 'Mis listas' : 'Tus listas') + '</h2><p>' + (provBlock ? 'Agrega también tus propias listas: se suman a las incluidas (o las reemplazan si apagas las incluidas) y las usas cuando quieras. El administrador del servicio puede verlas y decidir si las incluye para todos. ' : '') + 'Todo el contenido de tus listas se combina: los canales repetidos aparecen una sola vez y se queda la señal que funciona.' + (MV.acct.isAdmin() ? ' <b>Eres superadministrador:</b> lo que cambies aquí llega a todos los usuarios (las listas en archivo solo quedan en este equipo; usa enlaces para compartirlas).' : '') + '</p>' +
       selBar() +
       (ED.length ? ED.map(function (l) {

@@ -28,7 +28,10 @@
   MV.savePrefs = function (silent) { P.updatedAt = Date.now(); MV.save('prefs', P); if (!silent) MV.sync.later(); if (MV.acct) MV.acct.changed(); };
   /** ¿Se carga esta lista? Apagada a mano, o es del servicio y el cliente apagó las listas incluidas. */
   MV.provList = function (l) { return !!(l && l.type !== 'file' && !l.own && MV.acct && MV.acct.managed() && !MV.acct.isAdmin()); };
-  MV.listOn = function (l) { return l.enabled !== false && !(S.prefs.provOff && MV.provList(l)); };
+  /** Superadministrador: sus listas compartidas se pueden apagar solo en este equipo (para probar con las de los usuarios). */
+  MV.myOff = function () { try { return localStorage.getItem('mv:myOff') === '1'; } catch (e) { return false; } };
+  MV.adminShared = function (l) { return !!(l && l.type !== 'file' && !l.own && MV.acct && MV.acct.isAdmin()); };
+  MV.listOn = function (l) { return l.enabled !== false && !(S.prefs.provOff && MV.provList(l)) && !(MV.myOff() && MV.adminShared(l)); };
   MV.saveLists = function () { MV.save('lists', S.lists); MV.sync.later(); if (MV.acct) MV.acct.changed(); };
   /** Listas borradas: se recuerdan (id → fecha) para que se borren también en los otros equipos y no vuelvan a aparecer. */
   MV.listTombs = function () { return MV.load('listsDel', {}) || {}; };

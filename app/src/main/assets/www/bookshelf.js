@@ -234,7 +234,7 @@
     var local = b.path && MV.bookInfo ? MV.bookInfo(b).then(function (fi) { if (fi.desc) out.d = fi.desc; if (fi.cover) out.lc = 1; if (fi.author) out.a = fi.author; }).catch(function () {}) : Promise.resolve();
     var need = function () { return !out.d || (!out.c && !out.lc) || !out.g; };
     // Libros por enlace (MEGA, Drive, MediaFire, OPDS…): si internet no tiene portada, se toma del propio archivo
-    var fromFile = function () { if (!(b.links && b.url && !b.path && MV.bookInfo && (!out.c && !out.lc || !out.d))) return; return MV.bookInfo(b).then(function (fi) { if (fi.desc && !out.d) out.d = fi.desc; if (fi.cover) out.lc = 1; }).catch(function () {}); };
+    var fromFile = function () { if (!(b.links && b.url && !b.path && b._wantFile && MV.bookInfo && (!out.c && !out.lc || !out.d))) return; return MV.bookInfo(b).then(function (fi) { if (fi.desc && !out.d) out.d = fi.desc; if (fi.cover) out.lc = 1; }).catch(function () {}); };
     PEND[k] = local.then(function () { if (need()) return google().catch(function () {}); }).then(function () { if (!out.d || (!out.c && !out.lc)) return openlib().catch(function () {}); }).then(fromFile).then(function () {
       out.d = (out.d || '').replace(/\s*\(?(Source|Fuente):.*$/i, '').slice(0, 1200);
       delete PEND[k];
@@ -315,6 +315,7 @@
           [].forEach.call(d.querySelectorAll('.bsdl .m > *'), function (el, i) { el.animate([{ transform: 'translateY(110%)' }, { transform: 'none' }], { duration: 900, delay: 620 + i * 75, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'both' }); });
           var p = d.querySelector('.bsdp'); if (p) p.animate([{ transform: 'scale(.86)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 900, delay: 520, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'both' });
         }
+        if (need) { b._wantFile = 1; }
         if (need) fetchMeta(b).then(function (mm) {
           var txt = mm.d, pc = d.querySelector('.bsdp .bsc');
           if (mm.c && pc && !pc.querySelector('img')) pc.insertAdjacentHTML('beforeend', '<img src="' + esc(mm.c) + '" alt="" onerror="this.remove()">');

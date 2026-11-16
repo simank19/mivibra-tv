@@ -22,6 +22,8 @@ import java.util.concurrent.Executors
 /** Funciones nativas que la interfaz web llama como window.Android.xxx() */
 class Bridge(private val a: MainActivity) {
     private val io = Executors.newFixedThreadPool(4)
+    /** Descargas largas (MEGA, colecciones) aparte: así no traban la carga de listas ni el resto de la app. */
+    private val dl = Executors.newFixedThreadPool(2)
 
     private fun reply(id: String, ok: Boolean, data: Any?) {
         val payload = JSONObject().put("ok", ok).put("data", data ?: JSONObject.NULL)
@@ -544,7 +546,7 @@ class Bridge(private val a: MainActivity) {
     /** Archivos de una carpeta (o archivo) compartida de MEGA: nombre, tamaño y enlace interno para descargarlo. */
     @JavascriptInterface
     fun megaList(id: String, link: String) {
-        io.execute {
+        dl.execute {
             try { reply(id, true, Mega.list(link)) }
             catch (e: Exception) { reply(id, false, e.message ?: "No se pudo leer el enlace de MEGA") }
         }
@@ -553,7 +555,7 @@ class Bridge(private val a: MainActivity) {
     /** Colecciones comprimidas (.zip/.rar/.7z con libros adentro): lista y saca un libro. */
     @JavascriptInterface
     fun bookPack(id: String, json: String) {
-        io.execute {
+        dl.execute {
             try {
                 val o = JSONObject(json)
                 reply(id, true, if (o.optString("entry").isNotBlank()) Books.packEntry(a, o) { progress(id, it) } else Books.packList(a, o) { progress(id, it) })
@@ -591,7 +593,7 @@ class Bridge(private val a: MainActivity) {
     /** Foto de una carpeta de MEGA: se descarga y descifra una vez y queda en caché. */
     @JavascriptInterface
     fun megaPhoto(id: String, src: String) {
-        io.execute {
+        dl.execute {
             try {
                 val dir = java.io.File(a.filesDir, "photos/mega").apply { mkdirs() }
                 val key = java.security.MessageDigest.getInstance("MD5").digest(src.toByteArray()).joinToString("") { "%02x".format(it) }.take(16)
