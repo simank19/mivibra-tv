@@ -1667,7 +1667,7 @@
   // ---------- Catálogo listo guardado (abre al instante) ----------
   // Armar el catálogo (clasificar y juntar duplicados de cientos de miles de títulos) tarda mucho en un TV box.
   // El resultado se guarda y, si nada cambió (mismas listas, mismas versiones guardadas, mismos ajustes), se abre directo.
-  var SNAP_V = 1;
+  var SNAP_V = 2;   // sube cuando cambia cómo se combinan las listas (fuerza volver a combinar)
   function listStamp(id) { var m = MV.load('listTs', {}) || {}; m[id] = Date.now(); MV.save('listTs', m); }
   function snapSig() {
     var ts = MV.load('listTs', {}) || {};
@@ -1759,6 +1759,20 @@
           } else {
             if (q > (ex.q || 15)) swapIn(ex, it);
             else if (it.url && it.url !== ex.url && !it.stk) { ex.alts = ex.alts || []; if (ex.alts.length < 6 && ex.alts.indexOf(it.url) < 0) ex.alts.push(it.url); }
+          }
+          // Lo que es de tus listas (Xtream, M3U…) siempre se reproduce primero: un título que solo venía de un addon
+          // de catálogo (sin enlace) toma el enlace o los capítulos de tu lista aunque su ficha se vea "mejor"
+          if (it.type === 'movie' && !ex.url && it.url && !ex.ia) {
+            ['url', 'ua', 'ref', 'list', 'lang', 'tracks'].forEach(function (k) { if (it[k] !== undefined) ex[k] = it[k]; });
+            if (it.stk) ex.stk = it.stk;
+            if (ex.alts) ex.alts = ex.alts.filter(function (u) { return u !== it.url; });
+          }
+          if (it.type === 'series') {
+            if (!ex.xt && it.xt) { ex.xt = it.xt; ex.list = it.list; }
+            if (!ex.stks && it.stks) ex.stks = it.stks;
+            if (!ex.jf && !ex.px && (it.jf || it.px)) { ex.jf = it.jf; ex.px = it.px; }
+            var exHasUrl = (ex.episodes || []).some(function (e) { return e.url; }), itHasUrl = (it.episodes || []).some(function (e) { return e.url; });
+            if (!exHasUrl && itHasUrl) ex.episodes = it.episodes.slice();
           }
           if (!ex.logo && it.logo) ex.logo = it.logo;
           if (!ex.poster && it.poster) ex.poster = it.poster;
