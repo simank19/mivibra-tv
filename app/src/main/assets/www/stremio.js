@@ -273,7 +273,7 @@
     ls.forEach(function (l) { var m = l.man || {}; if (m.resources && res(m, 'stream') && ok.indexOf(l) < 0 && D[l.name] === undefined) D[l.name] = 'no tiene este tipo de contenido'; });
     var failed = 0;   // addons que no respondieron (caídos o lentos): un "sin enlaces" así no es definitivo
     var jobs = ok.map(function (l) {
-      return withTimeout(MV.getJSON(base(l.url) + '/stream/' + tyFor(l.man || {}) + '/' + encodeURIComponent(id) + '.json'), 12000).then(function (j) {
+      return withTimeout(MV.getSmallJSON(base(l.url) + '/stream/' + tyFor(l.man || {}) + '/' + encodeURIComponent(id) + '.json'), 12000).then(function (j) {
         var all = (j && j.streams) || [];
         MV._stTorrents = (MV._stTorrents || 0) + all.filter(function (s) { return s.infoHash && !s.url; }).length;
         var nd = all.filter(function (s) { return s.url && /^https?:/i.test(s.url); }).length, nt = all.length - nd;

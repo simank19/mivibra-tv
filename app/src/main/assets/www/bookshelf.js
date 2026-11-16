@@ -201,7 +201,7 @@
     if (!a && m.length > 1) { a = m.slice(1).join(' '); t = m[0]; }
     return { t: t.replace(/\s+/g, ' ').trim(), a: a.trim() };
   }
-  function getJSON(u) { return fetch(u).then(function (r) { if (!r.ok) throw 0; return r.json(); }); }
+  function getJSON(u) { if (MV.getSmallJSON && MV.A) return MV.getSmallJSON(u); return fetch(u).then(function (r) { if (!r.ok) throw 0; return r.json(); }); }
   function gbCover(v) { var il = v.imageLinks || {}, u = il.extraLarge || il.large || il.medium || il.thumbnail || il.smallThumbnail || ''; return u ? u.replace(/^http:/, 'https:').replace(/&edge=curl/, '').replace(/zoom=\d/, 'zoom=1') : ''; }
   function fetchMeta(b) {
     var c = metaCache(), k = b.key;

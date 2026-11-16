@@ -25,7 +25,7 @@ class Bridge(private val a: MainActivity) {
     /** Descargas largas (MEGA, colecciones) aparte: así no traban la carga de listas ni el resto de la app. */
     private val dl = Executors.newFixedThreadPool(2)
     /** Pedidos a internet (addons, listas, fichas): muchos a la vez, para que uno lento no haga esperar a los demás. */
-    private val net = Executors.newFixedThreadPool(16)
+    private val net = Executors.newFixedThreadPool(12)
 
     private fun reply(id: String, ok: Boolean, data: Any?) {
         val payload = JSONObject().put("ok", ok).put("data", data ?: JSONObject.NULL)
@@ -59,7 +59,8 @@ class Bridge(private val a: MainActivity) {
     /** mode = "text" devuelve el texto; mode = "file" lo guarda y devuelve una ruta para fetch() (listas grandes). */
     @JavascriptInterface
     fun httpGet(id: String, url: String, headersJson: String?, mode: String?) {
-        net.execute {
+        // Respuestas chicas (addons, fichas): muchas a la vez. Listas y catálogos (pueden pesar decenas de MB): de a 4, para no llenar la memoria
+        (if (mode == "small") net else io).execute {
             try {
                 if (mode == "file") {
                     val f = netFile(url)

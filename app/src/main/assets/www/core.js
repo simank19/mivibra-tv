@@ -117,10 +117,12 @@
   }
 
   /** Texto corto (APIs JSON). */
-  MV.getText = function (url, headers) {
+  MV.getText = function (url, headers, small) {
     if (!A) return webFetch(url, headers);
-    return call('httpGet', [url, JSON.stringify(headers || {}), 'text']).then(function (d) { return d.text; });
+    return call('httpGet', [url, JSON.stringify(headers || {}), small ? 'small' : 'text']).then(function (d) { return d.text; });
   };
+  /** Pedido chico (enlaces de addons, fichas): va por la vía rápida, sin esperar a que bajen las listas grandes. */
+  MV.getSmallJSON = function (url, headers) { return MV.getText(url, headers, true).then(function (t) { return JSON.parse(t); }); };
   /** Logo de canal sin su fondo (blanco, negro o de un color): la app lo limpia y lo guarda (solo en la app instalada). */
   MV.logoUrl = function (u) {
     if (!A || !/^https?:\/\//i.test(u || '') || /appassets\.androidplatform\.net/.test(u)) return u;
