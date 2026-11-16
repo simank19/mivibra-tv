@@ -17,6 +17,8 @@ on:
       - ".github/scripts/tvpack.py"
       - "roku/**"
       - ".github/scripts/rokupack.py"
+      - "movimiento/**"
+      - ".github/scripts/avatarpack.py"
   workflow_dispatch:
 
 permissions:
@@ -75,6 +77,15 @@ jobs:
           # Roku: la app se publica como librería; el Roku la descarga al abrir y así se actualiza solo
           python3 .github/scripts/rokupack.py site/roku/lib.zip ${{ github.run_number }} lib
           cp -r roku/web site/roku/img
+      - name: MiVibra Movimiento (editor de avatares en español y juego de vallas)
+        run: |
+          # Editor original fijado en una versión probada; las piezas son CC0 y el código MIT
+          git init -q /tmp/vam && cd /tmp/vam
+          git remote add origin https://github.com/ffunch/vrm-avatar-maker
+          git sparse-checkout set web LICENSE ASSETS.md
+          git fetch -q --depth 1 origin 46c185c8e94e01efb013e56cc9480ba7e9208e0d && git checkout -q FETCH_HEAD
+          cd "$GITHUB_WORKSPACE" && python3 .github/scripts/avatarpack.py /tmp/vam/web site/movimiento
+          cp /tmp/vam/LICENSE site/movimiento/LICENSE-editor.txt; cp /tmp/vam/ASSETS.md site/movimiento/CREDITOS-piezas.md
       - uses: actions/configure-pages@v5
         with:
           enablement: true

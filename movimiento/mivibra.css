@@ -1,0 +1,30 @@
+/* Marca MiVibra sobre VRM Avatar Maker: noche, naranja y vidrio */
+:root { --bg: #14110F; --panel: #0D0C0B; --line: #2A2622; --fg: #F3EFEA; --muted: #A39C94; --accent: #FF6900; --bad: #FF6A5A; }
+html, body { font: 14px/1.4 'DM Sans', system-ui, sans-serif; }
+#view { background: radial-gradient(70% 80% at 50% 40%, #2c241e 0%, #14110F 70%); }
+#panel { background: linear-gradient(180deg, #0D0C0B, #120f0d); }
+#panel h1 { display: flex; align-items: center; gap: 12px; font: 800 22px/1.1 'Bricolage Grotesque', 'DM Sans', sans-serif; margin: 6px 0 16px; letter-spacing: -.01em; }
+#panel h1 small { display: block; font: 700 10px 'DM Sans', sans-serif; letter-spacing: .2em; color: var(--muted); margin-bottom: 3px; }
+details { border-top: 1px solid var(--line); padding: 8px 0; }
+summary { font-weight: 700; font-size: 15px; padding: 6px 0; }
+summary::marker { color: var(--accent); }
+.sub { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; margin: 14px 0 8px; }
+label.slider { color: #CFC8BF; }
+input[type=range] { accent-color: var(--accent); }
+.tile { background: radial-gradient(circle at 50% 35%, #2f2823, #1a1613); border: 2px solid rgba(255,255,255,.06); border-radius: 12px; }
+.tile img { background: transparent; border-radius: 8px; }
+.tile.on { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255,105,0,.22); }
+.swatch.on { border-color: var(--accent); }
+button.plain { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); border-radius: 99px; color: var(--fg); font-weight: 700; }
+button.main { background: var(--accent); color: #0D0C0B; border-radius: 99px; font-weight: 800; }
+#bar { background: rgba(13,12,11,.92); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+#bar input[type=text] { background: rgba(255,255,255,.06); border-radius: 12px; }
+#mv-play { grid-column: 1 / -1; text-align: center; color: #FFB27A; font-weight: 700; font-size: 13px; text-decoration: none; padding: 4px; }
+#mv-play.ready { color: #0D0C0B; background: #F3EFEA; border-radius: 99px; padding: 8px; }
+#camera button { background: rgba(13,12,11,.6); border-radius: 99px; backdrop-filter: blur(10px); }
+#mv-credit { margin-top: 18px; color: #7f776f; font-size: 11px; line-height: 1.5; text-align: center; }
+#mv-credit a { color: #a89f95; }
+#mv-toast { position: fixed; left: 50%; top: 18px; transform: translate(-50%, -12px); padding: 12px 20px; border-radius: 99px; background: #F3EFEA; color: #17140F; font-weight: 700; font-size: 14px; opacity: 0; transition: all .3s; z-index: 99; pointer-events: none; box-shadow: 0 12px 30px rgba(0,0,0,.4); }
+#mv-toast.on { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+#mv-toast a { color: #B34A00; margin-left: 6px; }
+@media (max-width: 700px) { #bar { grid-template-columns: 1fr auto; } #mv-play { display: none; } #mv-play.ready { display: block; } }
