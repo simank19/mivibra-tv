@@ -322,20 +322,20 @@ function makeAvatar(o) {
   return A;
 }
 // ---- Poses (objetivos por articulación) y mezcla suave ----
-const KEYS = ['hy', 'hipsX', 'hipsY', 'spX', 'spY', 'spZ', 'hdX', 'hdY', 'hdZ', 'shLX', 'shLY', 'shLZ', 'elL', 'shRX', 'shRY', 'shRZ', 'elR', 'hpLX', 'hpLZ', 'knL', 'anL', 'hpRX', 'hpRZ', 'knR', 'anR', 'smile'];
-function P(o) { const p = {}; KEYS.forEach((k) => p[k] = 0); p.shLZ = 0.12; p.shRZ = -0.12; p.elL = -0.25; p.elR = -0.25; p.smile = 0.3; return Object.assign(p, o); }
+const KEYS = ['hy', 'hipsX', 'hipsY', 'spX', 'spY', 'spZ', 'hdX', 'hdY', 'hdZ', 'shLX', 'shLY', 'shLZ', 'elL', 'elLZ', 'shRX', 'shRY', 'shRZ', 'elR', 'elRZ', 'hpLX', 'hpLZ', 'knL', 'anL', 'hpRX', 'hpRZ', 'knR', 'anR', 'smile', 'fistL', 'fistR', 'pointR'];
+function P(o) { const p = {}; KEYS.forEach((k) => p[k] = 0); p.shLZ = 0.12; p.shRZ = -0.12; p.elL = -0.25; p.elR = -0.25; p.smile = 0.3; p.fistL = 0.35; p.fistR = 0.35; return Object.assign(p, o); }
 function mix(a, b, k) { const p = {}; KEYS.forEach((x) => p[x] = lerp(a[x], b[x], k)); return p; }
 const POSES = {
   idle: (t, ph = 0) => P({ hy: Math.sin(t * 2 + ph) * 0.012, spX: 0.02, spY: Math.sin(t * 0.6 + ph) * 0.05, hdY: Math.sin(t * 0.5 + ph) * 0.25, hdX: Math.sin(t * 0.8 + ph) * 0.05, shLZ: 0.14 + Math.sin(t * 2 + ph) * 0.02, shRZ: -0.14 - Math.sin(t * 2 + ph) * 0.02, hpLX: 0.02, hpRX: -0.02, knL: 0.06, knR: 0.08 }),
   shake: (t) => { const s = Math.sin(t * 14); return P({ hy: Math.abs(s) * 0.03, spY: s * 0.1, shLX: s * 0.3, shRX: -s * 0.3, elL: -0.4, elR: -0.4, hpLX: -0.1 + Math.max(0, s) * -0.3, knL: Math.max(0, s) * 0.6, hpRX: -0.1 + Math.max(0, -s) * -0.3, knR: Math.max(0, -s) * 0.6, hdY: s * 0.1 }); },
-  wave: (t) => P({ shLZ: 2.5, shLX: -0.2, elL: -0.5 + Math.sin(t * 9) * 0.45, hdZ: 0.1, hdY: 0.1, spZ: -0.05, hy: Math.sin(t * 4) * 0.01, smile: 1 }),
-  flex: (t) => P({ shLZ: 1.5, shRZ: -1.5, elL: -2.2 + Math.sin(t * 6) * 0.15, elR: -2.2 - Math.sin(t * 6) * 0.15, shLY: 0.0, spX: -0.05, hdX: -0.1, smile: 1, hy: -0.02, knL: 0.15, knR: 0.15 }),
-  point: (t) => P({ shRX: -2.8, shRZ: -0.2, elR: 0, shLZ: 0.3, elL: -0.3, hdX: -0.4, spX: -0.1, smile: 1, hy: Math.sin(t * 3) * 0.01 }),
-  jumpClap: (t) => { const c = (t * 1.6) % 1, j = Math.max(0, Math.sin(c * Math.PI * 2)); return P({ hy: j * 0.35 - (1 - j) * 0.06, shLX: -1.4, shRX: -1.4, shLZ: 0.1 + Math.sin(t * 12) * 0.25, shRZ: -0.1 - Math.sin(t * 12) * 0.25, elL: -0.6, elR: -0.6, knL: 0.3 * (1 - j), knR: 0.3 * (1 - j), hpLX: -0.2 * (1 - j), hpRX: -0.2 * (1 - j), smile: 1 }); },
-  bow: (t) => P({ spX: 0.6, hdX: 0.3, shLX: 0.4, shRX: 0.4, shLZ: 0.05, shRZ: -0.05, smile: 0.6 }),
-  dance: (t) => { const s = Math.sin(t * 7); return P({ hy: Math.abs(s) * 0.05, hipsY: s * 0.25, spZ: s * 0.12, shLZ: 1.2 + s * 0.6, shRZ: -1.2 + s * 0.6, elL: -1.2, elR: -1.2, hpLX: -Math.max(0, s) * 0.4, knL: Math.max(0, s) * 0.7, hpRX: -Math.max(0, -s) * 0.4, knR: Math.max(0, -s) * 0.7, hdZ: -s * 0.15, smile: 1 }); },
-  cheer: (t, ph = 0) => { const s = Math.sin(t * 8 + ph), j = Math.max(0, Math.sin(t * 6 + ph)); return P({ hy: j * 0.18, shLZ: 2.6 + s * 0.2, shRZ: -2.6 + s * 0.2, shLX: -0.2, shRX: -0.2, elL: -0.2, elR: -0.2, hdX: -0.3, knL: 0.2 * (1 - j), knR: 0.2 * (1 - j), smile: 1 }); },
-  tired: (t) => P({ spX: 0.55, hdX: -0.2, hy: -0.08 + Math.sin(t * 5) * 0.015, shLX: -0.6, shRX: -0.6, elL: -0.5, elR: -0.5, shLZ: 0.2, shRZ: -0.2, knL: 0.35, knR: 0.35, hpLX: -0.3, hpRX: -0.3, smile: 0.2 }),
+  wave: (t) => { const w = Math.sin(t * 8); return P({ shLZ: 2.25, shLX: -0.15, elL: -0.15, elLZ: 0.95 + w * 0.45, hdZ: 0.08, hdY: 0.12, spZ: -0.06, hipsY: 0.05, hy: Math.sin(t * 4) * 0.008, fistL: 0.05, smile: 1 }); },
+  flex: (t) => { const f = Math.sin(t * 5) * 0.12; return P({ shLZ: 1.5, shRZ: -1.5, shLX: -0.15, shRX: -0.15, elL: 0, elR: 0, elLZ: 1.95 + f, elRZ: -1.95 + f, fistL: 1.3, fistR: 1.3, spX: -0.04, hdX: -0.1, hy: -0.03, knL: 0.15, knR: 0.15, smile: 1 }); },
+  point: (t) => P({ shRZ: -2.85, shRX: -0.25, elR: 0, elRZ: -0.1, fistR: 1.1, pointR: 1, shLZ: 0.55, shLX: 0.1, elL: -0.25, elLZ: -1.45, fistL: 0.9, hdX: -0.35, hdY: -0.15, spX: -0.08, spZ: 0.04, hy: Math.sin(t * 3) * 0.008, smile: 1 }),
+  jumpClap: (t) => { const c = (t * 1.5) % 1, j = Math.max(0, Math.sin(c * Math.PI * 2)), cl = Math.abs(Math.sin(t * 9)); return P({ hy: j * 0.32 - (1 - j) * 0.06, shLX: -1.25, shRX: -1.25, shLZ: 0.08 + cl * 0.35, shRZ: -0.08 - cl * 0.35, elL: -0.25, elR: -0.25, fistL: 0.15, fistR: 0.15, knL: 0.35 * (1 - j), knR: 0.35 * (1 - j), hpLX: -0.25 * (1 - j), hpRX: -0.25 * (1 - j), hdX: -0.1, smile: 1 }); },
+  bow: (t) => { const b = Math.min(1, (t % 2.4) / 0.5) * (t % 2.4 < 1.6 ? 1 : Math.max(0, 1 - ((t % 2.4) - 1.6) / 0.6)); return P({ spX: 0.75 * b, hdX: 0.25 * b, shRX: -0.55, shRZ: -0.15, elR: -1.75, elRZ: 0.25, fistR: 0.4, shLX: 0.35, shLZ: 0.2, elL: -0.9, elLZ: 0.6, fistL: 0.6, smile: 0.7 }); },
+  dance: (t) => { const s = Math.sin(t * 6.5), c = Math.cos(t * 6.5); return P({ hy: -0.02 + Math.abs(s) * 0.05, hipsY: s * 0.28, spZ: s * 0.1, spY: -s * 0.15, shLZ: 1.35 + s * 0.7, shRZ: -1.35 + s * 0.7, elL: -0.2, elR: -0.2, elLZ: 0.9 + c * 0.4, elRZ: -0.9 + c * 0.4, fistL: 0.9, fistR: 0.9, hpLX: -Math.max(0, s) * 0.45, knL: Math.max(0, s) * 0.75, hpRX: -Math.max(0, -s) * 0.45, knR: Math.max(0, -s) * 0.75, hdZ: -s * 0.15, hdY: s * 0.15, smile: 1 }); },
+  cheer: (t, ph = 0) => { const s = Math.sin(t * 8 + ph), j = Math.max(0, Math.sin(t * 6 + ph)); return P({ hy: j * 0.16, shLZ: 2.55 + s * 0.15, shRZ: -2.55 + s * 0.15, shLX: -0.15, shRX: -0.15, elL: -0.15, elR: -0.15, elLZ: 0.25, elRZ: -0.25, fistL: 1.2, fistR: 1.2, hdX: -0.3, knL: 0.2 * (1 - j), knR: 0.2 * (1 - j), smile: 1 }); },
+  tired: (t) => P({ spX: 0.55, hdX: -0.25, hy: -0.1 + Math.sin(t * 5) * 0.015, shLX: -0.75, shRX: -0.75, elL: -0.2, elR: -0.2, shLZ: 0.25, shRZ: -0.25, elLZ: -0.2, elRZ: 0.2, fistL: 0.2, fistR: 0.2, knL: 0.4, knR: 0.4, hpLX: -0.35, hpRX: -0.35, smile: 0.2 }),
   // En sus marcas: rodilla atrás en el piso, manos en la línea
   marks: () => P({ hy: -0.5, spX: 1.25, hdX: -0.55, shLX: -1.25, shRX: -1.25, shLZ: 0.08, shRZ: -0.08, elL: 0, elR: 0, hpLX: -1.75, knL: 2.0, anL: 0.5, hpRX: -0.55, knR: 2.3, anR: 0.9, smile: 0 }),
   // Listos: cadera arriba
@@ -350,12 +350,12 @@ const POSES = {
       hpLX: -th * s - 0.12, knL: 0.15 + kneeMax * Math.pow(Math.max(0, c), 1.3), anL: -0.15 + 0.5 * Math.max(0, -c),
       hpRX: th * s - 0.12, knR: 0.15 + kneeMax * Math.pow(Math.max(0, -c), 1.3), anR: -0.15 + 0.5 * Math.max(0, c),
       shLX: (0.75 + 0.35 * k) * s, shRX: -(0.75 + 0.35 * k) * s, shLZ: 0.16, shRZ: -0.16, shLY: -0.15, shRY: 0.15,
-      elL: -1.45 - 0.25 * Math.max(0, -s), elR: -1.45 - 0.25 * Math.max(0, s), smile: 0.4
+      elL: -1.45 - 0.25 * Math.max(0, -s), elR: -1.45 - 0.25 * Math.max(0, s), fistL: 0.85, fistR: 0.85, smile: 0.4
     });
   },
   // Paso de valla: pierna de ataque (derecha) recta adelante, pierna de impulso abierta al lado
   hurdle: () => P({ hy: 0.06, spX: 0.75, hdX: -0.55, hpRX: -1.7, knR: 0.08, anR: 0.25, hpLX: 0.15, hpLZ: 1.15, knL: 1.85, anL: 0.4, shLX: -1.55, shLZ: 0.05, elL: -0.15, shRX: 0.6, shRZ: -0.45, elR: -1.4, smile: 0.2 }),
-  victory: (t) => { const j = Math.max(0, Math.sin(t * 5)); return P({ hy: j * 0.22, shLZ: 2.4, shRZ: -2.4, shLX: -0.4, shRX: -0.4, elL: -0.3, elR: -0.3, hdX: -0.35, spX: -0.12, knL: 0.15, knR: 0.15, smile: 1 }); }
+  victory: (t) => { const j = Math.max(0, Math.sin(t * 5)), pump = Math.max(0, Math.sin(t * 10)); return P({ hy: j * 0.2, shLZ: 2.35, shRZ: -2.35, shLX: -0.3, shRX: -0.3, elL: -0.1, elR: -0.1, elLZ: 0.35 + pump * 0.5, elRZ: -0.35 - pump * 0.5, fistL: 1.3, fistR: 1.3, hdX: -0.35, spX: -0.12, knL: 0.15, knR: 0.15, smile: 1 }); }
 };
 function apply(A, target, k) {
   const u = A.userData, J = u.J, c = u.cur; k = kf(k);
@@ -409,11 +409,21 @@ function attachVRM(r, buf) {
   }, () => res(false)));
 }
 const vrmReady = Promise.all(RUNNERS.map(async (r) => {
-  if (r.me) { const saved = await readSaved(); if (saved && saved.vrm) { r.name = (saved.name || r.name).slice(0, 18); return attachVRM(r, saved.vrm); } r.name = 'Tú'; return false; }
+  if (r.me) { const saved = await readSaved(); if (saved && saved.vrm) { r.name = (saved.name || r.name).slice(0, 18); return attachVRM(r, saved.vrm); } r.name = 'Tú'; try { return attachVRM(r, await (await fetch('../avatars/tu.vrm')).arrayBuffer()); } catch (e) { return false; } }
   const f = RIVAL_FILES[r.name]; if (!f) return false;
   try { const buf = await (await fetch('../avatars/' + f + '.vrm')).arrayBuffer(); return attachVRM(r, buf); } catch (e) { return false; }
 }));
 let myVRM = null;
+const FINGERS = ['Index', 'Middle', 'Ring', 'Little'], SEGS = ['Proximal', 'Intermediate', 'Distal'];
+function fingers(H, side, fist, point) {
+  const sg = side === 'left' ? -1 : 1;
+  FINGERS.forEach((f) => SEGS.forEach((g, gi) => {
+    const o = H.getNormalizedBoneNode(side + f + g); if (!o) return;
+    const k = f === 'Index' && point > 0.5 ? 0.05 : fist;
+    o.rotation.set(0, 0, sg * k * (gi === 0 ? 0.9 : 1.1));
+  }));
+  ['Metacarpal', 'Proximal', 'Distal'].forEach((g, gi) => { const o = H.getNormalizedBoneNode(side + 'Thumb' + g); if (o) o.rotation.set(0, -sg * fist * 0.35, sg * fist * (gi ? 0.45 : 0.15)); });
+}
 function driveVRM(dt) { RUNNERS.forEach((r) => driveOne(r, dt)); myVRM = ME.vrm || null; }
 function driveOne(r, dt) {
   const vrm = r.vrm; if (!vrm) return;
@@ -424,8 +434,13 @@ function driveOne(r, dt) {
   b('spine').rotation.set(c.spX * 0.55, c.spY, c.spZ);
   const ch = b('chest') || b('upperChest'); if (ch) ch.rotation.set(c.spX * 0.45, c.spY * 0.6, 0);
   b('head').rotation.set(c.hdX, c.hdY, c.hdZ);
-  b('leftUpperArm').rotation.set(c.shLX, c.shLY, -Math.PI / 2 + c.shLZ); b('leftLowerArm').rotation.set(0, c.elL, 0);
-  b('rightUpperArm').rotation.set(c.shRX, c.shRY, Math.PI / 2 + c.shRZ); b('rightLowerArm').rotation.set(0, -c.elR, 0);
+  b('leftUpperArm').rotation.set(c.shLX, c.shLY, -Math.PI / 2 + c.shLZ); b('leftLowerArm').rotation.set(0, c.elL, c.elLZ);
+  b('rightUpperArm').rotation.set(c.shRX, c.shRY, Math.PI / 2 + c.shRZ); b('rightLowerArm').rotation.set(0, -c.elR, c.elRZ);
+  // Hombros que suben un poco al levantar los brazos (más natural)
+  const lsh = b('leftShoulder'), rsh = b('rightShoulder');
+  if (lsh) lsh.rotation.set(0, 0, 0.22 * clamp(c.shLZ - 1.4, 0, 1.4)); if (rsh) rsh.rotation.set(0, 0, -0.22 * clamp(-c.shRZ - 1.4, 0, 1.4));
+  // Manos: dedos relajados, puño o señalando
+  fingers(H, 'left', c.fistL, 0); fingers(H, 'right', c.fistR, c.pointR);
   b('leftUpperLeg').rotation.set(c.hpLX, 0, c.hpLZ); b('leftLowerLeg').rotation.set(c.knL, 0, 0); b('leftFoot').rotation.set(c.anL, 0, 0);
   b('rightUpperLeg').rotation.set(c.hpRX, 0, -c.hpRZ); b('rightLowerLeg').rotation.set(c.knR, 0, 0); b('rightFoot').rotation.set(c.anR, 0, 0);
   const em = vrm.expressionManager;
@@ -571,7 +586,11 @@ function update(dt, t) {
   // Haces de luz
   beams.forEach((b, i) => { const on = phase === 'intro' || phase === 'present' || phase === 'podium'; b.visible = on; if (on) { const a = t * 0.6 + b.userData.ph; b.lookAt(CX + Math.sin(a) * 12, 0, CZ + Math.cos(a * 0.7) * 50 + (phase === 'podium' ? -60 : 0)); b.rotateX(-Math.PI / 2); b.material.opacity = 0.1 + 0.05 * Math.sin(t * 3 + i); } });
 
-  if (phase === 'intro') {
+  if (phase === 'test') {   // solo para revisar gestos: MVD.test(corredor, gesto)
+    const r = RUNNERS[TEST.i]; r.A.position.set(0, 0, -30); r.A.rotation.y = 0.35; r.A.userData.show = true;
+    apply(r.A, POSES[TEST.g](pt, 0), 1); setCam(TEST.side ? new THREE.Vector3(3.2, 1.25, -30) : new THREE.Vector3(0.4, 1.25, -26.8), new THREE.Vector3(0, 1.0, -30), 1);
+    RUNNERS.forEach((q) => { if (q !== r) q.A.position.set(q.x, 0, 0); });
+  } else   if (phase === 'intro') {
     // Grúa sobre el estadio que baja hasta la salida
     const k = smooth(pt / 7.5), a = lerp(-0.6, 1.6, k);
     setCam(new THREE.Vector3(Math.cos(a) * lerp(120, 26, k), lerp(70, 6, k), lerp(-50, 10, k) + Math.sin(a) * lerp(120, 10, k) * 0.5), new THREE.Vector3(0, lerp(0, 1.2, k), lerp(-50, -2, k)), 1);
@@ -699,7 +718,9 @@ $('goMute').onclick = () => begin(false);
 $('bSkip').onclick = () => { reset(); go('marks'); };
 $('bAgain').onclick = () => { reset(); go('intro'); };
 $('bSnd').onclick = () => { const on = SND.toggle(); $('bSnd').textContent = 'Sonido: ' + (on ? 'sí' : 'no'); };
-window.MVD = { step: (n, d = 1 / 60) => { for (let i = 0; i < n; i++) { T += d * slow; update(d * slow, T); } }, go: (p) => { reset(); go(p); }, get phase() { return phase; }, results: () => results };
+const TEST = { i: 0, g: 'idle' };
+POSES.runA = () => POSES.run(Math.PI / 2, 1); POSES.runB = () => POSES.run(0, 1); POSES.hurdleT = () => POSES.hurdle();
+window.MVD = { R: RUNNERS, test: (i, g, side) => { TEST.i = i; TEST.g = g; TEST.side = !!side; phase = 'test'; pt = 0; ['title','lower','big','cue','hud','clock','pace','phone','res','banner','note'].forEach((x) => show(x, 0)); }, step: (n, d = 1 / 60) => { for (let i = 0; i < n; i++) { T += d * slow; update(d * slow, T); } }, go: (p) => { reset(); go(p); }, get phase() { return phase; }, results: () => results };
 </script>
 </body>
 </html>
