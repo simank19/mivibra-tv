@@ -1747,6 +1747,8 @@
         }
         if (ex) {
           pairs.push([it, ex]);
+          // De qué lista viene cada enlace (para cambiar de lista en el reproductor)
+          if (!ex.stk && !it.stk) { var sm = ex.srcs || (ex.srcs = {}); if (ex.url && !sm[ex.url] && ex.list) sm[ex.url] = ex.list; if (it.url && !sm[it.url] && it.list) sm[it.url] = it.list; }
           if (it.type === 'live') {
             if (it.stk || ex.stk) { /* señales del portal: el enlace se pide al reproducir, no se mezclan */ }
             else if (it.url && it.url !== ex.url) { ex.alts = ex.alts || []; if (ex.alts.length < 6 && ex.alts.indexOf(it.url) < 0) ex.alts.push(it.url); }

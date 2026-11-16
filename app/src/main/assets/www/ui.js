@@ -2701,7 +2701,11 @@
   }
   function q(it, extra) {
     var nn = it.type === 'live' ? MV.nowNext(it) : {};
-    return Object.assign({ id: it.key, url: it.url, title: it.name, subtitle: nn.now ? nn.now.t : (it.group || ''), num: it.num || '', ua: it.ua || '', ref: it.ref || '', alts: it.alts || [], poster: it.type === 'live' ? '' : MV.poster(it), logo: it.type === 'live' ? (it.logo || '') : '', cn: it.type === 'live' && it.country ? D.countryName(it.country) : '', sp: it.type === 'live' && (D.RX.sports.test(it.group || '') || /\b(espn|fox sports|tyc|dsports|directv sports|win sports|bein|gol ?tv|tudn|claro sports|sky sports|eurosport|dazn|nba|nfl|f1)\b/i.test(it.name || '')), fav: MV.isFav(it.key), private: !!it.adult, stk: it.stk || null }, it.type === 'live' ? {} : subInfo(it), extra || {});
+    // Nombre de la lista de cada enlace: en el reproductor se puede cambiar de lista (Ajustes › Lista)
+    var srcNames = {};
+    if (it.srcs) Object.keys(it.srcs).forEach(function (u) { var l = S.lists.find(function (x) { return x.id === it.srcs[u]; }); if (l) srcNames[u] = l.name; });
+    else if (it.list) { var l0 = S.lists.find(function (x) { return x.id === it.list; }); if (l0 && it.url) srcNames[it.url] = l0.name; }
+    return Object.assign({ srcNames: srcNames, id: it.key, url: it.url, title: it.name, subtitle: nn.now ? nn.now.t : (it.group || ''), num: it.num || '', ua: it.ua || '', ref: it.ref || '', alts: it.alts || [], poster: it.type === 'live' ? '' : MV.poster(it), logo: it.type === 'live' ? (it.logo || '') : '', cn: it.type === 'live' && it.country ? D.countryName(it.country) : '', sp: it.type === 'live' && (D.RX.sports.test(it.group || '') || /\b(espn|fox sports|tyc|dsports|directv sports|win sports|bein|gol ?tv|tudn|claro sports|sky sports|eurosport|dazn|nba|nfl|f1)\b/i.test(it.name || '')), fav: MV.isFav(it.key), private: !!it.adult, stk: it.stk || null }, it.type === 'live' ? {} : subInfo(it), extra || {});
   }
   /** Jellyfin: antes de abrir, se piden los segmentos de intro/resumen/créditos (máx. 1,5 s; si no responde, se abre igual). */
   function withSkips(req, ctx, go) {

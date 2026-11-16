@@ -1108,6 +1108,31 @@ class PlayerActivity : ComponentActivity() {
             m.option("Quitar externo", action = { extSub = null; extOffset = 0; reloadExternal("Subtítulo externo quitado") })
         }
 
+        // Cambiar de lista: el mismo título o canal en tus otras listas
+        run {
+            val item = current()
+            val main = item.optString("url")
+            val alts = item.optJSONArray("alts")
+            val all = mutableListOf(main)
+            if (alts != null) for (i in 0 until alts.length()) alts.optString(i).takeIf { it.isNotBlank() && it !in all && !it.startsWith("stalker:") && !it.startsWith("yt:") }?.let { all.add(it) }
+            if (all.size > 1) {
+                val names = item.optJSONObject("srcNames")
+                val playing = attempts.getOrNull(attemptIndex)?.url ?: main
+                m.header("Lista")
+                all.forEachIndexed { n, u ->
+                    val label = names?.optString(u)?.ifBlank { null } ?: ("Lista " + (n + 1) + " · " + (try { Uri.parse(u).host ?: "" } catch (_: Exception) { "" }))
+                    val on = u == main
+                    m.option(label + (if (on && playing != main) "  (respaldo en uso)" else ""), on) {
+                        if (u == main) return@option
+                        val pos = if (live) 0L else (player?.currentPosition ?: 0L)
+                        val rest = org.json.JSONArray(); all.filter { it != u }.forEach { rest.put(it) }
+                        item.put("url", u).put("alts", rest)
+                        toastInfo("Cambiando a: $label")
+                        playIndex(index, pos)
+                    }
+                }
+            }
+        }
         m.header("Tamaño de los subtítulos")
         val curSize = prefs.getInt("subSize", 1)
         subSizes.forEachIndexed { idx, sz -> m.option(sz.first, idx == curSize) { prefs.edit().putInt("subSize", idx).apply(); applySubtitleStyle(); toastInfo("Subtítulos: ${sz.first}") } }
