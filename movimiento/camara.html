@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#54585C">
+<title>MiVibra Movimiento · Cámara</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@800&family=DM+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;font-family:'DM Sans',system-ui,sans-serif;color:#fff;background:radial-gradient(120% 90% at 30% 0%,#6E7276 0%,#54585C 40%,#3E4144 100%)}
+.glass{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.24);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:inset 0 1px 0 rgba(255,255,255,.22)}
+#stage{position:fixed;inset:0}
+video,#ov{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+video{opacity:.9}
+#ov{pointer-events:none}
+.top{position:fixed;left:12px;right:12px;top:calc(12px + env(safe-area-inset-top));display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:99px;z-index:3}
+.dot{width:11px;height:11px;border-radius:50%;background:#FFB13D;flex:none}
+.dot.ok{background:#34D399;box-shadow:0 0 0 0 rgba(52,211,153,.6);animation:p 2s infinite}
+@keyframes p{50%{box-shadow:0 0 0 8px rgba(52,211,153,0)}}
+.top b{font-size:14px;display:block}.top small{font-size:11px;color:#E4E6E8}
+.fps{margin-left:auto;font-size:11px;font-weight:800;padding:4px 9px;border-radius:99px;background:rgba(0,0,0,.25)}
+.msg{position:fixed;left:50%;top:calc(80px + env(safe-area-inset-top));transform:translateX(-50%);padding:9px 18px;border-radius:99px;font-weight:800;font-size:14px;white-space:nowrap;z-index:3;transition:background .3s}
+.msg.ok{background:rgba(52,211,153,.92);color:#0B2A1F;border-color:transparent}
+.bottom{position:fixed;left:10px;right:10px;bottom:calc(14px + env(safe-area-inset-bottom));padding:16px;border-radius:26px;z-index:3}
+.bottom p{margin:0 0 12px;font-size:12.5px;line-height:1.5;color:#EEF0F2}
+.row{display:flex;gap:8px}
+button{font:inherit;cursor:pointer}
+.btn{flex:1;height:48px;border-radius:99px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.12);color:#fff;font-weight:800;font-size:14px}
+.btn.pri{background:#F4F5F6;color:#2A2C2E;border-color:#F4F5F6}
+#start{position:fixed;inset:0;display:grid;place-items:center;z-index:5;padding:20px}
+#start .card{padding:26px 22px;border-radius:28px;max-width:420px;text-align:center}
+#start small{letter-spacing:.2em;font-weight:800;font-size:11px;color:#D6D9DC}
+#start h1{font-family:'Bricolage Grotesque',sans-serif;font-size:30px;margin:6px 0 10px}
+#start p{color:#EEF0F2;line-height:1.5;font-size:14px;margin:0 0 16px}
+#code{width:100%;height:56px;border-radius:16px;border:1px solid rgba(255,255,255,.3);background:rgba(0,0,0,.15);color:#fff;font:800 28px 'DM Sans',sans-serif;text-align:center;letter-spacing:.3em;margin-bottom:12px}
+#err{color:#FFD1C8;font-size:13px;min-height:18px;margin:6px 0 0}
+</style>
+</head>
+<body>
+<div id="stage"><video id="vid" playsinline muted></video><canvas id="ov"></canvas></div>
+<div class="top glass"><span class="dot" id="dot"></span><div><b id="st">Sin conectar</b><small id="sub">MiVibra Movimiento</small></div><span class="fps" id="fps">— fps</span></div>
+<div class="msg glass" id="msg">Ponte de cuerpo entero frente al celular</div>
+<div class="bottom glass">
+  <p>Apoya el celular de pie, a la altura de la cintura, a 2–3 m de ti. El video se procesa aquí: al TV solo llegan los puntos de tu cuerpo.</p>
+  <div class="row"><button class="btn" id="flip">Cambiar cámara</button><button class="btn pri" id="pause">Pausa</button></div>
+</div>
+<div id="start"><div class="card glass">
+  <small>MIVIBRA MOVIMIENTO</small>
+  <h1>Celular como cámara</h1>
+  <p>Escribe el código que aparece en el TV y permite el uso de la cámara.</p>
+  <input id="code" inputmode="numeric" maxlength="6" placeholder="······" autocomplete="off">
+  <button class="btn pri" id="go" style="width:100%">Conectar</button>
+  <p id="err"></p>
+</div></div>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
+<script type="module">
+import { FilesetResolver, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs';
+const $ = (id) => document.getElementById(id);
+const KEEP = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];   // nariz, hombros, codos, muñecas, caderas, rodillas, tobillos
+const BONES = [[11, 12], [11, 13], [13, 15], [12, 14], [14, 16], [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [24, 26], [26, 28]];
+let peer = null, conn = null, landmarker = null, facing = 'user', stream = null, paused = false, lastSend = 0, frames = 0, fpsT = performance.now(), wake = null;
+
+const qs = new URLSearchParams(location.search), preset = (qs.get('c') || '').replace(/\D/g, '').slice(0, 6);
+if (preset) $('code').value = preset;
+function status(t, ok, sub) { $('st').textContent = t; $('dot').classList.toggle('ok', !!ok); if (sub) $('sub').textContent = sub; }
+function msg(t, ok) { $('msg').textContent = t; $('msg').classList.toggle('ok', !!ok); }
+
+async function camera() {
+  if (stream) stream.getTracks().forEach((t) => t.stop());
+  stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 } }, audio: false });
+  const v = $('vid'); v.srcObject = stream; await v.play();
+  v.style.transform = $('ov').style.transform = facing === 'user' ? 'scaleX(-1)' : 'none';
+}
+async function model() {
+  const files = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+  const opts = (d) => ({ baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task', delegate: d }, runningMode: 'VIDEO', numPoses: 1, minPoseDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+  try { landmarker = await PoseLandmarker.createFromOptions(files, opts('GPU')); } catch (e) { landmarker = await PoseLandmarker.createFromOptions(files, opts('CPU')); }
+}
+function connect(code) {
+  return new Promise((res, rej) => {
+    peer = new Peer();
+    const fail = setTimeout(() => rej(new Error('No encontré el TV. Revisa el código y que el juego esté abierto.')), 15000);
+    peer.on('open', () => {
+      conn = peer.connect('mivibra-mv-' + code, { reliable: false, serialization: 'json' });
+      conn.on('open', () => { clearTimeout(fail); status('Conectado al TV', true, 'Código ' + code); conn.send({ t: 'hi', ua: navigator.userAgent.slice(0, 60) }); res(); });
+      conn.on('close', () => { status('Se cerró la conexión', false); msg('Vuelve a abrir el juego en el TV y escanea el código'); });
+      conn.on('data', (d) => { if (d && d.t === 'say') msg(d.text, d.ok); });
+    });
+    peer.on('error', (e) => { clearTimeout(fail); rej(new Error(e.type === 'peer-unavailable' ? 'No encontré el TV con ese código.' : 'No se pudo conectar (' + e.type + ').')); });
+  });
+}
+function draw(lm, w, h) {
+  const c = $('ov'), g = c.getContext('2d');
+  if (c.width !== w) { c.width = w; c.height = h; }
+  g.clearRect(0, 0, w, h);
+  if (!lm) return;
+  // La imagen se recorta como "cover": se ajustan los puntos al tamaño del video
+  g.lineWidth = Math.max(4, w / 90); g.lineCap = 'round'; g.strokeStyle = '#34D399'; g.shadowColor = 'rgba(52,211,153,.8)'; g.shadowBlur = 10;
+  BONES.forEach(([a, b]) => { const p = lm[a], q = lm[b]; if (p.visibility < 0.4 || q.visibility < 0.4) return; g.beginPath(); g.moveTo(p.x * w, p.y * h); g.lineTo(q.x * w, q.y * h); g.stroke(); });
+  g.shadowBlur = 0; g.fillStyle = '#fff';
+  KEEP.forEach((i) => { const p = lm[i]; if (p.visibility < 0.4) return; g.beginPath(); g.arc(p.x * w, p.y * h, Math.max(4, w / 110), 0, 7); g.fill(); });
+}
+function check(lm) {
+  if (!lm) return msg('No te veo: ponte frente al celular');
+  const need = [0, 11, 12, 23, 24, 25, 26, 27, 28], vis = need.filter((i) => lm[i].visibility > 0.5).length;
+  if (vis < need.length - 1) return msg(lm[27].visibility < 0.5 || lm[28].visibility < 0.5 ? 'Aléjate un poco: no veo tus pies' : 'Ponte de cuerpo entero frente al celular');
+  const h = Math.abs((lm[27].y + lm[28].y) / 2 - lm[0].y);
+  if (h > 0.92) return msg('Aléjate un paso');
+  if (h < 0.45) return msg('Acércate un paso');
+  msg('¡Te veo completo! Listo para jugar', true);
+}
+function loop() {
+  const v = $('vid');
+  if (!paused && landmarker && v.readyState >= 2) {
+    const now = performance.now(), r = landmarker.detectForVideo(v, now), lm = r.landmarks && r.landmarks[0];
+    draw(lm, v.videoWidth, v.videoHeight);
+    if (frames % 10 === 0) check(lm);
+    if (conn && conn.open && now - lastSend > 30) {
+      lastSend = now;
+      // Se manda espejado si es la cámara frontal: así tu derecha es la derecha del avatar
+      conn.send(lm ? { t: 'p', ts: Math.round(performance.now()), m: facing === 'user' ? 1 : 0, l: KEEP.map((i) => [+lm[i].x.toFixed(3), +lm[i].y.toFixed(3), +lm[i].visibility.toFixed(2)]) } : { t: 'p', l: null });
+    }
+    frames++;
+    if (now - fpsT > 1000) { $('fps').textContent = frames + ' fps'; frames = 0; fpsT = now; }
+  }
+  requestAnimationFrame(loop);
+}
+$('go').onclick = async () => {
+  const code = $('code').value.replace(/\D/g, '');
+  if (code.length !== 6) { $('err').textContent = 'El código tiene 6 números'; return; }
+  $('go').disabled = true; $('err').textContent = '';
+  try {
+    $('go').textContent = 'Abriendo la cámara…'; await camera();
+    $('go').textContent = 'Preparando la detección…'; await model();
+    $('go').textContent = 'Conectando con el TV…'; await connect(code);
+    $('start').remove();
+    try { wake = await navigator.wakeLock.request('screen'); } catch (e) {}
+    loop();
+  } catch (e) {
+    $('err').textContent = e && e.name === 'NotAllowedError' ? 'Permite el uso de la cámara para jugar.' : (e && e.message) || String(e);
+    $('go').disabled = false; $('go').textContent = 'Intentar de nuevo';
+  }
+};
+$('flip').onclick = async () => { facing = facing === 'user' ? 'environment' : 'user'; try { await camera(); } catch (e) { msg('No se pudo cambiar de cámara'); } };
+$('pause').onclick = () => { paused = !paused; $('pause').textContent = paused ? 'Seguir' : 'Pausa'; if (conn && conn.open) conn.send({ t: 'pause', on: paused }); };
+document.addEventListener('visibilitychange', async () => { if (!document.hidden && wake === null) { try { wake = await navigator.wakeLock.request('screen'); } catch (e) {} } });
+if (preset) setTimeout(() => $('go').click(), 300);
+</script>
+</body>
+</html>

@@ -20,6 +20,7 @@ canvas{display:block}
 #start h1{margin:8px 0 6px;font-size:40px;letter-spacing:-.02em}
 #start p{color:#E4E6E8;line-height:1.5;margin:0 0 22px}
 #start button{height:52px;padding:0 26px;border-radius:99px;border:0;background:#F4F5F6;color:#2A2C2E;font:800 17px Manrope,sans-serif;cursor:pointer;margin:4px}
+#start .card{max-height:94vh;overflow:auto}#start .card.camOn{max-width:760px}#start .card.camOn>p{display:none}#cam{display:none}#cam.on{display:grid;grid-template-columns:auto 1fr;gap:6px 22px;align-items:center;text-align:left}#cam p{grid-column:1/3;margin:0 0 6px}#cam img{grid-row:2/6;width:min(190px,34vh);height:min(190px,34vh);border-radius:16px;background:#fff;padding:8px;display:block}#cam .btns{grid-column:1/3;text-align:center;margin-top:8px}#cam .code{font-size:40px;font-weight:800;letter-spacing:.18em;margin:2px 0}#cam .url{font-size:13px;color:#E4E6E8;word-break:break-all}#cam .cst{margin:12px 0 4px;font-weight:800}#cam .cst.ok{color:#34D399}#main.off{display:none}
 #start button.alt{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.3)}
 .title{position:fixed;left:0;right:0;top:30%;text-align:center;opacity:0;transition:opacity .6s}
 .title.on{opacity:1}
@@ -96,8 +97,11 @@ canvas{display:block}
   <small>MIVIBRA MOVIMIENTO</small>
   <h1>100 m con vallas</h1>
   <p>Presentación, salida, carrera y podio con tu avatar. En el juego real te mueves frente a la cámara del celular.</p>
-  <button id="go">Empezar con sonido</button><button id="goMute" class="alt">Sin sonido</button>
+  <div id="main"><button id="go">Empezar con sonido</button><button id="goMute" class="alt">Sin sonido</button><br><button id="goCam" class="alt">Jugar con la cámara del celular</button></div>
+  <div id="cam"><p>Escanea el código con el celular, o abre la dirección y escribe el código. Ponlo de pie a 2–3 m, viéndote de cuerpo entero.</p><img id="qr" alt="Código QR para conectar el celular"><div class="code" id="ccode">······</div><div class="url" id="curl"></div><div class="cst" id="cst">Esperando el celular…</div><div class="btns"><button id="camGo" disabled>Empezar con sonido</button><button id="camBack" class="alt">Volver</button></div></div>
 </div></div>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@2.0.4/dist/qrcode.js"></script>
 <script type="importmap">{"imports":{"three":"../vendor/three-0.183.2/three.module.min.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.183.2/examples/jsm/","@pixiv/three-vrm":"../vendor/three-vrm-3.5.1/three-vrm.module.min.js"}}</script>
 <script type="module">
 import * as THREE from 'three';
@@ -585,7 +589,7 @@ function go(ph) {
   if (ph === 'intro') { excite = 0.9; waveOn = false; SND.beatStart(); SND.whoosh(); SND.cheer(); title('MIVIBRA MOVIMIENTO', '100 m con vallas', 'Estadio MiVibra · Final'); setTimeout(() => phase === 'intro' && show('note', 1), 2500); }
   if (ph === 'present') { excite = 0.6; }
   if (ph === 'marks') { SND.beatStop(); excite = 0.12; big('En sus marcas…'); }
-  if (ph === 'race') { excite = 0.85; waveOn = true; SND.gun(); SND.cheer(); flashScreen(0.5); show('hud', 1); show('clock', 1); show('pace', 1); show('phone', 1); raceT = 0; RUNNERS.forEach((r) => { r.d = -0.55; r.v = 0; r.ph = 0; r.done = false; r.t = 0; r.react = rnd(0.12, 0.22); r.vmax = r.me ? 9.05 : rnd(8.55, 9.0); r.lastStep = 0; }); hurdleObjs.forEach((h) => { h.hit = 0; h.g.rotation.x = 0; }); }
+  if (ph === 'race') { excite = 0.85; waveOn = true; SND.gun(); SND.cheer(); flashScreen(0.5); show('hud', 1); show('clock', 1); show('pace', 1); show('phone', 1); raceT = 0; RUNNERS.forEach((r) => { r.d = -0.55; r.v = 0; r.ph = 0; r.done = false; r.t = 0; r.react = r.me && CAM.on ? 0.08 : rnd(0.12, 0.22); r.nextH = 0; r.vmax = r.me ? 9.05 : rnd(8.55, 9.0); r.lastStep = 0; }); hurdleObjs.forEach((h) => { h.hit = 0; h.g.rotation.x = 0; }); }
   if (ph === 'finish') { excite = 1.3; waveOn = false; SND.cheer(); SND.ding(); }
   if (ph === 'podium') { excite = 1.2; podiumDone = false; }
 }
@@ -633,9 +637,18 @@ function update(dt, t) {
       if (!r.done) {
         const tt = raceT - r.react;
         let target = tt > 0 ? r.vmax * (1 - Math.exp(-tt / 0.85)) : 0;
-        r.v = lerp(r.v, target, 0.2);
+        if (r.me && CAM.on) target = tt > 0 ? camSpeed(r.vmax) : 0;
+        r.v = lerp(r.v, target, r.me && CAM.on ? 0.06 : 0.2);
       } else r.v = lerp(r.v, 0, dt * 1.2);
       r.d += r.v * dt; const z = -r.d;
+      if (r.me && CAM.on) {
+        const hz = HURDLES[r.nextH];
+        if (hz !== undefined && z <= hz) {
+          r.nextH++;
+          if (CAM.clock - CAM.jumpAt < 1100) { SND.whoosh(); camSay('¡Bien saltado!', true); }
+          else { r.v *= 0.45; CAM.stumbleT = 1.4; SND.boom(); camSay('¡Salta en cada valla!'); const h = hurdleObjs.find((o) => o.lane === r.lane + 1 && o.z === hz); if (h) h.hit = 1; }
+        }
+      }
       if (!r.done && z <= FIN) { r.done = true; r.t = raceT - (FIN - z) / Math.max(1, r.v); }
       // Fase de paso: zancada ~2,1 m a toda velocidad
       const stride = 1.2 + 0.9 * clamp(r.v / 9, 0, 1);
@@ -655,7 +668,7 @@ function update(dt, t) {
       leaderD = Math.max(leaderD, r.d);
     });
     // Vallas que se mueven al pasar (pequeño golpe)
-    hurdleObjs.forEach((h) => { const r = RUNNERS.find((q) => q.lane + 1 === h.lane); if (!r) return; const rel = -r.d - h.z; if (Math.abs(rel) < 0.3 && !h.hit && Math.random() < 0.25) { h.hit = 1; } if (h.hit) { h.g.rotation.x = lerp(h.g.rotation.x, -0.35, 0.2); } });
+    hurdleObjs.forEach((h) => { const r = RUNNERS.find((q) => q.lane + 1 === h.lane); if (!r) return; const rel = -r.d - h.z; if (Math.abs(rel) < 0.3 && !h.hit && !(r.me && CAM.on) && Math.random() < 0.25) { h.hit = 1; } if (h.hit) { h.g.rotation.x = lerp(h.g.rotation.x, -0.35, 0.2); } });
     // HUD
     const st = standings(), pos = st.indexOf(ME) + 1;
     $('clk').textContent = (ME.done ? ME.t : raceT).toFixed(2); $('posT').textContent = pos + '.° LUGAR';
@@ -663,7 +676,8 @@ function update(dt, t) {
     if (Math.floor(raceT * 10) !== Math.floor((raceT - dt) * 10)) drawClock(Math.min(raceT, 99).toFixed(2));
     const next = HURDLES.find((hz) => hz < -ME.d - 0.2);
     if (phase === 'race') { if (next !== undefined && -ME.d - next < 4.5) cue('¡SALTA!', true); else if (raceT < 2) cue('¡Trota en el sitio, rápido!'); else show('cue', 0); }
-    stick(ME.ph, next !== undefined && -ME.d - next < 1.5 ? 'jump' : 'run');
+    if (!camStick()) stick(ME.ph, next !== undefined && -ME.d - next < 1.5 ? 'jump' : 'run');
+    if (CAM.on && phase === 'race') { CAM.stumbleT -= dt; if (CAM.stumbleT > 0) cue('¡Tropezaste! Salta en cada valla', true); else if (camCadence() < 0.8 && !ME.done) cue('¡Trota en el sitio para avanzar!', true); }
     // Cámaras de carrera
     const mz = -ME.d;
     if (phase === 'race') {
@@ -706,6 +720,64 @@ function reset() {
   confetti.visible = false; drawClock('0.00');
 }
 
+// ================= Cámara del celular (puntos del cuerpo por WebRTC, conexión directa) =================
+// Índices de lo que manda el celular: 0 nariz, 1-2 hombros, 3-4 codos, 5-6 muñecas, 7-8 caderas, 9-10 rodillas, 11-12 tobillos
+const CAM = { clock: 0, rx: 0, on: false, peer: null, conn: null, code: '', lm: null, seen: 0, steps: [], side: 0, base: null, jumpAt: 0, paused: false, stumbleT: 0 };
+function camCode() { return String(Math.floor(100000 + Math.random() * 900000)); }
+function camOpen() {
+  if (CAM.peer) return;
+  if (!window.Peer) { $('cst').textContent = 'No se pudo cargar la conexión. Revisa internet.'; return; }
+  CAM.code = camCode();
+  const peer = new Peer('mivibra-mv-' + CAM.code); CAM.peer = peer;
+  const url = new URL('../camara/?c=' + CAM.code, location.href).href;
+  $('ccode').textContent = CAM.code; $('curl').textContent = url.replace(/^https?:\/\//, '').replace(/\?.*$/, '');
+  try { const q = qrcode(0, 'M'); q.addData(url); q.make(); $('qr').src = q.createDataURL(6, 2); } catch (e) {}
+  peer.on('error', (e) => { if (e.type === 'unavailable-id') { peer.destroy(); CAM.peer = null; camOpen(); } else $('cst').textContent = 'Error de conexión (' + e.type + ')'; });
+  peer.on('connection', (c) => {
+    if (CAM.conn) CAM.conn.close();
+    CAM.conn = c;
+    c.on('open', () => { CAM.on = true; $('cst').textContent = '¡Celular conectado! Ponte de cuerpo entero'; $('cst').classList.add('ok'); $('camGo').disabled = false; SND.init && SND.ding(); });
+    c.on('data', camData);
+    c.on('close', () => { CAM.on = false; CAM.lm = null; $('cst').textContent = 'Se desconectó el celular'; $('cst').classList.remove('ok'); if (phase === 'race') cue('El celular se desconectó', true); });
+  });
+}
+function camSay(text, ok) { try { if (CAM.conn && CAM.conn.open) CAM.conn.send({ t: 'say', text, ok: !!ok }); } catch (e) {} }
+function camData(d) {
+  if (!d) return;
+  if (d.t === 'pause') { CAM.paused = !!d.on; return; }
+  if (d.t !== 'p') return;
+  const l = d.l; CAM.lm = l; if (!l) return;
+  CAM.rx = performance.now(); CAM.seen = CAM.clock = typeof d.ts === 'number' ? d.ts : CAM.rx;
+  const vis = (i) => l[i][2] > 0.45;
+  if (!(vis(1) && vis(2) && vis(7) && vis(8))) return;
+  const shY = (l[1][1] + l[2][1]) / 2, hipY = (l[7][1] + l[8][1]) / 2, torso = Math.max(0.05, hipY - shY);
+  // Pasos: las rodillas suben y bajan alternadas al trotar en el sitio
+  if (vis(9) && vis(10)) {
+    const diff = (l[9][1] - l[10][1]) / torso;
+    const side = diff > 0.07 ? 1 : diff < -0.07 ? -1 : CAM.side;
+    if (side !== CAM.side && CAM.side !== 0) CAM.steps.push(CAM.seen);
+    CAM.side = side;
+  }
+  CAM.steps = CAM.steps.filter((t) => CAM.seen - t < 1500);
+  // Salto: la cadera sube por encima de su altura normal
+  if (CAM.base === null) CAM.base = hipY;
+  const up = (CAM.base - hipY) / torso;
+  if (up > 0.2 && CAM.seen - CAM.jumpAt > 600) { CAM.jumpAt = CAM.seen; }
+  if (up < 0.08) CAM.base = lerp(CAM.base, hipY, 0.04);
+}
+function camCadence() { return CAM.on && !CAM.paused && performance.now() - CAM.rx < 800 ? CAM.steps.length / 1.5 : 0; }
+function camSpeed(vmax) { return vmax * clamp((camCadence() - 0.6) / 2.6, 0, 1); }
+function camStick() {
+  const l = CAM.lm; if (!l) return false;
+  const P = (i) => [15 + (1 - l[i][0]) * 120, 10 + l[i][1] * 160];   // espejo: como mirarte en un espejo
+  const B = [[1, 2], [1, 3], [3, 5], [2, 4], [4, 6], [1, 7], [2, 8], [7, 8], [7, 9], [9, 11], [8, 10], [10, 12]];
+  let h = B.filter(([a, b]) => l[a][2] > 0.4 && l[b][2] > 0.4).map(([a, b]) => { const p = P(a), q = P(b); return `<path d="M${p[0].toFixed(1)} ${p[1].toFixed(1)}L${q[0].toFixed(1)} ${q[1].toFixed(1)}"/>`; }).join('');
+  if (l[0][2] > 0.4) { const n = P(0); h += `<circle cx="${n[0].toFixed(1)}" cy="${n[1].toFixed(1)}" r="9"/>`; }
+  $('stick').setAttribute('transform', ''); $('stick').innerHTML = h; return true;
+}
+$('goCam').onclick = () => { $('main').classList.add('off'); $('cam').classList.add('on'); $('cam').parentNode.classList.add('camOn'); camOpen(); };
+$('camBack').onclick = () => { $('main').classList.remove('off'); $('cam').classList.remove('on'); $('cam').parentNode.classList.remove('camOn'); };
+
 // ================= Bucle =================
 const clock = new THREE.Clock(); let T = 0, liveTick = 0;
 function frame() {
@@ -725,13 +797,14 @@ function begin(sound) {
 $('go').dataset.wait = 1; $('go').textContent = 'Cargando atletas…'; $('go').disabled = true; $('goMute').disabled = true;
 vrmReady.then(() => { delete $('go').dataset.wait; $('go').textContent = 'Empezar con sonido'; $('go').disabled = false; $('goMute').disabled = false; });
 $('go').onclick = () => begin(true);
+$('camGo').onclick = () => { camSay('¡A correr! Trota en el sitio y salta en las vallas', true); begin(true); };
 $('goMute').onclick = () => begin(false);
 $('bSkip').onclick = () => { reset(); go('marks'); };
 $('bAgain').onclick = () => { reset(); go('intro'); };
 $('bSnd').onclick = () => { const on = SND.toggle(); $('bSnd').textContent = 'Sonido: ' + (on ? 'sí' : 'no'); };
 const TEST = { i: 0, g: 'idle' };
 POSES.runA = () => POSES.run(Math.PI / 2, 1); POSES.runB = () => POSES.run(0, 1); POSES.hurdleT = () => POSES.hurdle();
-window.MVD = { R: RUNNERS, test: (i, g, side) => { TEST.i = i; TEST.g = g; TEST.side = !!side; phase = 'test'; pt = 0; ['title','lower','big','cue','hud','clock','pace','phone','res','banner','note'].forEach((x) => show(x, 0)); }, step: (n, d = 1 / 60) => { for (let i = 0; i < n; i++) { T += d * slow; update(d * slow, T); } }, go: (p) => { reset(); go(p); }, get phase() { return phase; }, results: () => results };
+window.MVD = { CAM, camData, R: RUNNERS, test: (i, g, side) => { TEST.i = i; TEST.g = g; TEST.side = !!side; phase = 'test'; pt = 0; ['title','lower','big','cue','hud','clock','pace','phone','res','banner','note'].forEach((x) => show(x, 0)); }, step: (n, d = 1 / 60) => { for (let i = 0; i < n; i++) { T += d * slow; update(d * slow, T); } }, go: (p) => { reset(); go(p); }, get phase() { return phase; }, results: () => results };
 </script>
 </body>
 </html>
