@@ -125,9 +125,13 @@
     // Con respuesta (id primero)
     httpGet: function (id, url, headersJson, mode) {
       xhr('GET', url, hdr(headersJson), null, 'arraybuffer').then(function (r) {
-        var text = bytesToText(r.body);
-        if (mode === 'file') reply(id, r.status < 400, { status: r.status, path: blobUrl(text) });
-        else reply(id, r.status < 400, { status: r.status, text: text });
+        if (mode === 'file') {
+          // Lista grande: se pasa tal cual (sin copiarla a texto) para no gastar el doble de memoria; solo .gz se descomprime
+          var u = new Uint8Array(r.body || new ArrayBuffer(0)), gz = u.length > 2 && u[0] === 0x1f && u[1] === 0x8b;
+          reply(id, r.status < 400, { status: r.status, path: gz ? blobUrl(bytesToText(r.body)) : URL.createObjectURL(new Blob([r.body], { type: 'text/plain;charset=utf-8' })) });
+          return;
+        }
+        reply(id, r.status < 400, { status: r.status, text: bytesToText(r.body) });
       }).catch(function (e) { reply(id, false, e.message); });
     },
     httpPost: function (id, url, body, ct) { xhr('POST', url, { 'Content-Type': ct || 'application/x-www-form-urlencoded' }, body).then(function (r) { reply(id, true, { status: r.status, text: r.body }); }).catch(function (e) { reply(id, false, e.message); }); },

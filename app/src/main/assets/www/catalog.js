@@ -1949,8 +1949,8 @@
       var data = { progs: {}, names: {} };
       return Promise.all(lists.map(function (l) {
         var ids = S.live.filter(function (i) { return i.list === l.id && i.tvg; }).map(function (i) { return i.tvg; });
-        return MV.call('epg', [l.epg, JSON.stringify(ids.length > 3000 ? [] : ids), 36]).then(function (r) {
-          return fetch(r.path).then(function (x) { return x.json(); }).then(function (j) {
+        return MV.heavy(function () { return MV.call('epg', [l.epg, JSON.stringify(ids.length > 3000 ? [] : ids), 36]); }).then(function (r) {
+          return MV.readPath(r.path, true).then(function (j) {
             Object.keys(j.progs || {}).forEach(function (k) { data.progs[k.toLowerCase()] = (data.progs[k.toLowerCase()] || []).concat(j.progs[k]); });
             Object.keys(j.channels || {}).forEach(function (k) { data.names[MV.norm(j.channels[k].n)] = k.toLowerCase(); });
           });

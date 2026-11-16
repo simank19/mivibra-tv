@@ -131,8 +131,29 @@
   /** Archivos grandes (listas M3U, JSON de Xtream): se guardan en disco y se leen con fetch. */
   MV.getBig = function (url, headers) {
     if (!A) return webFetch(url, headers);
-    return call('httpGet', [url, JSON.stringify(headers || {}), 'file']).then(function (d) {
-      return fetch(d.path).then(function (r) { return r.text(); });
+    return MV.heavy(function () {
+      return call('httpGet', [url, JSON.stringify(headers || {}), 'file']).then(function (d) { return MV.readPath(d.path); });
+    });
+  };
+  /** Lee un archivo que dejó el puente y, si es un blob (TV Samsung/LG), lo libera de la memoria. */
+  MV.readPath = function (path, json) {
+    return fetch(path).then(function (r) { return json ? r.json() : r.text(); }).then(function (v) {
+      if (/^blob:/.test(path || '')) { try { URL.revokeObjectURL(path); } catch (e) {} }
+      return v;
+    }, function (e) { if (/^blob:/.test(path || '')) { try { URL.revokeObjectURL(path); } catch (x) {} } throw e; });
+  };
+  /** Descargas pesadas (listas grandes, guías): en TV Samsung/LG van de una en una, porque el navegador
+      del TV tiene poca memoria y varias listas grandes a la vez lo cerraban (LG) o lo dejaban sin cargar (Samsung). */
+  var HV = { n: 0, q: [] };
+  MV.heavy = function (job) {
+    var max = MV.device && MV.device.webtv ? 1 : 64;
+    return new Promise(function (res, rej) {
+      function run() {
+        HV.n++;
+        var p; try { p = Promise.resolve(job()); } catch (e) { p = Promise.reject(e); }
+        p.then(res, rej).then(function () { HV.n--; var nx = HV.q.shift(); if (nx) setTimeout(nx, MV.device && MV.device.webtv ? 150 : 0); });
+      }
+      if (HV.n < max) run(); else HV.q.push(run);
     });
   };
   MV.getJSON = function (url, headers, big) {
