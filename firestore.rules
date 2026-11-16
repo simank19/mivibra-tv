@@ -29,6 +29,22 @@ service cloud.firestore {
       allow read, delete: if admin();
       allow update: if admin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
     }
+    // MiVibra Movimiento: el avatar 3D (.vrm) de cada usuario, en trozos de menos de 1 MB.
+    // Lo escribe solo su dueño; lo pueden leer los usuarios permitidos (para verlo en el público y en partidas en línea).
+    match /avatars/{uid} {
+      allow read: if allowed();
+      allow write: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'parts', 'size', 'at'])
+        && request.resource.data.uid == uid && request.resource.data.parts is int && request.resource.data.parts <= 24
+        && request.resource.data.size is int && request.resource.data.size <= 22000000 && str(request.resource.data, 'name', 30);
+      allow delete: if admin() || (signedIn() && request.auth.uid == uid);
+      match /parts/{n} {
+        allow read: if allowed();
+        allow write: if signedIn() && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['n', 'b']) && request.resource.data.b is bytes;
+        allow delete: if admin() || (signedIn() && request.auth.uid == uid);
+      }
+    }
     // Listas propias de cada usuario: él las guarda en su documento; el superadministrador las lee para decidir si las usa.
     match /userLists/{uid} {
       allow read: if admin() || (signedIn() && request.auth.uid == uid);

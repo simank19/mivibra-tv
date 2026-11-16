@@ -103,6 +103,33 @@
   // ---------- Guardar el avatar para los juegos (IndexedDB, mismo sitio que MiVibra Movimiento) ----------
   function db() { return new Promise((res, rej) => { const r = indexedDB.open('mivibra-movimiento', 1); r.onupgradeneeded = () => r.result.createObjectStore('avatar'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
   async function saveAvatar(buf, name) { const d = await db(); await new Promise((res, rej) => { const t = d.transaction('avatar', 'readwrite'); t.objectStore('avatar').put({ vrm: buf, name, at: Date.now() }, 'me'); t.oncomplete = res; t.onerror = () => rej(t.error); }); }
+  // Dentro de la app MiVibra (iframe): el avatar se guarda en la cuenta a través de la app
+  const IN_APP = window.parent !== window;
+  function parentSave(buf, name) {
+    return new Promise((res, rej) => {
+      const t = setTimeout(() => { window.removeEventListener('message', on); rej(new Error('La app no respondió')); }, 120000);
+      function on(e) { if (e.source !== window.parent || !e.data || e.data.mv !== 'avatar-saved') return; clearTimeout(t); window.removeEventListener('message', on); e.data.ok ? res() : rej(new Error(e.data.msg || 'No se pudo guardar en tu cuenta')); }
+      window.addEventListener('message', on);
+      window.parent.postMessage({ mv: 'avatar-save', vrm: buf, name }, '*', [buf]);
+    });
+  }
+  // Texturas a 1024 px como máximo: el avatar queda en 3–6 MB y carga rápido en el TV
+  async function shrink(buf, max) {
+    const { readGlb, writeGlb } = await import(new URL('./lib/vrm-fix.js', SCRIPT_URL || location.href).href);
+    const doc = readGlb(buf);
+    for (const img of (doc.json.images || [])) {
+      if (img.bufferView === undefined) continue;
+      const bmp = await createImageBitmap(new Blob([doc.views[img.bufferView]], { type: img.mimeType }));
+      const s = Math.min(1, max / Math.max(bmp.width, bmp.height)); if (s >= 1) continue;
+      const c = document.createElement('canvas'); c.width = Math.round(bmp.width * s); c.height = Math.round(bmp.height * s);
+      c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+      const mime = img.mimeType === 'image/png' ? 'image/png' : 'image/jpeg';
+      const blob = await new Promise((r) => c.toBlob(r, mime, 0.88));
+      doc.views[img.bufferView] = new Uint8Array(await blob.arrayBuffer()); img.mimeType = mime;
+    }
+    return writeGlb(doc);
+  }
+  const SCRIPT_URL = document.currentScript ? document.currentScript.src : '';
   function toast(msg, ms) { let el = document.getElementById('mv-toast'); if (!el) { el = document.createElement('div'); el.id = 'mv-toast'; document.body.appendChild(el); } el.innerHTML = msg; el.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('on'), ms || 3200); }
 
   function brand() {
@@ -113,7 +140,7 @@
     }
     const bar = document.getElementById('bar');
     if (bar && !document.getElementById('mv-save')) {
-      const save = document.createElement('button'); save.id = 'mv-save'; save.className = 'main'; save.textContent = 'Guardar en MiVibra';
+      const save = document.createElement('button'); save.id = 'mv-save'; save.className = 'main'; save.textContent = IN_APP ? 'Guardar en mi cuenta' : 'Guardar en MiVibra';
       const play = document.createElement('a'); play.id = 'mv-play'; play.href = '../vallas/'; play.textContent = 'Probar en 100 m vallas';
       bar.insertBefore(save, bar.children[1]);
       bar.insertBefore(play, save.nextSibling);
@@ -122,10 +149,12 @@
         if (!window.MV_EXPORT) { toast('El editor todavía está cargando'); return; }
         const label = save.textContent; save.disabled = true; save.textContent = 'Guardando…';
         try {
-          const buf = await window.MV_EXPORT();
+          let buf = await window.MV_EXPORT();
+          try { buf = await shrink(buf, 1024); } catch (e) { /* si no se puede reducir, se guarda tal cual */ }
           const name = (document.getElementById('name').value || 'Mi avatar').trim();
-          await saveAvatar(buf, name);
-          toast('<b>¡Avatar guardado!</b> Ya corre contigo en MiVibra Movimiento. <a href="../vallas/">Probar ahora</a>', 5000);
+          await saveAvatar(buf.slice(0), name);
+          if (IN_APP) { save.textContent = 'Subiendo a tu cuenta…'; await parentSave(buf, name); toast('<b>¡Avatar guardado en tu cuenta!</b> Te sigue al TV, al celular y al PC. <a href="../vallas/">Probar ahora</a>', 5500); }
+          else toast('<b>¡Avatar guardado!</b> Ya corre contigo en MiVibra Movimiento. <a href="../vallas/">Probar ahora</a>', 5000);
           play.classList.add('ready');
         } catch (e) { toast('No se pudo guardar: ' + (e && e.message || e)); }
         finally { save.disabled = false; save.textContent = label; }

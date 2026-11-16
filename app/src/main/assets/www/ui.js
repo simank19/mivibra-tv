@@ -100,6 +100,7 @@
     if (Date.now() - (MV._typedAt || 0) < 900) return true;
     if (MV.tourOpen && MV.tourOpen()) { MV.tourClose(); return true; }
     if (MV.ytPlayer && MV.ytPlayer.isOpen()) { MV.ytPlayer.close(); return true; }
+    if (MV.mvFrame && MV.mvFrame.open()) { MV.mvFrame.close(); return true; }
     if (MV.streamOpen && MV.streamOpen()) { MV.streamClose(); return true; }
     if (MV.modalOpen()) { MV.closeModal(); return true; }
     if (yearSel[view.name]) { yearSel[view.name] = ''; MV.rerender(); return true; }   // salir de "Ver todo" de un año
@@ -4998,6 +4999,7 @@
       '<button class="utile glass f" data-act="nav" data-arg="streams" data-fid="u-streams"><span class="uic">' + IC.play + '</span><b>Twitch y Kick</b><span>Transmisiones en vivo aquí mismo</span></button>' +
       '<button class="utile glass f" data-act="openDiag" data-fid="u-diag"><span class="uic">' + IC.settings + '</span><b>' + (MV.device.desktop ? 'Soporte MiVibra PC' : MV.device.tv ? 'Soporte MiVibra · TV box' : 'Diagnóstico MiVibra') + '</b><span>' + (MV.device.desktop ? 'Diagnóstico, limpieza y optimización de Windows' : 'Revisa y optimiza este equipo') + '</span></button>' +
       '<button class="utile glass f" data-act="nav" data-arg="photos" data-fid="u-photos"><span class="uic">' + IC.image + '</span><b>Fotos</b><span>Galería, USB, Drive, MEGA o desde el celular</span></button>' +
+      (MV.VIEWS.movimiento ? '<button class="utile glass f" data-act="nav" data-arg="movimiento" data-fid="u-mvm"><span class="uic">' + (IC.run || IC.games) + '</span><b>MiVibra Movimiento</b><span>Deportes con tu avatar 3D</span></button>' : '') +
       '<button class="utile glass f" data-act="nav" data-arg="achievements" data-fid="u-ach"><span class="uic">' + IC.trophy + '</span><b>Logros</b><span>' + (MV.ach ? 'Nivel ' + MV.ach.level().n + ' · ' + MV.ach.level().title : 'Tu nivel y medallas') + '</span></button>' +
       '<button class="utile glass f" data-act="adultOpen" data-fid="u-adult"><span class="uic">' + IC.lock + '</span><b>+18</b><span>' + (MV.adultOk() ? 'Desbloqueado' : 'Protegido con PIN') + '</span></button>' +
       (A && A.remoteFind && !(MV.device && MV.device.tv) ? '<button class="utile glass f" data-act="nav" data-arg="phoneRemote" data-fid="u-phremote"><span class="uic">' + IC.phone + '</span><b>Control de la TV</b><span>Usa este celular como control de tu TV</span></button>' : '') +

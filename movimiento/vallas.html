@@ -396,6 +396,16 @@ const ME = RUNNERS.find((r) => r.me);
 // ================= Avatares VRM: el tuyo (guardado en el editor) y los rivales =================
 const RIVAL_FILES = { Laura: 'laura', 'Andrés': 'andres', Valentina: 'valentina', Camilo: 'camilo', 'Sofía': 'sofia' };
 function readSaved() { return new Promise((res) => { try { const r = indexedDB.open('mivibra-movimiento', 1); r.onupgradeneeded = () => r.result.createObjectStore('avatar'); r.onerror = () => res(null); r.onsuccess = () => { try { const t = r.result.transaction('avatar', 'readonly').objectStore('avatar').get('me'); t.onsuccess = () => res(t.result || null); t.onerror = () => res(null); } catch (e) { res(null); } }; } catch (e) { res(null); } }); }
+// Dentro de la app MiVibra: tu avatar viene de tu cuenta (la app lo descarga y lo pasa aquí)
+function fromApp() {
+  if (window.parent === window) return Promise.resolve(null);
+  return new Promise((res) => {
+    const t = setTimeout(() => { window.removeEventListener('message', on); res(null); }, 45000);
+    function on(e) { if (e.source !== window.parent || !e.data || e.data.mv !== 'avatar') return; clearTimeout(t); window.removeEventListener('message', on); res(e.data.vrm ? e.data : null); }
+    window.addEventListener('message', on);
+    window.parent.postMessage({ mv: 'avatar-get' }, '*');
+  });
+}
 const vrmLoader = new GLTFLoader(); vrmLoader.register((p) => new VRMLoaderPlugin(p));
 let vrmLoaded = 0;
 function attachVRM(r, buf) {
@@ -409,7 +419,8 @@ function attachVRM(r, buf) {
   }, () => res(false)));
 }
 const vrmReady = Promise.all(RUNNERS.map(async (r) => {
-  if (r.me) { const saved = await readSaved(); if (saved && saved.vrm) { r.name = (saved.name || r.name).slice(0, 18); return attachVRM(r, saved.vrm); } r.name = 'Tú'; try { return attachVRM(r, await (await fetch('../avatars/tu.vrm')).arrayBuffer()); } catch (e) { return false; } }
+  if (r.me) { const acc = await fromApp(); if (acc && acc.vrm) { r.name = (acc.name || r.name).slice(0, 18); return attachVRM(r, acc.vrm); }
+    const saved = await readSaved(); if (saved && saved.vrm) { r.name = (saved.name || r.name).slice(0, 18); return attachVRM(r, saved.vrm); } r.name = 'Tú'; try { return attachVRM(r, await (await fetch('../avatars/tu.vrm')).arrayBuffer()); } catch (e) { return false; } }
   const f = RIVAL_FILES[r.name]; if (!f) return false;
   try { const buf = await (await fetch('../avatars/' + f + '.vrm')).arrayBuffer(); return attachVRM(r, buf); } catch (e) { return false; }
 }));
