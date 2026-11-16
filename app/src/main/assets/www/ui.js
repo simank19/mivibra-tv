@@ -51,11 +51,42 @@
   }
 
   // ---------- Navegación entre pantallas ----------
+  /** Qué se desplaza: en TV y PC la zona principal; en el celular a veces es la página entera. */
+  function scroller() {
+    var m = document.querySelector('.main');
+    if (m && m.scrollHeight > m.clientHeight + 4 && getComputedStyle(m).overflowY !== 'visible') return m;
+    return document.scrollingElement || document.documentElement;
+  }
+  /** Al volver: misma posición y misma tarjeta enfocada (se reintenta mientras la lista termina de dibujarse). */
+  function restoreSpot(prev) {
+    var t0 = Date.now(), done = false;
+    (function step() {
+      if (done) return;
+      var sc = scroller(), el = prev.focus ? (document.querySelector('[data-fid="' + prev.focus + '"]') || document.getElementById(prev.focus)) : null;
+      sc.style.scrollBehavior = 'auto';
+      if (prev.scroll) sc.scrollTop = prev.scroll;
+      if (el) {
+        try { el.focus({ preventScroll: true }); } catch (e) {}
+        var r = el.getBoundingClientRect();
+        if (r.bottom < 0 || r.top > window.innerHeight) { try { el.scrollIntoView({ block: 'center' }); } catch (e) {} }
+      }
+      sc.style.scrollBehavior = '';
+      // Listo cuando la tarjeta está y el desplazamiento llegó a donde estaba
+      if ((el || !prev.focus) && Math.abs(sc.scrollTop - (prev.scroll || 0)) < 30) done = true;
+      if (!done && Date.now() - t0 < 1500) return requestAnimationFrame(step);
+      // Sin la tarjeta de antes: se enfoca la primera que se ve en pantalla (sin mover la lista)
+      var ae = document.activeElement;
+      if (!ae || ae === document.body || !ae.closest('.view-in, .side, .topbar')) {
+        var vis = Array.prototype.filter.call(document.querySelectorAll('.view-in .f'), function (x) { var r = x.getBoundingClientRect(); return r.top >= 0 && r.bottom <= window.innerHeight && r.width; })[0];
+        if (vis) { try { vis.focus({ preventScroll: true }); } catch (e) {} } else MV.focusFirst();
+      }
+    })();
+  }
   MV.go = function (name, arg, opts) {
     opts = opts || {};
     if (!opts.replace && view.name !== 'boot' && !(view.name === name && view.arg === arg)) {
       var f = document.activeElement;
-      stack.push({ name: view.name, arg: view.arg, focus: f && f.id ? f.id : (f && f.dataset ? f.dataset.fid : null), scroll: (document.querySelector('.main') || {}).scrollTop || 0 });
+      stack.push({ name: view.name, arg: view.arg, focus: f && f.id ? f.id : (f && f.dataset ? f.dataset.fid : null), scroll: scroller().scrollTop || 0 });
       if (stack.length > 30) stack.shift();
     }
     view = { name: name, arg: arg };
@@ -75,9 +106,8 @@
     if (stack.length) {
       var prev = stack.pop();
       view = { name: prev.name, arg: prev.arg };
-      render();
-      var main = document.querySelector('.main'); if (main) main.scrollTop = prev.scroll || 0;
-      if (prev.focus) { var el = document.querySelector('[data-fid="' + prev.focus + '"]') || document.getElementById(prev.focus); if (el) { el.focus({ preventScroll: true }); } }
+      render(true);
+      restoreSpot(prev);
       return true;
     }
     var home = MV.isKids() ? 'kids' : 'home';
@@ -1570,12 +1600,36 @@
   function adultItems() { return MV.adultOk() ? S.items.filter(function (i) { return i.adult; }) : []; }
   VIEWS.adult = function () {
     if (!MV.adultOk()) return top('Adultos') + '<div class="empty glass"><h2>Contenido bloqueado</h2><p class="muted">Ábrelo desde Utilidades con el PIN.</p><div class="btns" style="justify-content:center"><button class="btn f" data-act="adultOpen" data-autofocus>Ingresar PIN</button></div></div>';
-    var all = adultItems(), live = all.filter(function (i) { return i.type === 'live'; }), vod = all.filter(function (i) { return i.type !== 'live'; });
+    var all = adultItems();
     var head = top('Adultos', '<button class="pill f" data-act="adultLock">' + IC.lock.replace('<svg', '<svg width="18" height="18"') + 'Bloquear</button>') +
       '<p class="muted" style="margin:0 0 12px">Se bloquea solo a los 30 minutos o al tocar Bloquear.</p>';
     if (!all.length) return head + '<div class="empty glass"><h2>No hay contenido +18 en tus listas</h2></div>';
-    return head + (live.length ? '<h3 style="margin:8px 0">Canales <small class="muted">' + live.length + '</small></h3>' + grid(live, 'ch', 'adult-live') : '') +
+    // Buscador y filtros propios de esta sección (no aparecen en el buscador general)
+    var q = MV.norm(ADQ.trim()), groups = {};
+    all.forEach(function (i) { var g = (i.group || '').trim(); if (g && (ADT === 'all' || (ADT === 'live') === (i.type === 'live'))) groups[g] = (groups[g] || 0) + 1; });
+    var gnames = Object.keys(groups).sort(function (a, b) { return groups[b] - groups[a]; }).slice(0, 40);
+    if (ADG && !groups[ADG]) ADG = '';
+    var list = all.filter(function (i) {
+      return (ADT === 'all' || (ADT === 'live') === (i.type === 'live')) && (!ADG || (i.group || '').trim() === ADG) && (!q || MV.norm(i.name || '').indexOf(q) >= 0 || MV.norm(i.group || '').indexOf(q) >= 0);
+    });
+    if (ADS === 'az') list = list.slice().sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+    else if (ADS === 'new') list = list.slice().sort(function (a, b) { return (b.added || 0) - (a.added || 0); });
+    var live = list.filter(function (i) { return i.type === 'live'; }), vod = list.filter(function (i) { return i.type !== 'live'; });
+    var nLive = all.filter(function (i) { return i.type === 'live'; }).length, nVod = all.length - nLive;
+    var bar = '<div class="chips" style="align-items:center">' +
+      [['all', 'Todo', all.length], ['live', 'Canales', nLive], ['vod', 'Películas y series', nVod]].filter(function (t) { return t[0] === 'all' || t[2]; }).map(function (t) { return '<button class="chip f' + (ADT === t[0] ? ' on' : '') + '" data-act="adultType" data-arg="' + t[0] + '">' + t[1] + ' <small>' + t[2] + '</small></button>'; }).join('') +
+      [['', 'Orden de la lista'], ['az', 'A–Z'], ['new', 'Recientes']].map(function (o) { return '<button class="chip f' + (ADS === o[0] ? ' on' : '') + '" data-act="adultSort" data-arg="' + o[0] + '">' + o[1] + '</button>'; }).join('') +
+      '<input class="in f" id="adultQ" placeholder="Buscar en Adultos…" value="' + esc(ADQ) + '" style="max-width:300px;margin-left:auto" autocomplete="off" enterkeyhint="search"></div>' +
+      (gnames.length > 1 ? '<div class="chips"><button class="chip f' + (!ADG ? ' on' : '') + '" data-act="adultGroup" data-arg="">Todas las categorías</button>' + gnames.map(function (g) { return '<button class="chip f' + (ADG === g ? ' on' : '') + '" data-act="adultGroup" data-arg="' + esc(g) + '">' + esc(g) + ' <small>' + groups[g] + '</small></button>'; }).join('') + '</div>' : '');
+    if (!list.length) return head + bar + '<div class="empty glass"><h2>Nada con ese filtro</h2><p class="muted">Prueba otra palabra o quita los filtros.</p><div class="btns" style="justify-content:center"><button class="btn f" data-act="adultClear">Quitar filtros</button></div></div>';
+    return head + bar + (live.length ? '<h3 style="margin:8px 0">Canales <small class="muted">' + live.length + '</small></h3>' + grid(live, 'ch', 'adult-live') : '') +
       (vod.length ? '<h3 style="margin:18px 0 8px">Películas y series <small class="muted">' + vod.length + '</small></h3>' + grid(vod, 'poster', 'adult-vod') : '');
+  };
+  var ADQ = '', ADT = 'all', ADG = '', ADS = '';
+  VIEWS.adult.after = function () {
+    var q = document.getElementById('adultQ'); if (!q) return;
+    q.addEventListener('input', function () { clearTimeout(q.t); q.t = setTimeout(function () { ADQ = q.value; limits['adult-live'] = limits['adult-vod'] = 60; MV.rerender(); var n = document.getElementById('adultQ'); if (n) { n.focus(); n.setSelectionRange(n.value.length, n.value.length); } }, 350); });
+    q.addEventListener('keydown', function (e) { if (e.key === 'Enter') { MV._typedAt = Date.now(); q.blur(); } });
   };
   VIEWS.docs = function () { return catalogView('docs', 'Documentales', S.items.filter(function (i) { return i.doc && i.type !== 'live'; })); };
 
@@ -4093,6 +4147,10 @@
   };
   ACT.consoleOpen = function () { MV.save('gamesClassic', false); if (MV.console) MV.console.open(); };
   Object.assign(ACT, ACT_EXTRA);
+  ACT.adultType = function (t) { ADT = t; ADG = ''; limits['adult-live'] = limits['adult-vod'] = 60; MV.rerender(); };
+  ACT.adultGroup = function (g) { ADG = g || ''; limits['adult-live'] = limits['adult-vod'] = 60; MV.rerender(); };
+  ACT.adultSort = function (v) { ADS = v || ''; MV.rerender(); };
+  ACT.adultClear = function () { ADQ = ''; ADT = 'all'; ADG = ''; ADS = ''; MV.rerender(); };
   Object.assign(ACT, UL_ACTS);
   MV.ACT = ACT;
   // Búsqueda por voz con el botón del control: en Juegos busca juegos, en lo demás busca películas, series y canales
