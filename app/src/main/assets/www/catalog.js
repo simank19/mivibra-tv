@@ -372,7 +372,11 @@
   /** Servidor sin /get.php ni parámetros (conserva la carpeta si la tiene: http://srv.com/iptv) */
   function xtBase(list) { return cleanHost(list.host); }
   function xtHdr(list) { return list.ua ? { 'User-Agent': list.ua } : null; }
-  function xtGet(list, action, extra, big) { return MV.getJSON(xtApi(list, action, extra), xtHdr(list), big); }
+  function xtGet(list, action, extra, big) {
+    // Pedidos chicos al reproducir (capítulos de una serie, ficha): vía rápida, sin esperar a que terminen de bajar las listas
+    if (!big && /^get_(series|vod)_info$/.test(action || '') && MV.getSmallJSON) return MV.getSmallJSON(xtApi(list, action, extra), xtHdr(list));
+    return MV.getJSON(xtApi(list, action, extra), xtHdr(list), big);
+  }
   function xtApi(list, action, extra) {
     return xtBase(list) + '/player_api.php?username=' + encodeURIComponent(list.user) + '&password=' + encodeURIComponent(list.pass) + (action ? '&action=' + action : '') + (extra || '');
   }
