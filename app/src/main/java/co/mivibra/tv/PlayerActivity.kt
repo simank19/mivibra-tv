@@ -696,7 +696,7 @@ class PlayerActivity : ComponentActivity() {
         val first = current()
         http = DefaultHttpDataSource.Factory()
             .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(7000)
+            .setConnectTimeoutMs(6000)
             .setReadTimeoutMs(15000)
             .setUserAgent(first.optString("ua").ifBlank { Net.UA })
         val referer = first.optString("ref")
@@ -707,9 +707,9 @@ class PlayerActivity : ComponentActivity() {
             .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
             .setEnableDecoderFallback(true)
 
-        // Arranca con 1 s en memoria (antes 2,5 s) y sigue llenando el búfer mientras se ve
+        // Arranca con medio segundo en memoria (antes 1 s) y sigue llenando el búfer mientras se ve
         val load = androidx.media3.exoplayer.DefaultLoadControl.Builder()
-            .setBufferDurationsMs(15_000, 50_000, 1_000, 2_500)
+            .setBufferDurationsMs(15_000, 50_000, 500, 2_000)
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
         val p = ExoPlayer.Builder(this, renderers)

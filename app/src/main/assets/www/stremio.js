@@ -241,12 +241,22 @@
     }
     return Promise.resolve(null);
   }
+  // Enlaces ya pedidos: se guardan 15 min (así Reproducir es instantáneo si se pidieron al abrir la ficha)
+  var ST_MEM = {};
   MV.stremioStreams = function (type, id, only) {
-    return rawStreams(type, id, only).then(function (st) {
+    var k = type + '|' + id + '|' + (only || ''), c = ST_MEM[k];
+    if (c && Date.now() - c.t < 15 * 60e3) return c.p;
+    var p = rawStreams(type, id, only).then(function (st) {
       if (st.length) return st;
       return altId(type, id).then(function (a) { return a && a !== id ? rawStreams(type, a, only).then(function (r) { if (!r.length) r.failed = (r.failed || 0) + (st.failed || 0); return r; }) : st; });
     });
+    ST_MEM[k] = { t: Date.now(), p: p };
+    p.then(function (st) { if (!st.length) delete ST_MEM[k]; }, function () { delete ST_MEM[k]; });
+    var ks = Object.keys(ST_MEM); if (ks.length > 60) delete ST_MEM[ks[0]];
+    return p;
   };
+  /** Pide los enlaces en segundo plano (al abrir la ficha), para que al darle Reproducir ya estén. */
+  MV.stremioPrefetch = function (type, id) { if (id && lists().length) MV.stremioStreams(type, id).catch(function () {}); };
   /** Un addon que tarda demasiado no frena a los demás: a los 12 s se sigue sin él. */
   function withTimeout(p, ms) { return Promise.race([p, new Promise(function (_, rej) { setTimeout(function () { rej(new Error('tardó demasiado')); }, ms); })]); }
   function rawStreams(type, id, only) {

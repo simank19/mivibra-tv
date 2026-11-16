@@ -1650,6 +1650,17 @@
   function plotMore() { var el = document.getElementById('plot'); if (el) { el.classList.toggle('clamp'); plotMoreCheck(); } }
   VIEWS.detail.after = function (key) {
     var it = S.byKey[key] || MV.reg[key]; if (!it) return;
+    // Reproducción instantánea: los enlaces de los addons se piden ya (película o el capítulo que sigue)
+    if (MV.stremioPrefetch) setTimeout(function () {
+      if (it.st && it.st.id && it.type !== 'series') MV.stremioPrefetch(it.st.type, it.st.id);
+      else if (it.episodes && it.episodes.length) {
+        // El que toca: después del último que se vio (o el primero)
+        var nx = 0;
+        it.episodes.forEach(function (ep, k) { var pr = MV.progressOf(it.key + '#' + ep.season + 'x' + ep.ep); if (pr) nx = pr.dur && pr.pos / pr.dur > 0.9 ? k + 1 : k; });
+        var e = it.episodes[Math.min(nx, it.episodes.length - 1)];
+        if (e && !e.url && e.stId) MV.stremioPrefetch('series', e.stId);
+      }
+    }, 400);
     setPlot(it.plot || '');
     // Si la ficha tarda mucho, no se queda en "Buscando ficha…" para siempre
     Promise.race([MV.meta(it), new Promise(function (r) { setTimeout(function () { r(null); }, 15000); })]).catch(function () { return null; }).then(function (m) {
