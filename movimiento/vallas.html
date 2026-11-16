@@ -433,18 +433,37 @@ function attachVRM(r, buf) {
   return new Promise((res) => vrmLoader.parse(buf, '', (g) => {
     const vrm = g.userData.vrm; if (!vrm) return res(false);
     try { VRMUtils.removeUnnecessaryVertices(vrm.scene); } catch (e) {}
-    vrm.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
+    vrm.scene.traverse((o) => {
+      if (!o.isMesh) return;
+      o.castShadow = true; o.frustumCulled = false;
+      if (Q === 0) {
+        // TV: material más simple y, en los rivales, sin gestos de la cara (ahorra mucha memoria de video)
+        const lite = (m) => m && m.isMeshStandardMaterial ? new THREE.MeshLambertMaterial({ map: m.map, color: m.color, transparent: m.transparent, opacity: m.opacity, alphaTest: m.alphaTest, side: m.side, depthWrite: m.depthWrite }) : m;
+        o.material = Array.isArray(o.material) ? o.material.map(lite) : lite(o.material);
+        if (!r.me && o.geometry.morphAttributes && Object.keys(o.geometry.morphAttributes).length) { o.geometry.morphAttributes = {}; o.morphTargetInfluences = undefined; o.morphTargetDictionary = undefined; }
+      }
+    });
+    if (Q === 0 && !r.me) vrm.expressionManager = undefined;
     S.add(vrm.scene); r.vrm = vrm; r.vrmRest = vrm.humanoid.getNormalizedBoneNode('hips').position.y; r.A.visible = false;
     vrmLoaded++; const el = document.getElementById('go'); if (el && el.dataset.wait) el.textContent = 'Cargando atletas… ' + vrmLoaded + '/' + RUNNERS.length;
     res(true);
   }, () => res(false)));
 }
-const vrmReady = Promise.all(RUNNERS.map(async (r) => {
+const nextFrame = () => new Promise((res) => requestAnimationFrame(() => setTimeout(res, 0)));
+async function loadOne(r) {
   if (r.me) { const acc = await fromApp(); if (acc && acc.vrm) { r.name = (acc.name || r.name).slice(0, 18); return attachVRM(r, acc.vrm); }
     const saved = await readSaved(); if (saved && saved.vrm) { r.name = (saved.name || r.name).slice(0, 18); return attachVRM(r, saved.vrm); } r.name = 'Tú'; try { return attachVRM(r, await (await fetch('../avatars/tu.vrm')).arrayBuffer()); } catch (e) { return false; } }
   const f = RIVAL_FILES[r.name]; if (!f) return false;
   try { const buf = await (await fetch('../avatars/' + f + '.vrm')).arrayBuffer(); return attachVRM(r, buf); } catch (e) { return false; }
-}));
+}
+// Uno por uno, dejando respirar la pantalla entre cada atleta, y preparando sus sombreadores sin congelar el TV
+const vrmReady = (async () => {
+  for (const r of RUNNERS) {
+    await nextFrame();
+    const ok = await loadOne(r);
+    if (ok && r.vrm) { try { await R.compileAsync(r.vrm.scene, cam, S); } catch (e) {} }
+  }
+})();
 let myVRM = null;
 const FINGERS = ['Index', 'Middle', 'Ring', 'Little'], SEGS = ['Proximal', 'Intermediate', 'Distal'];
 function fingers(H, side, fist, point) {
