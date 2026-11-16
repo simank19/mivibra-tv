@@ -215,7 +215,20 @@ sub onLoad(ev as Object)
         m.auth = invalid
         regDel("auth")
         toast("La sesión se cerró. Vuelve a entrar desde Ajustes.")
+    else if m.auth <> invalid and r.auth = invalid and r.user = invalid then
+        ' La cuenta sigue guardada: no se pudo conectar ahora (red lenta al prender). Se reintenta sola.
+        if m.authRetry = invalid then m.authRetry = 0
+        m.authRetry = m.authRetry + 1
+        if m.authRetry <= 6 then
+            toast("Conectando con tu cuenta…")
+            m.retryT = CreateObject("roSGNode", "Timer")
+            m.retryT.duration = 8 * m.authRetry
+            m.retryT.repeat = false
+            m.retryT.ObserveField("fire", "load")
+            m.retryT.control = "start"
+        end if
     end if
+    if r.user <> invalid then m.authRetry = 0
     if r.auth <> invalid then
         m.auth = r.auth
         regSet("auth", r.auth)

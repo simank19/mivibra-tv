@@ -100,10 +100,21 @@ function fbAuth(auth as Dynamic) as Dynamic
     now = nowSec()
     if auth.id <> invalid and auth.exp <> invalid and auth.exp > now + 300 then return auth
     cfg = mvConfig()
-    r = httpJson("POST", "https://securetoken.googleapis.com/v1/token?key=" + cfg.apiKey, "grant_type=refresh_token&refresh_token=" + enc(auth.refresh), formHdr())
-    if r.code = 400 or r.code = 401 then return { revoked: true }
-    if r.code <> 200 or r.j = invalid then return invalid
-    return { id: r.j.id_token, refresh: r.j.refresh_token, uid: r.j.user_id, email: auth.email, exp: now + Val(toS(r.j.expires_in)) }
+    ' Al abrir, la red del Roku a veces todavía no está lista: se reintenta antes de rendirse
+    for tries = 1 to 4
+        r = httpJson("POST", "https://securetoken.googleapis.com/v1/token?key=" + cfg.apiKey, "grant_type=refresh_token&refresh_token=" + enc(auth.refresh), formHdr())
+        if r.code = 200 and r.j <> invalid and r.j.id_token <> invalid then
+            return { id: r.j.id_token, refresh: r.j.refresh_token, uid: r.j.user_id, email: auth.email, exp: Int(nowSec() + Val(toS(r.j.expires_in))) }
+        end if
+        ' Solo se cierra la sesión si Google dice que esa sesión ya no vale (no por fallas de red o del servidor)
+        if r.code = 400 or r.code = 401 then
+            msg = ""
+            if r.j <> invalid and r.j.error <> invalid and type(r.j.error) = "roAssociativeArray" then msg = UCase(toS(r.j.error.message))
+            if Instr(1, msg, "TOKEN_EXPIRED") > 0 or Instr(1, msg, "INVALID_REFRESH_TOKEN") > 0 or Instr(1, msg, "USER_DISABLED") > 0 or Instr(1, msg, "USER_NOT_FOUND") > 0 then return { revoked: true }
+        end if
+        sleep(1500 * tries)
+    end for
+    return invalid
 end function
 
 function fsUrl(path as String) as String
@@ -155,7 +166,7 @@ function cmdLogin(r as Object) as Object
                 if f.j <> invalid and f.j.error <> invalid and f.j.error.message <> invalid then why = " (" + f.j.error.message + ")"
                 return { error: "Firebase no aceptó la cuenta" + why + ". Revisa la configuración de MiVibra." }
             end if
-            return { auth: { id: f.j.idToken, refresh: f.j.refreshToken, uid: f.j.localId, email: f.j.email, exp: nowSec() + Val(toS(f.j.expiresIn)) } }
+            return { auth: { id: f.j.idToken, refresh: f.j.refreshToken, uid: f.j.localId, email: f.j.email, exp: Int(nowSec() + Val(toS(f.j.expiresIn))) } }
         end if
         e = ""
         if t.j <> invalid and t.j.error <> invalid then e = t.j.error
