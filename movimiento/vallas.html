@@ -9,6 +9,7 @@
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:#0e0f12;overflow:hidden;font-family:Manrope,system-ui,sans-serif;color:#fff}
 canvas{display:block}
+html.q0 .glass{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background:rgba(24,26,30,.78)!important}
 .glass{background:rgba(24,26,30,.5);border:1px solid rgba(255,255,255,.22);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 16px 40px -16px rgba(0,0,0,.6)}
 #ui{position:fixed;inset:0;pointer-events:none}
 .ctrl{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);display:flex;gap:8px;padding:8px;border-radius:99px;pointer-events:auto}
@@ -102,7 +103,7 @@ canvas{display:block}
 </div></div>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@2.0.4/dist/qrcode.js"></script>
-<script type="importmap">{"imports":{"three":"../vendor/three-0.183.2/three.module.min.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.183.2/examples/jsm/","@pixiv/three-vrm":"../vendor/three-vrm-3.5.1/three-vrm.module.min.js"}}</script>
+<script type="importmap">{"imports":{"three":"../vendor/three-0.183.2/three.module.min.js","three/addons/":"../vendor/three-0.183.2/addons/","@pixiv/three-vrm":"../vendor/three-vrm-3.5.1/three-vrm.module.min.js"}}</script>
 <script type="module">
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -155,6 +156,7 @@ Object.assign(sun.shadow.camera, { left: -16, right: 16, top: 16, bottom: -16, n
 S.add(sun, sun.target);
 // Aplica el nivel de calidad: resolución interna, sombras, brillo (bloom) y la pantalla gigante
 function applyQ() {
+  document.documentElement.classList.toggle('q0', Q === 0);
   const maxW = [1280, 1600, 2600][Q];
   R.setPixelRatio(Math.min(devicePixelRatio, Q === 2 ? 1.75 : 1, maxW / innerWidth));
   composer.setPixelRatio(R.getPixelRatio()); composer.setSize(innerWidth, innerHeight);
@@ -449,12 +451,17 @@ function attachVRM(r, buf) {
     res(true);
   }, () => res(false)));
 }
+async function cachedFetch(url) {
+  const NAME = 'mv-avatares-v1';
+  try { const c = await caches.open(NAME); const hit = await c.match(url); if (hit) return await hit.arrayBuffer(); const res = await fetch(url); if (res.ok) { c.put(url, res.clone()).catch(() => {}); return await res.arrayBuffer(); } } catch (e) {}
+  return await (await fetch(url)).arrayBuffer();
+}
 const nextFrame = () => new Promise((res) => requestAnimationFrame(() => setTimeout(res, 0)));
 async function loadOne(r) {
   if (r.me) { const acc = await fromApp(); if (acc && acc.vrm) { r.name = (acc.name || r.name).slice(0, 18); return attachVRM(r, acc.vrm); }
-    const saved = await readSaved(); if (saved && saved.vrm) { r.name = (saved.name || r.name).slice(0, 18); return attachVRM(r, saved.vrm); } r.name = 'Tú'; try { return attachVRM(r, await (await fetch('../avatars/tu.vrm')).arrayBuffer()); } catch (e) { return false; } }
+    const saved = await readSaved(); if (saved && saved.vrm) { r.name = (saved.name || r.name).slice(0, 18); return attachVRM(r, saved.vrm); } r.name = 'Tú'; try { return attachVRM(r, await cachedFetch(new URL('../avatars/tu.vrm', location.href).href)); } catch (e) { return false; } }
   const f = RIVAL_FILES[r.name]; if (!f) return false;
-  try { const buf = await (await fetch('../avatars/' + f + '.vrm')).arrayBuffer(); return attachVRM(r, buf); } catch (e) { return false; }
+  try { return attachVRM(r, await cachedFetch(new URL('../avatars/' + f + '.vrm', location.href).href)); } catch (e) { return false; }
 }
 // Uno por uno, dejando respirar la pantalla entre cada atleta, y preparando sus sombreadores sin congelar el TV
 const vrmReady = (async () => {
@@ -599,9 +606,12 @@ function show(id, on) { $(id).classList.toggle('on', !!on); }
 function title(top, big, sub) { $('title').innerHTML = `<small>${top}</small><b>${[...big].map((ch, i) => `<span style="animation-delay:${i * 0.05}s">${ch === ' ' ? '&nbsp;' : ch}</span>`).join('')}</b><i>${sub}</i>`; show('title', 1); }
 function lower(r) { $('lower').innerHTML = `<div class="dot" style="background:${r.shirt}">${r.lane + 2}</div><div><small>CARRIL ${r.lane + 2}${r.me ? ' · TÚ' : ''}</small><b>${r.name}</b><span>Nivel ${r.lvl} · Mejor marca ${r.rec} s</span></div>`; show('lower', 1); }
 function big(txt) { $('big').textContent = txt; show('big', 1); }
-function cue(txt, hot) { $('cue').textContent = txt; $('cue').classList.toggle('hot', !!hot); show('cue', 1); }
+let cueTxt = '', cueHot = null;
+function cue(txt, hot) { if (txt === cueTxt && !!hot === cueHot && $('cue').classList.contains('on')) return; cueTxt = txt; cueHot = !!hot; $('cue').textContent = txt; $('cue').classList.toggle('hot', !!hot); show('cue', 1); }
 function flashScreen(a = 0.8) { const f = $('flash'); f.style.transition = 'none'; f.style.opacity = a; requestAnimationFrame(() => { f.style.transition = 'opacity .6s'; f.style.opacity = 0; }); }
+let stickN = 0;
 function stick(ph, mode) {
+  if (Q < 2 && (stickN++ % 3)) return;
   // Monigote de lo que "ve" el celular (sigue el paso del avatar)
   const s = Math.sin(ph), c = Math.cos(ph);
   const hip = [75, 98], sh = [75, 52];
@@ -803,14 +813,18 @@ function camData(d) {
 }
 function camCadence() { return CAM.on && !CAM.paused && performance.now() - CAM.rx < 800 ? CAM.steps.length / 1.5 : 0; }
 function camSpeed(vmax) { return vmax * clamp((camCadence() - 0.6) / 2.6, 0, 1); }
+let camDrawn = null;
 function camStick() {
   const l = CAM.lm; if (!l) return false;
+  if (l === camDrawn) return true; camDrawn = l;
   const P = (i) => [15 + (1 - l[i][0]) * 120, 10 + l[i][1] * 160];   // espejo: como mirarte en un espejo
   const B = [[1, 2], [1, 3], [3, 5], [2, 4], [4, 6], [1, 7], [2, 8], [7, 8], [7, 9], [9, 11], [8, 10], [10, 12]];
   let h = B.filter(([a, b]) => l[a][2] > 0.4 && l[b][2] > 0.4).map(([a, b]) => { const p = P(a), q = P(b); return `<path d="M${p[0].toFixed(1)} ${p[1].toFixed(1)}L${q[0].toFixed(1)} ${q[1].toFixed(1)}"/>`; }).join('');
   if (l[0][2] > 0.4) { const n = P(0); h += `<circle cx="${n[0].toFixed(1)}" cy="${n[1].toFixed(1)}" r="9"/>`; }
   $('stick').setAttribute('transform', ''); $('stick').innerHTML = h; return true;
 }
+// La conexión se prepara desde que abre el juego: así el código y el QR ya están listos al tocar el botón
+setTimeout(() => { try { camOpen(); } catch (e) {} }, 300);
 $('goCam').onclick = () => { $('main').classList.add('off'); $('cam').classList.add('on'); $('cam').parentNode.classList.add('camOn'); camOpen(); };
 $('camBack').onclick = () => { $('main').classList.remove('off'); $('cam').classList.remove('on'); $('cam').parentNode.classList.remove('camOn'); };
 

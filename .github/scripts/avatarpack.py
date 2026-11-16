@@ -46,6 +46,7 @@ def main():
     shutil.copytree(os.path.join(OVR, 'avatars'), os.path.join(out, 'avatars'))
     os.makedirs(os.path.join(out, 'vallas'), exist_ok=True)
     shutil.copy(os.path.join(OVR, 'vallas.html'), os.path.join(out, 'vallas', 'index.html'))
+    shutil.copytree(os.path.join(OVR, 'addons3'), os.path.join(out, 'vendor', 'three-0.183.2', 'addons'), dirs_exist_ok=True)
     os.makedirs(os.path.join(out, 'camara'), exist_ok=True)
     shutil.copy(os.path.join(OVR, 'camara.html'), os.path.join(out, 'camara', 'index.html'))
     open(os.path.join(out, 'index.html'), 'w').write('<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=editor/"><title>MiVibra Movimiento</title>')

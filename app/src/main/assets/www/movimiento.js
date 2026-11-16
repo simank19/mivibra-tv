@@ -83,15 +83,16 @@
   var box = null;
   MV.mvFrame = {
     open: function () { return !!(box && box.isConnected); },
-    close: function () { if (box) { box.remove(); box = null; } loadMeta().then(function () { if (MV.viewName() === 'movimiento') MV.rerender(); }); MV.focusFirst && MV.focusFirst(); }
+    close: function () { if (box) { box.remove(); box = null; } document.documentElement.classList.remove('mvplaying'); loadMeta().then(function () { if (MV.viewName() === 'movimiento') MV.rerender(); }); MV.focusFirst && MV.focusFirst(); }
   };
   function openFrame(path) {
     if (box) box.remove();
     box = document.createElement('div');
     box.className = 'mvframe';
-    box.innerHTML = '<iframe src="' + BASE + path + '" allow="autoplay; fullscreen; gamepad; camera" allowfullscreen></iframe>' +
+    box.innerHTML = '<iframe src="' + BASE + path + (MV.device && MV.device.tv ? '?q=0' : '') + '" allow="autoplay; fullscreen; gamepad; camera" allowfullscreen></iframe>' +
       '<button class="mvframe-x f" data-act="mvClose" aria-label="Volver a MiVibra"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M15 6l-6 6 6 6"/></svg></button>';
     document.body.appendChild(box);
+    document.documentElement.classList.add('mvplaying');   // la app de atrás deja de dibujarse mientras se juega
     var f = box.querySelector('iframe');
     f.onload = function () { try { f.focus(); f.contentWindow.focus(); } catch (e) {} };
   }
@@ -136,8 +137,8 @@
 
   // Estilos
   var css = document.createElement('style');
-  css.textContent = '.mvframe{position:fixed;inset:0;z-index:9998;background:#3E4144}.mvframe iframe{width:100%;height:100%;border:0;display:block}' +
-    '.mvframe-x{position:fixed;left:14px;bottom:14px;width:46px;height:46px;border-radius:50%;border:1px solid rgba(255,255,255,.3);background:rgba(40,42,46,.55);color:#fff;display:grid;place-items:center;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);z-index:9999;cursor:pointer;opacity:.75}.mvframe-x:focus,.mvframe-x:hover{opacity:1;background:#F4F5F6;color:#2A2C2E}' +
+  css.textContent = 'html.mvplaying #app,html.mvplaying #bg,html.mvplaying #deco{display:none!important}.mvframe{position:fixed;inset:0;z-index:9998;background:#3E4144}.mvframe iframe{width:100%;height:100%;border:0;display:block}' +
+    '.mvframe-x{position:fixed;left:14px;bottom:14px;width:46px;height:46px;border-radius:50%;border:1px solid rgba(255,255,255,.3);background:rgba(40,42,46,.55);color:#fff;display:grid;place-items:center;z-index:9999;cursor:pointer;opacity:.75}.mvframe-x:focus,.mvframe-x:hover{opacity:1;background:#F4F5F6;color:#2A2C2E}' +
     '.mvm-hero{padding:34px 36px;border-radius:28px;margin-bottom:18px}.mvm-hero small{letter-spacing:.2em;font-weight:800;font-size:12px;opacity:.75}.mvm-hero h2{font-size:34px;margin:6px 0 8px}.mvm-hero p{max-width:640px}.mvm-st{font-size:14px;opacity:.85;margin-top:14px}' +
     '.mvm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}.mvm-card{text-align:left;padding:22px;border-radius:22px;display:flex;flex-direction:column;gap:6px;color:inherit;cursor:pointer}.mvm-card b{font-size:20px}.mvm-card span{font-size:13px;opacity:.75}.mvm-card.soon{opacity:.6}';
   document.head.appendChild(css);
