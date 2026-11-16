@@ -393,27 +393,34 @@ RUNNERS.forEach((r) => {
 });
 const ME = RUNNERS.find((r) => r.me);
 
-// ================= Tu avatar del editor (VRM guardado en este navegador) =================
-let myVRM = null, vrmRestHips = 0;
+// ================= Avatares VRM: el tuyo (guardado en el editor) y los rivales =================
+const RIVAL_FILES = { Laura: 'laura', 'Andrés': 'andres', Valentina: 'valentina', Camilo: 'camilo', 'Sofía': 'sofia' };
 function readSaved() { return new Promise((res) => { try { const r = indexedDB.open('mivibra-movimiento', 1); r.onupgradeneeded = () => r.result.createObjectStore('avatar'); r.onerror = () => res(null); r.onsuccess = () => { try { const t = r.result.transaction('avatar', 'readonly').objectStore('avatar').get('me'); t.onsuccess = () => res(t.result || null); t.onerror = () => res(null); } catch (e) { res(null); } }; } catch (e) { res(null); } }); }
-const vrmReady = readSaved().then((saved) => {
-  if (!saved || !saved.vrm) return false;
-  const loader = new GLTFLoader(); loader.register((p) => new VRMLoaderPlugin(p));
-  return new Promise((res) => loader.parse(saved.vrm, '', (g) => {
+const vrmLoader = new GLTFLoader(); vrmLoader.register((p) => new VRMLoaderPlugin(p));
+let vrmLoaded = 0;
+function attachVRM(r, buf) {
+  return new Promise((res) => vrmLoader.parse(buf, '', (g) => {
     const vrm = g.userData.vrm; if (!vrm) return res(false);
     try { VRMUtils.removeUnnecessaryVertices(vrm.scene); } catch (e) {}
     vrm.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; } });
-    S.add(vrm.scene); myVRM = vrm; vrmRestHips = vrm.humanoid.getNormalizedBoneNode('hips').position.y;
-    ME.name = (saved.name || ME.name).slice(0, 18); ME.A.visible = false;
+    S.add(vrm.scene); r.vrm = vrm; r.vrmRest = vrm.humanoid.getNormalizedBoneNode('hips').position.y; r.A.visible = false;
+    vrmLoaded++; const el = document.getElementById('go'); if (el && el.dataset.wait) el.textContent = 'Cargando atletas… ' + vrmLoaded + '/' + RUNNERS.length;
     res(true);
   }, () => res(false)));
-});
-function driveVRM(dt) {
-  if (!myVRM) return;
-  const c = ME.A.userData.cur, H = myVRM.humanoid, b = (n) => H.getNormalizedBoneNode(n);
+}
+const vrmReady = Promise.all(RUNNERS.map(async (r) => {
+  if (r.me) { const saved = await readSaved(); if (saved && saved.vrm) { r.name = (saved.name || r.name).slice(0, 18); return attachVRM(r, saved.vrm); } r.name = 'Tú'; return false; }
+  const f = RIVAL_FILES[r.name]; if (!f) return false;
+  try { const buf = await (await fetch('../avatars/' + f + '.vrm')).arrayBuffer(); return attachVRM(r, buf); } catch (e) { return false; }
+}));
+let myVRM = null;
+function driveVRM(dt) { RUNNERS.forEach((r) => driveOne(r, dt)); myVRM = ME.vrm || null; }
+function driveOne(r, dt) {
+  const vrm = r.vrm; if (!vrm) return;
+  const c = r.A.userData.cur, H = vrm.humanoid, b = (n) => H.getNormalizedBoneNode(n);
   if (c.hy === undefined) return;
-  myVRM.scene.position.copy(ME.A.position); myVRM.scene.rotation.copy(ME.A.rotation); myVRM.scene.visible = ME.A.userData.show !== false;
-  const hips = b('hips'); hips.position.y = vrmRestHips + c.hy; hips.rotation.set(c.hipsX, c.hipsY, 0);
+  vrm.scene.position.copy(r.A.position); vrm.scene.rotation.copy(r.A.rotation); vrm.scene.visible = r.A.userData.show !== false;
+  const hips = b('hips'); hips.position.y = r.vrmRest + c.hy; hips.rotation.set(c.hipsX, c.hipsY, 0);
   b('spine').rotation.set(c.spX * 0.55, c.spY, c.spZ);
   const ch = b('chest') || b('upperChest'); if (ch) ch.rotation.set(c.spX * 0.45, c.spY * 0.6, 0);
   b('head').rotation.set(c.hdX, c.hdY, c.hdZ);
@@ -421,26 +428,27 @@ function driveVRM(dt) {
   b('rightUpperArm').rotation.set(c.shRX, c.shRY, Math.PI / 2 + c.shRZ); b('rightLowerArm').rotation.set(0, -c.elR, 0);
   b('leftUpperLeg').rotation.set(c.hpLX, 0, c.hpLZ); b('leftLowerLeg').rotation.set(c.knL, 0, 0); b('leftFoot').rotation.set(c.anL, 0, 0);
   b('rightUpperLeg').rotation.set(c.hpRX, 0, -c.hpRZ); b('rightLowerLeg').rotation.set(c.knR, 0, 0); b('rightFoot').rotation.set(c.anR, 0, 0);
-  const em = myVRM.expressionManager;
-  if (em) { em.setValue('blink', ME.A.userData.J.eyes[0].scale.y < 0.5 ? 1 : 0); em.setValue('happy', clamp((c.smile - 0.3) * 1.4, 0, 1)); }
-  myVRM.update(dt);
+  const em = vrm.expressionManager;
+  if (em) { em.setValue('blink', r.A.userData.J.eyes[0].scale.y < 0.5 ? 1 : 0); em.setValue('happy', clamp((c.smile - 0.3) * 1.4, 0, 1)); }
+  vrm.update(dt);
 }
 
-// ================= Público: avatares de otros jugadores =================
-const NS = seats.length;
-const iBody = new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.19, 0.26, 3, 10), Mt('#fff', { roughness: 0.8 }), NS);
-const iHead = new THREE.InstancedMesh(new THREE.SphereGeometry(0.21, 14, 10), Mt('#fff', { roughness: 0.6 }), NS);
-const iHair = new THREE.InstancedMesh(new THREE.SphereGeometry(0.225, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.5), Mt('#fff', { roughness: 0.5 }), NS);
-const iArmL = new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.06, 0.26, 3, 6), Mt('#fff', { roughness: 0.7 }), NS);
-const iArmR = new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.06, 0.26, 3, 6), Mt('#fff', { roughness: 0.7 }), NS);
-[iBody, iHead, iHair, iArmL, iArmR].forEach((m) => { m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); S.add(m); });
+// ================= Público: avatares de otros jugadores (sprites de avatares VRM reales) =================
+// crowd.webp: 12 avatares × 4 poses (quieto, brazos arriba, saludo, aplauso), 128×256 px cada uno
+const NS = seats.length, CROWD_COLS = 12;
+const crowdTex = new THREE.TextureLoader().load('../avatars/crowd.webp'); crowdTex.colorSpace = THREE.SRGBColorSpace; crowdTex.anisotropy = 4;
+const crowdGeo = new THREE.PlaneGeometry(0.62, 1.24); crowdGeo.translate(0, 0.62, 0);
+const aCell = new Float32Array(NS), aFrame = new Float32Array(NS);
+crowdGeo.setAttribute('aCell', new THREE.InstancedBufferAttribute(aCell, 1));
+const frameAttr = new THREE.InstancedBufferAttribute(aFrame, 1); frameAttr.setUsage(THREE.DynamicDrawUsage); crowdGeo.setAttribute('aFrame', frameAttr);
+const crowdMat = new THREE.MeshBasicMaterial({ map: crowdTex, alphaTest: 0.45, side: THREE.DoubleSide, color: '#e9d8cc' });
+crowdMat.onBeforeCompile = (sh) => {
+  sh.vertexShader = 'attribute float aCell;\nattribute float aFrame;\n' + sh.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\n#ifdef USE_MAP\n vMapUv = vec2((vMapUv.x + aCell) / ' + CROWD_COLS + '.0, (vMapUv.y + 3.0 - aFrame) / 4.0);\n#endif');
+};
+const crowdMesh = new THREE.InstancedMesh(crowdGeo, crowdMat, NS); crowdMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); S.add(crowdMesh);
 const col = new THREE.Color(), dmy = new THREE.Object3D(); dmy.rotation.order = 'YXZ';
-const cph = new Float32Array(NS), cex = new Float32Array(NS), cLong = new Uint8Array(NS);
-seats.forEach((s, i) => {
-  const sh = pick(SHIRTS); iBody.setColorAt(i, col.set(sh)); iArmL.setColorAt(i, col.set(sh)); iArmR.setColorAt(i, col.set(sh));
-  iHead.setColorAt(i, col.set(pick(SKINS))); iHair.setColorAt(i, col.set(pick(HAIRS)));
-  cph[i] = Math.random() * 6.28; cex[i] = rnd(0.5, 1.2); cLong[i] = Math.random() < 0.4 ? 1 : 0;
-});
+const cph = new Float32Array(NS), cex = new Float32Array(NS), csc = new Float32Array(NS);
+seats.forEach((s, i) => { aCell[i] = Math.floor(Math.random() * CROWD_COLS); cph[i] = Math.random() * 6.28; cex[i] = rnd(0.5, 1.2); csc[i] = rnd(0.9, 1.06); });
 let excite = 0.4, waveOn = false;
 const tmpV = new THREE.Vector3();
 function crowdTick(t) {
@@ -448,21 +456,11 @@ function crowdTick(t) {
     const s = seats[i];
     let e = excite * cex[i];
     if (waveOn) { const w = Math.sin(s.a * 3 - t * 2.2); if (w > 0.85) e = Math.max(e, 1.4); }
-    const jump = e > 0.75 ? Math.max(0, Math.sin(t * 7 + cph[i])) * 0.22 * e : Math.sin(t * 2 + cph[i]) * 0.01;
-    const y = s.y + 0.32 + jump;
-    dmy.position.set(s.x, y, s.z); dmy.rotation.set(0, s.yaw, 0); dmy.scale.set(1, 1, 1); dmy.updateMatrix(); iBody.setMatrixAt(i, dmy.matrix);
-    dmy.position.y = y + 0.42; dmy.updateMatrix(); iHead.setMatrixAt(i, dmy.matrix);
-    dmy.position.y = y + 0.45; dmy.scale.set(1, cLong[i] ? 1.25 : 1, 1); dmy.rotation.set(-0.35, s.yaw, 0); dmy.updateMatrix(); iHair.setMatrixAt(i, dmy.matrix);
-    // brazos: abajo (0) → arriba agitando (π)
-    const up = e > 0.75 ? 2.7 + Math.sin(t * 9 + cph[i]) * 0.25 : e > 0.45 ? 1.2 + Math.sin(t * 5 + cph[i]) * 0.6 : 0.15;
-    for (const [m, sd] of [[iArmL, 1], [iArmR, -1]]) {
-      const ang = up * sd;
-      const ox = 0.22 * sd + Math.sin(ang) * 0.15, oy = 0.18 - Math.cos(ang) * 0.15;
-      tmpV.set(ox, oy, 0).applyAxisAngle(THREE.Object3D.DEFAULT_UP, s.yaw);
-      dmy.position.set(s.x + tmpV.x, y + oy, s.z + tmpV.z); dmy.scale.set(1, 1, 1); dmy.rotation.set(0, s.yaw, ang); dmy.updateMatrix(); m.setMatrixAt(i, dmy.matrix);
-    }
+    const jump = e > 0.75 ? Math.max(0, Math.sin(t * 7 + cph[i])) * 0.2 * e : 0;
+    aFrame[i] = e > 0.75 ? (Math.sin(t * 4.5 + cph[i]) > 0 ? 1 : 2) : e > 0.45 ? (Math.sin(t * 9 + cph[i]) > 0.3 ? 3 : 0) : 0;
+    dmy.position.set(s.x, s.y + 0.02 + jump, s.z); dmy.rotation.set(0, s.yaw, 0); dmy.scale.set(csc[i], csc[i], csc[i]); dmy.updateMatrix(); crowdMesh.setMatrixAt(i, dmy.matrix);
   }
-  [iBody, iHead, iHair, iArmL, iArmR].forEach((m) => m.instanceMatrix.needsUpdate = true);
+  crowdMesh.instanceMatrix.needsUpdate = true; frameAttr.needsUpdate = true;
 }
 // Nombres de algunos jugadores del público (cerca de la salida)
 const TAGS = ['@laurita_run', '@camilo.fit', '@mafe', '@juanpa', '@sofi_dance', '@papá_brandon', '@andres10', '@vale'].map((n) => { const s = seats.filter((x) => x.row < 3 && x.z > -14 && x.z < 10)[Math.floor(Math.random() * 40)] || seats[0]; const el = document.createElement('div'); el.className = 'tag'; el.textContent = n; $('tags').appendChild(el); return { s, el }; });
@@ -653,8 +651,8 @@ function update(dt, t) {
   } else if (phase === 'podium') {
     if (!podiumDone) { podiumDone = true; if (!results.length) results = standings(); show('res', 0); const top = results.slice(0, 3); $('banner').innerHTML = '¡' + top[0].name + ' gana el oro!'; show('banner', 1); SND.fanfare(); setTimeout(SND.cheer, 400); confettiStart(); }
     const top = results.slice(0, 3);
-    RUNNERS.forEach((r) => { const i = top.indexOf(r); if (i < 0) { r.A.userData.show = false; r.A.visible = false; return; } r.A.userData.show = true; r.A.visible = !(r.me && myVRM); const [x, h] = PODS[i]; const jt = clamp((pt - 0.6 - i * 0.5) / 0.6, 0, 1); const from = new THREE.Vector3(POD.x + x, 0, POD.z + 2.2); const to = new THREE.Vector3(POD.x + x, h, POD.z); r.A.position.lerpVectors(from, to, smooth(jt)); r.A.position.y += Math.sin(jt * Math.PI) * 0.8; r.A.rotation.y = 0; apply(r.A, jt < 1 ? POSES.idle(t) : (i === 0 ? POSES.victory(t) : POSES.cheer(t, i)), 0.15);
-      if (pt > 3 + i * 0.4 && !r.medal) { r.medal = medal(['#FFC83D', '#C9CED6', '#C67B45'][i]); if (r.me && myVRM) { const ch = myVRM.humanoid.getNormalizedBoneNode('chest') || myVRM.humanoid.getNormalizedBoneNode('spine'); ch.add(r.medal); r.medal.position.set(0, 0.12, 0.14); r.medal.scale.setScalar(0.8); } else { r.A.userData.J.chest.add(r.medal); r.medal.position.set(0, 0.12, 0.2); } SND.ding(); } });
+    RUNNERS.forEach((r) => { const i = top.indexOf(r); if (i < 0) { r.A.userData.show = false; r.A.visible = false; return; } r.A.userData.show = true; r.A.visible = !r.vrm; const [x, h] = PODS[i]; const jt = clamp((pt - 0.6 - i * 0.5) / 0.6, 0, 1); const from = new THREE.Vector3(POD.x + x, 0, POD.z + 2.2); const to = new THREE.Vector3(POD.x + x, h, POD.z); r.A.position.lerpVectors(from, to, smooth(jt)); r.A.position.y += Math.sin(jt * Math.PI) * 0.8; r.A.rotation.y = 0; apply(r.A, jt < 1 ? POSES.idle(t) : (i === 0 ? POSES.victory(t) : POSES.cheer(t, i)), 0.15);
+      if (pt > 3 + i * 0.4 && !r.medal) { r.medal = medal(['#FFC83D', '#C9CED6', '#C67B45'][i]); if (r.vrm) { const ch = r.vrm.humanoid.getNormalizedBoneNode('chest') || r.vrm.humanoid.getNormalizedBoneNode('spine'); ch.add(r.medal); r.medal.position.set(0, 0.12, 0.14); r.medal.scale.setScalar(0.8); } else { r.A.userData.J.chest.add(r.medal); r.medal.position.set(0, 0.12, 0.2); } SND.ding(); } });
     if (Math.random() < 0.04 && pt > 1.5) firework(new THREE.Vector3(POD.x + rnd(-30, 30), rnd(25, 40), POD.z - rnd(10, 40)), pick(['#FF6A3D', '#FFD666', '#7AA7FF', '#FF3DA8', '#34D399']));
     const a = 0.3 * Math.sin(pt * 0.25);
     setCam(new THREE.Vector3(POD.x + Math.sin(a) * 7, 2.4, POD.z + Math.cos(a) * 7), new THREE.Vector3(POD.x, 1.6, POD.z), 0.05);
@@ -674,7 +672,7 @@ function showResults() {
 }
 function reset() {
   results = []; slow = 1;
-  RUNNERS.forEach((r) => { r.A.userData.show = true; r.A.visible = !(r.me && myVRM); if (r.medal) { r.medal.parent.remove(r.medal); r.medal = null; } r.A.position.set(r.x, 0, 0); r.A.rotation.y = Math.PI; r.A.userData.cur = {}; });
+  RUNNERS.forEach((r) => { r.A.userData.show = true; r.A.visible = !r.vrm; if (r.medal) { r.medal.parent.remove(r.medal); r.medal = null; } r.A.position.set(r.x, 0, 0); r.A.rotation.y = Math.PI; r.A.userData.cur = {}; });
   confetti.visible = false; drawClock('0.00');
 }
 
@@ -694,6 +692,8 @@ function begin(sound) {
   if (sound) SND.init(); else { SND.init(); SND.toggle(); $('bSnd').textContent = 'Sonido: no'; }
   reset(); $('hudT').textContent = 'Carril 5 · ' + ME.name; go('intro');
 }
+$('go').dataset.wait = 1; $('go').textContent = 'Cargando atletas…'; $('go').disabled = true; $('goMute').disabled = true;
+vrmReady.then(() => { delete $('go').dataset.wait; $('go').textContent = 'Empezar con sonido'; $('go').disabled = false; $('goMute').disabled = false; });
 $('go').onclick = () => begin(true);
 $('goMute').onclick = () => begin(false);
 $('bSkip').onclick = () => { reset(); go('marks'); };

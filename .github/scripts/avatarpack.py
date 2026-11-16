@@ -36,10 +36,14 @@ def main():
     j = open(p, encoding='utf-8').read()
     j = sub1(j, 'authors: ["Made with VRM Avatar Maker"]', 'authors: ["MiVibra Movimiento (VRM Avatar Maker)"]', 'autores')
     j = sub1(j, 'name: recipe.name || "My avatar"', 'name: recipe.name || "Mi avatar"', 'nombre')
+    j = sub1(j, 'new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true })', 'new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true })', 'renderer')
+    j = sub1(j, 'scene.background = new THREE.Color(0x26282b);', 'scene.background = null;  // MiVibra: fondo de vidrio gris (CSS)', 'fondo')
+    j = sub1(j, 'new THREE.GridHelper(4, 8, 0x555555, 0x3a3a3a)', 'new THREE.GridHelper(4, 8, 0xb8bcc0, 0x8a8e92)', 'cuadrícula')
     j += '\n// MiVibra: el botón "Guardar en MiVibra" arma el VRM con la misma función que la descarga\nwindow.MV_EXPORT = exportVRM;\n'
     open(p, 'w', encoding='utf-8').write(j)
     for f in ('mivibra.js', 'mivibra.css'):
         shutil.copy(os.path.join(OVR, f), os.path.join(out, f))
+    shutil.copytree(os.path.join(OVR, 'avatars'), os.path.join(out, 'avatars'))
     os.makedirs(os.path.join(out, 'vallas'), exist_ok=True)
     shutil.copy(os.path.join(OVR, 'vallas.html'), os.path.join(out, 'vallas', 'index.html'))
     open(os.path.join(out, 'index.html'), 'w').write('<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=editor/"><title>MiVibra Movimiento</title>')
