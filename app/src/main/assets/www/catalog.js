@@ -77,7 +77,7 @@
     if (i.adult) return false;
     if (i.type === 'live') return !!i.kids;
     if (i.anime || i.doc) return false;
-    if (i.age == null) return false;
+    if (i.age == null) return !!(i.kids || i.learnedKids || i.platform === 'disney') && !(i.genres || []).some(function (g) { return NOT_FOR_KIDS.indexOf(g) >= 0; });
     // Animación (no anime) se permite hasta 13 años; lo demás, solo de 0 a 7 años y que sea infantil o familiar
     if (i.animated && i.age <= 13) return true;
     // "Infantil/Familia" tiene que venir de la ficha de TMDB (no del título: "… American Kids" no es infantil)
@@ -2276,16 +2276,30 @@
   };
 
   // ---------- Tiempo de pantalla para perfiles infantiles ----------
+  // Se guarda en segundos por perfil y por día. Solo un contador a la vez: en los menús avanza el reloj de la app;
+  // mientras se ve algo (reproductor o YouTube), al cerrar se suma el tiempo real de esa sesión.
   MV.kidsUsed = function () {
     var u = MV.load('kidsUsage', {}), day = new Date().toDateString();
-    if (u.day !== day) u = { day: day, m: {} };
+    if (u.day !== day) u = { day: day, m: {}, s: {} };
+    if (!u.s) u.s = {};
+    if (u.m) Object.keys(u.m).forEach(function (k) { u.s[k] = (u.s[k] || 0) + u.m[k] * 60; }); u.m = {};   // formato anterior en minutos
     return u;
   };
-  MV.addKidsMinutes = function (n) {
-    if (!MV.isKids()) return;
-    var u = MV.kidsUsed(); u.m[S.pid] = (u.m[S.pid] || 0) + n; MV.save('kidsUsage', u);
+  MV.addKidsSeconds = function (sec) {
+    if (!MV.isKids() || !(sec > 0)) return;
+    var u = MV.kidsUsed(); u.s[S.pid] = (u.s[S.pid] || 0) + sec; MV.save('kidsUsage', u);
   };
-  MV.kidsLeft = function () { var u = MV.kidsUsed(); return Math.max(0, (+P.kidsLimit || 60) - (u.m[S.pid] || 0)); };
+  MV.addKidsMinutes = function (n) { MV.addKidsSeconds(n * 60); };
+  var kidsSess = 0;
+  MV.kidsSessionStart = function () { if (MV.isKids() && !kidsSess) kidsSess = Date.now(); };
+  MV.kidsSessionEnd = function () { if (!kidsSess) return; var sec = (Date.now() - kidsSess) / 1000; kidsSess = 0; if (sec > 0 && sec < 8 * 3600) MV.addKidsSeconds(sec); };
+  MV.kidsInSession = function () { return !!kidsSess; };
+  MV.kidsLeft = function () {
+    var u = MV.kidsUsed(), used = (u.s[S.pid] || 0) + (kidsSess ? (Date.now() - kidsSess) / 1000 : 0);
+    return Math.max(0, Math.ceil(((+P.kidsLimit || 60) * 60 - used) / 60));
+  };
+  /** El adulto regala minutos: se descuentan de lo usado hoy */
+  MV.kidsGive = function (min) { var u = MV.kidsUsed(); u.s[S.pid] = Math.max(0, (u.s[S.pid] || 0) - min * 60); MV.save('kidsUsage', u); };
 
   // ---------- Eventos internos ----------
   /** Borra del equipo lo personal de una cuenta (perfiles, historial, favoritos, "continuar viendo", PIN y usuario +18).

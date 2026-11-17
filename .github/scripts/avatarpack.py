@@ -50,7 +50,7 @@ def main():
     shutil.move(os.path.join(out, 'editor'), os.path.join(out, 'editor-vrm'))
     os.makedirs(os.path.join(out, 'editor'), exist_ok=True)
     shutil.copy(os.path.join(OVR, 'editor.html'), os.path.join(out, 'editor', 'index.html'))
-    for f in ('avatar.js', 'mvpose.js', 'mano.js'):
+    for f in ('avatar.js', 'anim.js', 'animaciones.json', 'mano.js'):
         shutil.copy(os.path.join(OVR, f), os.path.join(out, f))
     for d in ('kit', 'sonidos'):
         shutil.copytree(os.path.join(OVR, d), os.path.join(out, d))

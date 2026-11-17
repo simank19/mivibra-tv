@@ -147,7 +147,7 @@
   }
   /** Menú en el orden que eligió el superadministrador (Inicio siempre primero y Ajustes siempre al final). */
   function navItems() {
-    if (MV.isKids()) return [['kids', 'Inicio', IC.home], ['youtube', 'YouTube', IC.yt]];
+    if (MV.isKids()) return [['kids', 'Inicio', IC.home], ['youtube', 'YouTube', IC.yt], ['history', 'Historial', IC.history]];
     var all = allNavItems(), order = P.navOrder || [], hidden = P.navHidden || [];
     var mid = all.filter(function (n) { return n[0] !== 'home' && n[0] !== 'settings'; });
     mid.sort(function (a, b) {
@@ -2346,6 +2346,7 @@
     var access = A ? A.hasStorageAccess() : true;
     var pads = A ? JSON.parse(A.gamepads()) : [];
     return top('Juegos', '<button class="pill f" data-act="consoleOpen">' + IC.games.replace('<svg', '<svg width="18" height="18"') + 'Modo consola</button><button class="pill f" data-act="remoteQR">' + IC.phone.replace('<svg', '<svg width="18" height="18"') + 'Celular como mando</button>') +
+      (MV.VIEWS.movimiento ? '<section class="row"><h3>Juegos de MiVibra</h3><button class="banner glass f" data-act="nav" data-arg="movimiento" data-fid="g-mvm" style="width:100%;text-align:left;cursor:pointer"><div class="t"><b>MiVibra Movimiento</b><br><span class="muted">Deportes con tu avatar y la cámara del celular: 100 m con vallas y bolos</span></div><span class="btn f" style="pointer-events:none">Jugar</span></button></section>' : '') +
       (!access ? '<div class="banner glass"><div class="t"><b>Permite el acceso a la memoria, USB y discos duros</b><br><span class="muted">Así MiVibra TV encuentra tus ROMs en cualquier unidad conectada.</span></div><button class="btn f" data-act="storageAccess">Permitir acceso</button></div>' : '') +
       '<div class="btns" style="margin-bottom:16px"><button class="btn f" data-act="scanRoms">' + IC.refresh + 'Buscar juegos</button><button class="btn ghost f" data-act="romRoots">' + IC.usb + 'Carpetas y unidades</button><button class="btn ghost f" data-act="romsFromPhone">' + IC.phone + 'Enviar desde el celular</button><button class="btn ghost f" data-act="romDownload">' + IC.download + 'Descargar desde enlace</button><button class="btn ghost f" data-act="importBios">Importar BIOS</button></div>' +
       '<p class="muted" style="margin:-6px 0 14px">' + (pads.length ? 'Mandos conectados: ' + pads.map(function (p) { return esc(p.name); }).join(', ') : 'Sin mandos físicos conectados. Usa un mando Bluetooth/USB o tu celular.') + '</p>' +
@@ -2733,7 +2734,7 @@
     if (MV.audio && MV.audio.current() && !ctx.noRecord) MV.audio.stop();
     // Si había otro video abierto (por ejemplo en la ventana flotante), se cierra y su avance se guarda aparte
     if (playing) replaced = playing;
-    playing = Object.assign({ started: Date.now() }, ctx);
+    playing = Object.assign({ started: Date.now() }, ctx); MV.kidsSessionStart();
     req.audioLang = P.audioLang; req.subLang = P.subLang; req.subKey = P.subKey || '';
     req.subAddons = MV.stremioSubBases ? MV.stremioSubBases() : [];
     // Los addons de subtítulos buscan por el ID de IMDb: si aún no se conoce (no se abrió la ficha), se pide antes de abrir el reproductor
@@ -2962,8 +2963,7 @@
     if (r && r.replaced) { ctx = replaced; replaced = null; if (!ctx) return; }
     else { if (!playing) return; ctx = playing; playing = null; }
     if (MV.ach) try { MV.ach.onWatched(ctx, r || {}); } catch (e) {}
-    var mins = Math.round((Date.now() - ctx.started) / 60000);
-    if (mins > 0) MV.addKidsMinutes(mins);
+    MV.kidsSessionEnd();
     if (ctx.noRecord) { MV.rerender(); return; }
     if (ctx.list && r.index != null && ctx.list[r.index]) { MV.recordPlay(ctx.list[r.index], r); }
     else if (ctx.episodes) {
@@ -3465,7 +3465,7 @@
     kidsExit: function () { askParentPin().then(function (ok) { if (ok) { stack = []; MV.go('profiles', null, { replace: true }); } }); },
     kidsMore: function () {
       askParentPin().then(function (ok) {
-        if (!ok) return; var u = MV.kidsUsed(); u.m[S.pid] = Math.max(0, (u.m[S.pid] || 0) - 30); MV.save('kidsUsage', u);
+        if (!ok) return; MV.kidsGive(30);
         MV.closeModal(true); MV.toast('30 minutos más'); MV.rerender();
       });
     },
@@ -4711,7 +4711,7 @@
     function close() {
       open = false;
       pipSet();
-      if (kidIv) { clearInterval(kidIv); kidIv = null; var km = Math.round((Date.now() - kidT0) / 60000); if (km > 0 && MV.isKids()) MV.addKidsMinutes(km); }
+      if (kidIv) { clearInterval(kidIv); kidIv = null; } MV.kidsSessionEnd();
       if (player && player.destroy) { try { player.destroy(); } catch (e) {} }
       player = null;
       var b = box(); b.hidden = true; b.innerHTML = ''; b.classList.remove('ui');
@@ -4730,7 +4730,7 @@
       play: function (l, i) {
         if (AU.current()) AU.stop();
         // Perfil infantil: el tiempo de YouTube cuenta para el límite diario; si se acaba, se cierra
-        if (MV.isKids()) { kidT0 = Date.now(); clearInterval(kidIv); kidIv = setInterval(function () { if (!open) return; var m = Math.floor((Date.now() - kidT0) / 60000); if (m >= 1) { MV.addKidsMinutes(m); kidT0 += m * 60000; } if (+P.kidsLimit > 0 && MV.kidsLeft() <= 0) { close(); kidsTimeUp(); } }, 30000); }
+        if (MV.isKids()) { MV.kidsSessionStart(); clearInterval(kidIv); kidIv = setInterval(function () { if (!open) return; if (+P.kidsLimit > 0 && MV.kidsLeft() <= 0) { close(); kidsTimeUp(); } }, 30000); }
         list = l; idx = i || 0; open = true;
         var b = box(); b.hidden = false; b.classList.toggle('tv', !!MV.device.tv); document.body.classList.add('yt-open');
         load(); pipSet();
@@ -4999,7 +4999,7 @@
       '<button class="utile glass f" data-act="nav" data-arg="streams" data-fid="u-streams"><span class="uic">' + IC.play + '</span><b>Twitch y Kick</b><span>Transmisiones en vivo aquí mismo</span></button>' +
       '<button class="utile glass f" data-act="openDiag" data-fid="u-diag"><span class="uic">' + IC.settings + '</span><b>' + (MV.device.desktop ? 'Soporte MiVibra PC' : MV.device.tv ? 'Soporte MiVibra · TV box' : 'Diagnóstico MiVibra') + '</b><span>' + (MV.device.desktop ? 'Diagnóstico, limpieza y optimización de Windows' : 'Revisa y optimiza este equipo') + '</span></button>' +
       '<button class="utile glass f" data-act="nav" data-arg="photos" data-fid="u-photos"><span class="uic">' + IC.image + '</span><b>Fotos</b><span>Galería, USB, Drive, MEGA o desde el celular</span></button>' +
-      (MV.VIEWS.movimiento ? '<button class="utile glass f" data-act="nav" data-arg="movimiento" data-fid="u-mvm"><span class="uic">' + (IC.run || IC.games) + '</span><b>MiVibra Movimiento</b><span>Deportes con tu avatar 3D</span></button>' : '') +
+      '' +
       '<button class="utile glass f" data-act="nav" data-arg="achievements" data-fid="u-ach"><span class="uic">' + IC.trophy + '</span><b>Logros</b><span>' + (MV.ach ? 'Nivel ' + MV.ach.level().n + ' · ' + MV.ach.level().title : 'Tu nivel y medallas') + '</span></button>' +
       '<button class="utile glass f" data-act="adultOpen" data-fid="u-adult"><span class="uic">' + IC.lock + '</span><b>+18</b><span>' + (MV.adultOk() ? 'Desbloqueado' : 'Protegido con PIN') + '</span></button>' +
       (A && A.remoteFind && !(MV.device && MV.device.tv) ? '<button class="utile glass f" data-act="nav" data-arg="phoneRemote" data-fid="u-phremote"><span class="uic">' + IC.phone + '</span><b>Control de la TV</b><span>Usa este celular como control de tu TV</span></button>' : '') +
@@ -5542,11 +5542,14 @@
   };
 
   // Tiempo de pantalla de perfiles infantiles (también cuenta en los menús)
+  // Cuenta el tiempo real en los menús (cada 15 s); lo que se ve en el reproductor se suma al cerrarlo
+  var kidsLast = Date.now();
   setInterval(function () {
-    if (!MV.isKids() || document.hidden || +P.kidsLimit <= 0) return;
-    MV.addKidsMinutes(1);
-    if (MV.kidsLeft() <= 0 && !MV.modalOpen()) kidsTimeUp();
-  }, 60000);
+    var now = Date.now(), dt = now - kidsLast; kidsLast = now;
+    if (!MV.isKids() || +P.kidsLimit <= 0) return;
+    if (!document.hidden && !MV.kidsInSession() && dt > 0 && dt < 60000) MV.addKidsSeconds(dt / 1000);
+    if (MV.kidsLeft() <= 0 && !MV.modalOpen() && !MV.kidsInSession()) kidsTimeUp();
+  }, 15000);
 
   // ---------- Arranque ----------
   function boot() {

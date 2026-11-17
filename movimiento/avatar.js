@@ -91,7 +91,7 @@ export function preload(recipes) { recipes.forEach((r) => { r = fix(r); ['head',
 const matCache = new Map();
 function mat(hex, lite, o = {}) {
   const k = hex + (lite ? 'L' : 'S') + JSON.stringify(o);
-  if (!matCache.has(k)) matCache.set(k, lite ? new THREE.MeshLambertMaterial(Object.assign({ color: hex }, o)) : new THREE.MeshStandardMaterial(Object.assign({ color: hex, roughness: 0.48, metalness: 0 }, o)));
+  if (!matCache.has(k)) matCache.set(k, lite ? new THREE.MeshLambertMaterial(Object.assign({ color: hex, side: THREE.DoubleSide }, o)) : new THREE.MeshStandardMaterial(Object.assign({ color: hex, roughness: 0.48, metalness: 0, side: THREE.DoubleSide }, o)));
   return matCache.get(k);
 }
 const shade = (hex, k) => '#' + new THREE.Color(hex).multiplyScalar(k).getHexString();
@@ -277,8 +277,13 @@ function faceDecal(r, lite, skinMesh, eL, eR, head, tex) {
 }
 
 // ---------- Accesorios (gafas, gorras, audífonos, aretes) y peinados extra ----------
-function extras(r, lite, hb, eyes) {
-  const g = new THREE.Group(), c = hb.getCenter(new THREE.Vector3()), sz = hb.getSize(new THREE.Vector3());
+function extras(r, lite, hbAll, eyes, skins, sb) {
+  const hb = sb || hbAll, g = new THREE.Group(), c = hb.getCenter(new THREE.Vector3()), sz = hb.getSize(new THREE.Vector3());
+  const ey0 = eyes ? (eyes[0].y + eyes[1].y) / 2 : c.y, ed0 = eyes ? eyes[0].distanceTo(eyes[1]) : sz.x * 0.4;
+  // tamaño del gorro: en hombres, el cráneo; en mujeres, el pelo (se queda puesto) sin pasarse de una cabeza normal
+  const cap = (() => { const B = r.g === 'f' ? hbAll : hb, bc = B.getCenter(new THREE.Vector3()), bs = B.getSize(new THREE.Vector3());
+    const w = Math.max(Math.min(bs.x, ed0 * 3.4), ed0 * 2.5), d = Math.max(Math.min(bs.z, w * 1.1), ed0 * 2.5), top = r.g === 'f' ? Math.max(Math.min(B.max.y, ey0 + ed0 * 1.75), ey0 + ed0 * 1.3) : Math.max(hb.max.y, ey0 + ed0 * 1.25);
+    return { x: bc.x, z: bc.z, w, d, top }; })();
   const M = (col, o) => mat(col, lite, o); const hairM = M(r.hair), accM = M(r.acc || '#1F2937');
   const top = hb.max.y, front = hb.max.z, R = Math.max(sz.x, sz.z) / 2;
   const eyeY = eyes ? (eyes[0].y + eyes[1].y) / 2 : c.y + sz.y * 0.08, ed = eyes ? eyes[0].distanceTo(eyes[1]) : sz.x * 0.4;
@@ -289,30 +294,38 @@ function extras(r, lite, hb, eyes) {
   if (r.extraHair === 2) [-1, 1].forEach((s) => { for (let k = 0; k < 6; k++) { const b = add(new THREE.Mesh(new THREE.SphereGeometry(R * (0.16 - k * 0.008), 10, 8), hairM), c.x + s * R * 0.78, hb.min.y + sz.y * 0.35 - k * R * 0.22, c.z - R * 0.35); b.scale.set(1, 1.25, 1); } add(new THREE.Mesh(new THREE.SphereGeometry(R * 0.06, 8, 6), M(r.acc || '#8E5CF7')), c.x + s * R * 0.78, hb.min.y + sz.y * 0.35 - 6 * R * 0.22, c.z - R * 0.35); });
   // gorra o gorro
   if (r.cap === 1 || r.cap === 2) {
-    const capM = M(r.hat || r.top), dome = add(new THREE.Mesh(new THREE.SphereGeometry(R * 1.04, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), capM), c.x, eyeY + ed * 0.55, c.z - R * 0.05); dome.scale.set(1.02, 0.78, 1.04);
-    const brim = add(new THREE.Mesh(new THREE.CylinderGeometry(R * 0.75, R * 0.75, R * 0.05, 24, 1, false, -Math.PI / 2, Math.PI), capM), c.x, eyeY + ed * 0.5, c.z + R * 0.78); brim.scale.set(1, 1, 1.05); brim.rotation.x = 0.1;
-    add(new THREE.Mesh(new THREE.SphereGeometry(R * 0.08, 8, 6), capM), c.x, eyeY + ed * 0.55 + R * 0.8, c.z - R * 0.05);
-    if (r.cap === 1) { const t = logoTex(), lg = add(new THREE.Mesh(new THREE.PlaneGeometry(R * 0.7, R * 0.35), new THREE.MeshBasicMaterial({ map: t, transparent: true })), c.x, eyeY + ed * 0.55 + R * 0.38, c.z + R * 0.93); lg.rotation.x = -0.45; }
+    const capM = M(r.hat || r.top), dome = add(new THREE.Mesh(new THREE.SphereGeometry(1, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), capM), cap.x, eyeY + ed * 0.42, cap.z); dome.scale.set(cap.w * 0.56, (cap.top - eyeY - ed * 0.42) * 1.12, cap.d * 0.56);
+    const brim = add(new THREE.Mesh(new THREE.CylinderGeometry(R * 0.75, R * 0.75, R * 0.05, 24, 1, false, -Math.PI / 2, Math.PI), capM), cap.x, eyeY + ed * 0.44, cap.z + cap.d * 0.4); brim.scale.set(cap.w * 0.75 / R, 1, 1.05); brim.rotation.x = 0.1;
+    add(new THREE.Mesh(new THREE.SphereGeometry(R * 0.07, 8, 6), capM), cap.x, eyeY + ed * 0.42 + (cap.top - eyeY - ed * 0.42) * 1.12, cap.z);
+    if (r.cap === 1) { const t = logoTex(), lg = add(new THREE.Mesh(new THREE.PlaneGeometry(cap.w * 0.42, cap.w * 0.21), new THREE.MeshBasicMaterial({ map: t, transparent: true })), cap.x, eyeY + ed * 0.42 + (cap.top - eyeY - ed * 0.42) * 0.55, cap.z + cap.d * 0.48); lg.rotation.x = -0.5; }
   }
-  if (r.cap === 3) { const capM = M(r.hat || r.top); const d = add(new THREE.Mesh(new THREE.SphereGeometry(R * 1.0, 24, 14, 0, Math.PI * 2, 0, Math.PI * 0.55), capM), c.x, eyeY + ed * 0.55, c.z - R * 0.03); d.scale.set(1.0, 0.82, 1.02);
-    const band = add(new THREE.Mesh(new THREE.CylinderGeometry(R * 1.08, R * 1.1, R * 0.32, 24, 1, true), M('#' + new THREE.Color(r.hat || r.top).multiplyScalar(0.8).getHexString(), { side: THREE.DoubleSide })), c.x, eyeY + ed * 0.62, c.z - R * 0.03); band.scale.set(1.02, 1, 1.04);
-    add(new THREE.Mesh(new THREE.SphereGeometry(R * 0.2, 12, 10), M('#F4F5F6')), c.x, eyeY + ed * 0.5 + R * 1.0, c.z - R * 0.03); }
+  if (r.cap === 3) { const capM = M(r.hat || r.top); const d = add(new THREE.Mesh(new THREE.SphereGeometry(1, 24, 14, 0, Math.PI * 2, 0, Math.PI * 0.55), capM), cap.x, eyeY + ed * 0.4, cap.z); d.scale.set(cap.w * 0.57, (cap.top - eyeY - ed * 0.4) * 1.2, cap.d * 0.57);
+    const band = add(new THREE.Mesh(new THREE.CylinderGeometry(1, 1.02, 1, 24, 1, true), M('#' + new THREE.Color(r.hat || r.top).multiplyScalar(0.8).getHexString(), { side: THREE.DoubleSide })), cap.x, eyeY + ed * 0.52, cap.z); band.scale.set(cap.w * 0.585, ed * 0.3, cap.d * 0.585);
+    add(new THREE.Mesh(new THREE.SphereGeometry(R * 0.16, 12, 10), M('#F4F5F6')), cap.x, eyeY + ed * 0.4 + (cap.top - eyeY - ed * 0.4) * 1.2, cap.z); }
   // gafas
   if (r.glasses && eyes) {
     const frameM = r.glasses === 1 ? M('#111214') : M('#3a2a20'), lensM = r.glasses === 1 ? new THREE.MeshStandardMaterial({ color: '#1b2430', roughness: 0.1, metalness: 0.3, transparent: true, opacity: 0.88 }) : new THREE.MeshStandardMaterial({ color: '#dfefff', roughness: 0.05, transparent: true, opacity: 0.22 });
-    const z = front - R * 0.02;
+    const z = Math.max(eyes[0].z, eyes[1].z) + ed * 0.12;
     eyes.forEach((e) => { const fr = add(new THREE.Mesh(new THREE.TorusGeometry(ed * 0.27, ed * 0.04, 8, 24), frameM), e.x, e.y, z); fr.scale.set(1.15, r.glasses === 1 ? 0.85 : 0.75, 1); const ln = add(new THREE.Mesh(new THREE.CircleGeometry(ed * 0.27, 24), lensM), e.x, e.y, z - 0.001); ln.scale.copy(fr.scale); });
     add(new THREE.Mesh(new THREE.BoxGeometry(ed * 0.22, ed * 0.05, ed * 0.04), frameM), (eyes[0].x + eyes[1].x) / 2, eyeY + ed * 0.05, z);
-    [-1, 1].forEach((s) => { const tm = add(new THREE.Mesh(new THREE.BoxGeometry(ed * 0.04, ed * 0.04, R * 1.0), frameM), c.x + s * (sz.x / 2 + ed * 0.02), eyeY + ed * 0.03, z - R * 0.5); });
+    [-1, 1].forEach((s) => { const len = Math.max(0.01, z - c.z); add(new THREE.Mesh(new THREE.BoxGeometry(ed * 0.04, ed * 0.04, len), frameM), c.x + s * (sz.x / 2 + ed * 0.015), eyeY + ed * 0.03, z - len / 2); [eyes[0], eyes[1]].forEach(() => {}); });
+    eyes.forEach((e) => { const s = Math.sign(e.x - c.x) || 1, x0 = e.x + s * ed * 0.31, x1 = c.x + s * (sz.x / 2 + ed * 0.015); add(new THREE.Mesh(new THREE.BoxGeometry(Math.abs(x1 - x0) + ed * 0.04, ed * 0.04, ed * 0.04), frameM), (x0 + x1) / 2, eyeY + ed * 0.03, z - ed * 0.02); });
   }
   // audífonos
   if (r.phones) {
-    const pm = M(r.acc || '#111214'), band = add(new THREE.Mesh(new THREE.TorusGeometry(sz.x * 0.56, R * 0.07, 8, 24, Math.PI), pm), c.x, c.y + sz.y * 0.05, c.z); band.scale.y = (top - c.y - sz.y * 0.05 + R * 0.12) / (sz.x * 0.56);
-    [-1, 1].forEach((s) => { const cup = add(new THREE.Mesh(new THREE.CylinderGeometry(R * 0.32, R * 0.32, R * 0.22, 18), pm), c.x + s * (sz.x * 0.54), c.y + sz.y * 0.02, c.z); cup.rotation.z = Math.PI / 2;
-      add(new THREE.Mesh(new THREE.CylinderGeometry(R * 0.2, R * 0.2, R * 0.04, 16), M('#FF6A3D')), c.x + s * (sz.x * 0.54 + R * 0.12), c.y + sz.y * 0.02, c.z).rotation.z = Math.PI / 2; });
+    const topAll = hbAll.max.y, pm = M(r.acc || '#111214'), band = add(new THREE.Mesh(new THREE.TorusGeometry(sz.x * 0.6, R * 0.06, 8, 24, Math.PI), pm), c.x, eyeY - ed * 0.2, c.z); band.scale.y = (topAll - eyeY + ed * 0.2 + R * 0.06) / (sz.x * 0.6);
+    [-1, 1].forEach((s) => { const cup = add(new THREE.Mesh(new THREE.CylinderGeometry(R * 0.3, R * 0.3, R * 0.2, 18), pm), c.x + s * (sz.x * 0.56), eyeY - ed * 0.25, c.z); cup.rotation.z = Math.PI / 2;
+      add(new THREE.Mesh(new THREE.CylinderGeometry(R * 0.19, R * 0.19, R * 0.04, 16), M('#FF6A3D')), c.x + s * (sz.x * 0.56 + R * 0.11), eyeY - ed * 0.25, c.z).rotation.z = Math.PI / 2; });
   }
   // aretes
-  if (r.earrings) [-1, 1].forEach((s) => add(new THREE.Mesh(new THREE.TorusGeometry(R * 0.07, R * 0.016, 6, 16), M('#E8B84A', { metalness: 0.6, roughness: 0.3 })), c.x + s * sz.x * 0.47, eyeY - ed * 0.65, c.z - R * 0.05).rotation.y = Math.PI / 2);
+  if (r.earrings) {
+    const pts = (skins || []).flatMap((m) => vertsWorld(m)), yLo = eyeY - ed * 0.75, yHi = eyeY - ed * 0.05;
+    [-1, 1].forEach((s) => {
+      let best = null; pts.forEach((p) => { if (p.y > yLo && p.y < yHi && p.z < c.z + R * 0.3 && (best === null || s * p.x > s * best.x)) best = p; });
+      const ear = best ? best.clone() : new THREE.Vector3(c.x + s * sz.x * 0.45, eyeY - ed * 0.4, c.z);
+      const ring = add(new THREE.Mesh(new THREE.TorusGeometry(R * 0.07, R * 0.018, 6, 16), M('#E8B84A', { metalness: 0.6, roughness: 0.3 })), ear.x + s * R * 0.02, Math.min(ear.y, eyeY - ed * 0.45) - R * 0.08, ear.z); ring.rotation.y = Math.PI / 2;
+    });
+  }
   return g.children.length ? g : null;
 }
 let _logo = null;
@@ -366,7 +379,7 @@ export async function build(recipe, opts = {}) {
     });
   });
   // colores por papel de cada material
-  const eyeMeshes = [], headSkin = [];
+  const eyeMeshes = [], headSkin = [], ownEarrings = [];
   const order = { body: [], legs: [], feet: [], head: [] };
   meshes.forEach(([m, pn]) => {
     const name = m.material.name || '';
@@ -374,7 +387,9 @@ export async function build(recipe, opts = {}) {
     if (isEye) { eyeMeshes.push([m, name]); return; }
     const n = name.toLowerCase(); let k = 0;
     if (!/^(skin|hair|eyebrows|moustache|earrings|gold|metal)/.test(n)) { if (!order[pn].includes(name)) order[pn].push(name); k = order[pn].indexOf(name); }
+    m.userData.mvName = name;
     if (pn === 'head' && /^skin/i.test(name)) headSkin.push(m);
+    if (/^earrings/i.test(name)) { ownEarrings.push(m); m.visible = !!r.earrings; }
     m.material = mat(roleColor(pn, name, r, k), lite);
     m.geometry = m.geometry.clone(); m.geometry.computeVertexNormals();
     m.castShadow = true; m.frustumCulled = false;
@@ -415,9 +430,13 @@ export async function build(recipe, opts = {}) {
   }
   // proporciones caricatura: cabeza grande, cuerpo algo más ancho
   if (head && headSkin.length) {
-    const hb = new THREE.Box3(); headSkin.forEach((m) => vertsWorld(m).forEach((p) => hb.expandByPoint(p)));
+    const sb = new THREE.Box3(); headSkin.forEach((m) => vertsWorld(m).forEach((p) => sb.expandByPoint(p)));
+    const hb = sb.clone();
+    // con gorra o gorro: los hombres se quedan sin el pelo de arriba y sin el sombrero del modelo (la gorra lo reemplaza)
+    if (r.cap) meshes.forEach(([m, pn]) => { if (pn !== 'head' || !m.visible || eyeMeshes.some(([e]) => e === m)) return; const n = (m.userData.mvName || '').toLowerCase(); const isHair = /^hair/.test(n), isSkin = /^skin/.test(n), keep = isSkin || /^(earrings|eyebrows|moustache)/.test(n);
+      if (!keep && !isHair) m.visible = false; if (isHair && (r.g === 'm' || /punk/i.test(r.head))) m.visible = false; });
     root.traverse((o) => { if (o.isSkinnedMesh && meshes.some(([mm, pn]) => mm === o && pn === 'head') && o.visible) vertsWorld(o).forEach((p) => hb.expandByPoint(p)); });
-    const acc = extras(r, lite, hb, eyeW.length ? eyeCenters(eyeW) : null); if (acc) { wrap.add(acc); acc.updateMatrixWorld(true); head.attach(acc); }
+    const acc = extras(Object.assign({}, r, { earrings: ownEarrings.length ? 0 : r.earrings }), lite, hb, eyeW.length ? eyeCenters(eyeW) : null, headSkin, sb); if (acc) { wrap.add(acc); acc.updateMatrixWorld(true); head.attach(acc); }
   }
   if (r.print && head) { const top = meshes.filter(([m, pn]) => pn === 'body' && m.material === mat(r.top, lite)).map(([m]) => m); if (top.length) chestPrint(r, lite, top, bones, wrap); }
   if (head) head.scale.multiplyScalar(opts.headScale || 1.42);

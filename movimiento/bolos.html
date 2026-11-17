@@ -68,8 +68,8 @@ small{display:block;font-size:11px;letter-spacing:.2em;font-weight:800;color:#D6
 <script type="module">
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { loadAnims, Animator } from '../anim.js';
 import { build as buildAvatar, decode as decodeAvatar, DEFAULT } from '../avatar.js';
-import { LivePose } from '../mvpose.js';
 
 const $ = (id) => document.getElementById(id);
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x)), lerp = (a, b, k) => a + (b - a) * k;
@@ -174,6 +174,7 @@ async function loadAvatar() {
   if (!rec) rec = Object.assign({}, DEFAULT, { name: 'Tú' });
   av = await buildAvatar(rec, { lite: Q === 0 }); av.scene.traverse((o) => { if (o.isMesh) o.castShadow = Q > 0; });
   av.scene.rotation.y = Math.PI; S.add(av.scene); hy0 = av.humanoid.getNormalizedBoneNode('hips').position.y;
+  const A = await loadAnims().catch(() => null); if (A) av.anim = new Animator(av, A);
   $('who').textContent = 'Línea 7 · ' + (rec.name || 'Tú');
 }
 const N = (n) => av.humanoid.getNormalizedBoneNode(n);
@@ -283,10 +284,8 @@ function big(t, s, ms) { $('bigT').textContent = t; $('bigS').textContent = s; $
 function meter(p, txt1, txt2, title) { $('mbar').style.width = (clamp(p, 0, 1) * 100).toFixed(0) + '%'; $('mv1').textContent = txt1; $('mv2').textContent = txt2 || ''; if (title) $('mt').textContent = title; }
 
 // ---------- Cámara del celular: apuntar con el cuerpo y lanzar con el brazo ----------
-const LIVE = new LivePose();
 const CAMS = { hist: [], state: 'hold', backT: 0, cx0: null, arm: 6 };
 MVLink.onPose((l, ts, d) => {
-  LIVE.feed(d);
   if (!l || G.state !== 'aim' && G.state !== 'swing') return;
   const v = (i) => l[i] && l[i][2] > 0.45; if (!(v(1) && v(2) && v(7) && v(8))) return;
   const shY = (l[1][1] + l[2][1]) / 2, hipY = (l[7][1] + l[8][1]) / 2, torso = Math.max(0.06, hipY - shY), cx = 1 - (l[7][0] + l[8][0]) / 2;
@@ -414,7 +413,6 @@ function loop(now) {
   if (G.paused) dt = 0;
   G.t += dt;
   if (av) {
-    resetBones();
     const ax = G.state === 'aim' || G.state === 'swing' || G.state === 'menu' ? G.aimX : (av.scene.position.x);
     let z = 3.2, p = Object.assign({}, P_HOLD, { sp: Math.sin(now / 450) * 0.03 });
     if (G.state === 'swing') {
@@ -425,9 +423,9 @@ function loop(now) {
       else if (useCamera() && G.relT == null) meter(G.power, 'Lanza hacia adelante', '', 'FUERZA DEL BRAZO');
     } else if (G.state === 'roll' || G.state === 'sweep') { p = P_FOLLOW; z = 0.35; }
     av.scene.position.set(ax, 0, z);
-    pose(p);
-    // con la cámara: mientras apuntas, tu avatar copia tus brazos y tronco
-    if (G.state === 'aim' && useCamera()) LIVE.apply(av, dt, 1, { skip: ['leftUpperLeg', 'leftLowerLeg', 'rightUpperLeg', 'rightLowerLeg'] });
+    // de pie (apuntando, en el menú o mirando los pinos): animación natural; el lanzamiento es una pose hecha a mano
+    const natural = av.anim && (G.state === 'aim' || G.state === 'menu' || G.state === 'load' || G.state === 'end' || (G.state === 'sweep' && G.t > 1.2));
+    if (natural) { av.anim.play('Idle', { fade: 0.35 }); av.anim.update(dt); } else { if (av.anim) av.anim.stop(); resetBones(); pose(p); }
     av.update(dt);
   }
   if (G.state === 'swing' && G.relT == null) G.relT = G.relT; // espera el lanzamiento
