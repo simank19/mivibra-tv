@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Mi avatar · MiVibra Movimiento</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;color:#fff;font-family:Manrope,Inter,system-ui,sans-serif;background:radial-gradient(120% 120% at 30% 20%,#6E7276,#54585C 45%,#3E4144)}
+#view{position:fixed;inset:0;right:min(470px,44vw)}
+#view canvas{display:block;width:100%!important;height:100%!important;touch-action:none}
+.glass{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.22);border-radius:24px;box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 18px 40px -18px rgba(0,0,0,.5)}
+html:not(.q0) .glass{backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+#brand{position:fixed;left:22px;top:18px;display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px}
+#brand i{width:14px;height:14px;border-radius:50%;background:#FF6A3D;display:inline-block}
+#brand small{display:block;font-size:11px;letter-spacing:.22em;color:#D6D9DC}
+#panel{position:fixed;right:16px;top:16px;bottom:16px;width:min(450px,calc(44vw - 24px));display:flex;flex-direction:column;padding:16px}
+#tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tab{flex:1;min-width:70px;padding:10px 6px;border-radius:14px;border:2px solid transparent;background:rgba(255,255,255,.08);color:#fff;font:800 15px Manrope,Inter,sans-serif;cursor:pointer}
+.tab.on{background:#F4F5F6;color:#2A2C2E}
+#body{flex:1;overflow:auto;margin:12px -4px 0;padding:0 4px}
+h3{margin:14px 0 8px;font-size:13px;letter-spacing:.18em;color:#D6D9DC}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+.opt{padding:10px 14px;border-radius:14px;border:2px solid rgba(255,255,255,.14);background:rgba(255,255,255,.08);color:#fff;font:700 15px Manrope,Inter,sans-serif;cursor:pointer}
+.opt.on{border-color:#fff;background:rgba(255,255,255,.22)}
+.sw{width:40px;height:40px;border-radius:12px;border:3px solid rgba(255,255,255,.18);cursor:pointer;padding:0}
+.sw.on{border-color:#fff;transform:scale(1.08)}
+input[type=text]{width:100%;padding:14px 16px;border-radius:14px;border:2px solid rgba(255,255,255,.2);background:rgba(0,0,0,.18);color:#fff;font:800 20px Manrope,Inter,sans-serif}
+#actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.btn{padding:14px 12px;border-radius:16px;border:2px solid transparent;font:800 16px Manrope,Inter,sans-serif;cursor:pointer;background:rgba(255,255,255,.12);color:#fff}
+.btn.pri{background:#F4F5F6;color:#2A2C2E;grid-column:1/3}
+:focus-visible,.f:focus{outline:none;border-color:#FF6A3D!important;box-shadow:0 0 0 3px rgba(255,106,61,.45)}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(140%);padding:14px 20px;font-weight:700;transition:transform .3s;max-width:90vw}
+#toast.on{transform:translateX(-50%)}
+#poses{position:fixed;left:22px;bottom:40px;display:flex;gap:6px;padding:8px;border-radius:18px;max-width:calc(100% - min(470px,44vw) - 44px);overflow-x:auto}
+#live{position:fixed;left:22px;top:110px;display:none;gap:12px;align-items:center;padding:12px;max-width:360px}#live.on{display:flex}#live img{width:110px;height:110px;border-radius:12px;background:#fff;padding:5px}#live small{display:block;font-size:11px;letter-spacing:.18em;color:#D6D9DC}#live b{display:block;font-size:26px;letter-spacing:.14em}#live span{display:block;font-size:13px;color:#E4E6E8;margin-top:4px}#live span.ok{color:#34D399;font-weight:800}
+#poses .opt{white-space:nowrap;padding:8px 12px;font-size:14px}
+#credit{position:fixed;left:22px;bottom:14px;font-size:12px;color:rgba(255,255,255,.7)}
+#hint{position:fixed;left:22px;top:70px;font-size:13px;color:#E4E6E8}
+@media (max-width:760px){#view{right:0;bottom:52vh}#panel{left:10px;right:10px;width:auto;top:auto;height:52vh;bottom:10px}#hint{display:none}}
+</style>
+</head>
+<body>
+<div id="view"></div>
+<div id="brand"><i></i><div><small>MIVIBRA MOVIMIENTO</small>Mi avatar</div></div>
+<div id="hint">Arrastra para girar · versión en desarrollo</div>
+<div id="poses" class="glass"></div>
+<div id="live" class="glass"><img id="lqr" alt="Código QR"><div><small>EN VIVO CON TU CUERPO</small><b id="lcode">······</b><span id="lst">Escanea con el celular y ponlo a 2–3 m</span></div></div>
+<div id="panel" class="glass">
+  <div id="tabs"></div>
+  <div id="body"></div>
+  <div id="actions">
+    <button class="btn pri f" id="save">Guardar</button>
+    <button class="btn f" id="rand">Al azar</button>
+    <button class="btn f" id="playV">Probar en vallas</button>
+    <button class="btn f" id="playB" style="grid-column:1/3">Probar en bolos</button>
+  </div>
+</div>
+<div id="toast" class="glass"></div>
+<div id="credit">Piezas base CC0 de Quaternius · caras y colores de MiVibra</div>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@2.0.4/dist/qrcode.js"></script>
+<script src="../mano.js"></script>
+<script type="importmap">{"imports":{"three":"../vendor/three-0.183.2/three.module.min.js","three/addons/":"../vendor/three-0.183.2/addons/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { LivePose } from '../mvpose.js';
+import { build, CATALOG, FACES, EXTRAS, STYLES, SWATCH, DEFAULT, fix, encode, decode, randomRecipe, preload } from '../avatar.js';
+const $ = (id) => document.getElementById(id);
+const IN_APP = window.parent !== window;
+const IS_TV = /Tizen|Web0S|webOS|SMART-TV|SmartTV|NetCast|BRAVIA|AFT[A-Z]|Android TV|GoogleTV|MiTV|Mi TV|TCL|Hisense/i.test(navigator.userAgent) || new URLSearchParams(location.search).get('q') === '0';
+if (IS_TV) document.documentElement.classList.add('q0');
+let R = fix(DEFAULT), tab = 'cuerpo';
+
+// ---------- Vista 3D ----------
+const view = $('view');
+const rd = new THREE.WebGLRenderer({ antialias: !IS_TV, alpha: true }); rd.setPixelRatio(Math.min(devicePixelRatio, IS_TV ? 1 : 2));
+rd.toneMapping = THREE.NeutralToneMapping; rd.toneMappingExposure = 1.12; rd.shadowMap.enabled = !IS_TV; view.appendChild(rd.domElement);
+const S = new THREE.Scene(), cam = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
+S.add(new THREE.HemisphereLight('#f1f6ff', '#6a6058', 1.35));
+const key = new THREE.DirectionalLight('#fff4e8', 2.3); key.position.set(2.5, 4, 4); key.castShadow = true; key.shadow.mapSize.set(1024, 1024); S.add(key);
+const rim = new THREE.DirectionalLight('#cfe2ff', 1.1); rim.position.set(-3, 2.5, -3); S.add(rim);
+const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.8, 0.06, 48), new THREE.MeshStandardMaterial({ color: '#d9dde1', roughness: 0.5 })); disc.position.y = -0.03; disc.receiveShadow = true; S.add(disc);
+const ring = new THREE.Mesh(new THREE.TorusGeometry(0.78, 0.012, 8, 64), new THREE.MeshBasicMaterial({ color: '#FF6A3D' })); ring.rotation.x = Math.PI / 2; ring.position.y = 0.002; S.add(ring);
+const turn = new THREE.Group(); S.add(turn);
+function size() { const w = view.clientWidth, h = view.clientHeight; rd.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); const far = h > w ? 4.2 : 3.4; cam.position.set(0, 1.05, far); cam.lookAt(0, 0.82, 0); }
+addEventListener('resize', size); size();
+let av = null, building = 0, yaw = 0.35, drag = null, idleT = 0;
+view.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: yaw }; view.setPointerCapture(e.pointerId); });
+view.addEventListener('pointermove', (e) => { if (drag) { yaw = drag.y + (e.clientX - drag.x) * 0.01; idleT = 0; } });
+view.addEventListener('pointerup', () => { drag = null; });
+async function rebuild() {
+  const id = ++building; const a = await build(R, { lite: IS_TV }); if (id !== building) return;
+  if (av) { turn.remove(av.scene); }
+  av = a; turn.add(av.scene); pose(0);
+}
+let POSE = 'base';
+const POSES = [['live', 'En vivo'], ['base', 'Base'], ['run', 'Correr'], ['jump', 'Saltar'], ['tennis', 'Tenis'], ['bowl', 'Bolos'], ['kick', 'Fútbol']];
+const LIVE = new LivePose({ mirror: true }); let liveDt = 0.016;
+if (window.MVLink) MVLink.onPose((l, ts, d) => LIVE.feed(d));
+function liveOpen() { $('live').classList.add('on'); if (!window.MVLink) return; MVLink.open((txt, ok) => { $('lst').textContent = txt; $('lst').classList.toggle('ok', !!ok); }); if (MVLink.code) { $('lcode').textContent = MVLink.code; $('lqr').src = MVLink.qr(4); } }
+function paintPoses() { $('poses').innerHTML = POSES.map(([k, l]) => `<button class="opt f${k === POSE ? ' on' : ''}" data-pose="${k}">${l}</button>`).join(''); }
+const props = {
+  racket: (() => { const g = new THREE.Group(); const h = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.014, 8, 28), new THREE.MeshStandardMaterial({ color: '#2F7DF6' })); h.scale.y = 1.25; h.position.y = 0.3; const n = new THREE.Mesh(new THREE.CircleGeometry(0.115, 20), new THREE.MeshStandardMaterial({ color: '#fff', transparent: true, opacity: 0.35, side: THREE.DoubleSide })); n.scale.y = 1.25; n.position.y = 0.3; const hd = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.2, 8), new THREE.MeshStandardMaterial({ color: '#111214' })); hd.position.y = 0.09; g.add(h, n, hd); return g; })(),
+  bowl: new THREE.Mesh(new THREE.SphereGeometry(0.1, 24, 16), new THREE.MeshStandardMaterial({ color: '#8E5CF7', roughness: 0.12 })),
+  ball: new THREE.Mesh(new THREE.IcosahedronGeometry(0.1, 2), new THREE.MeshStandardMaterial({ color: '#fff', flatShading: true })),
+};
+Object.values(props).forEach((p) => { p.visible = false; turn.add(p); });
+const _hp = new THREE.Vector3();
+function pose(t) {
+  if (!av) return; const N = av.humanoid.getNormalizedBoneNode;
+  Object.values(av.humanoid.normalizedHumanBones).forEach((n) => n.rotation.set(0, 0, 0)); N('hips').position.y = av._hy ?? (av._hy = N('hips').position.y);
+  Object.values(props).forEach((p) => (p.visible = false));
+  if (POSE === 'live') { if (!LIVE.apply(av, liveDt, 1)) { N('leftUpperArm').rotation.set(0, 0, -1.25); N('rightUpperArm').rotation.set(0, 0, 1.25); } else N('hips').position.y = av._hy + Math.max(-0.4, Math.min(0.5, LIVE.lift * 0.22)); av.update(0); return; }
+  if (POSE !== 'base') { sportPose(N, t); av.update(0); return; }
+  const b = Math.sin(t * 2) * 0.03;
+  N('leftUpperArm').rotation.set(0, 0, -1.25 + b); N('rightUpperArm').rotation.set(0, 0, 1.25 - b);
+  N('leftLowerArm').rotation.set(0, 0.15, 0); N('rightLowerArm').rotation.set(0, -0.15, 0);
+  N('spine').rotation.set(0, Math.sin(t * 0.7) * 0.05, 0); N('head').rotation.set(Math.sin(t * 0.9) * 0.04, Math.sin(t * 0.6) * 0.12, 0);
+  const em = av.expressionManager; if (em) em.setValue('happy', 0.4 + Math.sin(t * 0.8) * 0.3);
+  av.update(0);
+}
+function handAt(p, side) { const h = av.humanoid.getRawBoneNode(side + 'Hand'); turn.updateMatrixWorld(true); h.getWorldPosition(_hp); turn.worldToLocal(_hp); p.position.copy(_hp); p.visible = true; }
+function sportPose(N, t) {
+  const s = Math.sin(t * 7), hy = av._hy;
+  if (POSE === 'run') {
+    N('leftUpperArm').rotation.set(s * 0.8, 0, -1.25); N('rightUpperArm').rotation.set(-s * 0.8, 0, 1.25); N('leftLowerArm').rotation.set(0, 1.3, 0); N('rightLowerArm').rotation.set(0, -1.3, 0);
+    N('leftUpperLeg').rotation.set(-s * 0.7, 0, 0); N('rightUpperLeg').rotation.set(s * 0.7, 0, 0); N('leftLowerLeg').rotation.set(Math.max(0, s) * 1.1 + 0.2, 0, 0); N('rightLowerLeg').rotation.set(Math.max(0, -s) * 1.1 + 0.2, 0, 0);
+    N('spine').rotation.set(0.15, 0, 0); N('hips').position.y = hy + Math.abs(Math.cos(t * 7)) * 0.04;
+  } else if (POSE === 'jump') {
+    const j = Math.max(0, Math.sin(t * 3)); N('hips').position.y = hy + j * 0.35;
+    N('leftUpperArm').rotation.set(0, 0, 1.1 * j - 1.2 * (1 - j)); N('rightUpperArm').rotation.set(0, 0, -1.1 * j + 1.2 * (1 - j));
+    N('leftUpperLeg').rotation.set(-0.5 * (1 - j), 0, 0.1); N('rightUpperLeg').rotation.set(-0.5 * (1 - j), 0, -0.1); N('leftLowerLeg').rotation.set(0.9 * (1 - j) + 0.2, 0, 0); N('rightLowerLeg').rotation.set(0.9 * (1 - j) + 0.2, 0, 0);
+  } else if (POSE === 'tennis') {
+    const k = (Math.sin(t * 2.5) + 1) / 2; N('spine').rotation.set(0.1, -0.5 + k * 0.9, 0);
+    N('rightUpperArm').rotation.set(-0.3, 0.9 - k * 1.6, 0.6); N('rightLowerArm').rotation.set(0, -0.5, 0); N('leftUpperArm').rotation.set(0, -0.6, -0.9); N('leftLowerArm').rotation.set(0, 0.6, 0);
+    N('leftUpperLeg').rotation.set(-0.3, 0, 0.1); N('leftLowerLeg').rotation.set(0.4, 0, 0); N('rightUpperLeg').rotation.set(0.2, 0, -0.1); N('hips').position.y = hy - 0.05;
+    av.update(0); handAt(props.racket, 'right'); props.racket.rotation.set(0.2, 0, -1.2 + k * 0.5); return;
+  } else if (POSE === 'bowl') {
+    const k = (Math.sin(t * 2) + 1) / 2; N('rightUpperArm').rotation.set(1.2 - k * 2.2, 0, 1.25); N('leftUpperArm').rotation.set(0.1, 0, -0.4); N('spine').rotation.set(0.25 + k * 0.2, 0, 0);
+    N('leftUpperLeg').rotation.set(-0.8, 0, 0); N('leftLowerLeg').rotation.set(0.9, 0, 0); N('rightUpperLeg').rotation.set(0.6, 0, -0.1); N('rightLowerLeg').rotation.set(0.2, 0, 0); N('hips').position.y = hy - 0.18;
+    av.update(0); handAt(props.bowl, 'right'); props.bowl.position.y -= 0.05; return;
+  } else if (POSE === 'kick') {
+    const k = (Math.sin(t * 3) + 1) / 2; N('rightUpperLeg').rotation.set(0.7 - k * 1.7, 0, 0); N('rightLowerLeg').rotation.set(0.9 * (1 - k) + 0.1, 0, 0); N('leftLowerLeg').rotation.set(0.2, 0, 0);
+    N('leftUpperArm').rotation.set(0, -0.3, -0.5); N('rightUpperArm').rotation.set(0, 0.3, 0.5); N('spine').rotation.set(-0.1, 0, 0);
+    props.ball.visible = true; props.ball.position.set(0.12, 0.1, 0.35 + k * 0.1);
+  }
+}
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now; idleT += dt; liveDt = dt;
+  if (POSE === 'live') yaw += (0 - yaw) * Math.min(1, dt * 4); else if (!drag && idleT > 3) yaw += dt * 0.35;
+  turn.rotation.y = yaw; pose(now / 1000); rd.render(S, cam); requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ---------- Panel ----------
+const TABS = [['cuerpo', 'Cuerpo'], ['cara', 'Cara'], ['pelo', 'Pelo'], ['ropa', 'Ropa'], ['acc', 'Accesorios'], ['nombre', 'Nombre']];
+function opts(key, list) { return '<div class="row">' + list.map(([v, l]) => `<button class="opt f${String(R[key]) === String(v) ? ' on' : ''}" data-k="${key}" data-v="${v}">${l}</button>`).join('') + '</div>'; }
+function sw(key, list) { return '<div class="row">' + list.map((c) => `<button class="sw f${R[key] === c ? ' on' : ''}" style="background:${c}" data-k="${key}" data-v="${c}" aria-label="Color ${c}"></button>`).join('') + '</div>'; }
+function num(key, list) { return '<div class="row">' + list.map((l, v) => `<button class="opt f${(R[key] || 0) === v ? ' on' : ''}" data-n="${key}" data-v="${v}">${l}</button>`).join('') + '</div>'; }
+function faceOpts(i, list) { return '<div class="row">' + list.map((l, v) => `<button class="opt f${R.face[i] === v ? ' on' : ''}" data-face="${i}" data-v="${v}">${l}</button>`).join('') + '</div>'; }
+function render() {
+  $('tabs').innerHTML = TABS.map(([k, l]) => `<button class="tab f${k === tab ? ' on' : ''}" data-tab="${k}">${l}</button>`).join('');
+  const C = CATALOG[R.g]; let h = '';
+  if (tab === 'cuerpo') h = '<h3>TIPO DE CUERPO</h3>' + opts('g', [['m', 'Hombre'], ['f', 'Mujer']]) + '<h3>PIEL</h3>' + sw('skin', SWATCH.skin);
+  if (tab === 'cara') h = '<h3>BOCA</h3>' + faceOpts(2, FACES.mouth) + '<h3>COLOR DE OJOS</h3>' + sw('eyes', SWATCH.eyes) + '<h3>MAQUILLAJE</h3>' + num('makeup', EXTRAS.makeup) + '<h3>BARBA Y VELLO FACIAL</h3>' + num('beard', EXTRAS.beard);
+  if (tab === 'pelo') h = '<h3>PEINADO</h3>' + opts('head', C.head) + '<h3>MOÑOS Y TRENZAS</h3>' + num('extraHair', EXTRAS.extraHair) + '<h3>COLOR DEL PELO</h3>' + sw('hair', SWATCH.hair);
+  if (tab === 'ropa') h = '<h3>ESTILOS RÁPIDOS</h3><div class="row">' + Object.keys(STYLES).map((k) => `<button class="opt f" data-style="${k}">${k}</button>`).join('') + '</div><h3>ARRIBA</h3>' + opts('body', C.body) + sw('top', SWATCH.cloth) + '<h3>ESTAMPADO</h3>' + num('print', EXTRAS.print) + '<h3>DETALLES DE ARRIBA</h3>' + sw('top2', SWATCH.cloth) +
+    '<h3>ABAJO</h3>' + opts('legs', C.legs) + sw('bottom', SWATCH.cloth) + '<h3>DETALLES DE ABAJO</h3>' + sw('bottom2', SWATCH.cloth) +
+    '<h3>ZAPATOS</h3>' + opts('feet', C.feet) + sw('shoes', SWATCH.cloth) + '<h3>DETALLES DE ZAPATOS</h3>' + sw('shoes2', SWATCH.cloth);
+  if (tab === 'acc') h = '<h3>GAFAS</h3>' + num('glasses', EXTRAS.glasses) + '<h3>GORRA O GORRO</h3>' + num('cap', EXTRAS.cap) + sw('hat', SWATCH.cloth) + '<h3>AUDÍFONOS</h3>' + num('phones', EXTRAS.phones) + '<h3>ARETES</h3>' + num('earrings', EXTRAS.earrings) + '<h3>COLOR DE ACCESORIOS</h3>' + sw('acc', SWATCH.cloth);
+  if (tab === 'nombre') h = '<h3>¿CÓMO TE LLAMAS EN EL JUEGO?</h3><input type="text" class="f" id="name" maxlength="18" value="' + R.name.replace(/"/g, '&quot;') + '">';
+  $('body').innerHTML = h;
+  const n = $('name'); if (n) n.oninput = () => { R.name = n.value.trim() || 'Tú'; };
+}
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.tab) { tab = t.dataset.tab; render(); focusFirst(); return; }
+  if (t.dataset.pose) { POSE = t.dataset.pose; paintPoses(); if (POSE === 'live') liveOpen(); else $('live').classList.remove('on'); return; }
+  if (t.dataset.n) { R[t.dataset.n] = +t.dataset.v; R = fix(R); render(); refocus2(t); rebuild(); return; }
+  if (t.dataset.style) { const st = STYLES[t.dataset.style]; R = fix(Object.assign({}, R, st[R.g], { top: st.top, top2: st.top2, bottom: st.bottom, bottom2: st.bottom2, shoes: st.shoes, shoes2: st.shoes2, print: st.print })); render(); rebuild(); return; }
+  if (t.dataset.face !== undefined) { R.face = R.face.slice(); R.face[+t.dataset.face] = +t.dataset.v; R = fix(R); render(); refocus(t); rebuild(); return; }
+  if (t.dataset.k) { const k = t.dataset.k, v = t.dataset.v; if (k === 'g' && v !== R.g) { R = fix(Object.assign({}, R, { g: v, head: CATALOG[v].head[0][0], body: CATALOG[v].body[0][0], legs: CATALOG[v].legs[0][0], feet: CATALOG[v].feet[0][0] })); } else R[k] = v; if (k === 'top' && !R.hatSet) R.hat = v; if (k === 'hat') R.hatSet = true; R = fix(R); render(); refocus(t); rebuild(); }
+});
+function refocus(t) { const sel = `[data-k="${t.dataset.k}"][data-v="${t.dataset.v}"],[data-face="${t.dataset.face}"][data-v="${t.dataset.v}"]`; const n = document.querySelector(sel); if (n) n.focus(); }
+function refocus2(t) { const n = document.querySelector(`[data-n="${t.dataset.n}"][data-v="${t.dataset.v}"]`); if (n) n.focus(); }
+function focusFirst() { const n = document.querySelector('.tab.on'); if (n) n.focus(); }
+$('rand').onclick = () => { R = fix(Object.assign(randomRecipe(), { name: R.name })); render(); rebuild(); };
+
+// ---------- Control remoto: flechas mueven el foco al botón más cercano ----------
+document.addEventListener('keydown', (e) => {
+  const dirs = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }; const d = dirs[e.key];
+  if (!d) return; if (document.activeElement && document.activeElement.tagName === 'INPUT' && d[0]) return;
+  const cur = document.activeElement && document.activeElement.classList.contains('f') ? document.activeElement : null;
+  const all = [...document.querySelectorAll('.f')].filter((x) => x.offsetParent);
+  if (!cur) { all[0] && all[0].focus(); e.preventDefault(); return; }
+  const a = cur.getBoundingClientRect(), ax = a.left + a.width / 2, ay = a.top + a.height / 2; let best = null, bd = 1e9;
+  all.forEach((x) => { if (x === cur) return; const b = x.getBoundingClientRect(), bx = b.left + b.width / 2, by = b.top + b.height / 2; const dx = bx - ax, dy = by - ay;
+    const along = dx * d[0] + dy * d[1]; if (along <= 4) return; const across = Math.abs(dx * d[1]) + Math.abs(dy * d[0]); const sc = along + across * 2.2; if (sc < bd) { bd = sc; best = x; } });
+  if (best) { best.focus(); best.scrollIntoView({ block: 'nearest' }); e.preventDefault(); }
+});
+
+// ---------- Guardar ----------
+function toast(h, ms) { $('toast').innerHTML = h; $('toast').classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => $('toast').classList.remove('on'), ms || 3500); }
+function db() { return new Promise((res, rej) => { const r = indexedDB.open('mivibra-movimiento', 1); r.onupgradeneeded = () => r.result.createObjectStore('avatar'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+async function saveLocal(buf, name) { const d = await db(); await new Promise((res, rej) => { const t = d.transaction('avatar', 'readwrite'); t.objectStore('avatar').put({ vrm: buf, name, at: Date.now() }, 'me'); t.oncomplete = res; t.onerror = () => rej(t.error); }); }
+async function readLocal() { try { const d = await db(); return await new Promise((res) => { const t = d.transaction('avatar', 'readonly').objectStore('avatar').get('me'); t.onsuccess = () => res(t.result || null); t.onerror = () => res(null); }); } catch (e) { return null; } }
+function parentSave(buf, name) {
+  return new Promise((res, rej) => {
+    const t = setTimeout(() => { removeEventListener('message', on); rej(new Error('La app no respondió')); }, 60000);
+    function on(e) { if (e.source !== window.parent || !e.data || e.data.mv !== 'avatar-saved') return; clearTimeout(t); removeEventListener('message', on); e.data.ok ? res() : rej(new Error(e.data.msg || 'No se pudo guardar en tu cuenta')); }
+    addEventListener('message', on); window.parent.postMessage({ mv: 'avatar-save', vrm: buf, name }, '*', [buf]);
+  });
+}
+function fromApp() {
+  if (!IN_APP) return Promise.resolve(null);
+  return new Promise((res) => { const t = setTimeout(() => { removeEventListener('message', on); res(null); }, 20000);
+    function on(e) { if (e.source !== window.parent || !e.data || e.data.mv !== 'avatar') return; clearTimeout(t); removeEventListener('message', on); res(e.data.vrm ? e.data : null); }
+    addEventListener('message', on); window.parent.postMessage({ mv: 'avatar-get' }, '*'); });
+}
+$('save').textContent = IN_APP ? 'Guardar en mi cuenta' : 'Guardar';
+$('save').onclick = async () => {
+  const btn = $('save'); btn.disabled = true; const old = btn.textContent;
+  try {
+    await saveLocal(encode(R), R.name);
+    if (IN_APP) { btn.textContent = 'Guardando en tu cuenta…'; await parentSave(encode(R), R.name); toast('<b>¡Avatar guardado en tu cuenta!</b> Te sigue al TV, al celular y al PC.', 4500); }
+    else toast('<b>¡Avatar guardado!</b> Ya aparece en los juegos de este equipo.', 3500);
+  } catch (e) { toast('No se pudo guardar: ' + e.message, 5000); }
+  btn.disabled = false; btn.textContent = old;
+};
+$('playV').onclick = () => { location.href = '../vallas/' + location.search; };
+$('playB').onclick = () => { location.href = '../bolos/' + location.search; };
+if (IN_APP) addEventListener('keydown', (e) => { if (e.key === 'Escape') window.parent.postMessage({ mv: 'close' }, '*'); });
+
+// ---------- Inicio: el avatar de tu cuenta o el guardado en este equipo ----------
+render(); paintPoses();
+preload([R]);
+window.MVED = { set: async (o) => { R = fix(Object.assign({}, R, o)); render(); await rebuild(); }, pose: (p) => { POSE = p; paintPoses(); }, yaw: (v) => { yaw = v; idleT = -1e9; }, tab: (k) => { tab = k; render(); } };
+(async () => {
+  const acc = await fromApp(); let r = acc && acc.vrm ? decode(acc.vrm) : null;
+  if (!r) { const s = await readLocal(); r = s && s.vrm ? decode(s.vrm) : null; }
+  if (r) { R = r; render(); }
+  await rebuild(); focusFirst();
+  if (acc && acc.vrm && !decode(acc.vrm)) toast('Tu avatar anterior era del estilo realista. Crea uno nuevo con el estilo caricatura y guárdalo.', 6000);
+})();
+</script>
+</body>
+</html>

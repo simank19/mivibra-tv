@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Bolos · MiVibra Movimiento</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#1d1f24;color:#fff;font-family:Manrope,Inter,system-ui,sans-serif}
+canvas{display:block}
+.glass{background:rgba(24,26,30,.6);border:1px solid rgba(255,255,255,.22);border-radius:20px;box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 14px 34px -14px rgba(0,0,0,.6)}
+html:not(.q0) .glass{backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+html.q0 .glass{background:rgba(24,26,30,.82)}
+.ui{position:fixed;z-index:5}
+#hud{left:20px;top:18px;padding:10px 16px}
+small{display:block;font-size:11px;letter-spacing:.2em;font-weight:800;color:#D6D9DC}
+#hud b{font-size:20px}
+#score{right:20px;top:18px;padding:10px 12px}
+#score .row{display:flex;gap:4px;margin-top:6px}
+.f{width:42px;height:50px;border-radius:8px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);font-size:12px;text-align:center}
+.f i{display:block;font-style:normal;font-size:10px;color:#C9CED6;margin-top:2px}
+.f .r{font-weight:800;font-size:13px;height:16px}
+.f .t{font-weight:800;font-size:15px}
+.f.cur{background:rgba(255,106,61,.28);border-color:#FF6A3D}
+.f.ten{width:56px}
+#tot{display:flex;flex-direction:column;justify-content:center;padding:0 8px;font-size:12px;color:#C9CED6}
+#tot b{font-size:22px;color:#fff}
+#cue{left:50%;top:100px;transform:translateX(-50%);padding:12px 22px;font-size:24px;font-weight:800;white-space:nowrap;display:none}
+#cue.on{display:block}#cue.hot{background:rgba(255,106,61,.88);border-color:#FFB13D}
+#meter{left:20px;bottom:20px;width:290px;padding:12px 16px}
+#meter .bar{height:14px;border-radius:99px;background:rgba(255,255,255,.12);margin-top:8px;overflow:hidden}
+#meter .bar i{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,#34D399,#FFB13D,#FF6A3D)}
+#meter .v{display:flex;justify-content:space-between;margin-top:8px;font-weight:800;font-size:15px}
+#phone{right:20px;bottom:20px;width:170px;padding:10px 12px;display:none}
+#phone.on{display:block}
+#phone svg{display:block;margin:4px auto 0}
+#phone path,#phone circle{stroke:#34D399;stroke-width:6;stroke-linecap:round;fill:none}
+#big{left:0;right:0;top:12%;text-align:center;display:none;pointer-events:none}
+#big.on{display:block}
+#big b{display:block;font-size:110px;font-weight:900;text-shadow:0 6px 0 #FF6A3D,0 18px 50px rgba(0,0,0,.6)}
+#big span{display:inline-block;margin-top:6px;font-size:24px;font-weight:800;padding:8px 18px;border-radius:99px;background:rgba(24,26,30,.7)}
+#connect{right:20px;top:110px;width:300px;padding:14px;display:none;text-align:center}
+#connect.on{display:block}
+#connect img{width:170px;height:170px;border-radius:14px;background:#fff;padding:6px;display:block;margin:8px auto}
+#connect .code{font-size:34px;font-weight:900;letter-spacing:.16em}
+#connect .st{font-size:14px;margin-top:6px;color:#E4E6E8}#connect .st.ok{color:#34D399;font-weight:800}
+#loading{left:50%;top:50%;transform:translate(-50%,-50%);padding:18px 26px;font-weight:800;font-size:18px}
+#credit{position:fixed;left:50%;bottom:6px;transform:translateX(-50%);font-size:11px;color:rgba(255,255,255,.65);z-index:5;white-space:nowrap}
+#keys{left:50%;bottom:22px;transform:translateX(-50%);padding:8px 14px;font-size:13px;color:#E4E6E8;display:none}
+#keys.on{display:block}
+</style>
+</head>
+<body>
+<div id="hud" class="ui glass"><small>MIVIBRA MOVIMIENTO · BOLOS</small><b id="who">Tú</b></div>
+<div id="score" class="ui glass"><small>MARCADOR</small><div class="row" id="frames"></div></div>
+<div id="cue" class="ui glass"></div>
+<div id="meter" class="ui glass"><small id="mt">FUERZA</small><div class="bar"><i id="mbar"></i></div><div class="v"><span id="mv1">—</span><span id="mv2"></span></div></div>
+<div id="phone" class="ui glass"><small>CÁMARA DEL CELULAR</small><svg width="146" height="170" viewBox="0 0 150 176"><g id="stick"></g></svg></div>
+<div id="big" class="ui"><b id="bigT"></b><span id="bigS"></span></div>
+<div id="connect" class="ui glass"><small>JUGAR CON TU CUERPO</small><img id="qr" alt="Código QR para conectar el celular"><div class="code" id="code">······</div><div class="st" id="cst">Preparando…</div></div>
+<div id="keys" class="ui glass">← → apuntar · ↑ ↓ efecto · OK cargar y lanzar · Atrás: pausa</div>
+<div id="loading" class="ui glass">Preparando la bolera…</div>
+<div id="credit">Sonidos de bolos: juskiddink y daveincamas (CC BY-SA 3.0) · avatares con piezas CC0 de Quaternius</div>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@2.0.4/dist/qrcode.js"></script>
+<script src="../mano.js"></script>
+<script type="importmap">{"imports":{"three":"../vendor/three-0.183.2/three.module.min.js","three/addons/":"../vendor/three-0.183.2/addons/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { build as buildAvatar, decode as decodeAvatar, DEFAULT } from '../avatar.js';
+import { LivePose } from '../mvpose.js';
+
+const $ = (id) => document.getElementById(id);
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x)), lerp = (a, b, k) => a + (b - a) * k;
+const ss = (a, b, t) => { const x = clamp((t - a) / (b - a), 0, 1); return x * x * (3 - 2 * x); };
+// ---------- Calidad (TV liviano) ----------
+const IS_TV = /Tizen|Web0S|webOS|SMART-TV|SmartTV|NetCast|HbbTV|BRAVIA|AFT[A-Z]|Android TV|GoogleTV|MiTV|Mi TV|TCL|Hisense|CrKey/i.test(navigator.userAgent) || (/Android/i.test(navigator.userAgent) && !/Mobile/i.test(navigator.userAgent) && !('ontouchstart' in window));
+const QP = new URLSearchParams(location.search).get('q');
+const Q = QP !== null ? clamp(+QP | 0, 0, 2) : IS_TV ? 0 : 2;
+document.documentElement.classList.toggle('q0', Q === 0);
+const R = new THREE.WebGLRenderer({ antialias: Q === 2, powerPreference: 'high-performance' });
+R.setPixelRatio(Math.min(devicePixelRatio, Q === 2 ? 1.75 : 1, (Q === 0 ? 960 : 2000) / innerWidth)); R.setSize(innerWidth, innerHeight);
+R.toneMapping = THREE.NeutralToneMapping; R.toneMappingExposure = 1.08; R.shadowMap.enabled = Q > 0; R.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.prepend(R.domElement);
+const S = new THREE.Scene(); S.background = new THREE.Color('#d9d2f0'); S.fog = new THREE.Fog('#d9d2f0', 34, 80);
+const cam = new THREE.PerspectiveCamera(48, innerWidth / innerHeight, 0.05, 120);
+addEventListener('resize', () => { R.setSize(innerWidth, innerHeight); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
+function tex(w, h, draw, rep) { const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d'); draw(g, w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = Q === 0 ? 2 : 8; if (rep) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep[0], rep[1]); } t.userData = { c, g }; return t; }
+const M = (c, o = {}) => Q === 0 ? (() => { const k = Object.assign({}, o); delete k.roughness; delete k.metalness; return new THREE.MeshLambertMaterial(Object.assign({ color: c }, k)); })() : new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.5 }, o));
+function box(w, h, d, m, x, y, z) { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.set(x, y, z); b.receiveShadow = true; S.add(b); return b; }
+
+// ---------- Bolera (estilo caricatura, colores MiVibra) ----------
+const LW = 1.066, HEAD = -18.29, ZA = 5, ZB = -19.4, LEN = ZA - ZB, GUT = LW / 2 + 0.12;
+const laneTex = tex(256, 2048, (g, w, h) => {
+  for (let i = 0; i < 26; i++) { g.fillStyle = `hsl(34,${55 + (i % 3) * 5}%,${70 + ((i * 7) % 5)}%)`; g.fillRect(i * w / 26, 0, w / 26 + 1, h); }
+  const zv = (z) => (ZA - z) / LEN * h;
+  g.fillStyle = '#5a3a24'; g.fillRect(0, zv(0) - 3, w, 6);
+  for (let i = 0; i < 7; i++) { const x = (i + 1) * w / 8, y = zv(-4.6) + Math.abs(i - 3) * 18; g.fillStyle = '#FF6A3D'; g.beginPath(); g.moveTo(x, y - 26); g.lineTo(x - 7, y + 10); g.lineTo(x + 7, y + 10); g.fill(); }
+  for (let i = 0; i < 10; i++) { g.fillStyle = '#8E5CF7'; g.beginPath(); g.arc((i + 0.5) * w / 10, zv(-2.1), 3, 0, 7); g.fill(); }
+});
+const laneMat = M('#ffffff', { map: laneTex, roughness: 0.25 });
+const gutMat = M('#5b5480', { roughness: 0.4 }), capMat = M('#8E5CF7', { roughness: 0.5 });
+const NEIGH = Q === 0 ? 1 : 2;
+for (let k = -NEIGH; k <= NEIGH; k++) {
+  const x0 = k * 1.95;
+  const lane = new THREE.Mesh(new THREE.PlaneGeometry(LW, LEN), laneMat); lane.rotation.x = -Math.PI / 2; lane.position.set(x0, 0, (ZA + ZB) / 2); lane.receiveShadow = true; S.add(lane);
+  [-1, 1].forEach((s) => { const gt = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, -ZB, 10, 1, true, Math.PI / 2, Math.PI), gutMat); gt.material.side = THREE.DoubleSide; gt.rotation.set(-Math.PI / 2, 0, 0); gt.position.set(x0 + s * GUT, 0, ZB / 2); S.add(gt); });
+  box(0.22, 0.06, -ZB, capMat, x0 + LW / 2 + 0.35, 0.03, ZB / 2);
+  box(LW + 0.5, 0.04, 1.4, M('#1e1a2c'), x0, -0.3, -20.2);
+  // máscara sobre los pinos con el número de la línea
+  const n = 7 + k;
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.5), new THREE.MeshBasicMaterial({ toneMapped: false, map: tex(512, 140, (g, w, h) => { const gr = g.createLinearGradient(0, 0, w, 0); gr.addColorStop(0, '#FF6A3D'); gr.addColorStop(1, '#8E5CF7'); g.fillStyle = gr; g.fillRect(0, 0, w, h); g.fillStyle = '#fff'; g.font = '900 64px Manrope,Inter,sans-serif'; g.textBaseline = 'middle'; g.fillText('MiVibra', 26, 74); g.textAlign = 'right'; g.font = '900 86px Manrope,Inter,sans-serif'; g.fillText(String(n), w - 24, 76); }) }));
+  sign.position.set(x0, 1.3, -19.0); S.add(sign);
+  if (k < NEIGH) { const bx = x0 + 0.975; box(0.36, 0.55, 1.3, M('#5b4f86'), bx, 0.275, 4.6); ['#2F7DF6', '#F43F5E', '#FFB13D'].forEach((c, i) => { const b = new THREE.Mesh(new THREE.SphereGeometry(0.108, 18, 12), M(c, { roughness: 0.15 })); b.position.set(bx, 0.66, 4.15 + i * 0.3); S.add(b); }); }
+}
+// Paredes de colores, techo con luces y zona del jugador
+const wallTex = tex(1024, 256, (g, w, h) => { const gr = g.createLinearGradient(0, 0, w, 0); gr.addColorStop(0, '#8E5CF7'); gr.addColorStop(0.5, '#FF6A3D'); gr.addColorStop(1, '#FFB13D'); g.fillStyle = gr; g.fillRect(0, 0, w, h); g.fillStyle = 'rgba(255,255,255,.18)'; for (let i = 0; i < 18; i++) { g.beginPath(); g.arc(Math.random() * w, Math.random() * h, 20 + Math.random() * 60, 0, 7); g.fill(); } });
+box(14, 5, 0.2, M('#ffffff', { map: wallTex }), 0, 2.5, -21.0);
+[-1, 1].forEach((s) => box(0.2, 5, 30, M('#b7a8f0'), s * 6.5, 2.5, -6));
+box(14, 0.2, 30, M('#f1ecff'), 0, 4.2, -6);
+for (let z = -18; z <= 4; z += 4.4) box(9, 0.06, 0.3, new THREE.MeshBasicMaterial({ color: '#fff3e0' }), 0, 4.08, z);
+box(14, 0.05, 7, M('#6d5cc4'), 0, -0.02, 7.5);
+// Marcador grande sobre la zona de lanzamiento
+const boardTex = tex(1024, 256, () => {});
+const board = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 0.7), new THREE.MeshBasicMaterial({ map: boardTex, toneMapped: false })); board.position.set(0, 2.75, -1.6); S.add(board);
+box(2.9, 0.8, 0.06, M('#15121f'), 0, 2.75, -1.64);
+S.add(new THREE.HemisphereLight('#fffaf2', '#8a7ab0', 1.55));
+const key = new THREE.DirectionalLight('#fff4e6', 1.8); key.position.set(2, 9, 6); key.target.position.set(0, 0, -6); key.castShadow = Q > 0; key.shadow.mapSize.set(Q === 2 ? 2048 : 1024, Q === 2 ? 2048 : 1024);
+Object.assign(key.shadow.camera, { left: -4, right: 4, top: 16, bottom: -16, near: 1, far: 40 }); key.shadow.bias = -0.0004; S.add(key, key.target);
+if (Q > 0) { const p = new THREE.PointLight('#fff4e6', 6, 6, 1.4); p.position.set(0, 1.0, -17.4); S.add(p); }
+
+// ---------- Pinos y bola ----------
+const prof = [[0, 0], [0.026, 0], [0.034, 0.012], [0.05, 0.06], [0.0605, 0.115], [0.058, 0.165], [0.045, 0.215], [0.026, 0.255], [0.022, 0.28], [0.03, 0.32], [0.032, 0.345], [0.026, 0.37], [0.012, 0.381], [0, 0.381]].map(([r, y]) => new THREE.Vector2(r, y));
+const pinTex = tex(4, 128, (g, w, h) => { g.fillStyle = '#fbfbf8'; g.fillRect(0, 0, w, h); g.fillStyle = '#e0283a'; g.fillRect(0, h * 0.535, w, h * 0.03); g.fillRect(0, h * 0.585, w, h * 0.03); });
+const pinGeo = new THREE.LatheGeometry(prof, Q === 0 ? 14 : 24), pinMat = M('#ffffff', { map: pinTex, roughness: 0.25 });
+const PINS = [];
+for (let r = 0; r < 4; r++) for (let i = 0; i <= r; i++) { const m = new THREE.Mesh(pinGeo, pinMat); m.castShadow = Q > 0; S.add(m); PINS.push({ m, x0: (i - r / 2) * 0.3048, z0: HEAD - r * 0.264 }); }
+const ballTex = tex(256, 128, (g, w, h) => { const gr = g.createLinearGradient(0, 0, w, h); gr.addColorStop(0, '#5b2bd1'); gr.addColorStop(0.5, '#8E5CF7'); gr.addColorStop(1, '#FF6A3D'); g.fillStyle = gr; g.fillRect(0, 0, w, h); g.fillStyle = '#120a1e'; [[0.5, 0.18], [0.46, 0.27], [0.54, 0.27]].forEach(([u, v]) => { g.beginPath(); g.ellipse(u * w, v * h, 5, 7, 0, 0, 7); g.fill(); }); });
+const BR = 0.108, ball = new THREE.Mesh(new THREE.SphereGeometry(BR, 28, 18), M('#ffffff', { map: ballTex, roughness: 0.12 })); ball.castShadow = Q > 0; S.add(ball);
+// trayectoria prevista al apuntar
+const NSEG = 40, aimGeo = new THREE.PlaneGeometry(1, 1, 1, NSEG);
+const aim = new THREE.Mesh(aimGeo, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, toneMapped: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, map: tex(64, 512, (g, w, h) => { for (let i = 0; i < 24; i++) { const y = i * h / 24; g.fillStyle = 'rgba(255,150,90,1)'; g.beginPath(); g.moveTo(w * 0.15, y + 14); g.lineTo(w / 2, y + 3); g.lineTo(w * 0.85, y + 14); g.lineTo(w * 0.85, y + 19); g.lineTo(w / 2, y + 8); g.lineTo(w * 0.15, y + 19); g.fill(); } }) }));
+aim.renderOrder = 2; S.add(aim);
+
+// Pocas piezas para el TV: lo que no se mueve se junta
+if (Q === 0) {
+  S.updateMatrixWorld(true); const by = new Map();
+  S.traverse((o) => { if (!o.isMesh || o === ball || o === aim || PINS.some((p) => p.m === o) || o === board) return; const k = o.material.uuid; (by.get(k) || by.set(k, []).get(k)).push(o); });
+  by.forEach((list) => { if (list.length < 2) return; const gs = list.map((o) => { const g = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone()).applyMatrix4(o.matrixWorld); ['uv1', 'uv2', 'color'].forEach((a) => g.deleteAttribute && g.attributes[a] && g.deleteAttribute(a)); return g; });
+    const mg = mergeGeometries(gs); if (!mg) return; const m = new THREE.Mesh(mg, list[0].material); S.add(m); list.forEach((o) => (o.visible = false)); });
+}
+
+// ---------- Sonidos reales ----------
+const SND = { ac: null, buf: {}, roll: null, rollG: null,
+  async init() { if (this.ac) return; try { this.ac = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: Q === 0 ? 'playback' : 'interactive' }); } catch (e) { return; }
+    this.out = this.ac.createGain(); this.out.gain.value = 0.9; this.out.connect(this.ac.destination);
+    for (const n of ['bola-roll', 'pinos']) { try { const b = await (await fetch('../sonidos/' + n + '.mp3')).arrayBuffer(); this.buf[n] = await this.ac.decodeAudioData(b); } catch (e) {} } },
+  play(n, g = 1, rate = 1) { if (!this.ac || !this.buf[n]) return null; const s = this.ac.createBufferSource(); s.buffer = this.buf[n]; s.playbackRate.value = rate; const v = this.ac.createGain(); v.gain.value = g; s.connect(v); v.connect(this.out); s.start(); return { s, v }; },
+  rollStart() { this.rollStop(); const p = this.play('bola-roll', 0.0); if (!p) return; p.s.loop = true; this.roll = p; },
+  rollSet(v) { if (this.roll) this.roll.v.gain.value = v; },
+  rollStop() { if (this.roll) { try { this.roll.s.stop(); } catch (e) {} this.roll = null; } },
+  thud() { if (!this.ac) return; const t = this.ac.currentTime, o = this.ac.createOscillator(), v = this.ac.createGain(); o.frequency.setValueAtTime(80, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.2); v.gain.setValueAtTime(0.6, t); v.gain.exponentialRampToValueAtTime(0.001, t + 0.25); o.connect(v); v.connect(this.out); o.start(t); o.stop(t + 0.3); },
+  ding(f = 880) { if (!this.ac) return; const t = this.ac.currentTime; [f, f * 1.25, f * 1.5].forEach((ff, i) => { const o = this.ac.createOscillator(), v = this.ac.createGain(); o.frequency.value = ff; v.gain.setValueAtTime(0, t + i * 0.09); v.gain.linearRampToValueAtTime(0.12, t + i * 0.09 + 0.01); v.gain.exponentialRampToValueAtTime(0.001, t + i * 0.09 + 0.5); o.connect(v); v.connect(this.out); o.start(t + i * 0.09); o.stop(t + i * 0.09 + 0.6); }); },
+};
+
+// ---------- Avatar ----------
+let av = null, hy0 = 0;
+function readSaved() { return new Promise((res) => { try { const r = indexedDB.open('mivibra-movimiento', 1); r.onupgradeneeded = () => r.result.createObjectStore('avatar'); r.onerror = () => res(null); r.onsuccess = () => { try { const t = r.result.transaction('avatar', 'readonly').objectStore('avatar').get('me'); t.onsuccess = () => res(t.result || null); t.onerror = () => res(null); } catch (e) { res(null); } }; } catch (e) { res(null); } }); }
+function fromApp() { if (window.parent === window) return Promise.resolve(null); return new Promise((res) => { const t = setTimeout(() => { removeEventListener('message', on); res(null); }, 20000); function on(e) { if (e.source !== window.parent || !e.data || e.data.mv !== 'avatar') return; clearTimeout(t); removeEventListener('message', on); res(e.data.vrm ? e.data : null); } addEventListener('message', on); window.parent.postMessage({ mv: 'avatar-get' }, '*'); }); }
+async function loadAvatar() {
+  const acc = await fromApp(); let rec = acc && acc.vrm ? decodeAvatar(acc.vrm) : null;
+  if (!rec) { const s = await readSaved(); rec = s && s.vrm ? decodeAvatar(s.vrm) : null; }
+  if (!rec) rec = Object.assign({}, DEFAULT, { name: 'Tú' });
+  av = await buildAvatar(rec, { lite: Q === 0 }); av.scene.traverse((o) => { if (o.isMesh) o.castShadow = Q > 0; });
+  av.scene.rotation.y = Math.PI; S.add(av.scene); hy0 = av.humanoid.getNormalizedBoneNode('hips').position.y;
+  $('who').textContent = 'Línea 7 · ' + (rec.name || 'Tú');
+}
+const N = (n) => av.humanoid.getNormalizedBoneNode(n);
+function resetBones() { Object.values(av.humanoid.normalizedHumanBones).forEach((n) => n.quaternion.identity()); N('hips').position.y = hy0; }
+const mix = (a, b, k) => { const o = {}; new Set([...Object.keys(a), ...Object.keys(b)]).forEach((key) => { o[key] = lerp(a[key] || 0, b[key] || 0, k); }); return o; };
+// Posturas del lanzamiento (X positivo del brazo = hacia atrás)
+const P_HOLD = { rsx: -0.6, rel: 1.5, rsz: 0.35, lsx: -0.6, lel: 1.5, lsz: -0.35 };
+const P_BACK = { rsx: 1.3, rel: 0.05, lsx: -0.2, lel: 0.2, lsz: 0.9, sp: 0.3 };
+const P_REL = { rsx: -0.25, lsx: 0.2, lsz: 1.0, sp: 0.45, lhx: -0.85, lk: 0.95, rhx: 0.75, rk: 0.15, drop: 0.2 };
+const P_FOLLOW = { rsx: -2.2, rel: 0.35, lsx: 0.25, lsz: 1.05, sp: 0.35, lhx: -0.85, lk: 0.95, rhx: 0.8, rk: 0.15, drop: 0.2 };
+function pose(p) {
+  const g = (k) => p[k] || 0;
+  N('rightUpperArm').rotation.set(g('rsx'), 0, Math.PI / 2 + g('rsz')); N('rightLowerArm').rotation.set(0, -g('rel'), 0);
+  N('leftUpperArm').rotation.set(g('lsx'), 0, -Math.PI / 2 + g('lsz')); N('leftLowerArm').rotation.set(0, g('lel'), 0);
+  N('leftUpperLeg').rotation.set(g('lhx'), 0, 0); N('leftLowerLeg').rotation.set(g('lk'), 0, 0); N('rightUpperLeg').rotation.set(g('rhx'), 0, 0); N('rightLowerLeg').rotation.set(g('rk'), 0, 0);
+  N('spine').rotation.set(g('sp'), 0, 0); N('hips').position.y = hy0 - g('drop');
+}
+
+// ---------- Estado del juego ----------
+let G = { frame: 0, roll: 0, rolls: [[], [], [], [], [], [], [], [], [], []], state: 'load', t: 0, aimX: 0, spin: 0, power: 0, meterOn: false, speed: 0, hook: 0, standing: null };
+const ball2 = { x: 0, z: 0, vx: 0, vz: 0, gut: false, live: false, y: BR };
+function resetPins(all) {
+  PINS.forEach((p) => { if (all || !p.down) { p.x = p.x0; p.z = p.z0; p.vx = p.vz = 0; p.down = false; p.gone = false; p.tilt = 0; p.ax = new THREE.Vector3(1, 0, 0); p.spin = 0; p.m.visible = true; } else { p.gone = true; p.m.visible = false; } });
+}
+function placePins() {
+  const q1 = new THREE.Quaternion(), q2 = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
+  PINS.forEach((p) => { if (p.gone) return; q1.setFromAxisAngle(p.ax, p.tilt); q2.setFromAxisAngle(up, p.spin); p.m.quaternion.copy(q2).multiply(q1); p.m.position.set(p.x, Math.sin(p.tilt) * 0.055, p.z); });
+}
+// Física sencilla en el plano: bola contra pinos y pinos entre sí
+function physics(dt) {
+  if (ball2.live) {
+    ball2.x += ball2.vx * dt; ball2.z += ball2.vz * dt;
+    const d = -ball2.z;
+    if (!ball2.gut && d > 7) ball2.vx += ball2.hook * 0.9 * dt;
+    ball2.vz *= 1 - 0.015 * dt;
+    if (!ball2.gut && Math.abs(ball2.x) > LW / 2 - 0.01) { ball2.gut = true; ball2.x = Math.sign(ball2.x) * GUT; ball2.vx = 0; ball2.y = BR - 0.06; SND.thud(); cue('¡Canal!', true); }
+    if (ball2.z < -19.7) { ball2.live = false; SND.rollStop(); }
+  }
+  const pr = 0.06;
+  PINS.forEach((p) => {
+    if (p.gone) return;
+    if (ball2.live && !ball2.gut) {
+      const dx = p.x - ball2.x, dz = p.z - ball2.z, dist = Math.hypot(dx, dz), md = BR + pr;
+      if (dist < md && dist > 1e-4) {
+        const nx = dx / dist, nz = dz / dist, rv = (ball2.vx - p.vx) * nx + (ball2.vz - p.vz) * nz;
+        if (rv > 0) { const j = (1 + 0.7) * rv / (1 / 7 + 1 / 1.5); ball2.vx -= j / 7 * nx; ball2.vz -= j / 7 * nz; p.vx += j / 1.5 * nx; p.vz += j / 1.5 * nz; if (j / 1.5 > 0.35) knock(p); if (!G.hitT) { G.hitT = G.t; const n = PINS.filter((q) => !q.gone).length; SND.play('pinos', 0.6 + 0.4 * Math.min(1, n / 10), 0.95 + Math.random() * 0.1); } }
+        ball2.x = p.x - nx * md; ball2.z = p.z - nz * md;
+      }
+    }
+  });
+  for (let i = 0; i < PINS.length; i++) for (let k = i + 1; k < PINS.length; k++) {
+    const a = PINS[i], b = PINS[k]; if (a.gone || b.gone) continue;
+    const ra = a.down ? 0.1 : pr, rb = b.down ? 0.1 : pr, dx = b.x - a.x, dz = b.z - a.z, dist = Math.hypot(dx, dz), md = ra + rb;
+    if (dist < md && dist > 1e-4) {
+      const nx = dx / dist, nz = dz / dist, rv = (a.vx - b.vx) * nx + (a.vz - b.vz) * nz;
+      if (rv > 0) { const j = (1 + 0.6) * rv / 2; a.vx -= j * nx; a.vz -= j * nz; b.vx += j * nx; b.vz += j * nz; if (j > 0.3) { knock(a); knock(b); } }
+      const push = (md - dist) / 2; a.x -= nx * push; a.z -= nz * push; b.x += nx * push; b.z += nz * push;
+    }
+  }
+  PINS.forEach((p) => {
+    if (p.gone) return;
+    const sp = Math.hypot(p.vx, p.vz);
+    if (sp > 0) { const ns = Math.max(0, sp - 2.0 * dt); p.vx *= ns / sp; p.vz *= ns / sp; }
+    p.x += p.vx * dt; p.z += p.vz * dt;
+    if (Math.abs(p.x) > 0.9) { p.x = Math.sign(p.x) * 0.9; p.vx *= -0.5; knock(p); }
+    if (p.z < -19.75) { p.z = -19.75; p.vz = 0; knock(p); }
+    if (Math.abs(p.x) > LW / 2 + 0.02 && !p.down) knock(p);
+    if (p.down) { p.tilt = Math.min(Math.PI / 2, p.tilt + dt * 6); p.spin += sp * dt * 3; }
+  });
+}
+function knock(p) { if (p.down) return; p.down = true; const sp = Math.hypot(p.vx, p.vz) || 1; p.ax.set(p.vz / sp, 0, -p.vx / sp); if (p.ax.lengthSq() < 0.1) p.ax.set(1, 0, 0); }
+
+// ---------- Puntaje ----------
+function scores() {
+  const flat = []; G.rolls.forEach((r) => r.forEach((x) => flat.push(x)));
+  const out = []; let i = 0, tot = 0;
+  for (let f = 0; f < 10; f++) {
+    const r = G.rolls[f]; if (!r.length) { out.push(null); continue; }
+    if (f < 9) {
+      if (r[0] === 10) { if (flat[i + 1] === undefined || flat[i + 2] === undefined) { out.push(null); i += 1; continue; } tot += 10 + flat[i + 1] + flat[i + 2]; i += 1; }
+      else if (r.length < 2) { out.push(null); i += 1; continue; }
+      else if (r[0] + r[1] === 10) { if (flat[i + 2] === undefined) { out.push(null); i += 2; continue; } tot += 10 + flat[i + 2]; i += 2; }
+      else { tot += r[0] + r[1]; i += 2; }
+    } else { const done = r.length === 3 || (r.length === 2 && r[0] + r[1] < 10); if (!done) { out.push(null); continue; } tot += r.reduce((a, b) => a + b, 0); }
+    out.push(tot);
+  }
+  return out;
+}
+function marks(f) {
+  const r = G.rolls[f];
+  if (f < 9) { if (r[0] === 10) return ['', 'X']; return [r[0] === undefined ? '' : r[0] === 0 ? '-' : r[0], r[1] === undefined ? '' : r[0] + r[1] === 10 ? '/' : r[1] === 0 ? '-' : r[1]]; }
+  const o = []; r.forEach((x, k) => { const prev = k > 0 ? r[k - 1] : null; if (x === 10 && (k === 0 || prev === 10 || (k === 2 && r[0] + r[1] === 10))) o.push('X'); else if (k > 0 && prev !== 10 && prev + x === 10 && !(k === 2 && r[0] + r[1] === 10 && r[0] !== 10)) o.push('/'); else o.push(x === 0 ? '-' : x); }); while (o.length < 3) o.push(''); return o;
+}
+function drawScore() {
+  const sc = scores(), tot = sc.filter((x) => x !== null).pop() || 0;
+  $('frames').innerHTML = Array.from({ length: 10 }, (_, f) => { const m = marks(f); return `<div class="f${f === G.frame && G.state !== 'end' ? ' cur' : ''}${f === 9 ? ' ten' : ''}"><i>${f + 1}</i><div class="r">${m.join(' ')}</div><div class="t">${sc[f] ?? ''}</div></div>`; }).join('') + `<div id="tot">TOTAL<b>${tot}</b></div>`;
+  const { g } = boardTex.userData, w = 1024, h = 256; g.fillStyle = '#100d18'; g.fillRect(0, 0, w, h);
+  g.fillStyle = '#FF6A3D'; g.beginPath(); g.arc(34, 38, 10, 0, 7); g.fill(); g.fillStyle = '#fff'; g.font = '800 30px Manrope,Inter,sans-serif'; g.textBaseline = 'middle'; g.fillText($('who').textContent.replace('Línea 7 · ', ''), 54, 40);
+  for (let f = 0; f < 10; f++) { const x = 20 + f * 88, y = 80; g.fillStyle = f === G.frame ? '#3a2219' : '#1a1626'; g.fillRect(x, y, 84, 150); g.strokeStyle = f === G.frame ? '#FF6A3D' : '#2e2840'; g.lineWidth = 3; g.strokeRect(x, y, 84, 150);
+    g.fillStyle = '#9aa3ad'; g.font = '700 18px Manrope,Inter'; g.textAlign = 'center'; g.fillText(String(f + 1), x + 42, y + 18); g.fillStyle = '#fff'; g.font = '800 26px Manrope,Inter'; g.fillText(marks(f).join(' '), x + 42, y + 58); if (sc[f] !== null) { g.font = '900 38px Manrope,Inter'; g.fillText(String(sc[f]), x + 42, y + 112); } g.textAlign = 'left'; }
+  g.fillStyle = '#9aa3ad'; g.font = '700 18px Manrope'; g.fillText('TOTAL', 912, 98); g.fillStyle = '#fff'; g.font = '900 52px Manrope'; g.fillText(String(tot), 912, 160); boardTex.needsUpdate = true;
+}
+
+// ---------- Interfaz ----------
+function cue(t, hot) { $('cue').textContent = t; $('cue').classList.toggle('hot', !!hot); $('cue').classList.add('on'); clearTimeout(cue.h); cue.h = setTimeout(() => $('cue').classList.remove('on'), 2600); }
+function big(t, s, ms) { $('bigT').textContent = t; $('bigS').textContent = s; $('big').classList.add('on'); clearTimeout(big.h); big.h = setTimeout(() => $('big').classList.remove('on'), ms || 2200); }
+function meter(p, txt1, txt2, title) { $('mbar').style.width = (clamp(p, 0, 1) * 100).toFixed(0) + '%'; $('mv1').textContent = txt1; $('mv2').textContent = txt2 || ''; if (title) $('mt').textContent = title; }
+
+// ---------- Cámara del celular: apuntar con el cuerpo y lanzar con el brazo ----------
+const LIVE = new LivePose();
+const CAMS = { hist: [], state: 'hold', backT: 0, cx0: null, arm: 6 };
+MVLink.onPose((l, ts, d) => {
+  LIVE.feed(d);
+  if (!l || G.state !== 'aim' && G.state !== 'swing') return;
+  const v = (i) => l[i] && l[i][2] > 0.45; if (!(v(1) && v(2) && v(7) && v(8))) return;
+  const shY = (l[1][1] + l[2][1]) / 2, hipY = (l[7][1] + l[8][1]) / 2, torso = Math.max(0.06, hipY - shY), cx = 1 - (l[7][0] + l[8][0]) / 2;
+  if (CAMS.cx0 === null) CAMS.cx0 = cx;
+  if (G.state === 'aim') G.aimX = clamp((cx - CAMS.cx0) * 2.4, -0.42, 0.42);
+  // la muñeca que más se mueve es la del lanzamiento
+  const wr = [5, 6].map((i) => v(i) ? (l[i][1] - hipY) / torso : null), wx = [5, 6].map((i) => v(i) ? (1 - l[i][0]) / torso : null);
+  CAMS.hist.push({ ts, wr, wx }); CAMS.hist = CAMS.hist.filter((h) => ts - h.ts < 400);
+  const k = CAMS.arm === 6 ? 1 : 0;
+  if (wr[k] === null) return;
+  const y = wr[k];
+  if (CAMS.state === 'hold' && y > 0.3) { CAMS.state = 'back'; CAMS.backT = ts; if (G.state === 'aim') startSwing(); }
+  if (CAMS.state === 'back') {
+    const old = CAMS.hist[0]; const vy = old && old.wr[k] !== null ? (y - old.wr[k]) / Math.max(0.05, (ts - old.ts) / 1000) : 0;
+    G.power = clamp(-vy / 6, G.power * 0.98, 1);
+    if (y < 0.05 && vy < -1.8) { const vx = old && old.wx[k] !== null ? (wx[k] - old.wx[k]) / Math.max(0.05, (ts - old.ts) / 1000) : 0; release(clamp(-vy / 6, 0.25, 1), clamp(vx * 0.12, -1, 1)); CAMS.state = 'done'; }
+    else if (ts - CAMS.backT > 3500) CAMS.state = 'hold';
+  }
+});
+function useCamera() { return MVLink.fresh(); }
+MVHand.onPause = () => pause();
+function stickDraw() {
+  const l = MVLink.lm; $('phone').classList.toggle('on', !!(MVLink.on && l)); if (!l) return;
+  const P = (i) => [15 + (1 - l[i][0]) * 120, 10 + l[i][1] * 160], B = [[1, 2], [1, 3], [3, 5], [2, 4], [4, 6], [1, 7], [2, 8], [7, 8], [7, 9], [9, 11], [8, 10], [10, 12]];
+  let h = B.filter(([a, b]) => l[a][2] > 0.4 && l[b][2] > 0.4).map(([a, b]) => { const p = P(a), q = P(b); return `<path d="M${p[0].toFixed(0)} ${p[1].toFixed(0)}L${q[0].toFixed(0)} ${q[1].toFixed(0)}"/>`; }).join('');
+  if (l[0][2] > 0.4) { const n = P(0); h += `<circle cx="${n[0].toFixed(0)}" cy="${n[1].toFixed(0)}" r="9"/>`; } $('stick').innerHTML = h;
+}
+
+// ---------- Flujo del turno ----------
+function newRoll() {
+  G.state = 'aim'; G.t = 0; G.power = 0; G.meterOn = false; G.hitT = 0; G.relT = null; CAMS.state = 'hold'; CAMS.cx0 = null; ball2.live = false; ball2.gut = false; ball2.y = BR;
+  MVHand.pauseEnabled = true; drawScore();
+  const f = G.frame + 1, r = G.rolls[G.frame].length + 1;
+  cue(useCamera() ? 'Muévete para apuntar · lleva el brazo atrás y lanza' : 'Turno ' + f + ' · bola ' + r + ' · ← → apunta y OK para lanzar');
+  meter(0, '—', '', useCamera() ? 'FUERZA DEL BRAZO' : 'FUERZA');
+  $('keys').classList.toggle('on', !useCamera());
+}
+function startSwing() { if (G.state !== 'aim') return; G.state = 'swing'; G.t = 0; }
+function release(power, hook) {
+  if (G.state !== 'aim' && G.state !== 'swing') return;
+  if (G.state === 'aim') { G.state = 'swing'; G.t = 1.2; }
+  G.relT = G.t; G.speed = lerp(4.5, 9.5, power); G.hook = hook; G.power = power; MVHand.pauseEnabled = false;
+  meter(power, Math.round(G.speed * 3.6) + ' km/h', hook > 0.15 ? 'Efecto →' : hook < -0.15 ? 'Efecto ←' : 'Recta', 'LANZAMIENTO');
+}
+function launch() {
+  G.state = 'roll'; G.t = 0; ball2.live = true; ball2.x = G.aimX + 0.18; ball2.z = 0.1; ball2.vz = -G.speed; ball2.vx = 0; ball2.hook = -G.hook * 1.0;
+  SND.thud(); SND.rollStart(); $('keys').classList.remove('on');
+}
+function settle() {
+  const before = G.standing ?? 10, down = PINS.filter((p) => p.down && !p.gone).length, f = G.frame, r = G.rolls[f];
+  r.push(down);
+  const first = r.length === 1;
+  let msg = null;
+  if (f < 9) {
+    if (first && down === 10) msg = ['¡CHUZA!', 'Strike · 10 pinos'];
+    else if (!first && r[0] + r[1] === 10) msg = ['¡SPARE!', 'Tumbaste todos en dos bolas'];
+    else msg = [down === 0 ? '¡Uy!' : down + (down === 1 ? ' pino' : ' pinos'), first ? 'Te quedan ' + (10 - down) : 'Total del turno: ' + (r[0] + r[1])];
+  } else msg = [down === before && before === 10 ? '¡CHUZA!' : down === before ? '¡SPARE!' : down + ' pinos', 'Turno 10'];
+  if (msg[0].startsWith('¡CHUZA') || msg[0].startsWith('¡SPARE')) { SND.ding(msg[0].startsWith('¡CHUZA') ? 988 : 784); MVLink.say(msg[0], true); }
+  big(msg[0], msg[1]);
+  // ¿siguiente bola o siguiente turno?
+  let nextFrame = false, resetAll = false;
+  if (f < 9) { if (first && down === 10) { nextFrame = true; } else if (!first) nextFrame = true; }
+  else { const t = r.reduce((a, b) => a + b, 0); if (r.length === 3 || (r.length === 2 && r[0] + r[1] < 10)) { G.state = 'end'; drawScore(); setTimeout(endGame, 2400); return; } resetAll = (r.length === 1 && down === 10) || (r.length === 2 && (r[1] === 10 || r[0] + r[1] === 10)) || (r.length === 2 && r[0] === 10 && down === before && before === 10); }
+  G.state = 'sweep'; G.t = 0;
+  setTimeout(() => {
+    if (nextFrame) { G.frame++; resetPins(true); G.standing = 10; }
+    else if (resetAll) { resetPins(true); G.standing = 10; }
+    else { resetPins(false); G.standing = PINS.filter((p) => !p.gone).length; }
+    newRoll();
+  }, 2400);
+}
+function endGame() {
+  const tot = scores()[9] || 0; MVHand.pauseEnabled = false;
+  MVHand.menu({ kicker: 'FIN DEL JUEGO', title: tot + ' puntos', sub: tot >= 150 ? '¡Juegazo!' : tot >= 90 ? '¡Muy bien!' : 'Sigue practicando: ¡la próxima es mejor!', items: [{ id: 'again', label: 'Jugar otra vez', icon: '↻' }, { id: 'edit', label: 'Cambiar mi avatar', icon: '☺' }, { id: 'exit', label: 'Salir', icon: '✕' }], back: 'exit', onPick: menuPick });
+}
+function pause() {
+  if (G.state === 'menu' || MVHand.open) return; G.paused = true;
+  MVHand.menu({ kicker: 'JUEGO EN PAUSA', title: 'Pausa', items: [{ id: 'resume', label: 'Continuar', icon: '▶' }, { id: 'again', label: 'Reiniciar juego', icon: '↻' }, { id: 'exit', label: 'Salir', icon: '☰' }], back: 'resume', onPick: menuPick });
+}
+function menuPick(id) {
+  G.paused = false;
+  if (id === 'resume') return;
+  if (id === 'play' || id === 'again') { SND.init(); G.frame = 0; G.rolls = [[], [], [], [], [], [], [], [], [], []]; G.standing = 10; resetPins(true); $('connect').classList.remove('on'); newRoll(); return; }
+  if (id === 'cam') { $('connect').classList.add('on'); return startMenu(); }
+  if (id === 'edit') { location.href = '../editor/' + location.search; return; }
+  if (id === 'exit') { if (window.parent !== window) window.parent.postMessage({ mv: 'close' }, '*'); else history.back(); }
+}
+function startMenu() {
+  G.state = 'menu';
+  MVHand.menu({ kicker: 'MIVIBRA MOVIMIENTO', title: 'Bolos', sub: MVLink.on ? 'Celular conectado: levanta la mano y desliza por la flecha.' : 'Conecta el celular para jugar con tu cuerpo, o usa el control.',
+    items: [{ id: 'play', label: 'Jugar (10 turnos)', icon: '▶' }, { id: 'cam', label: MVLink.on ? 'Celular conectado ✓' : 'Conectar el celular', icon: '◉' }, { id: 'exit', label: 'Salir', icon: '✕' }], back: 'exit', onPick: menuPick });
+}
+
+// ---------- Control remoto ----------
+addEventListener('keydown', (e) => {
+  if (MVHand.key(e)) { e.preventDefault(); return; }
+  if (e.key === 'Escape' || e.key === 'p' || e.key === 'MediaPlayPause') { pause(); e.preventDefault(); return; }
+  if (G.state !== 'aim' && G.state !== 'swing') return;
+  if (e.key === 'ArrowLeft') G.aimX = clamp(G.aimX - 0.04, -0.42, 0.42);
+  if (e.key === 'ArrowRight') G.aimX = clamp(G.aimX + 0.04, -0.42, 0.42);
+  if (e.key === 'ArrowUp') G.spin = clamp(G.spin + 0.25, -1, 1);
+  if (e.key === 'ArrowDown') G.spin = clamp(G.spin - 0.25, -1, 1);
+  if (e.key === 'Enter' || e.key === ' ' || e.keyCode === 23) { SND.init(); if (!G.meterOn) { G.meterOn = true; G.mt = 0; startSwing(); } else { G.meterOn = false; release(G.power, G.spin); } }
+  e.preventDefault();
+});
+
+// ---------- Cámara de TV ----------
+const cp = new THREE.Vector3(), cl = new THREE.Vector3(), tP = new THREE.Vector3(), tL = new THREE.Vector3();
+function camera(dt) {
+  if (G.state === 'roll' && ball2.z > -14) { tP.set(ball2.x * 0.4 + 0.3, 0.7, Math.min(ball2.z + 2.6, 3)); tL.set(ball2.x * 0.2, 0.2, ball2.z - 6); }
+  else if (G.state === 'roll' || G.state === 'sweep' || G.state === 'end') { tP.set(0.45, 0.65, -16.4); tL.set(0, 0.2, -18.8); }
+  else if (G.state === 'menu' || G.state === 'load') { tP.set(1.4, 2.2, 6.6); tL.set(0, 0.5, -12); }
+  else { const x = av ? av.scene.position.x : 0, z = av ? av.scene.position.z : 3; tP.set(x + 0.55, 1.75, z + 3.0); tL.set(x * 0.6, 0.45, -12); }
+  const k = 1 - Math.exp(-dt * (G.state === 'roll' ? 6 : 3)); cp.lerp(tP, k); cl.lerp(tL, k); cam.position.copy(cp); cam.lookAt(cl);
+}
+cp.set(1.4, 2.2, 6.6); cl.set(0, 0.5, -12);
+
+// ---------- Bucle ----------
+let last = performance.now();
+const tmp = new THREE.Vector3();
+function loop(now) {
+  requestAnimationFrame(loop);
+  let dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (G.paused) dt = 0;
+  G.t += dt;
+  if (av) {
+    resetBones();
+    const ax = G.state === 'aim' || G.state === 'swing' || G.state === 'menu' ? G.aimX : (av.scene.position.x);
+    let z = 3.2, p = Object.assign({}, P_HOLD, { sp: Math.sin(now / 450) * 0.03 });
+    if (G.state === 'swing') {
+      const t = G.t;
+      if (G.relT === undefined || G.relT === null) { p = mix(P_HOLD, P_BACK, ss(0, 0.9, t)); z = lerp(3.2, 1.6, ss(0, 1.2, t)); }
+      else { const u = t - G.relT; p = u < 0.35 ? mix(P_BACK, P_REL, ss(0, 0.35, u)) : mix(P_REL, P_FOLLOW, ss(0.35, 0.9, u)); z = lerp(1.6, 0.35, ss(0, 0.35, u)); if (u > 0.33 && !ball2.live && G.state === 'swing') launch(); }
+      if (G.meterOn) { G.mt += dt; G.power = 0.5 - 0.5 * Math.cos(G.mt * 3.2); meter(G.power, Math.round(lerp(4.5, 9.5, G.power) * 3.6) + ' km/h', G.spin ? (G.spin > 0 ? 'Efecto →' : 'Efecto ←') : 'Recta', 'FUERZA'); }
+      else if (useCamera() && G.relT == null) meter(G.power, 'Lanza hacia adelante', '', 'FUERZA DEL BRAZO');
+    } else if (G.state === 'roll' || G.state === 'sweep') { p = P_FOLLOW; z = 0.35; }
+    av.scene.position.set(ax, 0, z);
+    pose(p);
+    // con la cámara: mientras apuntas, tu avatar copia tus brazos y tronco
+    if (G.state === 'aim' && useCamera()) LIVE.apply(av, dt, 1, { skip: ['leftUpperLeg', 'leftLowerLeg', 'rightUpperLeg', 'rightLowerLeg'] });
+    av.update(dt);
+  }
+  if (G.state === 'swing' && G.relT == null) G.relT = G.relT; // espera el lanzamiento
+  if (G.state === 'swing' && G.relT !== undefined && G.relT !== null && !ball2.live && G.t - G.relT > 0.6) launch();
+  // bola: en la mano hasta lanzarla
+  if (!ball2.live && av && (G.state === 'aim' || G.state === 'swing' || G.state === 'menu')) { av.scene.updateMatrixWorld(true); av.humanoid.getRawBoneNode('rightHand').getWorldPosition(tmp); ball.position.copy(tmp); ball.position.y -= 0.06; ball.visible = true; }
+  if (ball2.live || G.state === 'roll') {
+    const sub = 4; for (let i = 0; i < sub; i++) physics(dt / sub);
+    ball.position.set(ball2.x, ball2.y, ball2.z); ball.rotation.x -= ball2.vz * dt / BR; ball.visible = ball2.z > -19.8;
+    if (SND.roll) SND.rollSet(ball2.live ? 0.55 : 0);
+    placePins();
+    const moving = PINS.some((p) => !p.gone && Math.hypot(p.vx, p.vz) > 0.03);
+    if (G.state === 'roll' && !ball2.live && (!moving || G.t > 7)) { G.state = 'settling'; setTimeout(settle, 700); }
+    if (G.state === 'roll' && G.t > 9) { ball2.live = false; }
+  } else placePins();
+  // trayectoria prevista
+  aim.visible = G.state === 'aim';
+  if (aim.visible) { const pos = aimGeo.attributes.position, hk = -(G.spin || 0); for (let j = 0; j <= NSEG; j++) { const d = 0.4 + j / NSEG * 17.6, x = G.aimX + 0.18 + hk * 0.45 * Math.pow(Math.max(0, d - 7) / 11, 2) * 0.5, z = 0.15 - d, w = 0.08 + j / NSEG * 0.05; pos.setXYZ(j * 2, x - w, 0.005, z); pos.setXYZ(j * 2 + 1, x + w, 0.005, z); } pos.needsUpdate = true; aimGeo.computeBoundingSphere(); }
+  if ((now | 0) % 3 === 0) stickDraw();
+  camera(dt || 0.016);
+  R.render(S, cam);
+}
+
+// ---------- Inicio ----------
+MVLink.open((txt, ok) => { $('cst').textContent = txt; $('cst').classList.toggle('ok', !!ok); if (MVLink.code) { $('code').textContent = MVLink.code; if (!$('qr').src) $('qr').src = MVLink.qr(5); } if (ok && G.state === 'menu') { MVHand.close(); startMenu(); } });
+resetPins(true); G.standing = 10; drawScore();
+requestAnimationFrame(loop);
+loadAvatar().then(() => { $('loading').style.display = 'none'; startMenu(); }).catch((e) => { console.error(e); $('loading').textContent = 'No se pudo cargar el avatar'; });
+window.MVB = { G, ball2, PINS, release: (p, h) => { startSwing(); release(p, h); }, pick: (id) => { MVHand.close(); menuPick(id); }, scores };
+</script>
+</body>
+</html>

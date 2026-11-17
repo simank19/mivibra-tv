@@ -103,7 +103,7 @@ html.q0 .glass{backdrop-filter:none!important;-webkit-backdrop-filter:none!impor
 </div></div>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@2.0.4/dist/qrcode.js"></script>
-<script type="importmap">{"imports":{"three":"../vendor/three-0.183.2/three.module.min.js","three/addons/":"../vendor/three-0.183.2/addons/","@pixiv/three-vrm":"../vendor/three-vrm-3.5.1/three-vrm.module.min.js"}}</script>
+<script type="importmap">{"imports":{"three":"../vendor/three-0.183.2/three.module.min.js","three/addons/":"../vendor/three-0.183.2/addons/"}}</script>
 <script type="module">
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -112,7 +112,8 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
+import { LivePose } from '../mvpose.js';
+import { build as buildAvatar, decode as decodeAvatar, PRESETS, DEFAULT, fix as fixAvatar, preload as preloadAvatars } from '../avatar.js';
 
 const $ = (id) => document.getElementById(id);
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -131,13 +132,13 @@ const QFIX = QP !== null;
 const R = new THREE.WebGLRenderer({ antialias: Q === 2, powerPreference: 'high-performance' });
 R.setSize(innerWidth, innerHeight);
 R.shadowMap.enabled = true;
-R.toneMapping = THREE.ACESFilmicToneMapping; R.toneMappingExposure = 1.05;
+R.toneMapping = THREE.NeutralToneMapping; R.toneMappingExposure = 1.08;
 document.body.prepend(R.domElement);
 const S = new THREE.Scene();
 const cam = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 900);
 const composer = new EffectComposer(R);
 composer.addPass(new RenderPass(S, cam));
-const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.55, 0.5, 0.82);
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.18, 0.4, 0.95);
 composer.addPass(bloom); composer.addPass(new OutputPass());
 addEventListener('resize', () => { R.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); applyQ(); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
 
@@ -149,11 +150,13 @@ const glowTex = tex(128, 128, (g, w) => { const r = g.createRadialGradient(64, 6
 function glow(color, size) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true })); s.scale.set(size, size, 1); return s; }
 
 // ================= Cielo y luz (atardecer) =================
-const sky = new THREE.Mesh(new THREE.SphereGeometry(600, 32, 16), new THREE.MeshBasicMaterial({ side: THREE.BackSide, fog: false, map: tex(4, 512, (g, w, h) => { const r = g.createLinearGradient(0, 0, 0, h); r.addColorStop(0, '#0E1A44'); r.addColorStop(0.32, '#2B3F86'); r.addColorStop(0.46, '#C46A7A'); r.addColorStop(0.5, '#F49A5B'); r.addColorStop(0.56, '#FFD9A0'); r.addColorStop(1, '#2a2430'); g.fillStyle = r; g.fillRect(0, 0, w, h); }) }));
+// Cielo de día con nubes (estilo caricatura)
+const sky = new THREE.Mesh(new THREE.SphereGeometry(600, 32, 16), new THREE.MeshBasicMaterial({ side: THREE.BackSide, fog: false, toneMapped: false, map: tex(1024, 512, (g, w, h) => { const r = g.createLinearGradient(0, 0, 0, h); r.addColorStop(0, '#2f8ff0'); r.addColorStop(0.45, '#7cc6ff'); r.addColorStop(0.52, '#cdeeff'); r.addColorStop(1, '#a9d98a'); g.fillStyle = r; g.fillRect(0, 0, w, h);
+  for (let k = 0; k < 40; k++) { const x = Math.random() * w, y = h * (0.12 + Math.random() * 0.34), rr = 14 + Math.random() * 34; const c = g.createRadialGradient(x, y, 0, x, y, rr); c.addColorStop(0, 'rgba(255,255,255,.95)'); c.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = c; g.beginPath(); g.ellipse(x, y, rr * 2.2, rr, 0, 0, 7); g.fill(); } }) }));
 S.add(sky);
-S.fog = new THREE.Fog('#c98a78', 160, 520);
-S.add(new THREE.HemisphereLight('#a9b8ff', '#4a3a2a', 0.55));
-const sun = new THREE.DirectionalLight('#ffd2a1', 2.4); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+S.fog = new THREE.Fog('#cfe8ff', 200, 560);
+S.add(new THREE.HemisphereLight('#e8f3ff', '#7d8a5c', 1.25));
+const sun = new THREE.DirectionalLight('#fff4e2', 2.7); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -16, right: 16, top: 16, bottom: -16, near: 1, far: 120 }); sun.shadow.bias = -0.0004;
 S.add(sun, sun.target);
 // Aplica el nivel de calidad: resolución interna, sombras, brillo (bloom) y la pantalla gigante
@@ -169,18 +172,18 @@ function applyQ() {
   R.shadowMap.needsUpdate = true;
   if (window.blobs) blobs.forEach((b) => (b.visible = Q === 0));
 }
-const fill = new THREE.DirectionalLight('#9fb4ff', 0.6); fill.position.set(30, 25, -60); S.add(fill);
+const fill = new THREE.DirectionalLight('#dceaff', 0.9); fill.position.set(30, 25, -60); S.add(fill);
 
 // ================= Estadio =================
 const CX = 0, CZ = -50, RX = 32, RZ = 88;   // óvalo de las gradas
-const grass = tex(256, 256, (g, w, h) => { for (let y = 0; y < h; y += 32) { g.fillStyle = (y / 32) % 2 ? '#2f8f47' : '#2a8040'; g.fillRect(0, y, w, 32); } }, [14, 14]);
+const grass = tex(256, 256, (g, w, h) => { for (let y = 0; y < h; y += 32) { g.fillStyle = (y / 32) % 2 ? '#62c46d' : '#55b763'; g.fillRect(0, y, w, 32); } }, [14, 14]);
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), Mt('#ffffff', { map: grass, roughness: 0.95 })); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; S.add(ground);
 const LANES = 8, LW = 1.22, X0 = -(LANES * LW) / 2;
 const laneX = (i) => X0 + LW * (i + 0.5);
 const trackTex = tex(1024, 64, (g, w, h) => { g.fillStyle = '#C24A33'; g.fillRect(0, 0, w, h); for (let i = 0; i < 2500; i++) { g.fillStyle = `rgba(${Math.random() < .5 ? '0,0,0' : '255,255,255'},.06)`; g.fillRect(Math.random() * w, Math.random() * h, 2, 2); } g.fillStyle = '#fff'; for (let i = 0; i <= LANES; i++) g.fillRect(Math.min(w - 4, i * (w / LANES)), 0, 4, h); }, [1, 40]);
 const track = new THREE.Mesh(new THREE.PlaneGeometry(LANES * LW + 0.05, 200), Mt('#ffffff', { map: trackTex, roughness: 0.85 })); track.rotation.x = -Math.PI / 2; track.position.set(0, 0.015, -60); track.receiveShadow = true; S.add(track);
 // apron rojo
-const apron = new THREE.Mesh(new THREE.PlaneGeometry(16, 200), Mt('#9c3a28', { roughness: 0.9 })); apron.rotation.x = -Math.PI / 2; apron.position.set(0, 0.01, -60); apron.receiveShadow = true; S.add(apron);
+const apron = new THREE.Mesh(new THREE.PlaneGeometry(16, 200), Mt('#e0623f', { roughness: 0.9 })); apron.rotation.x = -Math.PI / 2; apron.position.set(0, 0.01, -60); apron.receiveShadow = true; S.add(apron);
 // Líneas de salida y meta + números de carril
 const lineM = Mt('#ffffff', { roughness: 0.5 });
 S.add(box(LANES * LW, 0.01, 0.06, lineM, 0, 0.02, 0));
@@ -211,7 +214,7 @@ for (let i = 0; i < LANES; i++) for (const z of HURDLES) {
 }
 
 // Gradas ovaladas (con huecos) + techo de vigas + torres de luz
-const standM = Mt('#3b3f55', { roughness: 0.92 }), standM2 = Mt('#2e3247', { roughness: 0.92 });
+const standM = Mt('#5b8def', { roughness: 0.7 }), standM2 = Mt('#f4f5f6', { roughness: 0.7 });
 const seats = [];
 const ROWS = 15;
 for (let r = 0; r < ROWS; r++) {
@@ -421,7 +424,6 @@ RUNNERS.forEach((r) => {
 const ME = RUNNERS.find((r) => r.me);
 
 // ================= Avatares VRM: el tuyo (guardado en el editor) y los rivales =================
-const RIVAL_FILES = { Laura: 'laura', 'Andrés': 'andres', Valentina: 'valentina', Camilo: 'camilo', 'Sofía': 'sofia' };
 function readSaved() { return new Promise((res) => { try { const r = indexedDB.open('mivibra-movimiento', 1); r.onupgradeneeded = () => r.result.createObjectStore('avatar'); r.onerror = () => res(null); r.onsuccess = () => { try { const t = r.result.transaction('avatar', 'readonly').objectStore('avatar').get('me'); t.onsuccess = () => res(t.result || null); t.onerror = () => res(null); } catch (e) { res(null); } }; } catch (e) { res(null); } }); }
 // Dentro de la app MiVibra: tu avatar viene de tu cuenta (la app lo descarga y lo pasa aquí)
 function fromApp() {
@@ -433,27 +435,16 @@ function fromApp() {
     window.parent.postMessage({ mv: 'avatar-get' }, '*');
   });
 }
-const vrmLoader = new GLTFLoader(); vrmLoader.register((p) => new VRMLoaderPlugin(p));
+// Avatares estilo caricatura (avatar.js): el tuyo sale de tu cuenta o de este equipo; los rivales son prearmados
 let vrmLoaded = 0;
-function attachVRM(r, buf) {
-  return new Promise((res) => vrmLoader.parse(buf, '', (g) => {
-    const vrm = g.userData.vrm; if (!vrm) return res(false);
-    try { VRMUtils.removeUnnecessaryVertices(vrm.scene); } catch (e) {}
-    vrm.scene.traverse((o) => {
-      if (!o.isMesh) return;
-      o.castShadow = true; o.frustumCulled = false;
-      if (Q === 0) {
-        // TV: material más simple y, en los rivales, sin gestos de la cara (ahorra mucha memoria de video)
-        const lite = (m) => m && m.isMeshStandardMaterial ? new THREE.MeshLambertMaterial({ map: m.map, color: m.color, transparent: m.transparent, opacity: m.opacity, alphaTest: m.alphaTest, side: m.side, depthWrite: m.depthWrite }) : m;
-        o.material = Array.isArray(o.material) ? o.material.map(lite) : lite(o.material);
-        if (!r.me && o.geometry.morphAttributes && Object.keys(o.geometry.morphAttributes).length) { o.geometry.morphAttributes = {}; o.morphTargetInfluences = undefined; o.morphTargetDictionary = undefined; }
-      }
-    });
-    if (Q === 0 && !r.me) vrm.expressionManager = undefined;
-    S.add(vrm.scene); r.vrm = vrm; r.vrmRest = vrm.humanoid.getNormalizedBoneNode('hips').position.y; r.A.visible = false;
+async function attachAvatar(r, recipe) {
+  try {
+    const av = await buildAvatar(recipe, { lite: Q === 0 });
+    av.scene.traverse((o) => { if (o.isMesh) { o.castShadow = Q > 0; o.frustumCulled = false; } });
+    S.add(av.scene); r.vrm = av; r.vrmRest = av.humanoid.getNormalizedBoneNode('hips').position.y; r.A.visible = false;
     vrmLoaded++; const el = document.getElementById('go'); if (el && el.dataset.wait) el.textContent = 'Cargando atletas… ' + vrmLoaded + '/' + RUNNERS.length;
-    res(true);
-  }, () => res(false)));
+    return true;
+  } catch (e) { console.error(e); return false; }
 }
 async function cachedFetch(url) {
   const NAME = 'mv-avatares-v1';
@@ -462,10 +453,14 @@ async function cachedFetch(url) {
 }
 const nextFrame = () => new Promise((res) => requestAnimationFrame(() => setTimeout(res, 0)));
 async function loadOne(r) {
-  if (r.me) { const acc = await fromApp(); if (acc && acc.vrm) { r.name = (acc.name || r.name).slice(0, 18); return attachVRM(r, acc.vrm); }
-    const saved = await readSaved(); if (saved && saved.vrm) { r.name = (saved.name || r.name).slice(0, 18); return attachVRM(r, saved.vrm); } r.name = 'Tú'; try { return attachVRM(r, await cachedFetch(new URL('../avatars/' + (Q === 0 ? 'tv/' : '') + 'tu.vrm', location.href).href)); } catch (e) { return false; } }
-  const f = RIVAL_FILES[r.name]; if (!f) return false;
-  try { return attachVRM(r, await cachedFetch(new URL('../avatars/' + (Q === 0 ? 'tv/' : '') + f + '.vrm', location.href).href)); } catch (e) { return false; }
+  if (r.me) {
+    const acc = await fromApp(); let rec = acc && acc.vrm ? decodeAvatar(acc.vrm) : null;
+    if (!rec) { const saved = await readSaved(); rec = saved && saved.vrm ? decodeAvatar(saved.vrm) : null; }
+    if (!rec) rec = Object.assign({}, DEFAULT, { name: 'Tú' });
+    r.name = String(rec.name || 'Tú').slice(0, 18); return attachAvatar(r, rec);
+  }
+  const p = PRESETS.find((x) => x.name === r.name) || PRESETS[(r.lane || 0) % PRESETS.length];
+  return attachAvatar(r, p);
 }
 // Uno por uno, dejando respirar la pantalla entre cada atleta, y preparando sus sombreadores sin congelar el TV
 const vrmReady = (async () => {
@@ -507,6 +502,8 @@ function driveOne(r, dt) {
   b('rightUpperLeg').rotation.set(c.hpRX, 0, -c.hpRZ); b('rightLowerLeg').rotation.set(c.knR, 0, 0); b('rightFoot').rotation.set(c.anR, 0, 0);
   const em = vrm.expressionManager;
   if (em) { em.setValue('blink', r.A.userData.J.eyes[0].scale.y < 0.5 ? 1 : 0); em.setValue('happy', clamp((c.smile - 0.3) * 1.4, 0, 1)); }
+  // con la cámara del celular, tu avatar copia tus brazos, piernas, tronco y cabeza en vivo
+  if (r.me && CAM.on && !CAM.paused) LIVE.apply(vrm, dt, 1);
   vrm.update(dt);
 }
 
@@ -747,7 +744,7 @@ function update(dt, t) {
     if (!podiumDone) { podiumDone = true; if (!results.length) results = standings(); show('res', 0); const top = results.slice(0, 3); $('banner').innerHTML = '¡' + top[0].name + ' gana el oro!'; show('banner', 1); SND.fanfare(); setTimeout(SND.cheer, 400); confettiStart(); }
     const top = results.slice(0, 3);
     RUNNERS.forEach((r) => { const i = top.indexOf(r); if (i < 0) { r.A.userData.show = false; r.A.visible = false; return; } r.A.userData.show = true; r.A.visible = !r.vrm; const [x, h] = PODS[i]; const jt = clamp((pt - 0.6 - i * 0.5) / 0.6, 0, 1); const from = new THREE.Vector3(POD.x + x, 0, POD.z + 2.2); const to = new THREE.Vector3(POD.x + x, h, POD.z); r.A.position.lerpVectors(from, to, smooth(jt)); r.A.position.y += Math.sin(jt * Math.PI) * 0.8; r.A.rotation.y = 0; apply(r.A, jt < 1 ? POSES.idle(t) : (i === 0 ? POSES.victory(t) : POSES.cheer(t, i)), 0.15);
-      if (pt > 3 + i * 0.4 && !r.medal) { r.medal = medal(['#FFC83D', '#C9CED6', '#C67B45'][i]); if (r.vrm) { const ch = r.vrm.humanoid.getNormalizedBoneNode('chest') || r.vrm.humanoid.getNormalizedBoneNode('spine'); ch.add(r.medal); r.medal.position.set(0, 0.12, 0.14); r.medal.scale.setScalar(0.8); } else { r.A.userData.J.chest.add(r.medal); r.medal.position.set(0, 0.12, 0.2); } SND.ding(); } });
+      if (pt > 3 + i * 0.4 && !r.medal) { r.medal = medal(['#FFC83D', '#C9CED6', '#C67B45'][i]); if (r.vrm) { const H = r.vrm.humanoid, ch = (H.getRawBoneNode && (H.getRawBoneNode('upperChest') || H.getRawBoneNode('chest'))) || H.getNormalizedBoneNode('chest'); r.vrm.scene.updateMatrixWorld(true); const wp = new THREE.Vector3(); ch.getWorldPosition(wp); const fw = new THREE.Vector3(0, 0, 0.16).applyQuaternion(r.vrm.scene.quaternion); S.add(r.medal); r.medal.position.copy(wp).add(fw); r.medal.position.y -= 0.06; r.medal.quaternion.copy(r.vrm.scene.quaternion); r.medal.scale.setScalar(0.8); r.medal.updateMatrixWorld(true); ch.attach(r.medal); } else { r.A.userData.J.chest.add(r.medal); r.medal.position.set(0, 0.12, 0.2); } SND.ding(); } });
     if (Math.random() < 0.04 && pt > 1.5) firework(new THREE.Vector3(POD.x + rnd(-30, 30), rnd(25, 40), POD.z - rnd(10, 40)), pick(['#FF6A3D', '#FFD666', '#7AA7FF', '#FF3DA8', '#34D399']));
     const a = 0.3 * Math.sin(pt * 0.25);
     setCam(new THREE.Vector3(POD.x + Math.sin(a) * 7, 2.4, POD.z + Math.cos(a) * 7), new THREE.Vector3(POD.x, 1.6, POD.z), 0.05);
@@ -793,8 +790,10 @@ function camOpen() {
   });
 }
 function camSay(text, ok) { try { if (CAM.conn && CAM.conn.open) CAM.conn.send({ t: 'say', text, ok: !!ok }); } catch (e) {} }
+const LIVE = new LivePose();
 function camData(d) {
   if (!d) return;
+  if (d.t === 'p') LIVE.feed(d);
   if (d.t === 'pause') { CAM.paused = !!d.on; return; }
   if (d.t !== 'p') return;
   const l = d.l; CAM.lm = l; if (!l) return;

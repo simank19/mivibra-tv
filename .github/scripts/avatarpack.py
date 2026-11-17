@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Arma MiVibra Movimiento para GitHub Pages (site/movimiento):
+el editor de avatares caricatura (piezas CC0 de Quaternius), los juegos (vallas, bolos) y la cámara del celular;
+además deja
 el editor de avatares VRM Avatar Maker (MIT, piezas CC0 de MakeHuman) en español y con la marca MiVibra,
 más el juego de 100 m con vallas, que corre con el avatar guardado en el mismo navegador.
 
@@ -43,7 +45,19 @@ def main():
     open(p, 'w', encoding='utf-8').write(j)
     for f in ('mivibra.js', 'mivibra.css'):
         shutil.copy(os.path.join(OVR, f), os.path.join(out, f))
-    shutil.copytree(os.path.join(OVR, 'avatars'), os.path.join(out, 'avatars'))
+    # El editor VRM queda en editor-vrm/ (avatares realistas, ya no se usa en los juegos);
+    # el editor nuevo de avatares caricatura va en editor/
+    shutil.move(os.path.join(out, 'editor'), os.path.join(out, 'editor-vrm'))
+    os.makedirs(os.path.join(out, 'editor'), exist_ok=True)
+    shutil.copy(os.path.join(OVR, 'editor.html'), os.path.join(out, 'editor', 'index.html'))
+    for f in ('avatar.js', 'mvpose.js', 'mano.js'):
+        shutil.copy(os.path.join(OVR, f), os.path.join(out, f))
+    for d in ('kit', 'sonidos'):
+        shutil.copytree(os.path.join(OVR, d), os.path.join(out, d))
+    shutil.copytree(os.path.join(OVR, 'avatars'), os.path.join(out, 'avatars'), ignore=shutil.ignore_patterns('*.vrm', 'tv'))
+    if os.path.exists(os.path.join(OVR, 'bolos.html')):
+        os.makedirs(os.path.join(out, 'bolos'), exist_ok=True)
+        shutil.copy(os.path.join(OVR, 'bolos.html'), os.path.join(out, 'bolos', 'index.html'))
     os.makedirs(os.path.join(out, 'vallas'), exist_ok=True)
     shutil.copy(os.path.join(OVR, 'vallas.html'), os.path.join(out, 'vallas', 'index.html'))
     shutil.copytree(os.path.join(OVR, 'addons3'), os.path.join(out, 'vendor', 'three-0.183.2', 'addons'), dirs_exist_ok=True)
