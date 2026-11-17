@@ -35,6 +35,13 @@ button{font:inherit;cursor:pointer}
 #start p{color:#EEF0F2;line-height:1.5;font-size:14px;margin:0 0 16px}
 #code{width:100%;height:56px;border-radius:16px;border:1px solid rgba(255,255,255,.3);background:rgba(0,0,0,.15);color:#fff;font:800 28px 'DM Sans',sans-serif;text-align:center;letter-spacing:.3em;margin-bottom:12px}
 #err{color:#FFD1C8;font-size:13px;min-height:18px;margin:6px 0 0}
+#ph{position:fixed;inset:0;z-index:8;display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px;background:rgba(10,10,14,.35)}
+#ph.on{display:flex}
+#phT{font:800 22px 'Bricolage Grotesque',sans-serif;padding:8px 18px;border-radius:99px;background:rgba(255,106,61,.92)}
+#phN{font:900 140px/1 'Bricolage Grotesque',sans-serif;text-shadow:0 8px 0 #FF6A3D,0 20px 50px rgba(0,0,0,.5);min-height:10px}
+#phImg{display:none;max-width:92vw;max-height:58vh;border-radius:16px;box-shadow:0 20px 50px rgba(0,0,0,.5)}
+#phBtns{display:none;gap:8px;width:min(420px,92vw)}
+#phFl{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:9}
 </style>
 </head>
 <body>
@@ -42,9 +49,10 @@ button{font:inherit;cursor:pointer}
 <div class="top glass"><span class="dot" id="dot"></span><div><b id="st">Sin conectar</b><small id="sub">MiVibra Movimiento</small></div><span class="fps" id="fps">— fps</span></div>
 <div class="msg glass" id="msg">Ponte de cuerpo entero frente al celular</div>
 <div class="bottom glass">
-  <p>Apoya el celular de pie, a la altura de la cintura, a 2–3 m de ti. El video se procesa aquí: al TV solo llegan los puntos de tu cuerpo.</p>
+  <p>Apoya el celular de pie, a la altura de la cintura, a 2–3 m de ti. El video se procesa aquí: al TV solo llegan los puntos de tu cuerpo (y, si no la cancelas, una copia pequeña de la foto de celebración). Al cambiar de juego no tienes que volver a conectar.</p>
   <div class="row"><button class="btn" id="flip">Cambiar cámara</button><button class="btn pri" id="pause">Pausa</button></div>
 </div>
+<div id="ph"><div id="phT">¡Celebra!</div><div id="phN"></div><img id="phImg" alt="Foto de celebración"><div id="phBtns" class="row"><button class="btn pri" id="phSave">Guardar</button><button class="btn" id="phShare">Compartir</button><button class="btn" id="phClose">Listo</button></div><button class="btn" id="phX" style="flex:none;width:200px">No tomar foto</button></div><div id="phFl"></div>
 <div id="start"><div class="card glass">
   <small>MIVIBRA MOVIMIENTO</small>
   <h1>Celular como cámara</h1>
@@ -57,9 +65,10 @@ button{font:inherit;cursor:pointer}
 <script type="module">
 import { FilesetResolver, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs';
 const $ = (id) => document.getElementById(id);
-const KEEP = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28, 7, 8];   // + orejas (para el giro de la cabeza)   // nariz, hombros, codos, muñecas, caderas, rodillas, tobillos
-const BONES = [[11, 12], [11, 13], [13, 15], [12, 14], [14, 16], [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [24, 26], [26, 28]];
-let peer = null, conn = null, landmarker = null, facing = 'user', stream = null, paused = false, lastSend = 0, frames = 0, fpsT = performance.now(), wake = null;
+// nariz, hombros, codos, muñecas, caderas, rodillas, tobillos, orejas (giro de cabeza), índices y pulgares (giro de la mano), puntas de los pies
+const KEEP = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28, 7, 8, 19, 20, 21, 22, 31, 32];
+const BONES = [[11, 12], [11, 13], [13, 15], [12, 14], [14, 16], [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [24, 26], [26, 28], [15, 19], [16, 20], [27, 31], [28, 32]];
+let peer = null, conn = null, code = '', mySlot = (() => { try { const v = sessionStorage.getItem('mv-slot'); return v === null ? null : +v; } catch (e) { return null; } })(), files = null, quality = 'full', slowN = 0, landmarker = null, facing = 'user', stream = null, paused = false, lastSend = 0, frames = 0, fpsT = performance.now(), wake = null;
 
 const qs = new URLSearchParams(location.search), preset = (qs.get('c') || '').replace(/\D/g, '').slice(0, 6);
 if (preset) $('code').value = preset;
@@ -72,29 +81,90 @@ async function camera() {
   const v = $('vid'); v.srcObject = stream; await v.play();
   v.style.transform = $('ov').style.transform = facing === 'user' ? 'scaleX(-1)' : 'none';
 }
-async function model() {
-  const files = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
-  const opts = (d) => ({ baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task', delegate: d }, runningMode: 'VIDEO', numPoses: 1, minPoseDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
-  try { landmarker = await PoseLandmarker.createFromOptions(files, opts('GPU')); } catch (e) { landmarker = await PoseLandmarker.createFromOptions(files, opts('CPU')); }
+async function model(q) {
+  quality = q || quality;
+  if (!files) files = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+  // "full" ve mejor manos, pies y giros; "lite" es más rápido en celulares sencillos
+  const url = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_' + quality + '/float16/1/pose_landmarker_' + quality + '.task';
+  const opts = (d) => ({ baseOptions: { modelAssetPath: url, delegate: d }, runningMode: 'VIDEO', numPoses: 1, minPoseDetectionConfidence: 0.55, minPosePresenceConfidence: 0.55, minTrackingConfidence: 0.6 });
+  const old = landmarker; let gpu = true;
+  try { landmarker = await PoseLandmarker.createFromOptions(files, opts('GPU')); } catch (e) { gpu = false; landmarker = await PoseLandmarker.createFromOptions(files, opts('CPU')); }
+  if (old) try { old.close(); } catch (e) {}
+  if (!gpu && quality === 'full') return model('lite');
+  $('sub').textContent = 'Detección ' + (quality === 'full' ? 'precisa' : 'rápida') + (code ? ' · código ' + code : '');
 }
-function connect(code) {
+function onData(d) {
+  if (!d) return;
+  if (d.t === 'say') msg(d.text, d.ok);
+  if (d.t === 'slot') { mySlot = d.n - 1; try { sessionStorage.setItem('mv-slot', mySlot); } catch (e) {} let b = document.getElementById('slotTag'); if (!b) { b = document.createElement('div'); b.id = 'slotTag'; b.style.cssText = 'position:fixed;right:12px;top:calc(70px + env(safe-area-inset-top));z-index:9;padding:8px 14px;border-radius:99px;font:800 16px Manrope,Inter,sans-serif;color:#fff;box-shadow:0 6px 16px rgba(0,0,0,.35)'; document.body.appendChild(b); } b.textContent = 'Jugador ' + d.n; b.style.background = d.color || '#FF6A3D'; msg((d.game ? d.game + ' · ' : '') + 'Eres el jugador ' + d.n + '. Mira el TV', true); }
+  if (d.t === 'full') msg('Ya hay 4 jugadores conectados', false);
+  if (d.t === 'photo') photo(d);
+}
+let retry = null;
+function link() {
+  if (!peer || peer.destroyed) return;
+  if (peer.disconnected) { try { peer.reconnect(); } catch (e) {} return; }
+  const c = peer.connect('mivibra-mv-' + code, { reliable: false, serialization: 'json' });
+  c.on('open', () => { conn = c; clearInterval(retry); retry = null; status('Conectado al TV', true, 'Código ' + code); c.send({ t: 'hi', slot: mySlot, ua: navigator.userAgent.slice(0, 60) }); });
+  c.on('data', onData);
+  c.on('close', () => { if (conn === c) { conn = null; reconnect(); } });
+}
+// Si el TV cambia de juego, la conexión se corta un momento: el celular sigue con la cámara y se reconecta solo
+function reconnect() {
+  if (retry) return;
+  status('Cambiando de juego…', false, 'Reconectando con el TV · código ' + code); msg('Espera: me reconecto solo al siguiente juego');
+  retry = setInterval(() => { if (!conn) link(); }, 1500);
+}
+function connect(c) {
+  code = c;
   return new Promise((res, rej) => {
     peer = new Peer();
     const fail = setTimeout(() => rej(new Error('No encontré el TV. Revisa el código y que el juego esté abierto.')), 15000);
-    peer.on('open', () => {
-      conn = peer.connect('mivibra-mv-' + code, { reliable: false, serialization: 'json' });
-      conn.on('open', () => { clearTimeout(fail); status('Conectado al TV', true, 'Código ' + code); conn.send({ t: 'hi', ua: navigator.userAgent.slice(0, 60) }); res(); });
-      conn.on('close', () => { status('Se cerró la conexión', false); msg('Vuelve a abrir el juego en el TV y escanea el código'); });
-      conn.on('data', (d) => {
-        if (!d) return;
-        if (d.t === 'say') msg(d.text, d.ok);
-        if (d.t === 'slot') { let b = document.getElementById('slotTag'); if (!b) { b = document.createElement('div'); b.id = 'slotTag'; b.style.cssText = 'position:fixed;right:12px;top:12px;z-index:9;padding:8px 14px;border-radius:99px;font:800 16px Manrope,Inter,sans-serif;color:#fff;box-shadow:0 6px 16px rgba(0,0,0,.35)'; document.body.appendChild(b); } b.textContent = 'Jugador ' + d.n; b.style.background = d.color || '#FF6A3D'; msg('Eres el jugador ' + d.n + '. Mira el TV', true); }
-        if (d.t === 'full') msg('Ya hay 4 jugadores conectados', false);
-      });
+    let first = true;
+    peer.on('open', () => { if (!first) return; first = false;
+      const c0 = peer.connect('mivibra-mv-' + code, { reliable: false, serialization: 'json' });
+      c0.on('open', () => { clearTimeout(fail); conn = c0; status('Conectado al TV', true, 'Código ' + code); c0.send({ t: 'hi', slot: mySlot, ua: navigator.userAgent.slice(0, 60) }); res(); });
+      c0.on('data', onData);
+      c0.on('close', () => { if (conn === c0) { conn = null; reconnect(); } });
     });
-    peer.on('error', (e) => { clearTimeout(fail); rej(new Error(e.type === 'peer-unavailable' ? 'No encontré el TV con ese código.' : 'No se pudo conectar (' + e.type + ').')); });
+    peer.on('disconnected', () => { setTimeout(() => { try { if (!peer.destroyed) peer.reconnect(); } catch (e) {} }, 1000); });
+    peer.on('error', (e) => {
+      if (conn || retry) return;   // durante la reconexión los errores son normales (el juego aún está cargando)
+      clearTimeout(fail); rej(new Error(e.type === 'peer-unavailable' ? 'No encontré el TV con ese código.' : 'No se pudo conectar (' + e.type + ').'));
+    });
   });
 }
+// ---------- Foto de celebración ----------
+// Cuenta 3-2-1, toma una foto con la cámara, le pone el marco de MiVibra y la guarda en el celular.
+// Al TV llega solo una copia pequeña para mostrarla en pantalla. Se puede cancelar.
+let photoX = false;
+function photo(d) {
+  photoX = false; const box = $('ph'); box.classList.add('on'); $('phImg').style.display = 'none'; $('phBtns').style.display = 'none'; $('phX').style.display = '';
+  let n = d.n || 3; $('phN').textContent = n; $('phT').textContent = d.title || '¡Celebra!';
+  const iv = setInterval(() => {
+    if (photoX) { clearInterval(iv); box.classList.remove('on'); try { conn && conn.send({ t: 'phx' }); } catch (e) {} return; }
+    n--; if (n > 0) { $('phN').textContent = n; return; }
+    clearInterval(iv); $('phN').textContent = ''; $('phX').style.display = 'none'; shoot(d);
+  }, 1000);
+}
+function shoot(d) {
+  const v = $('vid'), W = v.videoWidth, H = v.videoHeight; if (!W) return;
+  const c = document.createElement('canvas'), pad = Math.round(W * 0.04), foot = Math.round(W * 0.16);
+  c.width = W + pad * 2; c.height = H + pad + foot; const g = c.getContext('2d');
+  const gr = g.createLinearGradient(0, 0, c.width, c.height); gr.addColorStop(0, '#8E5CF7'); gr.addColorStop(0.55, '#FF6A3D'); gr.addColorStop(1, '#FFB13D'); g.fillStyle = gr; g.fillRect(0, 0, c.width, c.height);
+  g.save(); if (facing === 'user') { g.translate(pad + W, pad); g.scale(-1, 1); g.drawImage(v, 0, 0, W, H); } else g.drawImage(v, pad, pad, W, H); g.restore();
+  g.fillStyle = '#fff'; g.font = '900 ' + Math.round(foot * 0.34) + 'px "Bricolage Grotesque",DM Sans,sans-serif'; g.textBaseline = 'middle';
+  g.fillText(d.title || '¡Celebración!', pad, H + pad + foot * 0.38);
+  g.font = '700 ' + Math.round(foot * 0.17) + 'px DM Sans,sans-serif'; g.fillText((d.sub ? d.sub + ' · ' : '') + 'MiVibra Movimiento · ' + new Date().toLocaleDateString('es-CO'), pad, H + pad + foot * 0.74);
+  const flash = $('phFl'); flash.style.transition = 'none'; flash.style.opacity = 1; requestAnimationFrame(() => { flash.style.transition = 'opacity .6s'; flash.style.opacity = 0; });
+  const url = c.toDataURL('image/jpeg', 0.9); $('phImg').src = url; $('phImg').style.display = 'block'; $('phBtns').style.display = 'flex';
+  c.toBlob((b) => { lastPhoto = b; }, 'image/jpeg', 0.9);
+  // copia pequeña para el TV, en pedazos
+  const s = document.createElement('canvas'), k = Math.min(1, 420 / c.width); s.width = Math.round(c.width * k); s.height = Math.round(c.height * k); s.getContext('2d').drawImage(c, 0, 0, s.width, s.height);
+  const small = s.toDataURL('image/jpeg', 0.7), id = Date.now() % 1e6, CH = 7000, n = Math.ceil(small.length / CH);
+  for (let i = 0; i < n; i++) setTimeout(() => { try { conn && conn.send({ t: 'ph', id, i, n, s: small.slice(i * CH, (i + 1) * CH) }); } catch (e) {} }, i * 25);
+}
+let lastPhoto = null;
 function draw(lm, w, h) {
   const c = $('ov'), g = c.getContext('2d');
   if (c.width !== w) { c.width = w; c.height = h; }
@@ -124,10 +194,10 @@ function loop() {
     if (conn && conn.open && now - lastSend > 30) {
       lastSend = now;
       // Se manda espejado si es la cámara frontal: así tu derecha es la derecha del avatar
-      conn.send(lm ? { t: 'p', ts: Math.round(performance.now()), m: facing === 'user' ? 1 : 0, l: KEEP.map((i) => [+lm[i].x.toFixed(3), +lm[i].y.toFixed(3), +lm[i].visibility.toFixed(2)]), w: wl ? KEEP.map((i) => [+wl[i].x.toFixed(3), +wl[i].y.toFixed(3), +wl[i].z.toFixed(3)]) : undefined } : { t: 'p', l: null });
+      conn.send(lm ? { t: 'p', v: 2, ts: Math.round(performance.now()), m: facing === 'user' ? 1 : 0, l: KEEP.map((i) => [+lm[i].x.toFixed(3), +lm[i].y.toFixed(3), +lm[i].visibility.toFixed(2)]), w: wl ? KEEP.map((i) => [+wl[i].x.toFixed(3), +wl[i].y.toFixed(3), +wl[i].z.toFixed(3)]) : undefined } : { t: 'p', l: null });
     }
     frames++;
-    if (now - fpsT > 1000) { $('fps').textContent = frames + ' fps'; frames = 0; fpsT = now; }
+    if (now - fpsT > 1000) { $('fps').textContent = frames + ' fps'; slowN = frames < 16 && quality === 'full' ? slowN + 1 : 0; if (slowN >= 4) { slowN = 0; model('lite').catch(() => {}); } frames = 0; fpsT = now; }
   }
   requestAnimationFrame(loop);
 }
@@ -137,7 +207,7 @@ $('go').onclick = async () => {
   $('go').disabled = true; $('err').textContent = '';
   try {
     $('go').textContent = 'Abriendo la cámara…'; await camera();
-    $('go').textContent = 'Preparando la detección…'; await model();
+    $('go').textContent = 'Preparando la detección…'; await model((navigator.hardwareConcurrency || 4) >= 6 ? 'full' : 'lite');
     $('go').textContent = 'Conectando con el TV…'; await connect(code);
     $('start').remove();
     try { wake = await navigator.wakeLock.request('screen'); } catch (e) {}
@@ -149,6 +219,10 @@ $('go').onclick = async () => {
 };
 $('flip').onclick = async () => { facing = facing === 'user' ? 'environment' : 'user'; try { await camera(); } catch (e) { msg('No se pudo cambiar de cámara'); } };
 $('pause').onclick = () => { paused = !paused; $('pause').textContent = paused ? 'Seguir' : 'Pausa'; if (conn && conn.open) conn.send({ t: 'pause', on: paused }); };
+$('phX').onclick = () => { photoX = true; };
+$('phClose').onclick = () => { $('ph').classList.remove('on'); };
+$('phSave').onclick = () => { const a = document.createElement('a'); a.href = $('phImg').src; a.download = 'mivibra-celebracion-' + Date.now() + '.jpg'; document.body.appendChild(a); a.click(); a.remove(); };
+$('phShare').onclick = async () => { try { const f = new File([lastPhoto], 'mivibra-celebracion.jpg', { type: 'image/jpeg' }); if (navigator.canShare && navigator.canShare({ files: [f] })) await navigator.share({ files: [f], title: 'MiVibra Movimiento' }); else $('phSave').click(); } catch (e) {} };
 document.addEventListener('visibilitychange', async () => { if (!document.hidden && wake === null) { try { wake = await navigator.wakeLock.request('screen'); } catch (e) {} } });
 if (preset) setTimeout(() => $('go').click(), 300);
 </script>

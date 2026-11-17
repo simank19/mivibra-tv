@@ -64,6 +64,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { loadAnims, Animator } from '../anim.js';
 import { build as buildAvatar, decode as decodeAvatar, DEFAULT, PRESETS } from '../avatar.js';
+import { Espejo, celebrate, facesCam, snapCanvas } from '../espejo.js';
 
 const $ = (id) => document.getElementById(id);
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x)), lerp = (a, b, k) => a + (b - a) * k, rnd = (a, b) => a + Math.random() * (b - a);
@@ -229,7 +230,7 @@ function point(winner, why) {
   SND.play(human || G.mode === 'two' ? 'point' : 'lose'); if (G.rally >= 6) SND.play('cheer', 0.6);
   big(G.sc[0] + ' – ' + G.sc[1], (winner === 0 && G.mode === 'cpu' ? '¡Punto para ti! ' : 'Punto de ' + SIDES[winner].name + '. ') + (why || ''), 1500);
   MVLink.say('Punto ' + G.sc[slotOf(winner)] + '–' + G.sc[1 - slotOf(winner)], true, slotOf(winner)); if (G.mode === 'two') MVLink.say('Punto para ' + SIDES[winner].name, false, slotOf(loser));
-  const a = SIDES[winner].av; if (a && a.anim) { a.anim.play('Victory', { loop: false, speed: 1.4, fade: 0.2 }); a.swingT = 1.3; }
+  G.pw = winner; CELS[winner].t = 0; CELS[winner].style = null;
   const [a0, a1] = G.sc, done = (a0 >= G.winTo || a1 >= G.winTo) && Math.abs(a0 - a1) >= 2;
   G.serveN++; const deuce = a0 >= G.winTo - 1 && a1 >= G.winTo - 1;
   if (deuce || G.serveN >= 2) { G.serveN = 0; G.server = 1 - G.server; }
@@ -248,6 +249,9 @@ function plsDraw() { $('pls').innerHTML = [0, 1].map((k) => { const p = MVLink.p
 // ---------- Cámara del celular: la raqueta sigue la mano ----------
 // Se usa la muñeca que está más arriba/adelante (la mano con la que juegas). La posición de la mano mueve la raqueta
 // de lado a lado; un movimiento rápido de la mano hacia adelante (o arriba) es un remate.
+// Tu avatar copia tus brazos, tronco y cabeza; al ganar un punto o el partido celebra contigo
+const EJ = [0, 1].map(() => new Espejo()), CELS = [{}, {}];
+MVLink.onPose((l, ts, d, slot) => { if (EJ[slot]) EJ[slot].feed(d); });
 const HAND = [0, 1].map(() => ({ x: 0, y: 0, k: 6, hist: [], smashT: 0, cx0: null, swingAt: -1e9 }));
 MVLink.onPose((l, ts, d, slot) => {
   if (slot > 1 || !l) return; const H = HAND[slot];
@@ -338,7 +342,11 @@ function placeScene(dt, now) {
     const a = SIDES[side].av; if (!a) return;
     // el cuerpo va detrás de la raqueta, con la mano derecha cerca de ella
     a.scene.position.set(clamp(P.x - (side === 0 ? 0.32 : -0.32), -1.6, 1.6), 0, (side === 0 ? 1 : -1) * (PZ + 0.38)); a.scene.rotation.y = SIDES[side].rot;
-    if (a.anim) { a.swingT = Math.max(0, (a.swingT || 0) - dt); if (a.swingT <= 0) a.anim.play(Math.abs(P.vx) > 0.8 ? 'Walk' : 'Idle', { fade: 0.25, speed: Math.abs(P.vx) > 0.8 ? 1.4 : 1 }); a.anim.update(dt); }
+    const party = (G.state === 'point' && G.pw === side) || (G.state === 'end' && G.win === side);
+    if (a.anim) { a.swingT = Math.max(0, (a.swingT || 0) - dt); if (a.swingT <= 0 || party) a.anim.play(party ? 'Idle' : Math.abs(P.vx) > 0.8 ? 'Walk' : 'Idle', { fade: 0.25, speed: Math.abs(P.vx) > 0.8 ? 1.4 : 1 }); a.anim.update(dt); }
+    const E = ctl(side) === 'cam' ? EJ[slotOf(side)] : null;
+    if (party) celebrate(a, dt, E, CELS[side], facesCam(a.scene, cam));
+    else if (E) E.apply(a, dt, { arms: a.swingT > 0 ? 0.25 : 1, spine: 0.6, head: 1, legs: 0 }, facesCam(a.scene, cam));
     a.update(dt);
   });
   // la bola en la mano de quien saca
@@ -350,7 +358,8 @@ function placeScene(dt, now) {
 // cámara: detrás de ti, siguiendo un poco la bola
 const cP = new THREE.Vector3(0, 2.5, 3.9), cL = new THREE.Vector3(0, 0.7, -0.8), tP = new THREE.Vector3(), tL = new THREE.Vector3();
 function camera(dt) {
-  if (G.state === 'menu' || G.state === 'load') { const a = performance.now() / 6000; tP.set(Math.sin(a) * 3.6, 2.4, Math.cos(a) * 3.6); tL.set(0, 0.7, 0); }
+  if (G.state === 'end' && G.win >= 0 && SIDES[G.win].av) { const p = SIDES[G.win].av.scene.position, d = G.win === 0 ? -1 : 1; tP.set(p.x + 0.5, 1.6, p.z + d * 3.2); tL.set(p.x - 0.3, 0.9, p.z); }
+  else if (G.state === 'menu' || G.state === 'load') { const a = performance.now() / 6000; tP.set(Math.sin(a) * 3.6, 2.4, Math.cos(a) * 3.6); tL.set(0, 0.7, 0); }
   else { tP.set(PADS[0].x * 0.2, 2.55, PZ + 2.25); tL.set(B.live ? B.p.x * 0.2 : 0, 0.6, -0.7); }
   const k = 1 - Math.exp(-dt * 3); cP.lerp(tP, k); cL.lerp(tL, k); cam.position.copy(cP); cam.lookAt(cL);
 }
@@ -367,8 +376,15 @@ function pause() {
 }
 function endGame() {
   G.state = 'end'; MVHand.pauseEnabled = false; const w = G.sc[0] > G.sc[1] ? 0 : 1; drawScore(); SND.play('cheer');
-  const a = SIDES[w].av; if (a && a.anim) { a.anim.play('Victory', { fade: 0.2 }); a.swingT = 99; } const l = SIDES[1 - w].av; if (l && l.anim) { l.anim.play('Defeat', { loop: false, fade: 0.2 }); l.swingT = 99; }
-  [0, 1].forEach((k) => { if (MVLink.players[k]) MVLink.say(k === w ? '¡Ganaste el partido!' : 'Buen partido. ¡La revancha!', k === w, k); });
+  G.win = w; CELS[w].t = 0; CELS[w].style = null; const l = SIDES[1 - w].av; if (l && l.anim) { l.anim.play('Defeat', { loop: false, fade: 0.2 }); l.swingT = 99; }
+  [0, 1].forEach((k) => { if (MVLink.players[k]) MVLink.say(k === w ? '¡Ganaste el partido! Celebra para la foto' : 'Buen partido. ¡La revancha!', k === w, k); });
+  const title = G.mode === 'cpu' ? (w === 0 ? '¡Ganaste!' : 'Gana MiVibra') : '¡Gana ' + SIDES[w].name + '!';
+  big(title, '¡Celebra! Tu avatar baila contigo', 2400);
+  const ps = ctl(w) === 'cam' && MVLink.players[slotOf(w)] ? [slotOf(w)] : (G.mode === 'cpu' && MVLink.players[0] ? [0] : []);
+  setTimeout(() => MVPhoto.take({ title, sub: 'Tenis de mesa · ' + G.sc[0] + ' – ' + G.sc[1], slots: ps, snap: () => snapCanvas(R, () => R.render(S, cam)), done: endMenu }), 1800);
+}
+function endMenu() {
+  const w = G.win;
   MVHand.menu({ kicker: 'FIN DEL PARTIDO', title: (G.mode === 'cpu' ? (w === 0 ? '¡Ganaste!' : 'Gana MiVibra') : '¡Gana ' + SIDES[w].name + '!'), sub: G.sc[0] + ' – ' + G.sc[1], dim: 0.25,
     items: [{ id: 'again', label: 'Revancha', icon: '↻' }, { id: 'menu', label: 'Menú principal', icon: '☰' }, { id: 'edit', label: 'Cambiar mi avatar', icon: '☺' }, { id: 'exit', label: 'Salir', icon: '✕' }], back: 'menu', onPick: menuPick });
 }
@@ -386,11 +402,11 @@ function menuPick(id) {
   if (id === 'lvl') { const o = [[0, 5], [1, 11], [2, 11], [2, 21]], i = o.findIndex(([l, w]) => l === G.lvl && w === G.winTo); [G.lvl, G.winTo] = o[(i + 1) % o.length]; return startMenu(); }
   if (id === 'pts') { G.winTo = G.winTo === 11 ? 5 : G.winTo === 5 ? 21 : 11; return startMenu(); }
   if (id === 'two' && MVLink.count() < 2) { cue('Para 2 jugadores conecta 2 celulares con el mismo código', true); return startMenu(); }
-  if (id === 'menu') return startMenu();
+  if (id === 'menu') { G.win = -1; return startMenu(); }
   if (id === 'cpu' || id === 'two' || id === 'again') {
     SND.init(); $('connect').classList.remove('on'); $('loading').style.display = ''; $('loading').textContent = 'Preparando…';
     setMode(id === 'again' ? G.mode : id).then(() => {
-      $('loading').style.display = 'none'; G.sc = [0, 0]; G.server = Math.random() < 0.5 ? 0 : 1; G.serveN = 0; PADS[0].x = 0.2; PADS[1].x = -0.2;
+      $('loading').style.display = 'none'; G.win = -1; [0, 1].forEach((k) => { const a = SIDES[k].av; if (a) a.swingT = 0; }); G.sc = [0, 0]; G.server = Math.random() < 0.5 ? 0 : 1; G.serveN = 0; PADS[0].x = 0.2; PADS[1].x = -0.2;
       big(G.mode === 'two' ? '¡A jugar!' : '¡A jugar!', 'Partido a ' + G.winTo + ' · ' + (G.mode === 'two' ? '2 jugadores' : 'contra MiVibra (' + LVL[G.lvl].name + ')'), 1600);
       MVLink.players.forEach((p, k) => { if (p) MVLink.say(k < 2 ? (G.mode === 'two' ? 'Eres ' + SIDES[k].name + (k === 0 ? ' (cerca)' : ' (al fondo)') : 'Mueve la mano: la raqueta te sigue') : 'Esta partida es de 2', true, k); });
       newPoint();
@@ -446,7 +462,7 @@ MVLink.onChange = () => { plsDraw(); if (G.state === 'menu' && MVHand.open) star
 setTimeout(() => { if (MVLink.code) { $('code').textContent = MVLink.code; const q = MVLink.qr(5); if (q) $('qr').src = q; } }, 400);
 requestAnimationFrame(loop);
 loadAvatars().then(() => { $('loading').style.display = 'none'; startMenu(); }).catch((e) => { console.error(e); $('loading').textContent = 'No se pudo cargar el avatar'; });
-window.MVT = { G, B, PADS, HAND, serve, pick: (id) => { MVHand.close(); menuPick(id); }, setX: (x) => { PADS[0].vk = 0; PADS[0].x = x; } };
+window.MVT = { G, EJ, B, PADS, HAND, serve, pick: (id) => { MVHand.close(); menuPick(id); }, setX: (x) => { PADS[0].vk = 0; PADS[0].x = x; } };
 </script>
 </body>
 </html>

@@ -71,6 +71,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { loadAnims, Animator } from '../anim.js';
 import { build as buildAvatar, decode as decodeAvatar, DEFAULT, PRESETS } from '../avatar.js';
+import { Espejo, celebrate, facesCam, snapCanvas } from '../espejo.js';
 
 const $ = (id) => document.getElementById(id);
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x)), lerp = (a, b, k) => a + (b - a) * k;
@@ -332,6 +333,10 @@ MVLink.onPose((l, ts, d, slot) => {
     else if (ts - CAMS.backT > 3500) CAMS.state = 'hold';
   }
 });
+// Tu avatar copia lo que haces (brazos, tronco y cabeza) mientras apuntas o esperas, y celebra contigo
+const EJ = [0, 1, 2, 3].map(() => new Espejo()), CEL = {};
+MVLink.onPose((l, ts, d, slot) => { if (EJ[slot]) EJ[slot].feed(d); });
+function myEJ() { const s = turnSlot(); return s >= 0 ? EJ[s] : (EJ.find((e) => e.fresh()) || EJ[0]); }
 function useCamera() { const s = turnSlot(); return s >= 0 ? MVLink.fresh(s) : MVLink.fresh(); }
 MVHand.onPause = () => pause();
 function stickDraw() {
@@ -371,7 +376,7 @@ function settle() {
     else if (!first && r[0] + r[1] === 10) msg = ['¡SPARE!', 'Tumbaste todos en dos bolas'];
     else msg = [down === 0 ? '¡Uy!' : down + (down === 1 ? ' pino' : ' pinos'), first ? 'Te quedan ' + (10 - down) : 'Total del turno: ' + (r[0] + r[1])];
   } else msg = [down === before && before === 10 ? '¡CHUZA!' : down === before ? '¡SPARE!' : down + ' pinos', 'Turno 10'];
-  if (msg[0].startsWith('¡CHUZA') || msg[0].startsWith('¡SPARE')) { SND.ding(msg[0].startsWith('¡CHUZA') ? 988 : 784); const s0 = turnSlot(); MVLink.say(msg[0], true, s0 >= 0 ? s0 : undefined); }
+  if (msg[0].startsWith('¡CHUZA') || msg[0].startsWith('¡SPARE')) { G.cel = 2.3; CEL.t = 0; CEL.style = null; SND.ding(msg[0].startsWith('¡CHUZA') ? 988 : 784); const s0 = turnSlot(); MVLink.say(msg[0], true, s0 >= 0 ? s0 : undefined); }
   big(msg[0], msg[1]);
   // ¿siguiente bola o siguiente turno?
   let nextFrame = false, resetAll = false;
@@ -385,8 +390,17 @@ function settle() {
     newRoll();
   }, 2400);
 }
-function endGame() {
+function endGame(after) {
   MVHand.pauseEnabled = false;
+  if (!after) {
+    G.state = 'end'; CEL.t = 0; CEL.style = null; let wi = 0, title, sub;
+    if (G.np > 1) { const t = PL.slice(0, G.np).map((p) => scores(p.rolls)[9] || 0); wi = t.indexOf(Math.max(...t)); setCur(wi); title = '¡Gana ' + PL[wi].name + '!'; sub = 'Bolos · ' + t[wi] + ' puntos'; }
+    else { const tot = scores()[9] || 0; title = tot >= 120 ? '¡Juegazo!' : '¡Buen juego!'; sub = 'Bolos · ' + tot + ' puntos'; }
+    big(title, '¡Celebra! Tu avatar baila contigo', 2600); drawScore();
+    const slot = MVLink.players[PL[wi].slot] ? PL[wi].slot : MVLink.players.findIndex(Boolean);
+    setTimeout(() => MVPhoto.take({ title, sub, slots: slot >= 0 ? [slot] : [], snap: () => snapCanvas(R, () => R.render(S, cam)), done: () => endGame(true) }), 1800);
+    return;
+  }
   if (G.np > 1) { const rk = PL.slice(0, G.np).map((p) => ({ p, t: scores(p.rolls)[9] || 0 })).sort((a, b) => b.t - a.t); drawScore();
     rk.forEach(({ p }, i) => { if (MVLink.players[p.slot]) MVLink.say(i === 0 ? '¡Ganaste! ' + rk[0].t + ' puntos' : 'Quedaste ' + (i + 1) + '.°', i === 0, p.slot); });
     return MVHand.menu({ kicker: 'FIN DEL JUEGO', title: '¡Gana ' + rk[0].p.name + '!', sub: rk.map((x, i) => (i + 1) + '. ' + x.p.name + ' — ' + x.t).join('   ·   '), items: [{ id: 'again', label: 'Jugar otra vez', icon: '↻' }, { id: 'play', label: 'Cambiar jugadores', icon: '☺' }, { id: 'exit', label: 'Salir', icon: '✕' }], back: 'exit', onPick: menuPick }); }
@@ -434,7 +448,8 @@ addEventListener('keydown', (e) => {
 // ---------- Cámara de TV ----------
 const cp = new THREE.Vector3(), cl = new THREE.Vector3(), tP = new THREE.Vector3(), tL = new THREE.Vector3();
 function camera(dt) {
-  if (G.state === 'roll' && ball2.z > -14) { tP.set(ball2.x * 0.4 + 0.3, 0.7, Math.min(ball2.z + 2.6, 3)); tL.set(ball2.x * 0.2, 0.2, ball2.z - 6); }
+  if ((G.cel > 0 && G.state === 'sweep') || G.state === 'end') { const x = av ? av.scene.position.x : 0, z = av ? av.scene.position.z : 0.4; tP.set(x - 0.35, 1.25, z - 2.5); tL.set(x, 0.85, z); }
+  else if (G.state === 'roll' && ball2.z > -14) { tP.set(ball2.x * 0.4 + 0.3, 0.7, Math.min(ball2.z + 2.6, 3)); tL.set(ball2.x * 0.2, 0.2, ball2.z - 6); }
   else if (G.state === 'roll' || G.state === 'sweep' || G.state === 'end') { tP.set(0.45, 0.65, -16.4); tL.set(0, 0.2, -18.8); }
   else if (G.state === 'menu' || G.state === 'load') { tP.set(1.4, 2.2, 6.6); tL.set(0, 0.5, -12); }
   else { const x = av ? av.scene.position.x : 0, z = av ? av.scene.position.z : 3; tP.set(x + 0.55, 1.75, z + 3.0); tL.set(x * 0.6, 0.45, -12); }
@@ -461,9 +476,15 @@ function loop(now) {
       else if (useCamera() && G.relT == null) meter(G.power, 'Lanza hacia adelante', '', 'FUERZA DEL BRAZO');
     } else if (G.state === 'roll' || G.state === 'sweep') { p = P_FOLLOW; z = 0.35; }
     av.scene.position.set(ax, 0, z);
-    // de pie (apuntando, en el menú o mirando los pinos): animación natural; el lanzamiento es una pose hecha a mano
-    const natural = av.anim && (G.state === 'aim' || G.state === 'menu' || G.state === 'load' || G.state === 'end' || (G.state === 'sweep' && G.t > 1.2));
-    if (natural) { av.anim.play('Idle', { fade: 0.35 }); av.anim.update(dt); } else { if (av.anim) av.anim.stop(); resetBones(); pose(p); }
+    // celebrando (chuza, spare o fin del juego): el avatar se voltea hacia ti y celebra contigo (o baila solo)
+    G.cel = Math.max(0, (G.cel || 0) - dt); const celeb = G.cel > 0 || G.state === 'end';
+    av.scene.rotation.y = lerp(av.scene.rotation.y, celeb ? 0.15 : Math.PI, 1 - Math.exp(-dt * 5));
+    if (celeb) { if (av.anim) { av.anim.play('Idle', { fade: 0.3 }); av.anim.update(dt); } celebrate(av, dt, myEJ(), CEL, facesCam(av.scene, cam)); }
+    else {
+      // de pie (apuntando, en el menú o mirando los pinos): animación natural + lo que hagas frente al celular
+      const natural = av.anim && (G.state === 'aim' || G.state === 'menu' || G.state === 'load' || (G.state === 'sweep' && G.t > 1.2));
+      if (natural) { av.anim.play('Idle', { fade: 0.35 }); av.anim.update(dt); myEJ().apply(av, dt, { arms: 1, spine: 0.7, head: 1, legs: 0 }, facesCam(av.scene, cam)); } else { if (av.anim) av.anim.stop(); resetBones(); pose(p); }
+    }
     av.update(dt);
   }
   if (G.state === 'swing' && G.relT == null) G.relT = G.relT; // espera el lanzamiento
@@ -492,7 +513,7 @@ MVLink.open((txt, ok) => { $('cst').textContent = txt; $('cst').classList.toggle
 resetPins(true); G.standing = 10; drawScore();
 requestAnimationFrame(loop);
 loadAvatar().then(() => { $('loading').style.display = 'none'; startMenu(); }).catch((e) => { console.error(e); $('loading').textContent = 'No se pudo cargar el avatar'; });
-window.MVB = { G, PL, setPlayers, ball2, PINS, settle: () => settle(), release: (p, h) => { startSwing(); release(p, h); }, pick: (id) => { MVHand.close(); menuPick(id); }, scores };
+window.MVB = { G, PL, EJ, setPlayers, ball2, PINS, settle: () => settle(), release: (p, h) => { startSwing(); release(p, h); }, pick: (id) => { MVHand.close(); menuPick(id); }, scores };
 </script>
 </body>
 </html>

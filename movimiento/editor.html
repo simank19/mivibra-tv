@@ -62,6 +62,7 @@ input[type=text]{width:100%;padding:14px 16px;border-radius:14px;border:2px soli
 <script type="module">
 import * as THREE from 'three';
 import { loadAnims, Animator } from '../anim.js';
+import { dance } from '../espejo.js';
 import { build, CATALOG, FACES, EXTRAS, STYLES, SWATCH, DEFAULT, fix, encode, decode, randomRecipe, preload } from '../avatar.js';
 const $ = (id) => document.getElementById(id);
 const IN_APP = window.parent !== window;
@@ -93,7 +94,7 @@ async function rebuild() {
   av = a; turn.add(av.scene); pose(0);
 }
 let POSE = 'base';
-const POSES = [['base', 'Base'], ['walk', 'Caminar'], ['run', 'Correr'], ['jump', 'Saltar'], ['win', 'Victoria'], ['tennis', 'Tenis'], ['bowl', 'Bolos'], ['kick', 'Fútbol']];
+const POSES = [['base', 'Base'], ['walk', 'Caminar'], ['run', 'Correr'], ['jump', 'Saltar'], ['win', 'Victoria'], ['tennis', 'Tenis'], ['bowl', 'Bolos'], ['kick', 'Fútbol'], ['salsa', 'Baile salsa'], ['disco', 'Baile disco'], ['robot', 'Robot'], ['festejo', 'Celebrar'], ['aplauso', 'Aplaudir']];
 const CLIPS = { base: 'Idle', walk: 'Walk', run: 'Run', jump: 'Jump', win: 'Victory', tennis: 'SwordSlash' };
 let liveDt = 0.016;
 function paintPoses() { $('poses').innerHTML = POSES.map(([k, l]) => `<button class="opt f${k === POSE ? ' on' : ''}" data-pose="${k}">${l}</button>`).join(''); }
@@ -108,6 +109,8 @@ function pose(t) {
   if (!av) return; const N = av.humanoid.getNormalizedBoneNode;
   Object.values(av.humanoid.normalizedHumanBones).forEach((n) => n.rotation.set(0, 0, 0)); N('hips').position.y = av._hy ?? (av._hy = N('hips').position.y);
   Object.values(props).forEach((p) => (p.visible = false));
+  // bailes y celebraciones (los mismos que hace tu avatar al ganar en los juegos)
+  if (['salsa', 'disco', 'robot', 'festejo', 'aplauso'].includes(POSE) && av.anim) { av.anim.play('Idle', { fade: 0.3 }); av.anim.update(liveDt); dance(av, t, POSE, 1); const em = av.expressionManager; if (em) em.setValue('happy', 1); av.update(0); return; }
   if (CLIPS[POSE] && av.anim) { av.anim.play(CLIPS[POSE], { fade: 0.3 }); av.anim.update(liveDt); const em = av.expressionManager; if (em) em.setValue('happy', 0.5); av.update(0); if (POSE === 'tennis') { handAt(props.racket, 'right'); props.racket.rotation.set(0.3, 0, -0.6); } return; }
   if (POSE !== 'base') { sportPose(N, t); av.update(0); return; }
   const b = Math.sin(t * 2) * 0.03;

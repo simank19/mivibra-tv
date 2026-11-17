@@ -1,7 +1,7 @@
 /* MiVibra Movimiento — control con la mano (estilo Kinect) y conexión con la cámara del celular.
    - MVLink: conexión directa con el celular (PeerJS). El celular manda los puntos del cuerpo; el video no sale del teléfono.
    - MVHand: cursor con la mano, menús que se eligen deslizando la mano por la flecha, y pausa con el brazo izquierdo en diagonal.
-   Puntos que llegan del celular: 0 nariz, 1-2 hombros (izq, der), 3-4 codos, 5-6 muñecas, 7-8 caderas, 9-10 rodillas, 11-12 tobillos.
+   Puntos que llegan del celular: 0 nariz, 1-2 hombros (izq, der), 3-4 codos, 5-6 muñecas, 7-8 caderas, 9-10 rodillas, 11-12 tobillos,\n   13-14 orejas, 15-16 dedos índice, 17-18 pulgares, 19-20 puntas de los pies.\n   - MVPhoto: foto de celebración (cuenta 3-2-1, el celular la toma y la guarda; al TV llega una copia pequeña para mostrarla).
    Todo funciona también con el control remoto: flechas y OK. */
 (function () {
   'use strict';
@@ -17,26 +17,44 @@
     COLORS,
     onPose(fn) { this.listeners.push(fn); },
     count() { return this.players.filter(Boolean).length; },
+    // El código se guarda unas horas: al pasar de un juego a otro se reutiliza y el celular se reconecta solo
+    savedCode() { try { const o = JSON.parse(localStorage.getItem('mv-link') || 'null'); if (o && Date.now() - o.at < 8 * 3600e3 && /^\d{6}$/.test(o.code)) return o.code; } catch (e) {} return null; },
+    saveCode() { try { localStorage.setItem('mv-link', JSON.stringify({ code: this.code, at: Date.now() })); } catch (e) {} },
     open(status) {
       if (status) this.status = status;
       if (this.peer) return;
       if (!window.Peer) { this.status('No se pudo cargar la conexión. Revisa internet.', false); return; }
-      this.code = String(Math.floor(100000 + Math.random() * 900000));
+      this.tries = this.tries || 0;
+      this.code = this.code || this.savedCode() || String(Math.floor(100000 + Math.random() * 900000));
       const peer = new Peer('mivibra-mv-' + this.code); this.peer = peer;
       this.url = new URL('../camara/?c=' + this.code, location.href).href;
-      this.status('Esperando el celular…', false);
-      peer.on('error', (e) => { if (e.type === 'unavailable-id') { peer.destroy(); this.peer = null; this.open(); } else this.status('Error de conexión (' + e.type + ')', false); });
+      this.status(this.tries ? 'Reconectando…' : 'Esperando el celular…', false);
+      peer.on('open', () => { this.tries = 0; this.saveCode(); this.status(this.count() ? this.count() + ' celulares conectados' : 'Esperando el celular… (si ya estaba conectado, vuelve solo)', this.count() > 0); if (this.onChange) this.onChange(); });
+      peer.on('error', (e) => {
+        if (e.type === 'unavailable-id') {
+          // el juego anterior aún tiene el código: se espera un momento y se reintenta (si no, código nuevo)
+          peer.destroy(); this.peer = null; this.tries++;
+          if (this.tries > 8) { this.code = String(Math.floor(100000 + Math.random() * 900000)); this.tries = 0; }
+          setTimeout(() => this.open(), 1200);
+        } else this.status('Error de conexión (' + e.type + ')', false);
+      });
+      peer.on('disconnected', () => { try { peer.reconnect(); } catch (e) {} });
+      addEventListener('pagehide', () => { try { peer.destroy(); } catch (e) {} });
       peer.on('connection', (c) => {
-        c.on('open', () => {
-          const slot = this.players.findIndex((p) => !p);
+        let P = null;
+        // el celular dice qué jugador era (para seguir siendo el mismo al cambiar de juego)
+        const join = (want) => {
+          if (P) return;
+          let slot = typeof want === 'number' && want >= 0 && want < 4 && !this.players[want] ? want : this.players.findIndex((p) => !p);
           if (slot < 0) { try { c.send({ t: 'full' }); } catch (e) {} setTimeout(() => c.close(), 500); return; }
-          const P = { conn: c, slot, lm: null, ts: 0, rx: 0, paused: false, color: COLORS[slot] }; this.players[slot] = P;
-          try { c.send({ t: 'slot', n: slot + 1, color: COLORS[slot] }); } catch (e) {}
+          P = { conn: c, slot, lm: null, ts: 0, rx: 0, paused: false, color: COLORS[slot] }; this.players[slot] = P;
+          try { c.send({ t: 'slot', n: slot + 1, color: COLORS[slot], game: document.title.split('·')[0].trim() }); } catch (e) {}
           this.on = true; this.status(this.count() === 1 ? '¡Celular conectado! Levanta la mano para usar el menú' : this.count() + ' celulares conectados', true);
           if (this.onChange) this.onChange();
-          c.on('data', (d) => this.data(d, P));
-          c.on('close', () => { if (this.players[slot] === P) this.players[slot] = null; this.on = this.count() > 0; this.lm = this.on ? this.lm : null; this.status(this.on ? this.count() + ' celulares conectados' : 'Se desconectó el celular', this.on); if (this.onChange) this.onChange(); });
-        });
+        };
+        c.on('open', () => { setTimeout(() => join(), 900); });
+        c.on('data', (d) => { if (!P) { if (d && d.t === 'hi') join(d.slot); else join(); } if (P) this.data(d, P); });
+        c.on('close', () => { if (P && this.players[P.slot] === P) this.players[P.slot] = null; this.on = this.count() > 0; this.lm = this.on ? this.lm : null; this.status(this.on ? this.count() + ' celulares conectados' : 'Se desconectó el celular', this.on); if (this.onChange) this.onChange(); });
       });
     },
     qr(size) { try { const q = qrcode(0, 'M'); q.addData(this.url); q.make(); return q.createDataURL(size || 6, 2); } catch (e) { return ''; } },
@@ -44,6 +62,8 @@
     data(d, P) {
       if (!d) return;
       if (d.t === 'pause') { P.paused = !!d.on; this.paused = this.players.some((p) => p && p.paused); return; }
+      if (d.t === 'ph') { MVPhoto.part(d, P); return; }
+      if (d.t === 'phx') { MVPhoto.cancelled(P); return; }
       if (d.t !== 'p' || !d.l) return;
       P.lm = d.l; P.rx = performance.now(); P.ts = typeof d.ts === 'number' ? d.ts : P.rx;
       this.lm = d.l; this.rx = P.rx; this.ts = P.ts;
@@ -190,5 +210,58 @@ html:not(.q0) .mvh-dim{backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6p
     },
   };
   MVLink.onPose((l, ts, d, slot) => MVHand.feed(l, ts, slot));
-  window.MVLink = MVLink; window.MVHand = MVHand;
+
+  // ---------------- Foto de celebración ----------------
+  // take({ title, sub, slots:[0..], snap: () => dataURL del juego }) → cuenta 3-2-1 en el TV y en el celular.
+  // El celular toma la foto con su cámara, la guarda allá (con el marco de MiVibra) y manda una copia pequeña al TV.
+  const pcss = `
+.mvp-cd{position:fixed;inset:0;z-index:45;display:none;place-items:center;pointer-events:none}
+.mvp-cd.on{display:grid}
+.mvp-cd b{font:900 min(34vh,260px)/1 Manrope,Inter,system-ui,sans-serif;color:#fff;text-shadow:0 10px 0 #FF6A3D,0 30px 80px rgba(0,0,0,.55);animation:mvpz .9s ease-out}
+.mvp-cd i{position:absolute;top:14%;left:50%;transform:translateX(-50%);font:800 28px Manrope,Inter,sans-serif;color:#fff;font-style:normal;padding:10px 22px;border-radius:99px;background:rgba(24,26,30,.75);white-space:nowrap}
+@keyframes mvpz{from{transform:scale(1.6);opacity:0}to{transform:scale(1);opacity:1}}
+.mvp-fl{position:fixed;inset:0;z-index:46;background:#fff;opacity:0;pointer-events:none;transition:opacity .5s}
+.mvp-card{position:fixed;z-index:44;right:4vw;top:50%;transform:translateY(-50%) rotate(2deg);display:none;padding:14px 14px 18px;border-radius:18px;background:#fbfbf8;color:#2A2C2E;box-shadow:0 30px 70px -20px rgba(0,0,0,.7);max-width:46vw}
+.mvp-card.on{display:block;animation:mvpin .6s cubic-bezier(.2,1.4,.4,1)}
+@keyframes mvpin{from{transform:translateY(-40%) rotate(10deg) scale(.6);opacity:0}}
+.mvp-card .ph{display:flex;gap:10px}
+.mvp-card img{display:block;height:min(42vh,320px);max-width:min(21vw,300px);border-radius:10px;object-fit:cover;background:#ddd}
+.mvp-card img:only-child{max-width:min(42vw,560px)}
+.mvp-card b{display:block;margin-top:10px;font:900 22px Manrope,Inter,sans-serif}
+.mvp-card span{display:block;font:700 13px Manrope,Inter,sans-serif;color:#6b6f75;margin-top:2px}`;
+  const MVPhoto = {
+    busy: false, parts: {}, got: [], el: null,
+    build() { if (this.el) return; const st = document.createElement('style'); st.textContent = pcss; document.head.appendChild(st);
+      const mk = (c) => { const e = document.createElement('div'); e.className = c; document.body.appendChild(e); return e; };
+      this.el = { cd: mk('mvp-cd'), fl: mk('mvp-fl'), card: mk('mvp-card') }; },
+    take(o) {
+      if (this.busy) return; this.build(); this.busy = true; this.o = o; this.parts = {}; this.got = [];
+      const slots = (o.slots || [0]).filter((k) => MVLink.players[k]);
+      slots.forEach((k) => { try { MVLink.players[k].conn.send({ t: 'photo', title: o.title || '¡Celebra!', sub: o.sub || '', n: 3 }); } catch (e) {} });
+      const cd = this.el.cd; let n = 3;
+      const tick = () => {
+        if (n > 0) { cd.innerHTML = '<i>' + (slots.length ? '📸 ¡Celebra! Foto en…' : '📸 ¡Foto de tu avatar!') + '</i><b>' + n + '</b>'; cd.classList.add('on'); beep(n === 1 ? 880 : 660, 0.12, 0.14); n--; setTimeout(tick, 1000); return; }
+        cd.classList.remove('on'); this.el.fl.style.transition = 'none'; this.el.fl.style.opacity = 0.9; requestAnimationFrame(() => { this.el.fl.style.transition = 'opacity .6s'; this.el.fl.style.opacity = 0; });
+        beep(1700, 0.05, 0.2); let snap = ''; try { snap = o.snap ? o.snap() : ''; } catch (e) {}
+        this.snap = snap; this.wait = slots.length; this.show(); setTimeout(() => this.show(true), 4500);
+      };
+      tick();
+    },
+    part(d, P) {
+      // la foto llega en pedazos (la conexión es rápida pero sin garantías para mensajes grandes)
+      const k = P.slot + ':' + d.id; const b = this.parts[k] || (this.parts[k] = { n: d.n, p: [] }); b.p[d.i] = d.s;
+      if (b.p.filter(Boolean).length === b.n) { this.got[P.slot] = b.p.join(''); delete this.parts[k]; this.wait--; this.show(); }
+    },
+    cancelled() { this.wait--; this.show(); },
+    show(final) {
+      if (!this.el || !this.busy) return; if (!final && this.wait > 0) return;
+      if (this.shown) return; this.shown = true;
+      const c = this.el.card, imgs = this.got.filter(Boolean).slice(0, 2);
+      c.innerHTML = '<div class="ph">' + imgs.map((u) => '<img src="' + u + '" alt="Foto celebrando">').join('') + (this.snap ? '<img src="' + this.snap + '" alt="Tu avatar celebrando">' : '') + '</div><b>' + esc(this.o.title || '¡Celebración!') + '</b><span>' + esc(this.o.sub || '') + (imgs.length ? ' · guardada en tu celular' : '') + '</span>';
+      c.classList.add('on');
+      setTimeout(() => { c.classList.remove('on'); this.busy = false; this.shown = false; if (this.o.done) this.o.done(); }, 7000);
+    },
+  };
+  function esc(t) { return String(t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]); }
+  window.MVLink = MVLink; window.MVHand = MVHand; window.MVPhoto = MVPhoto;
 })();

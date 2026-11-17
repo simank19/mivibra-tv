@@ -115,6 +115,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { loadAnims, Animator } from '../anim.js';
+import { Espejo, celebrate, facesCam, snapCanvas } from '../espejo.js';
 import { build as buildAvatar, decode as decodeAvatar, PRESETS, DEFAULT, fix as fixAvatar, preload as preloadAvatars } from '../avatar.js';
 
 const $ = (id) => document.getElementById(id);
@@ -485,6 +486,17 @@ function fingers(H, side, fist, point) {
   ['Metacarpal', 'Proximal', 'Distal'].forEach((g, gi) => { const o = H.getNormalizedBoneNode(side + 'Thumb' + g); if (o) o.rotation.set(0, -sg * fist * 0.35, sg * fist * (gi ? 0.45 : 0.15)); });
 }
 function driveVRM(dt) { RUNNERS.forEach((r) => driveOne(r, dt)); myVRM = ME.vrm || null; }
+// Tu avatar hace lo que haces frente al celular: saluda en la presentación, mueve los brazos al correr y celebra al llegar
+const EJ = [0, 1, 2, 3].map(() => new Espejo());
+MVLink.onPose((l, ts, d, slot) => { if (EJ[slot]) EJ[slot].feed(d); });
+function mirrorOne(r, dt) {
+  let hs = hum(r); if (hs < 0 && r.me) hs = 0; if (hs < 0) return;
+  const E = EJ[hs], fc = facesCam(r.vrm.scene, cam), top = results.length ? results.slice(0, 3) : standings().slice(0, 1);
+  const party = (phase === 'podium' && top.includes(r)) || (phase === 'finish' && r.done && r.v < 3 && top[0] === r);
+  if (party) { if (!r.cel) r.cel = {}; celebrate(r.vrm, dt, E, r.cel, fc); }
+  else if (phase === 'intro' || phase === 'present' || (phase === 'finish' && r.done)) E.apply(r.vrm, dt, { arms: 1, spine: 0.7, head: 1 }, fc);
+  else if (phase === 'race' || phase === 'finish') E.apply(r.vrm, dt, { arms: 0.45, head: 0.5 }, fc);
+}
 function driveOne(r, dt) {
   const vrm = r.vrm; if (!vrm) return;
   const c = r.A.userData.cur, H = vrm.humanoid, b = (n) => H.getNormalizedBoneNode(n);
@@ -495,6 +507,7 @@ function driveOne(r, dt) {
     if (r.clipTime != null) r.anim.setTime(r.clipTime);
     r.anim.update(dt);
     const em2 = vrm.expressionManager; if (em2) em2.setValue('happy', r.clip === 'Victory' ? 1 : 0.3);
+    mirrorOne(r, dt);
     vrm.update(dt); return;
   }
   if (r.anim) r.anim.stop();
@@ -641,13 +654,14 @@ function stick(ph, mode) {
 }
 
 // ================= Director (fases) =================
+let podPhoto = false, podDone = false;
 let phase = 'wait', pt = 0, raceT = 0, slow = 1, results = [], podiumDone = false;
 const camPos = new THREE.Vector3(60, 60, 60), camLook = new THREE.Vector3(0, 0, -50);
 let DTF = 1 / 60;
 const kf = (k) => (k >= 1 ? 1 : 1 - Math.pow(1 - k, DTF * 60));
 function setCam(p, l, k) { k = kf(k); camPos.lerp(p, k); camLook.lerp(l, k); cam.position.copy(camPos); cam.lookAt(camLook); }
 function go(ph) {
-  phase = ph; pt = 0;
+  phase = ph; pt = 0; if (ph === 'podium') { podPhoto = false; podDone = false; RUNNERS.forEach((r) => (r.cel = null)); }
   ['title', 'lower', 'big', 'cue', 'hud', 'clock', 'pace', 'phone', 'res', 'banner', 'note'].forEach((x) => show(x, 0));
   TAGS.forEach((t) => t.el.classList.remove('on'));
   if (ph === 'intro') { excite = 0.9; waveOn = false; SND.beatStart(); SND.whoosh(); SND.cheer(); title('MIVIBRA MOVIMIENTO', '100 m con vallas', 'Estadio MiVibra · Final'); setTimeout(() => phase === 'intro' && show('note', 1), 2500); }
@@ -765,7 +779,13 @@ function update(dt, t) {
     }
     flashTick(phase === 'finish' ? 0.05 : 0.008);
   } else if (phase === 'podium') {
-    if (pt > 6 && !menuOn && !MVHand.open) endMenu();
+    if (pt > 3.4 && !podPhoto) { podPhoto = true;
+      const top = results.slice(0, 3), hs = MVLink.players.map((p, k) => (p ? k : -1)).filter((k) => k >= 0 && top.some((r) => hum(r) === k));
+      const mine = results.indexOf(ME) + 1, w = top[0];
+      const title = hum(w) >= 0 || w === ME ? '¡' + w.name + ' gana el oro!' : mine <= 3 ? '¡Al podio! ' + mine + '.° lugar' : '¡' + w.name + ' gana el oro!';
+      big('¡Celebra!', 'Foto del podio en 3 segundos', 1600);
+      MVPhoto.take({ title, sub: '100 m con vallas · ' + (ME.t ? ME.t.toFixed(2) + ' s' : ''), slots: hs.length ? hs : (MVLink.players[0] ? [0] : []), snap: () => snapCanvas(R, () => (Q === 0 ? R.render(S, cam) : composer.render())), done: () => { podDone = true; } }); }
+    if ((podDone || pt > 20) && !menuOn && !MVHand.open) endMenu();
     if (!podiumDone) { podiumDone = true; if (!results.length) results = standings(); show('res', 0); const top = results.slice(0, 3); $('banner').innerHTML = '¡' + top[0].name + ' gana el oro!'; show('banner', 1); SND.fanfare(); setTimeout(SND.cheer, 400); confettiStart(); }
     const top = results.slice(0, 3);
     RUNNERS.forEach((r) => { const i = top.indexOf(r); if (i < 0) { r.A.userData.show = false; r.A.visible = false; return; } r.A.userData.show = true; r.A.visible = !r.vrm; const [x, h] = PODS[i]; const jt = clamp((pt - 0.6 - i * 0.5) / 0.6, 0, 1); const from = new THREE.Vector3(POD.x + x, 0, POD.z + 2.2); const to = new THREE.Vector3(POD.x + x, h, POD.z); r.A.position.lerpVectors(from, to, smooth(jt)); r.A.position.y += Math.sin(jt * Math.PI) * 0.8; r.A.rotation.y = 0; apply(r.A, jt < 1 ? POSES.idle(t) : (i === 0 ? POSES.victory(t) : POSES.cheer(t, i)), 0.15); r.clip = jt < 1 ? 'Idle' : 'Victory'; r.clipSpeed = i === 0 ? 1 : 0.85; r.clipTime = null; r.clipLoop = true;
