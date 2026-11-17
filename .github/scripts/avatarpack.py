@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Arma MiVibra Movimiento para GitHub Pages (site/movimiento):
-el editor de avatares caricatura (piezas CC0 de Quaternius), los juegos (vallas, bolos) y la cámara del celular;
+el editor de avatares caricatura (piezas CC0 de Quaternius), los juegos (vallas, bolos, tenis de mesa) y la cámara del celular;
 además deja
 el editor de avatares VRM Avatar Maker (MIT, piezas CC0 de MakeHuman) en español y con la marca MiVibra,
 más el juego de 100 m con vallas, que corre con el avatar guardado en el mismo navegador.
@@ -58,6 +58,9 @@ def main():
     if os.path.exists(os.path.join(OVR, 'bolos.html')):
         os.makedirs(os.path.join(out, 'bolos'), exist_ok=True)
         shutil.copy(os.path.join(OVR, 'bolos.html'), os.path.join(out, 'bolos', 'index.html'))
+    if os.path.exists(os.path.join(OVR, 'tenis.html')):
+        os.makedirs(os.path.join(out, 'tenis'), exist_ok=True)
+        shutil.copy(os.path.join(OVR, 'tenis.html'), os.path.join(out, 'tenis', 'index.html'))
     os.makedirs(os.path.join(out, 'vallas'), exist_ok=True)
     shutil.copy(os.path.join(OVR, 'vallas.html'), os.path.join(out, 'vallas', 'index.html'))
     shutil.copytree(os.path.join(OVR, 'addons3'), os.path.join(out, 'vendor', 'three-0.183.2', 'addons'), dirs_exist_ok=True)

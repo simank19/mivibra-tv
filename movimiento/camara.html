@@ -85,7 +85,12 @@ function connect(code) {
       conn = peer.connect('mivibra-mv-' + code, { reliable: false, serialization: 'json' });
       conn.on('open', () => { clearTimeout(fail); status('Conectado al TV', true, 'Código ' + code); conn.send({ t: 'hi', ua: navigator.userAgent.slice(0, 60) }); res(); });
       conn.on('close', () => { status('Se cerró la conexión', false); msg('Vuelve a abrir el juego en el TV y escanea el código'); });
-      conn.on('data', (d) => { if (d && d.t === 'say') msg(d.text, d.ok); });
+      conn.on('data', (d) => {
+        if (!d) return;
+        if (d.t === 'say') msg(d.text, d.ok);
+        if (d.t === 'slot') { let b = document.getElementById('slotTag'); if (!b) { b = document.createElement('div'); b.id = 'slotTag'; b.style.cssText = 'position:fixed;right:12px;top:12px;z-index:9;padding:8px 14px;border-radius:99px;font:800 16px Manrope,Inter,sans-serif;color:#fff;box-shadow:0 6px 16px rgba(0,0,0,.35)'; document.body.appendChild(b); } b.textContent = 'Jugador ' + d.n; b.style.background = d.color || '#FF6A3D'; msg('Eres el jugador ' + d.n + '. Mira el TV', true); }
+        if (d.t === 'full') msg('Ya hay 4 jugadores conectados', false);
+      });
     });
     peer.on('error', (e) => { clearTimeout(fail); rej(new Error(e.type === 'peer-unavailable' ? 'No encontré el TV con ese código.' : 'No se pudo conectar (' + e.type + ').')); });
   });

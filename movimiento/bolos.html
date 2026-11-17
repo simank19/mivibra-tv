@@ -25,6 +25,7 @@ small{display:block;font-size:11px;letter-spacing:.2em;font-weight:800;color:#D6
 .f.ten{width:56px}
 #tot{display:flex;flex-direction:column;justify-content:center;padding:0 8px;font-size:12px;color:#C9CED6}
 #tot b{font-size:22px;color:#fff}
+#plist{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}#plist span{display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;background:rgba(255,255,255,.08);font-size:13px;font-weight:700;color:#D6D9DC}#plist span.cur{background:rgba(255,106,61,.3);color:#fff;outline:1px solid #FF6A3D}#plist i{width:9px;height:9px;border-radius:50%;display:inline-block}#plist b{color:#fff}
 #cue{left:50%;top:100px;transform:translateX(-50%);padding:12px 22px;font-size:24px;font-weight:800;white-space:nowrap;display:none}
 #cue.on{display:block}#cue.hot{background:rgba(255,106,61,.88);border-color:#FFB13D}
 #meter{left:20px;bottom:20px;width:290px;padding:12px 16px}
@@ -52,7 +53,7 @@ small{display:block;font-size:11px;letter-spacing:.2em;font-weight:800;color:#D6
 </head>
 <body>
 <div id="hud" class="ui glass"><small>MIVIBRA MOVIMIENTO · BOLOS</small><b id="who">Tú</b></div>
-<div id="score" class="ui glass"><small>MARCADOR</small><div class="row" id="frames"></div></div>
+<div id="score" class="ui glass"><small>MARCADOR</small><div class="row" id="frames"></div><div id="plist"></div></div>
 <div id="cue" class="ui glass"></div>
 <div id="meter" class="ui glass"><small id="mt">FUERZA</small><div class="bar"><i id="mbar"></i></div><div class="v"><span id="mv1">—</span><span id="mv2"></span></div></div>
 <div id="phone" class="ui glass"><small>CÁMARA DEL CELULAR</small><svg width="146" height="170" viewBox="0 0 150 176"><g id="stick"></g></svg></div>
@@ -69,7 +70,7 @@ small{display:block;font-size:11px;letter-spacing:.2em;font-weight:800;color:#D6
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { loadAnims, Animator } from '../anim.js';
-import { build as buildAvatar, decode as decodeAvatar, DEFAULT } from '../avatar.js';
+import { build as buildAvatar, decode as decodeAvatar, DEFAULT, PRESETS } from '../avatar.js';
 
 const $ = (id) => document.getElementById(id);
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x)), lerp = (a, b, k) => a + (b - a) * k;
@@ -176,9 +177,32 @@ async function loadAvatar() {
   av.scene.rotation.y = Math.PI; S.add(av.scene); hy0 = av.humanoid.getNormalizedBoneNode('hips').position.y;
   const A = await loadAnims().catch(() => null); if (A) av.anim = new Animator(av, A);
   $('who').textContent = 'Línea 7 · ' + (rec.name || 'Tú');
+  PL[0] = { name: rec.name || 'Tú', rolls: newRolls(), av, slot: 0, color: MVLink.COLORS[0] };
+  ANIMS = A;
 }
+// ---------- Jugadores (1 a 4, por turnos) ----------
+let ANIMS = null; const PL = [];
+function newRolls() { return [[], [], [], [], [], [], [], [], [], []]; }
+async function setPlayers(n) {
+  for (let k = 1; k < n; k++) if (!PL[k]) {
+    const rec = Object.assign({}, PRESETS[(k * 2 - 1) % PRESETS.length], { name: 'Jugador ' + (k + 1) });
+    const a = await buildAvatar(rec, { lite: Q === 0 }); a.scene.traverse((o) => { if (o.isMesh) o.castShadow = Q > 0; });
+    a.scene.rotation.y = Math.PI; a.scene.visible = false; S.add(a.scene); if (ANIMS) a.anim = new Animator(a, ANIMS);
+    PL[k] = { name: rec.name, rolls: null, av: a, slot: k, color: MVLink.COLORS[k] };
+  }
+  G.np = n; PL.forEach((p, k) => { p.rolls = newRolls(); p.av.scene.visible = k === 0; });
+  if (!PL[0].own) PL[0].own = PL[0].name; PL[0].name = n > 1 && /^t[uú]$/i.test(PL[0].own) ? 'Jugador 1' : PL[0].own;
+  setCur(0);
+}
+function setCur(k) {
+  G.cur = k; const P = PL[k]; PL.forEach((p, i) => { p.av.scene.visible = i === k; });
+  av = P.av; hy0 = av.humanoid.getNormalizedBoneNode('hips').position.y; G.rolls = P.rolls;
+  $('who').textContent = (G.np > 1 ? 'Turno de ' : 'Línea 7 · ') + P.name;
+}
+// celular de quien tiene el turno (si no tiene celular propio, sirve cualquiera: se pueden pasar el celular)
+function turnSlot() { const s = PL[G.cur] ? PL[G.cur].slot : 0; return MVLink.players[s] ? s : -1; }
 const N = (n) => av.humanoid.getNormalizedBoneNode(n);
-function resetBones() { Object.values(av.humanoid.normalizedHumanBones).forEach((n) => n.quaternion.identity()); N('hips').position.y = hy0; }
+function resetBones() { if (!av) return; Object.values(av.humanoid.normalizedHumanBones).forEach((n) => n.quaternion.identity()); N('hips').position.y = hy0; }
 const mix = (a, b, k) => { const o = {}; new Set([...Object.keys(a), ...Object.keys(b)]).forEach((key) => { o[key] = lerp(a[key] || 0, b[key] || 0, k); }); return o; };
 // Posturas del lanzamiento (X positivo del brazo = hacia atrás)
 const P_HOLD = { rsx: -0.6, rel: 1.5, rsz: 0.35, lsx: -0.6, lel: 1.5, lsz: -0.35 };
@@ -194,7 +218,7 @@ function pose(p) {
 }
 
 // ---------- Estado del juego ----------
-let G = { frame: 0, roll: 0, rolls: [[], [], [], [], [], [], [], [], [], []], state: 'load', t: 0, aimX: 0, spin: 0, power: 0, meterOn: false, speed: 0, hook: 0, standing: null };
+let G = { np: 1, cur: 0, frame: 0, roll: 0, rolls: [[], [], [], [], [], [], [], [], [], []], state: 'load', t: 0, aimX: 0, spin: 0, power: 0, meterOn: false, speed: 0, hook: 0, standing: null };
 const ball2 = { x: 0, z: 0, vx: 0, vz: 0, gut: false, live: false, y: BR };
 function resetPins(all) {
   PINS.forEach((p) => { if (all || !p.down) { p.x = p.x0; p.z = p.z0; p.vx = p.vz = 0; p.down = false; p.gone = false; p.tilt = 0; p.ax = new THREE.Vector3(1, 0, 0); p.spin = 0; p.m.visible = true; } else { p.gone = true; p.m.visible = false; } });
@@ -248,11 +272,11 @@ function physics(dt) {
 function knock(p) { if (p.down) return; p.down = true; const sp = Math.hypot(p.vx, p.vz) || 1; p.ax.set(p.vz / sp, 0, -p.vx / sp); if (p.ax.lengthSq() < 0.1) p.ax.set(1, 0, 0); }
 
 // ---------- Puntaje ----------
-function scores() {
-  const flat = []; G.rolls.forEach((r) => r.forEach((x) => flat.push(x)));
+function scores(rolls = G.rolls) {
+  const flat = []; rolls.forEach((r) => r.forEach((x) => flat.push(x)));
   const out = []; let i = 0, tot = 0;
   for (let f = 0; f < 10; f++) {
-    const r = G.rolls[f]; if (!r.length) { out.push(null); continue; }
+    const r = rolls[f]; if (!r.length) { out.push(null); continue; }
     if (f < 9) {
       if (r[0] === 10) { if (flat[i + 1] === undefined || flat[i + 2] === undefined) { out.push(null); i += 1; continue; } tot += 10 + flat[i + 1] + flat[i + 2]; i += 1; }
       else if (r.length < 2) { out.push(null); i += 1; continue; }
@@ -263,16 +287,18 @@ function scores() {
   }
   return out;
 }
-function marks(f) {
-  const r = G.rolls[f];
+function marks(f, rolls = G.rolls) {
+  const r = rolls[f];
   if (f < 9) { if (r[0] === 10) return ['', 'X']; return [r[0] === undefined ? '' : r[0] === 0 ? '-' : r[0], r[1] === undefined ? '' : r[0] + r[1] === 10 ? '/' : r[1] === 0 ? '-' : r[1]]; }
   const o = []; r.forEach((x, k) => { const prev = k > 0 ? r[k - 1] : null; if (x === 10 && (k === 0 || prev === 10 || (k === 2 && r[0] + r[1] === 10))) o.push('X'); else if (k > 0 && prev !== 10 && prev + x === 10 && !(k === 2 && r[0] + r[1] === 10 && r[0] !== 10)) o.push('/'); else o.push(x === 0 ? '-' : x); }); while (o.length < 3) o.push(''); return o;
 }
 function drawScore() {
   const sc = scores(), tot = sc.filter((x) => x !== null).pop() || 0;
   $('frames').innerHTML = Array.from({ length: 10 }, (_, f) => { const m = marks(f); return `<div class="f${f === G.frame && G.state !== 'end' ? ' cur' : ''}${f === 9 ? ' ten' : ''}"><i>${f + 1}</i><div class="r">${m.join(' ')}</div><div class="t">${sc[f] ?? ''}</div></div>`; }).join('') + `<div id="tot">TOTAL<b>${tot}</b></div>`;
+  const tots = PL.slice(0, G.np || 1).map((p) => { const s2 = scores(p.rolls); return s2.filter((x) => x !== null).pop() || 0; });
+  $('plist').innerHTML = (G.np || 1) > 1 ? PL.slice(0, G.np).map((p, k) => `<span class="${k === G.cur ? 'cur' : ''}"><i style="background:${p.color}"></i>${p.name} <b>${tots[k]}</b></span>`).join('') : '';
   const { g } = boardTex.userData, w = 1024, h = 256; g.fillStyle = '#100d18'; g.fillRect(0, 0, w, h);
-  g.fillStyle = '#FF6A3D'; g.beginPath(); g.arc(34, 38, 10, 0, 7); g.fill(); g.fillStyle = '#fff'; g.font = '800 30px Manrope,Inter,sans-serif'; g.textBaseline = 'middle'; g.fillText($('who').textContent.replace('Línea 7 · ', ''), 54, 40);
+  g.fillStyle = '#FF6A3D'; g.beginPath(); g.arc(34, 38, 10, 0, 7); g.fill(); g.fillStyle = '#fff'; g.font = '800 30px Manrope,Inter,sans-serif'; g.textBaseline = 'middle'; g.fillText(PL[G.cur] ? PL[G.cur].name : 'Tú', 54, 40); if ((G.np || 1) > 1) { g.font = '700 22px Manrope,Inter,sans-serif'; g.textAlign = 'right'; g.fillText(PL.slice(0, G.np).map((p, k) => p.name.replace('Jugador ', 'J') + ' ' + tots[k]).join('   '), 1004, 40); g.textAlign = 'left'; }
   for (let f = 0; f < 10; f++) { const x = 20 + f * 88, y = 80; g.fillStyle = f === G.frame ? '#3a2219' : '#1a1626'; g.fillRect(x, y, 84, 150); g.strokeStyle = f === G.frame ? '#FF6A3D' : '#2e2840'; g.lineWidth = 3; g.strokeRect(x, y, 84, 150);
     g.fillStyle = '#9aa3ad'; g.font = '700 18px Manrope,Inter'; g.textAlign = 'center'; g.fillText(String(f + 1), x + 42, y + 18); g.fillStyle = '#fff'; g.font = '800 26px Manrope,Inter'; g.fillText(marks(f).join(' '), x + 42, y + 58); if (sc[f] !== null) { g.font = '900 38px Manrope,Inter'; g.fillText(String(sc[f]), x + 42, y + 112); } g.textAlign = 'left'; }
   g.fillStyle = '#9aa3ad'; g.font = '700 18px Manrope'; g.fillText('TOTAL', 912, 98); g.fillStyle = '#fff'; g.font = '900 52px Manrope'; g.fillText(String(tot), 912, 160); boardTex.needsUpdate = true;
@@ -285,8 +311,9 @@ function meter(p, txt1, txt2, title) { $('mbar').style.width = (clamp(p, 0, 1) *
 
 // ---------- Cámara del celular: apuntar con el cuerpo y lanzar con el brazo ----------
 const CAMS = { hist: [], state: 'hold', backT: 0, cx0: null, arm: 6 };
-MVLink.onPose((l, ts, d) => {
+MVLink.onPose((l, ts, d, slot) => {
   if (!l || G.state !== 'aim' && G.state !== 'swing') return;
+  const ts0 = turnSlot(); if (ts0 >= 0 && slot !== ts0) return;
   const v = (i) => l[i] && l[i][2] > 0.45; if (!(v(1) && v(2) && v(7) && v(8))) return;
   const shY = (l[1][1] + l[2][1]) / 2, hipY = (l[7][1] + l[8][1]) / 2, torso = Math.max(0.06, hipY - shY), cx = 1 - (l[7][0] + l[8][0]) / 2;
   if (CAMS.cx0 === null) CAMS.cx0 = cx;
@@ -305,7 +332,7 @@ MVLink.onPose((l, ts, d) => {
     else if (ts - CAMS.backT > 3500) CAMS.state = 'hold';
   }
 });
-function useCamera() { return MVLink.fresh(); }
+function useCamera() { const s = turnSlot(); return s >= 0 ? MVLink.fresh(s) : MVLink.fresh(); }
 MVHand.onPause = () => pause();
 function stickDraw() {
   const l = MVLink.lm; $('phone').classList.toggle('on', !!(MVLink.on && l)); if (!l) return;
@@ -344,22 +371,26 @@ function settle() {
     else if (!first && r[0] + r[1] === 10) msg = ['¡SPARE!', 'Tumbaste todos en dos bolas'];
     else msg = [down === 0 ? '¡Uy!' : down + (down === 1 ? ' pino' : ' pinos'), first ? 'Te quedan ' + (10 - down) : 'Total del turno: ' + (r[0] + r[1])];
   } else msg = [down === before && before === 10 ? '¡CHUZA!' : down === before ? '¡SPARE!' : down + ' pinos', 'Turno 10'];
-  if (msg[0].startsWith('¡CHUZA') || msg[0].startsWith('¡SPARE')) { SND.ding(msg[0].startsWith('¡CHUZA') ? 988 : 784); MVLink.say(msg[0], true); }
+  if (msg[0].startsWith('¡CHUZA') || msg[0].startsWith('¡SPARE')) { SND.ding(msg[0].startsWith('¡CHUZA') ? 988 : 784); const s0 = turnSlot(); MVLink.say(msg[0], true, s0 >= 0 ? s0 : undefined); }
   big(msg[0], msg[1]);
   // ¿siguiente bola o siguiente turno?
   let nextFrame = false, resetAll = false;
   if (f < 9) { if (first && down === 10) { nextFrame = true; } else if (!first) nextFrame = true; }
-  else { const t = r.reduce((a, b) => a + b, 0); if (r.length === 3 || (r.length === 2 && r[0] + r[1] < 10)) { G.state = 'end'; drawScore(); setTimeout(endGame, 2400); return; } resetAll = (r.length === 1 && down === 10) || (r.length === 2 && (r[1] === 10 || r[0] + r[1] === 10)) || (r.length === 2 && r[0] === 10 && down === before && before === 10); }
+  else { const t = r.reduce((a, b) => a + b, 0); if (r.length === 3 || (r.length === 2 && r[0] + r[1] < 10)) { if (G.cur < G.np - 1) nextFrame = true; else { G.state = 'end'; drawScore(); setTimeout(endGame, 2400); return; } } else resetAll = (r.length === 1 && down === 10) || (r.length === 2 && (r[1] === 10 || r[0] + r[1] === 10)) || (r.length === 2 && r[0] === 10 && down === before && before === 10); }
   G.state = 'sweep'; G.t = 0;
   setTimeout(() => {
-    if (nextFrame) { G.frame++; resetPins(true); G.standing = 10; }
+    if (nextFrame) { const nx = (G.cur + 1) % G.np; if (nx === 0) G.frame++; resetPins(true); G.standing = 10; if (G.np > 1) { setCur(nx); big('Turno de ' + PL[nx].name, 'Turno ' + (G.frame + 1) + ' de 10', 1800); const s1 = turnSlot(); if (s1 >= 0) MVLink.say('¡Es tu turno! Lanza la bola', true, s1); } }
     else if (resetAll) { resetPins(true); G.standing = 10; }
     else { resetPins(false); G.standing = PINS.filter((p) => !p.gone).length; }
     newRoll();
   }, 2400);
 }
 function endGame() {
-  const tot = scores()[9] || 0; MVHand.pauseEnabled = false;
+  MVHand.pauseEnabled = false;
+  if (G.np > 1) { const rk = PL.slice(0, G.np).map((p) => ({ p, t: scores(p.rolls)[9] || 0 })).sort((a, b) => b.t - a.t); drawScore();
+    rk.forEach(({ p }, i) => { if (MVLink.players[p.slot]) MVLink.say(i === 0 ? '¡Ganaste! ' + rk[0].t + ' puntos' : 'Quedaste ' + (i + 1) + '.°', i === 0, p.slot); });
+    return MVHand.menu({ kicker: 'FIN DEL JUEGO', title: '¡Gana ' + rk[0].p.name + '!', sub: rk.map((x, i) => (i + 1) + '. ' + x.p.name + ' — ' + x.t).join('   ·   '), items: [{ id: 'again', label: 'Jugar otra vez', icon: '↻' }, { id: 'play', label: 'Cambiar jugadores', icon: '☺' }, { id: 'exit', label: 'Salir', icon: '✕' }], back: 'exit', onPick: menuPick }); }
+  const tot = scores()[9] || 0;
   MVHand.menu({ kicker: 'FIN DEL JUEGO', title: tot + ' puntos', sub: tot >= 150 ? '¡Juegazo!' : tot >= 90 ? '¡Muy bien!' : 'Sigue practicando: ¡la próxima es mejor!', items: [{ id: 'again', label: 'Jugar otra vez', icon: '↻' }, { id: 'edit', label: 'Cambiar mi avatar', icon: '☺' }, { id: 'exit', label: 'Salir', icon: '✕' }], back: 'exit', onPick: menuPick });
 }
 function pause() {
@@ -369,15 +400,22 @@ function pause() {
 function menuPick(id) {
   G.paused = false;
   if (id === 'resume') return;
-  if (id === 'play' || id === 'again') { SND.init(); G.frame = 0; G.rolls = [[], [], [], [], [], [], [], [], [], []]; G.standing = 10; resetPins(true); $('connect').classList.remove('on'); newRoll(); return; }
+  if (id === 'play') return countMenu();
+  if (/^n[1-4]$/.test(id) || id === 'again') { const n = id === 'again' ? (G.np || 1) : +id[1]; SND.init(); G.state = 'load'; $('loading').style.display = ''; $('loading').textContent = n > 1 ? 'Preparando jugadores…' : 'Preparando…';
+    setPlayers(n).then(() => { $('loading').style.display = 'none'; G.frame = 0; G.standing = 10; resetPins(true); $('connect').classList.remove('on'); if (n > 1) { big('Turno de ' + PL[0].name, n + ' jugadores · 10 turnos', 1800); MVLink.players.forEach((p, k) => { if (p) MVLink.say(k < n ? (k === 0 ? 'Empiezas tú' : 'Eres ' + PL[k].name + '. Espera tu turno') : 'Esta partida es de ' + n, true, k); }); } newRoll(); }); return; }
   if (id === 'cam') { $('connect').classList.add('on'); return startMenu(); }
   if (id === 'edit') { location.href = '../editor/' + location.search; return; }
   if (id === 'exit') { if (window.parent !== window) window.parent.postMessage({ mv: 'close' }, '*'); else history.back(); }
 }
+function countMenu() {
+  G.state = 'menu'; const c = Math.max(1, MVLink.count());
+  MVHand.menu({ kicker: 'BOLOS', title: '¿Cuántos juegan?', sub: 'Lanzan por tandas. Cada uno con su celular, o se pasan uno solo.', focus: Math.min(3, c - 1),
+    items: [{ id: 'n1', label: '1 jugador', icon: '1' }, { id: 'n2', label: '2 jugadores', icon: '2' }, { id: 'n3', label: '3 jugadores', icon: '3' }, { id: 'n4', label: '4 jugadores', icon: '4' }, { id: 'back', label: 'Volver', icon: '←' }], back: 'back', onPick: (id) => id === 'back' ? startMenu() : menuPick(id) });
+}
 function startMenu() {
   G.state = 'menu';
   MVHand.menu({ kicker: 'MIVIBRA MOVIMIENTO', title: 'Bolos', sub: MVLink.on ? 'Celular conectado: levanta la mano y desliza por la flecha.' : 'Conecta el celular para jugar con tu cuerpo, o usa el control.',
-    items: [{ id: 'play', label: 'Jugar (10 turnos)', icon: '▶' }, { id: 'cam', label: MVLink.on ? 'Celular conectado ✓' : 'Conectar el celular', icon: '◉' }, { id: 'exit', label: 'Salir', icon: '✕' }], back: 'exit', onPick: menuPick });
+    items: [{ id: 'play', label: 'Jugar (1 a 4 jugadores)', icon: '▶' }, { id: 'cam', label: MVLink.on ? MVLink.count() + (MVLink.count() > 1 ? ' celulares conectados ✓' : ' celular conectado ✓') : 'Conectar celulares', icon: '◉' }, { id: 'exit', label: 'Salir', icon: '✕' }], back: 'exit', onPick: menuPick });
 }
 
 // ---------- Control remoto ----------
@@ -454,7 +492,7 @@ MVLink.open((txt, ok) => { $('cst').textContent = txt; $('cst').classList.toggle
 resetPins(true); G.standing = 10; drawScore();
 requestAnimationFrame(loop);
 loadAvatar().then(() => { $('loading').style.display = 'none'; startMenu(); }).catch((e) => { console.error(e); $('loading').textContent = 'No se pudo cargar el avatar'; });
-window.MVB = { G, ball2, PINS, release: (p, h) => { startSwing(); release(p, h); }, pick: (id) => { MVHand.close(); menuPick(id); }, scores };
+window.MVB = { G, PL, setPlayers, ball2, PINS, settle: () => settle(), release: (p, h) => { startSwing(); release(p, h); }, pick: (id) => { MVHand.close(); menuPick(id); }, scores };
 </script>
 </body>
 </html>

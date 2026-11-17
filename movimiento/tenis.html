@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Tenis de mesa · MiVibra Movimiento</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#1d1f24;color:#fff;font-family:Manrope,Inter,system-ui,sans-serif}
+canvas{display:block}
+.glass{background:rgba(24,26,30,.6);border:1px solid rgba(255,255,255,.22);border-radius:20px;box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 14px 34px -14px rgba(0,0,0,.6)}
+html:not(.q0) .glass{backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+html.q0 .glass{background:rgba(24,26,30,.82)}
+.ui{position:fixed;z-index:5}
+small{display:block;font-size:11px;letter-spacing:.2em;font-weight:800;color:#D6D9DC}
+#hud{left:20px;top:18px;padding:10px 16px}#hud b{font-size:20px}
+#score{left:50%;top:16px;transform:translateX(-50%);padding:10px 14px;display:flex;align-items:center;gap:14px}
+#score .p{display:flex;align-items:center;gap:8px;font-weight:800;font-size:18px;min-width:150px}
+#score .p.r{justify-content:flex-end}
+#score .p i{width:10px;height:10px;border-radius:50%}
+#score .p .sv{width:12px;height:12px;border-radius:50%;background:#FFD666;box-shadow:0 0 10px #FFD666;visibility:hidden}
+#score .p .sv.on{visibility:visible}
+#score .n{font-size:44px;font-weight:900;min-width:58px;text-align:center;padding:0 6px;border-radius:14px;background:rgba(255,255,255,.08)}
+#cue{left:50%;top:108px;transform:translateX(-50%);padding:12px 22px;font-size:24px;font-weight:800;white-space:nowrap;display:none}
+#cue.on{display:block}#cue.hot{background:rgba(255,106,61,.88);border-color:#FFB13D}
+#big{left:0;right:0;top:20%;text-align:center;display:none;pointer-events:none}
+#big.on{display:block}
+#big b{display:block;font-size:100px;font-weight:900;text-shadow:0 6px 0 #FF6A3D,0 18px 50px rgba(0,0,0,.6)}
+#big span{display:inline-block;margin-top:6px;font-size:24px;font-weight:800;padding:8px 18px;border-radius:99px;background:rgba(24,26,30,.7)}
+#phone{right:20px;bottom:20px;width:170px;padding:10px 12px;display:none}
+#phone.on{display:block}
+#phone svg{display:block;margin:4px auto 0}
+#phone path,#phone circle{stroke:#34D399;stroke-width:6;stroke-linecap:round;fill:none}
+#phone circle.h{stroke:#FFD666;fill:#FFD666}
+#connect{right:20px;top:110px;width:300px;padding:14px;display:none;text-align:center}
+#connect.on{display:block}
+#connect img{width:160px;height:160px;border-radius:14px;background:#fff;padding:6px;display:block;margin:8px auto}
+#connect .code{font-size:32px;font-weight:900;letter-spacing:.16em}
+#connect .st{font-size:14px;margin-top:6px;color:#E4E6E8}#connect .st.ok{color:#34D399;font-weight:800}
+#pls{display:flex;gap:6px;justify-content:center;margin-top:8px}#pls b{padding:4px 10px;border-radius:99px;font-size:13px;color:#fff}#pls b.off{background:rgba(255,255,255,.1)!important;color:#9aa0a6;font-weight:600}
+#connect i{display:block;font-size:12px;color:#C9CDD2;margin-top:8px;font-style:normal;line-height:1.4}
+#loading{left:50%;top:50%;transform:translate(-50%,-50%);padding:18px 26px;font-weight:800;font-size:18px}
+#keys{left:50%;bottom:22px;transform:translateX(-50%);padding:8px 14px;font-size:13px;color:#E4E6E8;display:none}
+#keys.on{display:block}
+#credit{position:fixed;left:50%;bottom:6px;transform:translateX(-50%);font-size:11px;color:rgba(255,255,255,.65);z-index:5;white-space:nowrap}
+</style>
+</head>
+<body>
+<div id="hud" class="ui glass"><small>MIVIBRA MOVIMIENTO</small><b>Tenis de mesa</b></div>
+<div id="score" class="ui glass"><div class="p"><i id="c0"></i><span id="n0">Tú</span><span class="sv" id="s0"></span></div><div class="n" id="p0">0</div><div class="n" id="p1">0</div><div class="p r"><span class="sv" id="s1"></span><span id="n1">MiVibra</span><i id="c1"></i></div></div>
+<div id="cue" class="ui glass"></div>
+<div id="phone" class="ui glass"><small>CÁMARA DEL CELULAR</small><svg width="146" height="170" viewBox="0 0 150 176"><g id="stick"></g></svg></div>
+<div id="big" class="ui"><b id="bigT"></b><span id="bigS"></span></div>
+<div id="connect" class="ui glass"><small>JUEGA CON TU BRAZO · HASTA 2</small><img id="qr" alt="Código QR para conectar el celular"><div class="code" id="code">······</div><div class="st" id="cst">Preparando…</div><div id="pls"></div><i>Ponlo de pie a 2–3 m. Mueve la mano con la que juegas: la raqueta la sigue.</i></div>
+<div id="keys" class="ui glass">← → mover la raqueta · ↑ remate · OK sacar · Atrás: pausa</div>
+<div id="loading" class="ui glass">Preparando la mesa…</div>
+<div id="credit">Avatares con piezas CC0 de Quaternius · sonidos generados por MiVibra</div>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@2.0.4/dist/qrcode.js"></script>
+<script src="../mano.js"></script>
+<script type="importmap">{"imports":{"three":"../vendor/three-0.183.2/three.module.min.js","three/addons/":"../vendor/three-0.183.2/addons/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { loadAnims, Animator } from '../anim.js';
+import { build as buildAvatar, decode as decodeAvatar, DEFAULT, PRESETS } from '../avatar.js';
+
+const $ = (id) => document.getElementById(id);
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x)), lerp = (a, b, k) => a + (b - a) * k, rnd = (a, b) => a + Math.random() * (b - a);
+// ---------- Calidad (TV liviano) ----------
+const IS_TV = /Tizen|Web0S|webOS|SMART-TV|SmartTV|NetCast|HbbTV|BRAVIA|AFT[A-Z]|Android TV|GoogleTV|MiTV|Mi TV|TCL|Hisense|CrKey/i.test(navigator.userAgent) || (/Android/i.test(navigator.userAgent) && !/Mobile/i.test(navigator.userAgent) && screen.width >= 1280);
+const QP = new URLSearchParams(location.search).get('q');
+const Q = QP !== null ? clamp(+QP | 0, 0, 2) : IS_TV ? 0 : 2;
+document.documentElement.classList.toggle('q0', Q === 0);
+const R = new THREE.WebGLRenderer({ antialias: Q === 2, powerPreference: 'high-performance' });
+R.setPixelRatio(Math.min(devicePixelRatio, Q === 2 ? 1.75 : 1, (Q === 0 ? 960 : 2000) / innerWidth)); R.setSize(innerWidth, innerHeight);
+R.toneMapping = THREE.NeutralToneMapping; R.toneMappingExposure = 1.08; R.shadowMap.enabled = Q > 0; R.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.prepend(R.domElement);
+const S = new THREE.Scene(); S.background = new THREE.Color('#2a2350');
+const cam = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.05, 80);
+addEventListener('resize', () => { R.setSize(innerWidth, innerHeight); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
+function tex(w, h, draw) { const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d'); draw(g, w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = Q === 2 ? 4 : 1; return t; }
+const M = (c, o = {}) => Q === 0 ? (() => { const k = Object.assign({}, o); delete k.roughness; delete k.metalness; return new THREE.MeshLambertMaterial(Object.assign({ color: c }, k)); })() : new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.6 }, o));
+function box(w, h, d, m, x, y, z) { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.set(x, y, z); b.receiveShadow = true; b.castShadow = Q > 0; S.add(b); return b; }
+
+// ---------- Sala y mesa (medidas reales: 2,74 × 1,525 m, a 76 cm, red de 15,25 cm) ----------
+const TW = 1.525, TL = 2.74, TH = 0.76, NH = 0.1525, HALF = TL / 2, BR = 0.02, BRV = 0.032;
+const floorTex = tex(512, 512, (g, w, h) => { g.fillStyle = '#3b2f74'; g.fillRect(0, 0, w, h); for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) { g.fillStyle = (i + j) % 2 ? 'rgba(255,255,255,.035)' : 'rgba(0,0,0,.05)'; g.fillRect(i * 64, j * 64, 64, 64); } });
+floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping; floorTex.repeat.set(4, 4);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), M('#ffffff', { map: floorTex, roughness: 0.8 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; S.add(floor);
+// cancha naranja bajo la mesa
+const court = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 7.2), M('#FF6A3D', { roughness: 0.7 })); court.rotation.x = -Math.PI / 2; court.position.y = 0.004; court.receiveShadow = true; S.add(court);
+const wallTex = tex(1024, 256, (g, w, h) => { const gr = g.createLinearGradient(0, 0, w, 0); gr.addColorStop(0, '#8E5CF7'); gr.addColorStop(0.5, '#FF6A3D'); gr.addColorStop(1, '#FFB13D'); g.fillStyle = gr; g.fillRect(0, 0, w, h); g.fillStyle = 'rgba(255,255,255,.9)'; g.font = '900 92px Manrope,Inter,sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('MiVibra · Tenis de mesa', w / 2, h / 2); });
+box(16, 4, 0.2, M('#ffffff', { map: wallTex }), 0, 2, -6);
+[-1, 1].forEach((s) => box(0.2, 4, 16, M('#5b4f9a'), s * 6, 2, 0));
+// vallas bajas alrededor con colores MiVibra
+['#2F7DF6', '#34D399', '#F43F5E', '#FFB13D'].forEach((c, i) => { const s = i < 2 ? -1 : 1; box(0.06, 0.55, 2.2, M(c), s * 2.6, 0.275, (i % 2 ? 1.4 : -1.4)); });
+// mesa
+const topTex = tex(256, 512, (g, w, h) => { g.fillStyle = '#1f5fd6'; g.fillRect(0, 0, w, h); g.fillStyle = '#fff'; g.fillRect(0, 0, w, 6); g.fillRect(0, h - 6, w, 6); g.fillRect(0, 0, 6, h); g.fillRect(w - 6, 0, 6, h); g.fillRect(w / 2 - 2, 0, 4, h); });
+const top = new THREE.Mesh(new THREE.BoxGeometry(TW, 0.03, TL), [M('#17469f'), M('#17469f'), M('#ffffff', { map: topTex, roughness: 0.35 }), M('#17469f'), M('#17469f'), M('#17469f')]);
+top.position.set(0, TH - 0.015, 0); top.receiveShadow = true; top.castShadow = Q > 0; S.add(top);
+const legM = M('#2A2C2E');
+[[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([a, b]) => box(0.05, TH - 0.03, 0.05, legM, a * (TW / 2 - 0.15), (TH - 0.03) / 2, b * (HALF - 0.3)));
+// red
+const netTex = tex(64, 32, (g, w, h) => { g.fillStyle = 'rgba(20,20,30,.5)'; g.fillRect(0, 0, w, h); g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 1; for (let i = 0; i < w; i += 6) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, h); g.stroke(); } for (let j = 0; j < h; j += 6) { g.beginPath(); g.moveTo(0, j); g.lineTo(w, j); g.stroke(); } g.fillStyle = '#fff'; g.fillRect(0, 0, w, 4); });
+netTex.wrapS = THREE.RepeatWrapping; netTex.repeat.set(8, 1);
+const net = new THREE.Mesh(new THREE.PlaneGeometry(TW + 0.3, NH), new THREE.MeshBasicMaterial({ map: netTex, transparent: true, side: THREE.DoubleSide, depthWrite: false })); net.position.set(0, TH + NH / 2, 0); S.add(net);
+[-1, 1].forEach((s) => box(0.02, NH + 0.02, 0.02, M('#cfd3da'), s * (TW / 2 + 0.15), TH + NH / 2, 0));
+// luces
+S.add(new THREE.HemisphereLight('#fffaf2', '#5a4a9a', 1.5));
+const key = new THREE.DirectionalLight('#fff4e6', 1.9); key.position.set(1.5, 7, 3); key.castShadow = Q > 0; key.shadow.mapSize.set(Q === 2 ? 2048 : 1024, Q === 2 ? 2048 : 1024);
+Object.assign(key.shadow.camera, { left: -4, right: 4, top: 5, bottom: -5, near: 1, far: 20 }); key.shadow.bias = -0.0004; S.add(key);
+for (let z = -4; z <= 4; z += 4) box(3, 0.05, 0.3, new THREE.MeshBasicMaterial({ color: '#fff3e0' }), 0, 3.9, z);
+
+// ---------- Bola y raquetas ----------
+const ball = new THREE.Mesh(new THREE.SphereGeometry(BRV, 18, 12), new THREE.MeshBasicMaterial({ color: '#FFB13D', toneMapped: false })); S.add(ball);
+const ballSh = new THREE.Mesh(new THREE.CircleGeometry(0.04, 16), new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.3, depthWrite: false })); ballSh.rotation.x = -Math.PI / 2; S.add(ballSh);
+// estela de la bola (pocas piezas)
+const TRAIL = [];
+for (let i = 0; i < (Q === 0 ? 4 : 8); i++) { const m = new THREE.Mesh(new THREE.SphereGeometry(BRV * (1 - i * 0.09), 10, 8), new THREE.MeshBasicMaterial({ color: '#FFD666', transparent: true, opacity: 0.35 - i * 0.04, depthWrite: false, toneMapped: false })); S.add(m); TRAIL.push(m); }
+function paddle(color) {
+  const g = new THREE.Group(), PS = 1.5;   // un poco más grande que la real para que se vea bien en el TV
+  const face = new THREE.Mesh(new THREE.CylinderGeometry(0.085 * PS, 0.085 * PS, 0.012, 28), M(color, { roughness: 0.5 })); face.rotation.x = Math.PI / 2; g.add(face);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.085 * PS, 0.006, 6, 28), M('#1a1b1d')); g.add(rim);
+  const handle = new THREE.Mesh(new THREE.BoxGeometry(0.03 * PS, 0.1 * PS, 0.022), M('#c58b52')); handle.position.y = -0.12 * PS; g.add(handle);
+  g.traverse((o) => { if (o.isMesh) o.castShadow = Q > 0; }); S.add(g); return g;
+}
+const PAD = [paddle('#E4282F'), paddle('#1c1c22')];
+
+// Para el TV: lo que no se mueve se junta en pocas piezas
+if (Q === 0) {
+  S.updateMatrixWorld(true); const by = new Map(), keep = new Set([ball, ballSh, net, ...TRAIL]); PAD.forEach((p) => p.traverse((o) => keep.add(o)));
+  S.traverse((o) => { if (!o.isMesh || keep.has(o) || Array.isArray(o.material)) return; const k = o.material.uuid; (by.get(k) || by.set(k, []).get(k)).push(o); });
+  by.forEach((list) => { if (list.length < 2) return; const gs = list.map((o) => { const g = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone()).applyMatrix4(o.matrixWorld); ['uv1', 'uv2', 'color'].forEach((a) => g.deleteAttribute(a)); return g; });
+    const mg = mergeGeometries(gs); if (!mg) return; const m = new THREE.Mesh(mg, list[0].material); S.add(m); list.forEach((o) => (o.visible = false)); });
+}
+
+// ---------- Sonido: efectos "grabados" una vez y solo reproducidos (liviano en TV) ----------
+const SND = (() => {
+  let ac = null, out, on = true; const B = {}, SR = 22050;
+  function nb(c) { const b = c.createBuffer(1, c.sampleRate * 0.5, c.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b; }
+  function click(c, t, f, dur, gain, nz = 0.4) { const o = c.createOscillator(), g = c.createGain(); o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 0.7, t + dur); g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); o.connect(g); g.connect(c.destination); o.start(t); o.stop(t + dur + 0.02);
+    const s = c.createBufferSource(); s.buffer = nb(c); const fl = c.createBiquadFilter(); fl.type = 'bandpass'; fl.frequency.value = f * 2; const g2 = c.createGain(); g2.gain.setValueAtTime(gain * nz, t); g2.gain.exponentialRampToValueAtTime(0.0001, t + dur * 0.6); s.connect(fl); fl.connect(g2); g2.connect(c.destination); s.start(t); s.stop(t + dur); }
+  const RC = {
+    pad: [0.12, (c) => click(c, 0, 1400, 0.08, 0.9, 0.8)],
+    smash: [0.2, (c) => { click(c, 0, 1100, 0.12, 1, 1.2); click(c, 0.01, 2200, 0.05, 0.4); }],
+    tab: [0.12, (c) => click(c, 0, 900, 0.07, 0.7, 0.5)],
+    net: [0.2, (c) => click(c, 0, 220, 0.15, 0.8, 1.5)],
+    point: [0.9, (c) => { click(c, 0, 988, 0.4, 0.25, 0); click(c, 0.16, 1318, 0.6, 0.25, 0); }],
+    lose: [0.7, (c) => { click(c, 0, 392, 0.3, 0.25, 0); click(c, 0.18, 330, 0.45, 0.25, 0); }],
+    cheer: [2, (c) => { const s = c.createBufferSource(); s.buffer = nb(c); s.loop = true; const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1300; f.Q.value = 0.5; const g = c.createGain(); g.gain.setValueAtTime(0, 0); g.gain.linearRampToValueAtTime(0.5, 0.25); g.gain.exponentialRampToValueAtTime(0.001, 1.9); s.connect(f); f.connect(g); g.connect(c.destination); s.start(0); s.stop(2); }],
+  };
+  return {
+    get on() { return on; }, toggle() { on = !on; return on; },
+    async init() { if (ac) return; try { ac = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'playback' }); } catch (e) { return; } out = ac.createGain(); out.gain.value = 0.9; out.connect(ac.destination);
+      for (const k in RC) { try { const oc = new OfflineAudioContext(1, Math.ceil(RC[k][0] * SR), SR); RC[k][1](oc); B[k] = await oc.startRendering(); } catch (e) {} } },
+    play(k, g = 1, rate = 1) { if (!ac || !on || !B[k]) return; if (ac.state === 'suspended') ac.resume(); const s = ac.createBufferSource(); s.buffer = B[k]; s.playbackRate.value = rate; let n = s; if (g !== 1) { const v = ac.createGain(); v.gain.value = g; s.connect(v); n = v; } n.connect(out); s.start(); },
+  };
+})();
+
+// ---------- Avatares ----------
+function readSaved() { return new Promise((res) => { try { const r = indexedDB.open('mivibra-movimiento', 1); r.onupgradeneeded = () => r.result.createObjectStore('avatar'); r.onerror = () => res(null); r.onsuccess = () => { try { const t = r.result.transaction('avatar', 'readonly').objectStore('avatar').get('me'); t.onsuccess = () => res(t.result || null); t.onerror = () => res(null); } catch (e) { res(null); } }; } catch (e) { res(null); } }); }
+function fromApp() { if (window.parent === window) return Promise.resolve(null); return new Promise((res) => { const t = setTimeout(() => { removeEventListener('message', on); res(null); }, 20000); function on(e) { if (e.source !== window.parent || !e.data || e.data.mv !== 'avatar') return; clearTimeout(t); removeEventListener('message', on); res(e.data.vrm ? e.data : null); } addEventListener('message', on); window.parent.postMessage({ mv: 'avatar-get' }, '*'); }); }
+const SIDES = [{ z: 1, name: 'Tú', av: null, rot: Math.PI }, { z: -1, name: 'MiVibra', av: null, rot: 0 }];
+let ANIMS = null, myRec = null;
+async function makeAv(rec) { const a = await buildAvatar(rec, { lite: Q === 0 }); a.scene.traverse((o) => { if (o.isMesh) o.castShadow = Q > 0; }); S.add(a.scene); if (ANIMS) a.anim = new Animator(a, ANIMS); return a; }
+async function loadAvatars() {
+  const acc = await fromApp(); myRec = acc && acc.vrm ? decodeAvatar(acc.vrm) : null;
+  if (!myRec) { const s = await readSaved(); myRec = s && s.vrm ? decodeAvatar(s.vrm) : null; }
+  if (!myRec) myRec = Object.assign({}, DEFAULT, { name: 'Tú' });
+  ANIMS = await loadAnims().catch(() => null);
+  SIDES[0].av = await makeAv(myRec); SIDES[0].name = myRec.name || 'Tú';
+  SIDES[1].av = await makeAv(PRESETS[3]); SIDES[1].name = 'MiVibra';
+}
+function swingAnim(a, strong) { if (!a || !a.anim) return; a.anim.play('Punch', { loop: false, speed: strong ? 1.9 : 1.5, fade: 0.06 }); a.anim.setTime(0.08); a.swingT = 0.5; }
+
+// ---------- Estado del juego ----------
+// Lado 0: cerca de la cámara (z > 0). Lado 1: al fondo (z < 0).
+const G = { state: 'load', mode: 'cpu', lvl: 1, sc: [0, 0], server: 0, serveN: 0, t: 0, paused: false, rally: 0, last: -1, bounces: [0, 0], bounceSide: -1, serving: false, winTo: 11 };
+const B = { p: new THREE.Vector3(0, 1.1, 1.3), v: new THREE.Vector3(), live: false, held: true };
+const PADS = [{ x: 0.2, y: 1.0, vx: 0, tx: 0.2, smash: 0 }, { x: -0.2, y: 1.0, vx: 0, tx: -0.2 }];
+const LVL = [{ name: 'Fácil', sp: 1.5, err: 0.18, react: 0.32, pace: 0.85 }, { name: 'Normal', sp: 2.3, err: 0.1, react: 0.22, pace: 1 }, { name: 'Difícil', sp: 3.4, err: 0.05, react: 0.14, pace: 1.15 }];
+const GRAV = 7.5;          // un poco menos que la real: deja tiempo de reaccionar con la cámara del celular
+const PZ = HALF + 0.32;    // plano donde golpea cada raqueta
+// ¿quién controla cada lado? 'cam' (celular), 'key' (control) o 'cpu'
+function ctl(side) { if (G.auto) return 'cpu'; if (side === 1) return G.mode === 'two' ? 'cam' : 'cpu'; return MVLink.fresh(0) ? 'cam' : 'key'; }
+function slotOf(side) { return side; }
+
+// Golpe: calcula la velocidad para que la bola caiga en (tx, tz) pasando la red
+function shot(fromSide, tx, tz, speed) {
+  const p = B.p, dist = Math.hypot(tx - p.x, tz - p.z); let T = dist / speed;
+  for (let k = 0; k < 12; k++) {
+    const vx = (tx - p.x) / T, vz = (tz - p.z) / T, vy = (TH + BR - p.y + 0.5 * GRAV * T * T) / T;
+    const tn = (0 - p.z) / vz, yn = p.y + vy * tn - 0.5 * GRAV * tn * tn;
+    if (yn > TH + NH + 0.06 || k === 11) { B.v.set(vx, vy, vz); break; }
+    T *= 1.12;
+  }
+  B.live = true; B.held = false; G.last = fromSide; G.bounces = [0, 0]; G.rally++;
+}
+function hit(side, aimX, power, smash) {
+  const d = side === 0 ? -1 : 1;  // hacia dónde va la bola
+  const lv = LVL[G.lvl], cpu = ctl(side) === 'cpu';
+  let tx = clamp(aimX, -TW / 2 + 0.1, TW / 2 - 0.1), tz = d * rnd(0.55, HALF - 0.18);
+  let speed = lerp(4.2, 7.5, clamp(power, 0, 1)) * (cpu ? lv.pace : 1) * (smash ? 1.35 : 1);
+  if (cpu && Math.random() < lv.err) { if (Math.random() < 0.5) tz = d * (HALF + rnd(0.15, 0.4)); else tx = Math.sign(tx || 1) * (TW / 2 + rnd(0.1, 0.3)); }
+  shot(side, tx, tz, speed);
+  if (cpu && Math.random() < lv.err * 0.5) B.v.y *= 0.72;   // a veces la deja en la red
+  SND.play(smash ? 'smash' : 'pad', 1, rnd(0.95, 1.05)); swingAnim(SIDES[side].av, smash);
+  if (smash) { cue('¡REMATE!', true); MVLink.say('¡Remate!', true, slotOf(side)); }
+}
+function serve() {
+  if (!G.serving) return; G.serving = false; const s = G.server, d = s === 0 ? -1 : 1;
+  B.p.set(PADS[s].x, TH + 0.32, (s === 0 ? 1 : -1) * (HALF + 0.1));
+  shot(s, rnd(-0.45, 0.45), d * rnd(0.6, HALF - 0.25), 4.3); G.rally = 0; G.bounces = [0, 0];
+  SND.play('pad'); swingAnim(SIDES[s].av, false); $('keys').classList.remove('on');
+}
+function newPoint() {
+  G.state = 'play'; G.serving = true; G.t = 0; B.live = false; B.held = true; G.rally = 0; G.bounces = [0, 0];
+  const s = G.server; B.p.set(PADS[s].x, TH + 0.25, (s === 0 ? 1 : -1) * (HALF + 0.1)); B.v.set(0, 0, 0);
+  drawScore(); MVHand.pauseEnabled = true;
+  const who = SIDES[s].name, c = ctl(s);
+  if (c === 'cpu') cue('Saca ' + who);
+  else if (c === 'cam') { cue((G.mode === 'two' ? who + ': ' : '') + 'saca: levanta la raqueta y golpea'); MVLink.say('Tu saque: haz el movimiento de golpear', true, slotOf(s)); }
+  else { cue('Tu saque: OK para sacar · ← → para moverte'); $('keys').classList.add('on'); }
+}
+function point(winner, why) {
+  if (G.state !== 'play') return; G.state = 'point'; B.live = false; G.sc[winner]++;
+  const loser = 1 - winner, human = ctl(winner) !== 'cpu';
+  SND.play(human || G.mode === 'two' ? 'point' : 'lose'); if (G.rally >= 6) SND.play('cheer', 0.6);
+  big(G.sc[0] + ' – ' + G.sc[1], (winner === 0 && G.mode === 'cpu' ? '¡Punto para ti! ' : 'Punto de ' + SIDES[winner].name + '. ') + (why || ''), 1500);
+  MVLink.say('Punto ' + G.sc[slotOf(winner)] + '–' + G.sc[1 - slotOf(winner)], true, slotOf(winner)); if (G.mode === 'two') MVLink.say('Punto para ' + SIDES[winner].name, false, slotOf(loser));
+  const a = SIDES[winner].av; if (a && a.anim) { a.anim.play('Victory', { loop: false, speed: 1.4, fade: 0.2 }); a.swingT = 1.3; }
+  const [a0, a1] = G.sc, done = (a0 >= G.winTo || a1 >= G.winTo) && Math.abs(a0 - a1) >= 2;
+  G.serveN++; const deuce = a0 >= G.winTo - 1 && a1 >= G.winTo - 1;
+  if (deuce || G.serveN >= 2) { G.serveN = 0; G.server = 1 - G.server; }
+  drawScore();
+  setTimeout(() => { if (done) endGame(); else newPoint(); }, 1700);
+}
+function drawScore() {
+  [0, 1].forEach((k) => { $('p' + k).textContent = G.sc[k]; $('n' + k).textContent = SIDES[k].name; $('s' + k).classList.toggle('on', G.server === k && G.state !== 'end'); $('c' + k).style.background = MVLink.COLORS[k]; });
+}
+
+// ---------- Interfaz ----------
+function cue(t, hot) { $('cue').textContent = t; $('cue').classList.toggle('hot', !!hot); $('cue').classList.add('on'); clearTimeout(cue.h); cue.h = setTimeout(() => $('cue').classList.remove('on'), 2600); }
+function big(t, s, ms) { $('bigT').textContent = t; $('bigS').textContent = s; $('big').classList.add('on'); clearTimeout(big.h); big.h = setTimeout(() => $('big').classList.remove('on'), ms || 2200); }
+function plsDraw() { $('pls').innerHTML = [0, 1].map((k) => { const p = MVLink.players[k]; return `<b class="${p ? '' : 'off'}" style="background:${MVLink.COLORS[k]}">J${k + 1}${p ? ' ✓' : ''}</b>`; }).join(''); }
+
+// ---------- Cámara del celular: la raqueta sigue la mano ----------
+// Se usa la muñeca que está más arriba/adelante (la mano con la que juegas). La posición de la mano mueve la raqueta
+// de lado a lado; un movimiento rápido de la mano hacia adelante (o arriba) es un remate.
+const HAND = [0, 1].map(() => ({ x: 0, y: 0, k: 6, hist: [], smashT: 0, cx0: null, swingAt: -1e9 }));
+MVLink.onPose((l, ts, d, slot) => {
+  if (slot > 1 || !l) return; const H = HAND[slot];
+  const v = (i) => l[i] && l[i][2] > 0.45; if (!(v(1) && v(2))) return;
+  const shX = (l[1][0] + l[2][0]) / 2, shY = (l[1][1] + l[2][1]) / 2, sw = Math.max(0.06, Math.abs(l[1][0] - l[2][0]));
+  const cand = [5, 6].filter(v); if (!cand.length) return;
+  // la mano que juega: la más alejada del cuerpo (o la que ya veníamos siguiendo)
+  let k = H.k; if (!v(k) || cand.some((i) => i !== k && Math.abs(l[i][0] - shX) > Math.abs(l[k][0] - shX) + sw * 0.5)) k = cand.sort((a, b) => Math.abs(l[b][0] - shX) - Math.abs(l[a][0] - shX))[0]; H.k = k;
+  // espejo: si mueves la mano a tu derecha, la raqueta va a la derecha de la pantalla
+  const hx = (shX - l[k][0]) / sw, hy = (shY - l[k][1]) / sw;
+  const bodyX = 0.5 - shX;   // también cuenta dar pasos a los lados
+  H.x = clamp(bodyX * 2.2 + hx * 0.32, -1.1, 1.1); H.y = clamp(hy, -1.5, 1.5);
+  H.hist.push({ ts, x: H.x, y: hy }); H.hist = H.hist.filter((h) => ts - h.ts < 260);
+  const o = H.hist[0]; if (o && ts - o.ts > 80) { const sp = Math.hypot(H.x - o.x, (hy - o.y) * 0.5) / ((ts - o.ts) / 1000); if (sp > 4.2) { H.smashT = 0.45; H.swingAt = performance.now(); } else if (sp > 1.6) H.swingAt = performance.now(); }
+});
+function stickDraw() {
+  const p = MVLink.players[0], l = p && p.lm; $('phone').classList.toggle('on', !!l && G.state !== 'menu'); if (!l) return;
+  const P = (i) => [15 + (1 - l[i][0]) * 120, 10 + l[i][1] * 160], Bn = [[1, 2], [1, 3], [3, 5], [2, 4], [4, 6], [1, 7], [2, 8], [7, 8], [7, 9], [9, 11], [8, 10], [10, 12]];
+  let h = Bn.filter(([a, b]) => l[a] && l[b] && l[a][2] > 0.4 && l[b][2] > 0.4).map(([a, b]) => { const q = P(a), r = P(b); return `<path d="M${q[0].toFixed(0)} ${q[1].toFixed(0)}L${r[0].toFixed(0)} ${r[1].toFixed(0)}"/>`; }).join('');
+  if (l[0][2] > 0.4) { const n = P(0); h += `<circle cx="${n[0].toFixed(0)}" cy="${n[1].toFixed(0)}" r="9"/>`; }
+  const k = HAND[0].k; if (l[k] && l[k][2] > 0.4) { const w = P(k); h += `<circle class="h" cx="${w[0].toFixed(0)}" cy="${w[1].toFixed(0)}" r="8"/>`; }
+  $('stick').innerHTML = h;
+}
+
+// ---------- Física y reglas ----------
+function predictX(side) {
+  // dónde cruzará la bola el plano de golpe de este lado (aprox., con el rebote en la mesa)
+  const p = B.p.clone(), v = B.v.clone(), zt = side === 0 ? PZ : -PZ; let bounced = G.bounces[side] > 0;
+  for (let i = 0; i < 240; i++) { const dt = 1 / 120; v.y -= GRAV * dt; p.addScaledVector(v, dt); if (!bounced && p.y < TH + BR && Math.abs(p.z) < HALF && Math.abs(p.x) < TW / 2 && v.y < 0) { v.y = -v.y * 0.86; bounced = true; } if ((side === 0 && p.z >= zt) || (side === 1 && p.z <= zt)) break; }
+  return p.x;
+}
+function physics(dt) {
+  if (!B.live) return;
+  const p = B.p, v = B.v, oz = p.z;
+  v.y -= GRAV * dt; p.addScaledVector(v, dt);
+  // red
+  if ((oz > 0) !== (p.z > 0) && p.y < TH + NH + BR && Math.abs(p.x) < TW / 2 + 0.15) { p.z = oz > 0 ? 0.03 : -0.03; v.z *= -0.15; v.x *= 0.3; v.y = Math.min(v.y, 0.3); SND.play('net'); }
+  // mesa
+  if (p.y < TH + BR && v.y < 0 && Math.abs(p.x) < TW / 2 && Math.abs(p.z) < HALF && p.y > TH - 0.05) {
+    p.y = TH + BR; v.y = -v.y * 0.86; v.x *= 0.97; v.z *= 0.97; SND.play('tab', 0.9, rnd(0.95, 1.08));
+    const side = p.z > 0 ? 0 : 1; G.bounces[side]++;
+    if (side === G.last) return point(1 - side, 'Rebotó en su propio lado');
+    if (G.bounces[side] >= 2) return point(1 - side, 'Dos botes');
+  }
+  // suelo / fuera
+  if (p.y < 0.12) {
+    const recv = 1 - G.last;
+    if (G.bounces[recv] > 0) return point(G.last, 'No la alcanzó');
+    return point(recv, Math.abs(p.z) < 0.1 ? 'Se quedó en la red' : 'Afuera');
+  }
+  if (Math.abs(p.z) > PZ + 1.2 || Math.abs(p.x) > 3.2) { const recv = 1 - G.last; return G.bounces[recv] > 0 ? point(G.last, 'No la alcanzó') : point(recv, 'Afuera'); }
+  // golpes: cuando la bola llega al plano de golpe del que la recibe (y ya botó en su lado)
+  const recv = 1 - G.last, zt = recv === 0 ? PZ : -PZ;
+  if (G.bounces[recv] === 1 && ((recv === 0 && oz < zt && p.z >= zt) || (recv === 1 && oz > zt && p.z <= zt))) {
+    const P = PADS[recv], reach = ctl(recv) === 'cam' ? 0.42 : 0.34;
+    if (Math.abs(P.x - p.x) < reach) {
+      const c = ctl(recv);
+      // la dirección sale de dónde golpea la raqueta: con el borde se va cruzada
+      const off = (p.x - P.x) / reach, aim = clamp(-P.x * 0.4 + off * 0.9 + (c === 'cpu' ? rnd(-0.5, 0.5) : P.vx * 0.12), -0.65, 0.65);
+      let smash = false, power = 0.45;
+      if (c === 'cam') { const H = HAND[slotOf(recv)]; smash = H.smashT > 0; power = performance.now() - H.swingAt < 500 ? 0.75 : 0.45; }
+      else if (c === 'key') { smash = P.smash > 0; power = 0.55; }
+      else { smash = G.lvl === 2 && p.y > TH + 0.35 && Math.random() < 0.3; power = rnd(0.35, 0.7); }
+      hit(recv, aim, power, smash);
+    }
+  }
+}
+function drivePads(dt) {
+  [0, 1].forEach((side) => {
+    const P = PADS[side], c = ctl(side), ox = P.x;
+    if (c === 'cam') { const H = HAND[slotOf(side)]; P.tx = H.x * (side === 0 ? 1 : 1); P.y = lerp(P.y, TH + 0.28 + clamp(H.y, -0.3, 1) * 0.25, 0.3); H.smashT -= dt; P.x = lerp(P.x, P.tx, 0.45); }
+    else if (c === 'key') { P.x = clamp(P.x + P.vk * 2.6 * dt, -1.1, 1.1); P.smash -= dt; P.y = lerp(P.y, TH + 0.3, 0.2); }
+    else {
+      const lv = LVL[G.lvl]; P.react = (P.react || 0) - dt;
+      if (B.live && G.last !== side) { if (P.react <= 0) { P.tx = predictX(side) + (P.miss || 0); P.react = lv.react; } }
+      else if (B.held && G.server === side) P.tx = rnd(-0.3, 0.3) * 0 + P.x;
+      else P.tx = lerp(P.tx, 0, 0.02);
+      P.x += clamp(P.tx - P.x, -lv.sp * dt, lv.sp * dt); P.y = lerp(P.y, TH + 0.3, 0.2);
+    }
+    P.vx = (P.x - ox) / Math.max(dt, 1e-3);
+  });
+}
+function placeScene(dt, now) {
+  [0, 1].forEach((side) => {
+    const P = PADS[side], pm = PAD[side], z = (side === 0 ? 1 : -1) * PZ, sw = SIDES[side].av ? SIDES[side].av.swingT || 0 : 0;
+    pm.position.set(P.x, P.y + Math.sin(sw * 6) * 0.05, z); pm.rotation.set(0, side === 0 ? 0 : Math.PI, clamp(-P.vx * 0.08, -0.5, 0.5) + (side === 0 ? -0.25 : 0.25));
+    pm.rotation.x = -sw * 1.2 * (side === 0 ? 1 : -1);
+    const a = SIDES[side].av; if (!a) return;
+    // el cuerpo va detrás de la raqueta, con la mano derecha cerca de ella
+    a.scene.position.set(clamp(P.x - (side === 0 ? 0.32 : -0.32), -1.6, 1.6), 0, (side === 0 ? 1 : -1) * (PZ + 0.38)); a.scene.rotation.y = SIDES[side].rot;
+    if (a.anim) { a.swingT = Math.max(0, (a.swingT || 0) - dt); if (a.swingT <= 0) a.anim.play(Math.abs(P.vx) > 0.8 ? 'Walk' : 'Idle', { fade: 0.25, speed: Math.abs(P.vx) > 0.8 ? 1.4 : 1 }); a.anim.update(dt); }
+    a.update(dt);
+  });
+  // la bola en la mano de quien saca
+  if (B.held) { const s = G.server, P = PADS[s]; B.p.set(P.x + (s === 0 ? -0.08 : 0.08), TH + 0.25 + Math.abs(Math.sin(now / 300)) * 0.12, (s === 0 ? 1 : -1) * (HALF + 0.1)); }
+  ball.position.copy(B.p); ball.visible = G.state === 'play';
+  ballSh.visible = ball.visible; const onT = Math.abs(B.p.x) < TW / 2 && Math.abs(B.p.z) < HALF; ballSh.position.set(B.p.x, (onT ? TH : 0) + 0.006, B.p.z); ballSh.material.opacity = clamp(0.4 - (B.p.y - (onT ? TH : 0)) * 0.3, 0.08, 0.4);
+  for (let i = TRAIL.length - 1; i > 0; i--) TRAIL[i].position.copy(TRAIL[i - 1].position); TRAIL[0].position.copy(B.p); TRAIL.forEach((m) => (m.visible = B.live));
+}
+// cámara: detrás de ti, siguiendo un poco la bola
+const cP = new THREE.Vector3(0, 2.5, 3.9), cL = new THREE.Vector3(0, 0.7, -0.8), tP = new THREE.Vector3(), tL = new THREE.Vector3();
+function camera(dt) {
+  if (G.state === 'menu' || G.state === 'load') { const a = performance.now() / 6000; tP.set(Math.sin(a) * 3.6, 2.4, Math.cos(a) * 3.6); tL.set(0, 0.7, 0); }
+  else { tP.set(PADS[0].x * 0.2, 2.55, PZ + 2.25); tL.set(B.live ? B.p.x * 0.2 : 0, 0.6, -0.7); }
+  const k = 1 - Math.exp(-dt * 3); cP.lerp(tP, k); cL.lerp(tL, k); cam.position.copy(cP); cam.lookAt(cL);
+}
+
+// ---------- Menús con la mano (como el Kinect) ----------
+function startMenu() {
+  G.state = 'menu'; MVHand.pauseEnabled = false; $('connect').classList.add('on'); $('keys').classList.remove('on'); const n = MVLink.count();
+  MVHand.menu({ kicker: 'MIVIBRA MOVIMIENTO', title: 'Tenis de mesa', sub: n ? (n > 1 ? '2 celulares conectados: pueden jugar uno contra otro.' : 'Celular conectado: mueve la mano y la raqueta te sigue.') : 'Conecta el celular para jugar con tu brazo, o usa el control.',
+    items: [{ id: 'cpu', label: 'Jugar contra MiVibra', icon: '▶' }, { id: 'two', label: '2 jugadores', icon: '⚔' }, { id: 'lvl', label: LVL[G.lvl].name + ' · a ' + G.winTo + ' puntos', icon: '★' }, { id: 'exit', label: 'Salir', icon: '✕' }], back: 'exit', onPick: menuPick });
+}
+function pause() {
+  if (G.state === 'menu' || G.state === 'end' || MVHand.open) return; G.paused = true;
+  MVHand.menu({ kicker: 'PARTIDO EN PAUSA', title: 'Pausa', items: [{ id: 'resume', label: 'Continuar', icon: '▶' }, { id: 'again', label: 'Reiniciar partido', icon: '↻' }, { id: 'menu', label: 'Menú principal', icon: '☰' }, { id: 'exit', label: 'Salir', icon: '✕' }], back: 'resume', onPick: menuPick });
+}
+function endGame() {
+  G.state = 'end'; MVHand.pauseEnabled = false; const w = G.sc[0] > G.sc[1] ? 0 : 1; drawScore(); SND.play('cheer');
+  const a = SIDES[w].av; if (a && a.anim) { a.anim.play('Victory', { fade: 0.2 }); a.swingT = 99; } const l = SIDES[1 - w].av; if (l && l.anim) { l.anim.play('Defeat', { loop: false, fade: 0.2 }); l.swingT = 99; }
+  [0, 1].forEach((k) => { if (MVLink.players[k]) MVLink.say(k === w ? '¡Ganaste el partido!' : 'Buen partido. ¡La revancha!', k === w, k); });
+  MVHand.menu({ kicker: 'FIN DEL PARTIDO', title: (G.mode === 'cpu' ? (w === 0 ? '¡Ganaste!' : 'Gana MiVibra') : '¡Gana ' + SIDES[w].name + '!'), sub: G.sc[0] + ' – ' + G.sc[1], dim: 0.25,
+    items: [{ id: 'again', label: 'Revancha', icon: '↻' }, { id: 'menu', label: 'Menú principal', icon: '☰' }, { id: 'edit', label: 'Cambiar mi avatar', icon: '☺' }, { id: 'exit', label: 'Salir', icon: '✕' }], back: 'menu', onPick: menuPick });
+}
+async function setMode(mode) {
+  G.mode = mode;
+  SIDES[0].name = mode === 'two' ? 'Jugador 1' : (myRec && myRec.name) || 'Tú';
+  SIDES[1].name = mode === 'two' ? 'Jugador 2' : 'MiVibra';
+  // rival en modo 2 jugadores: otro avatar para distinguirlo
+  const want = mode === 'two' ? PRESETS[0] : PRESETS[3];
+  if (SIDES[1].rec !== want) { if (SIDES[1].av) S.remove(SIDES[1].av.scene); SIDES[1].av = await makeAv(want); SIDES[1].rec = want; }
+}
+function menuPick(id) {
+  G.paused = false;
+  if (id === 'resume') return;
+  if (id === 'lvl') { const o = [[0, 5], [1, 11], [2, 11], [2, 21]], i = o.findIndex(([l, w]) => l === G.lvl && w === G.winTo); [G.lvl, G.winTo] = o[(i + 1) % o.length]; return startMenu(); }
+  if (id === 'pts') { G.winTo = G.winTo === 11 ? 5 : G.winTo === 5 ? 21 : 11; return startMenu(); }
+  if (id === 'two' && MVLink.count() < 2) { cue('Para 2 jugadores conecta 2 celulares con el mismo código', true); return startMenu(); }
+  if (id === 'menu') return startMenu();
+  if (id === 'cpu' || id === 'two' || id === 'again') {
+    SND.init(); $('connect').classList.remove('on'); $('loading').style.display = ''; $('loading').textContent = 'Preparando…';
+    setMode(id === 'again' ? G.mode : id).then(() => {
+      $('loading').style.display = 'none'; G.sc = [0, 0]; G.server = Math.random() < 0.5 ? 0 : 1; G.serveN = 0; PADS[0].x = 0.2; PADS[1].x = -0.2;
+      big(G.mode === 'two' ? '¡A jugar!' : '¡A jugar!', 'Partido a ' + G.winTo + ' · ' + (G.mode === 'two' ? '2 jugadores' : 'contra MiVibra (' + LVL[G.lvl].name + ')'), 1600);
+      MVLink.players.forEach((p, k) => { if (p) MVLink.say(k < 2 ? (G.mode === 'two' ? 'Eres ' + SIDES[k].name + (k === 0 ? ' (cerca)' : ' (al fondo)') : 'Mueve la mano: la raqueta te sigue') : 'Esta partida es de 2', true, k); });
+      newPoint();
+    });
+    return;
+  }
+  if (id === 'edit') { location.href = '../editor/' + location.search; return; }
+  if (id === 'exit') { if (window.parent !== window) window.parent.postMessage({ mv: 'close' }, '*'); else history.back(); }
+}
+MVHand.onPause = () => pause();
+
+// ---------- Control remoto ----------
+PADS[0].vk = 0;
+addEventListener('keydown', (e) => {
+  if (MVHand.key(e)) { e.preventDefault(); return; }
+  if (e.key === 'Escape' || e.key === 'p' || e.key === 'MediaPlayPause') { pause(); e.preventDefault(); return; }
+  if (G.state !== 'play') return;
+  if (e.key === 'ArrowLeft') PADS[0].vk = -1;
+  if (e.key === 'ArrowRight') PADS[0].vk = 1;
+  if (e.key === 'ArrowUp') PADS[0].smash = 0.5;
+  if ((e.key === 'Enter' || e.key === ' ' || e.keyCode === 23) && G.server === 0 && G.serving) serve();
+  e.preventDefault();
+});
+addEventListener('keyup', (e) => { if ((e.key === 'ArrowLeft' && PADS[0].vk < 0) || (e.key === 'ArrowRight' && PADS[0].vk > 0)) PADS[0].vk = 0; });
+
+// ---------- Bucle ----------
+let last = performance.now(), stickN = 0;
+function loop(now) {
+  requestAnimationFrame(loop);
+  let dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (G.paused) dt = 0;
+  G.t += dt;
+  if (G.state === 'play') {
+    drivePads(dt);
+    if (G.serving) {
+      const s = G.server, c = ctl(s);
+      if (c === 'cpu' && G.t > 1.4) serve();
+      if (c === 'cam' && G.t > 0.8 && performance.now() - HAND[slotOf(s)].swingAt < 250) serve();
+      if (G.t > 6) serve();   // si nadie saca, saca solo
+    }
+    const sub = 4; for (let i = 0; i < sub && G.state === 'play'; i++) physics(dt / sub);
+  }
+  placeScene(dt, now);
+  if ((stickN++ % (Q === 0 ? 4 : 2)) === 0) stickDraw();
+  camera(dt || 0.016);
+  R.render(S, cam);
+}
+
+// ---------- Inicio ----------
+plsDraw(); drawScore();
+MVLink.open((txt, ok) => { $('cst').textContent = txt; $('cst').classList.toggle('ok', !!ok); if (MVLink.code) { $('code').textContent = MVLink.code; if (!$('qr').src) $('qr').src = MVLink.qr(5); } });
+MVLink.onChange = () => { plsDraw(); if (G.state === 'menu' && MVHand.open) startMenu(); };
+setTimeout(() => { if (MVLink.code) { $('code').textContent = MVLink.code; const q = MVLink.qr(5); if (q) $('qr').src = q; } }, 400);
+requestAnimationFrame(loop);
+loadAvatars().then(() => { $('loading').style.display = 'none'; startMenu(); }).catch((e) => { console.error(e); $('loading').textContent = 'No se pudo cargar el avatar'; });
+window.MVT = { G, B, PADS, HAND, serve, pick: (id) => { MVHand.close(); menuPick(id); }, setX: (x) => { PADS[0].vk = 0; PADS[0].x = x; } };
+</script>
+</body>
+</html>

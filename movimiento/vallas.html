@@ -22,6 +22,7 @@ html.q0 .glass{backdrop-filter:none!important;-webkit-backdrop-filter:none!impor
 #start p{color:#E4E6E8;line-height:1.5;margin:0 0 22px}
 #start button{height:52px;padding:0 26px;border-radius:99px;border:0;background:#F4F5F6;color:#2A2C2E;font:800 17px Manrope,sans-serif;cursor:pointer;margin:4px}
 #start .card{max-height:94vh;overflow:auto}#start .card.camOn{max-width:760px}#start .card.camOn>p{display:none}#cam{display:none}#cam.on{display:grid;grid-template-columns:auto 1fr;gap:6px 22px;align-items:center;text-align:left}#cam p{grid-column:1/3;margin:0 0 6px}#cam img{grid-row:2/6;width:min(190px,34vh);height:min(190px,34vh);border-radius:16px;background:#fff;padding:8px;display:block}#cam .btns{grid-column:1/3;text-align:center;margin-top:8px}#cam .code{font-size:40px;font-weight:800;letter-spacing:.18em;margin:2px 0}#cam .url{font-size:13px;color:#E4E6E8;word-break:break-all}#cam .cst{margin:12px 0 4px;font-weight:800}#cam .cst.ok{color:#34D399}#main.off{display:none}
+#connect{position:fixed;right:22px;top:90px;width:300px;padding:14px 16px;border-radius:24px;text-align:center;z-index:6;display:none}#connect.on{display:block}#connect small{letter-spacing:.18em;font-weight:800;font-size:11px;color:#D6D9DC}#connect img{width:160px;height:160px;border-radius:14px;background:#fff;padding:6px;display:block;margin:8px auto}#connect .code{font-size:32px;font-weight:900;letter-spacing:.16em}#connect .st{font-size:14px;margin-top:4px;color:#E4E6E8}#connect .st.ok{color:#34D399;font-weight:800}#connect i{display:block;font-size:12px;color:#C9CDD2;margin-top:8px;font-style:normal;line-height:1.4}#pls{display:flex;gap:6px;justify-content:center;margin-top:8px;flex-wrap:wrap}#pls b{padding:4px 10px;border-radius:99px;font-size:13px;color:#fff}#pls b.off{background:rgba(255,255,255,.1)!important;color:#9aa0a6;font-weight:600}
 #start button.alt{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.3)}
 .title{position:fixed;left:0;right:0;top:30%;text-align:center;opacity:0;transition:opacity .6s}
 .title.on{opacity:1}
@@ -97,12 +98,13 @@ html.q0 .glass{backdrop-filter:none!important;-webkit-backdrop-filter:none!impor
 <div id="start"><div class="card glass">
   <small>MIVIBRA MOVIMIENTO</small>
   <h1>100 m con vallas</h1>
-  <p>Presentación, salida, carrera y podio con tu avatar. En el juego real te mueves frente a la cámara del celular.</p>
-  <div id="main"><button id="go">Empezar con sonido</button><button id="goMute" class="alt">Sin sonido</button><br><button id="goCam" class="alt">Jugar con la cámara del celular</button></div>
-  <div id="cam"><p>Escanea el código con el celular, o abre la dirección y escribe el código. Ponlo de pie a 2–3 m, viéndote de cuerpo entero.</p><img id="qr" alt="Código QR para conectar el celular"><div class="code" id="ccode">······</div><div class="url" id="curl"></div><div class="cst" id="cst">Esperando el celular…</div><div class="btns"><button id="camGo" disabled>Empezar con sonido</button><button id="camBack" class="alt">Volver</button></div></div>
+  <p id="ldg">Cargando atletas…</p>
+</div></div>
+<div id="connect" class="glass"><small>CORRE CON TU CUERPO · HASTA 4</small><img id="qr" alt="Código QR para conectar el celular"><div class="code" id="ccode">······</div><div class="st" id="cst">Preparando…</div><div id="pls"></div><i>Cada celular es un corredor. Ponlo de pie a 2–3 m, viéndote de cuerpo entero.</i></div>
 </div></div>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@2.0.4/dist/qrcode.js"></script>
+<script src="../mano.js"></script>
 <script type="importmap">{"imports":{"three":"../vendor/three-0.183.2/three.module.min.js","three/addons/":"../vendor/three-0.183.2/addons/"}}</script>
 <script type="module">
 import * as THREE from 'three';
@@ -576,37 +578,44 @@ function confettiTick(dt, t) { if (!confetti.visible) return; cf.forEach((c, i) 
 function medal(color) { const g = new THREE.Group(); const rib = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.018, 6, 20, Math.PI), Mt('#2F7DF6')); rib.rotation.z = Math.PI; rib.position.y = 0.08; g.add(rib); const d = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.02, 24), Mt(color, { metalness: 0.9, roughness: 0.25, emissive: color, emissiveIntensity: 0.25 })); d.rotation.x = Math.PI / 2; d.position.set(0, -0.1, 0.02); g.add(d); return g; }
 
 // ================= Sonido (sintetizado, sin archivos) =================
+// Sonido liviano: cada efecto se "graba" una sola vez al empezar (OfflineAudioContext) y después solo se reproduce.
+// Antes cada pisada, ovación o golpe armaba filtros en vivo y el TV se trababa; ahora reproducir es casi gratis.
 const SND = (() => {
-  let ac = null, master, crowdG, crowdF, rev, on = true, beat = null;
-  const noiseBuf = () => { const b = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b; };
-  let NB;
+  let ac = null, master, crowdG = null, crowdSrc = null, on = true, beatSrc = null, ready = null;
+  const B = {}, SR = Q === 0 ? 22050 : 32000;
+  const NOISE = new Map();
+  function noiseBuf(c) { if (NOISE.has(c)) return NOISE.get(c); const b = c.createBuffer(1, c.sampleRate * 2, c.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; NOISE.set(c, b); return b; }
+  function nz(c, t, dur, type, freq, gain, attack = 0.005, q = 0.7, sweep) { const s = c.createBufferSource(); s.buffer = noiseBuf(c); s.loop = true; const f = c.createBiquadFilter(); f.type = type; f.frequency.setValueAtTime(freq, t); if (sweep) f.frequency.exponentialRampToValueAtTime(sweep, t + dur * 0.9); f.Q.value = q; const g = c.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(gain, t + attack); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); s.connect(f); f.connect(g); g.connect(c.destination); s.start(t, Math.random()); s.stop(t + dur + 0.05); }
+  function tn(c, t, freq, dur, type = 'sine', gain = 0.2, sweepTo) { const o = c.createOscillator(), g = c.createGain(); o.type = type; o.frequency.setValueAtTime(freq, t); if (sweepTo) o.frequency.exponentialRampToValueAtTime(sweepTo, t + dur * 0.6); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(gain, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); if (type === 'sawtooth') { const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 2200; o.connect(f); f.connect(g); } else o.connect(g); g.connect(c.destination); o.start(t); o.stop(t + dur + 0.05); }
+  const R = {
+    gun: [1.3, (c) => { nz(c, 0, 0.35, 'lowpass', 4000, 1.2, 0.001); nz(c, 0, 1.2, 'lowpass', 600, 0.5, 0.001); }],
+    step: [0.08, (c) => nz(c, 0, 0.06, 'lowpass', 380, 0.3, 0.002)],
+    whoosh: [1, (c) => nz(c, 0, 0.9, 'bandpass', 300, 0.3, 0.3, 1.2, 2400)],
+    ding: [1, (c) => { tn(c, 0, 988, 0.5, 'sine', 0.18); tn(c, 0.18, 784, 0.7, 'sine', 0.18); }],
+    click: [0.05, (c) => nz(c, 0, 0.03, 'highpass', 5000, 0.15)],
+    boom: [1.1, (c) => { nz(c, 0, 0.5, 'lowpass', 900, 0.6, 0.002); for (let i = 0; i < 10; i++) nz(c, 0.2 + i * 0.06, 0.04, 'highpass', 4000, 0.08); }],
+    cheer: [3, (c) => { nz(c, 0, 2.8, 'bandpass', 1100, 0.55, 0.25, 0.4); nz(c, 0, 2.2, 'bandpass', 2400, 0.2, 0.3, 1); for (let i = 0; i < 4; i++) tn(c, Math.random() * 1.2, 1800 + Math.random() * 800, 0.35, 'sine', 0.04); }],
+    fanfare: [3.2, (c) => { [[523, 0], [659, 0.18], [784, 0.36], [1047, 0.54], [784, 0.9], [1047, 1.08]].forEach(([f, w]) => { tn(c, w, f, 0.5, 'sawtooth', 0.09); tn(c, w, f * 1.005, 0.5, 'sawtooth', 0.06); }); [[523, 659, 784], [587, 740, 880], [659, 831, 988]].forEach((ch, i) => ch.forEach((f) => tn(c, 1.5 + i * 0.5, f, 1.4, 'sawtooth', 0.05))); }],
+    crowd: [2, (c) => { const s = c.createBufferSource(); s.buffer = noiseBuf(c); const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 800; f.Q.value = 0.5; s.connect(f); f.connect(c.destination); s.start(0); }],
+    // ritmo de la presentación: 8 s en bucle (antes un temporizador cada 250 ms)
+    beat: [8, (c) => { for (let n = 0; n < 32; n++) { const t = n * 0.25; if (n % 2 === 0) tn(c, t, 140, 0.25, 'sine', 0.5, 45); nz(c, t, 0.05, 'highpass', 7000, n % 2 ? 0.12 : 0.06); if (n % 8 === 4) nz(c, t, 0.18, 'bandpass', 1800, 0.25, 0.002, 0.8); if (n % 4 === 0) tn(c, t, [220, 262, 196, 247][(n / 4) % 4], 0.4, 'sawtooth', 0.035); } }],
+  };
+  async function render(name) { const [dur, fn] = R[name]; const oc = new OfflineAudioContext(1, Math.ceil(dur * SR), SR); fn(oc); B[name] = await oc.startRendering(); }
   function init() {
-    if (ac) return; const AC = window.AudioContext || window.webkitAudioContext; try { ac = new AC({ latencyHint: Q === 0 ? 'playback' : 'interactive' }); } catch (e) { ac = new AC(); }
-    master = ac.createGain(); master.gain.value = 0.8; if (Q === 0) master.connect(ac.destination); else { const comp = ac.createDynamicsCompressor(); master.connect(comp); comp.connect(ac.destination); }
-    NB = noiseBuf();
-    // reverb del estadio
-    if (Q === 0) { rev = ac.createGain(); rev.gain.value = 0.3; rev.connect(master); } else {
-    rev = ac.createConvolver(); const ir = ac.createBuffer(2, ac.sampleRate * 2.6, ac.sampleRate); for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 3); } rev.buffer = ir; const rg = ac.createGain(); rg.gain.value = 0.35; rev.connect(rg); rg.connect(master); }
-    // público: ruido continuo filtrado
-    const src = ac.createBufferSource(); src.buffer = NB; src.loop = true; crowdF = ac.createBiquadFilter(); crowdF.type = 'bandpass'; crowdF.frequency.value = 700; crowdF.Q.value = 0.5; crowdG = ac.createGain(); crowdG.gain.value = 0;
-    src.connect(crowdF); crowdF.connect(crowdG); crowdG.connect(master); crowdG.connect(rev); src.start();
+    if (ac) return; const AC = window.AudioContext || window.webkitAudioContext; try { ac = new AC({ latencyHint: 'playback' }); } catch (e) { ac = new AC(); }
+    master = ac.createGain(); master.gain.value = 0.8; master.connect(ac.destination);
+    ready = (async () => { for (const n of ['step', 'gun', 'cheer', 'whoosh', 'ding', 'boom', 'click', 'crowd', 'beat', 'fanfare']) { try { await render(n); } catch (e) {} await new Promise((r) => setTimeout(r, 0)); }
+      if (B.crowd) { crowdSrc = ac.createBufferSource(); crowdSrc.buffer = B.crowd; crowdSrc.loop = true; crowdG = ac.createGain(); crowdG.gain.value = 0; crowdSrc.connect(crowdG); crowdG.connect(master); crowdSrc.start(); } })();
   }
-  const out = (node, dry = 1, wet = 0.4) => { const g = ac.createGain(); g.gain.value = dry; node.connect(g); g.connect(master); if (wet) { const w = ac.createGain(); w.gain.value = wet; node.connect(w); w.connect(rev); } };
-  function noise(dur, type, freq, gain, attack = 0.005, q = 0.7) { if (!ac || !on) return; const s = ac.createBufferSource(); s.buffer = NB; const f = ac.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q; const g = ac.createGain(); const t = ac.currentTime; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(gain, t + attack); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); s.connect(f); f.connect(g); out(g); s.start(t, Math.random()); s.stop(t + dur + 0.05); return f; }
-  function tone(freq, dur, type = 'sine', gain = 0.2, when = 0, wet = 0.3) { if (!ac || !on) return; const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime + when; o.type = type; o.frequency.value = freq; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(gain, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); if (type === 'sawtooth') { const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 2200; o.connect(f); f.connect(g); } else o.connect(g); out(g, 1, wet); o.start(t); o.stop(t + dur + 0.05); }
+  function play(name, gain = 1, rate = 1) { if (!ac || !on || !B[name]) return null; const s = ac.createBufferSource(); s.buffer = B[name]; s.playbackRate.value = rate; let n = s; if (gain !== 1) { const g = ac.createGain(); g.gain.value = gain; s.connect(g); n = g; } n.connect(master); s.start(); return s; }
+  let lastStep = 0;
   return {
     init, get on() { return on; }, toggle() { on = !on; if (crowdG) crowdG.gain.value = 0; if (!on) this.beatStop(); return on; },
-    crowd(level) { if (!ac || !crowdG) return; crowdG.gain.setTargetAtTime(on ? 0.04 + level * 0.32 : 0, ac.currentTime, 0.4); crowdF.frequency.setTargetAtTime(500 + level * 600, ac.currentTime, 0.5); },
-    cheer() { noise(2.8, 'bandpass', 1100, 0.55, 0.25, 0.4); noise(2.2, 'bandpass', 2400, 0.2, 0.3, 1); for (let i = 0; i < 4; i++) { const f = rnd(1800, 2600); tone(f, 0.35, 'sine', 0.04, rnd(0, 1.2), 0.5); } },
-    gun() { noise(0.35, 'lowpass', 4000, 1.2, 0.001); noise(1.2, 'lowpass', 600, 0.5, 0.001); },
-    step(p) { noise(0.06, 'lowpass', 380, 0.25 * p, 0.002); },
-    whoosh() { const f = noise(0.9, 'bandpass', 300, 0.25, 0.3, 1.2); if (f) f.frequency.exponentialRampToValueAtTime(2400, ac.currentTime + 0.8); },
-    ding() { tone(988, 0.5, 'sine', 0.18); tone(784, 0.7, 'sine', 0.18, 0.18); },
-    click() { noise(0.03, 'highpass', 5000, 0.15); },
-    boom() { noise(0.5, 'lowpass', 900, 0.6, 0.002); for (let i = 0; i < 10; i++) setTimeout(() => noise(0.04, 'highpass', 4000, 0.08), 200 + i * rnd(30, 90)); },
-    fanfare() { const N = [[523, 0], [659, 0.18], [784, 0.36], [1047, 0.54], [784, 0.9], [1047, 1.08]]; N.forEach(([f, w]) => { tone(f, 0.5, 'sawtooth', 0.09, w); tone(f * 1.005, 0.5, 'sawtooth', 0.06, w); }); [[523, 659, 784], [587, 740, 880], [659, 831, 988]].forEach((ch, i) => ch.forEach((f) => tone(f, 1.4, 'sawtooth', 0.05, 1.5 + i * 0.5))); },
-    beatStart() { if (!ac || !on || beat) return; let n = 0; beat = setInterval(() => { const t = ac.currentTime + 0.05; if (n % 2 === 0) { const o = ac.createOscillator(), g = ac.createGain(); o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.15); g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.25); o.connect(g); out(g, 1, 0.1); o.start(t); o.stop(t + 0.3); } noise(0.05, 'highpass', 7000, n % 2 ? 0.12 : 0.06); if (n % 8 === 4) noise(0.18, 'bandpass', 1800, 0.25, 0.002, 0.8); if (n % 4 === 0) tone([220, 262, 196, 247][(n / 4) % 4], 0.4, 'sawtooth', 0.035, 0, 0.2); n++; }, 250); },
-    beatStop() { if (beat) clearInterval(beat); beat = null; }
+    crowd(level) { if (!ac || !crowdG) return; crowdG.gain.setTargetAtTime(on ? 0.04 + level * 0.32 : 0, ac.currentTime, 0.4); },
+    cheer() { play('cheer', 1, 0.95 + Math.random() * 0.1); }, gun() { play('gun'); }, whoosh() { play('whoosh'); }, ding() { play('ding'); }, click() { play('click'); }, boom() { play('boom'); }, fanfare() { play('fanfare'); },
+    step(p) { const now = performance.now(); if (now - lastStep < 90) return; lastStep = now; play('step', 0.4 + 0.6 * p, 0.9 + Math.random() * 0.2); },
+    beatStart() { if (!ac || !on || beatSrc) return; const go = () => { if (beatSrc || !B.beat) return; beatSrc = ac.createBufferSource(); beatSrc.buffer = B.beat; beatSrc.loop = true; beatSrc.connect(master); beatSrc.start(); }; if (B.beat) go(); else if (ready) ready.then(go); },
+    beatStop() { if (beatSrc) { try { beatSrc.stop(); } catch (e) {} beatSrc = null; } },
   };
 })();
 
@@ -644,7 +653,7 @@ function go(ph) {
   if (ph === 'intro') { excite = 0.9; waveOn = false; SND.beatStart(); SND.whoosh(); SND.cheer(); title('MIVIBRA MOVIMIENTO', '100 m con vallas', 'Estadio MiVibra · Final'); setTimeout(() => phase === 'intro' && show('note', 1), 2500); }
   if (ph === 'present') { excite = 0.6; }
   if (ph === 'marks') { SND.beatStop(); excite = 0.12; big('En sus marcas…'); }
-  if (ph === 'race') { excite = 0.85; waveOn = true; SND.gun(); SND.cheer(); flashScreen(0.5); show('hud', 1); show('clock', 1); show('pace', 1); show('phone', 1); raceT = 0; RUNNERS.forEach((r) => { r.d = -0.55; r.v = 0; r.ph = 0; r.done = false; r.t = 0; r.react = r.me && CAM.on ? 0.08 : rnd(0.12, 0.22); r.nextH = 0; r.vmax = r.me ? 9.05 : rnd(8.55, 9.0); r.lastStep = 0; }); if (INST.length) setTimeout(syncInst, 0); hurdleObjs.forEach((h) => { h.hit = 0; h.g.rotation.x = 0; }); }
+  if (ph === 'race') { excite = 0.85; waveOn = true; SND.gun(); SND.cheer(); flashScreen(0.5); show('hud', 1); show('clock', 1); show('pace', 1); show('phone', 1); raceT = 0; RUNNERS.forEach((r) => { r.d = -0.55; r.v = 0; r.ph = 0; r.done = false; r.t = 0; r.react = hum(r) >= 0 ? 0.08 : rnd(0.12, 0.22); r.nextH = 0; r.vmax = r.me ? 9.05 : rnd(8.55, 9.0); r.lastStep = 0; }); if (INST.length) setTimeout(syncInst, 0); hurdleObjs.forEach((h) => { h.hit = 0; h.g.rotation.x = 0; }); }
   if (ph === 'finish') { excite = 1.3; waveOn = false; SND.cheer(); SND.ding(); }
   if (ph === 'podium') { excite = 1.2; podiumDone = false; }
 }
@@ -692,18 +701,21 @@ function update(dt, t) {
       if (!r.done) {
         const tt = raceT - r.react;
         let target = tt > 0 ? r.vmax * (1 - Math.exp(-tt / 0.85)) : 0;
-        if (r.me && CAM.on) target = tt > 0 ? camSpeed(r.vmax) : 0;
-        r.v = lerp(r.v, target, r.me && CAM.on ? 0.06 : 0.2);
+        const hs = hum(r);
+        if (hs >= 0) target = tt > 0 ? camSpeed(r.vmax, hs) : 0;
+        r.v = lerp(r.v, target, hs >= 0 ? 0.06 : 0.2);
       } else r.v = lerp(r.v, 0, dt * 1.2);
       r.d += r.v * dt; const z = -r.d;
-      if (r.me && CAM.on) {
-        const hz = HURDLES[r.nextH];
+      const hsj = hum(r);
+      if (hsj >= 0) {
+        const C = CS[hsj], hz = HURDLES[r.nextH];
         if (hz !== undefined && z <= hz) {
           r.nextH++;
-          if (CAM.clock - CAM.jumpAt < 1100) { SND.whoosh(); camSay('¡Bien saltado!', true); }
-          else { r.v *= 0.45; CAM.stumbleT = 1.4; SND.boom(); camSay('¡Salta en cada valla!'); const h = hurdleObjs.find((o) => o.lane === r.lane + 1 && o.z === hz); if (h) h.hit = 1; }
+          if (C.clock - C.jumpAt < 1100) { if (r.me) SND.whoosh(); camSay('¡Bien saltado!', true, hsj); }
+          else { r.v *= 0.45; C.stumbleT = 1.4; SND.boom(); camSay('¡Salta en cada valla!', false, hsj); const h = hurdleObjs.find((o) => o.lane === r.lane + 1 && o.z === hz); if (h) h.hit = 1; }
         }
       }
+      if (!r.done && z <= FIN && hum(r) >= 0) { const pl = RUNNERS.filter((q) => q.done).length + 1; camSay('¡Llegaste de ' + pl + '.°!', pl === 1, hum(r)); }
       if (!r.done && z <= FIN) { r.done = true; r.t = raceT - (FIN - z) / Math.max(1, r.v); }
       // Fase de paso: zancada ~2,1 m a toda velocidad
       const stride = 1.2 + 0.9 * clamp(r.v / 9, 0, 1);
@@ -728,7 +740,7 @@ function update(dt, t) {
       leaderD = Math.max(leaderD, r.d);
     });
     // Vallas que se mueven al pasar (pequeño golpe)
-    hurdleObjs.forEach((h) => { const r = RUNNERS.find((q) => q.lane + 1 === h.lane); if (!r) return; const rel = -r.d - h.z; if (Math.abs(rel) < 0.3 && !h.hit && !(r.me && CAM.on) && Math.random() < 0.25) { h.hit = 1; } if (h.hit) { h.g.rotation.x = lerp(h.g.rotation.x, -0.35, 0.2); } }); if (INST.length) syncInst();
+    hurdleObjs.forEach((h) => { const r = RUNNERS.find((q) => q.lane + 1 === h.lane); if (!r) return; const rel = -r.d - h.z; if (Math.abs(rel) < 0.3 && !h.hit && hum(r) < 0 && Math.random() < 0.25) { h.hit = 1; } if (h.hit) { h.g.rotation.x = lerp(h.g.rotation.x, -0.35, 0.2); } }); if (INST.length) syncInst();
     // HUD
     const st = standings(), pos = st.indexOf(ME) + 1;
     $('clk').textContent = (ME.done ? ME.t : raceT).toFixed(2); $('posT').textContent = pos + '.° LUGAR';
@@ -737,7 +749,7 @@ function update(dt, t) {
     const next = HURDLES.find((hz) => hz < -ME.d - 0.2);
     if (phase === 'race') { if (next !== undefined && -ME.d - next < 4.5) cue('¡SALTA!', true); else if (raceT < 2) cue('¡Trota en el sitio, rápido!'); else show('cue', 0); }
     if (!camStick()) stick(ME.ph, next !== undefined && -ME.d - next < 1.5 ? 'jump' : 'run');
-    if (CAM.on && phase === 'race') { CAM.stumbleT -= dt; if (CAM.stumbleT > 0) cue('¡Tropezaste! Salta en cada valla', true); else if (camCadence() < 0.8 && !ME.done) cue('¡Trota en el sitio para avanzar!', true); }
+    if (CAM.on && phase === 'race') { CS[0].stumbleT -= dt; if (CS[0].stumbleT > 0) cue('¡Tropezaste! Salta en cada valla', true); else if (camCadence() < 0.8 && !ME.done) cue('¡Trota en el sitio para avanzar!', true); }
     // Cámaras de carrera
     const mz = -ME.d;
     if (phase === 'race') {
@@ -753,6 +765,7 @@ function update(dt, t) {
     }
     flashTick(phase === 'finish' ? 0.05 : 0.008);
   } else if (phase === 'podium') {
+    if (pt > 6 && !menuOn && !MVHand.open) endMenu();
     if (!podiumDone) { podiumDone = true; if (!results.length) results = standings(); show('res', 0); const top = results.slice(0, 3); $('banner').innerHTML = '¡' + top[0].name + ' gana el oro!'; show('banner', 1); SND.fanfare(); setTimeout(SND.cheer, 400); confettiStart(); }
     const top = results.slice(0, 3);
     RUNNERS.forEach((r) => { const i = top.indexOf(r); if (i < 0) { r.A.userData.show = false; r.A.visible = false; return; } r.A.userData.show = true; r.A.visible = !r.vrm; const [x, h] = PODS[i]; const jt = clamp((pt - 0.6 - i * 0.5) / 0.6, 0, 1); const from = new THREE.Vector3(POD.x + x, 0, POD.z + 2.2); const to = new THREE.Vector3(POD.x + x, h, POD.z); r.A.position.lerpVectors(from, to, smooth(jt)); r.A.position.y += Math.sin(jt * Math.PI) * 0.8; r.A.rotation.y = 0; apply(r.A, jt < 1 ? POSES.idle(t) : (i === 0 ? POSES.victory(t) : POSES.cheer(t, i)), 0.15); r.clip = jt < 1 ? 'Idle' : 'Victory'; r.clipSpeed = i === 0 ? 1 : 0.85; r.clipTime = null; r.clipLoop = true;
@@ -782,51 +795,34 @@ function reset() {
 
 // ================= Cámara del celular (puntos del cuerpo por WebRTC, conexión directa) =================
 // Índices de lo que manda el celular: 0 nariz, 1-2 hombros, 3-4 codos, 5-6 muñecas, 7-8 caderas, 9-10 rodillas, 11-12 tobillos
-const CAM = { clock: 0, rx: 0, on: false, peer: null, conn: null, code: '', lm: null, seen: 0, steps: [], side: 0, base: null, jumpAt: 0, paused: false, stumbleT: 0 };
-function camCode() { return String(Math.floor(100000 + Math.random() * 900000)); }
-function camOpen() {
-  if (CAM.peer) return;
-  if (!window.Peer) { $('cst').textContent = 'No se pudo cargar la conexión. Revisa internet.'; return; }
-  CAM.code = camCode();
-  const peer = new Peer('mivibra-mv-' + CAM.code); CAM.peer = peer;
-  const url = new URL('../camara/?c=' + CAM.code, location.href).href;
-  $('ccode').textContent = CAM.code; $('curl').textContent = url.replace(/^https?:\/\//, '').replace(/\?.*$/, '');
-  try { const q = qrcode(0, 'M'); q.addData(url); q.make(); $('qr').src = q.createDataURL(6, 2); } catch (e) {}
-  peer.on('error', (e) => { if (e.type === 'unavailable-id') { peer.destroy(); CAM.peer = null; camOpen(); } else $('cst').textContent = 'Error de conexión (' + e.type + ')'; });
-  peer.on('connection', (c) => {
-    if (CAM.conn) CAM.conn.close();
-    CAM.conn = c;
-    c.on('open', () => { CAM.on = true; $('cst').textContent = '¡Celular conectado! Ponte de cuerpo entero'; $('cst').classList.add('ok'); $('camGo').disabled = false; SND.init && SND.ding(); });
-    c.on('data', camData);
-    c.on('close', () => { CAM.on = false; CAM.lm = null; $('cst').textContent = 'Se desconectó el celular'; $('cst').classList.remove('ok'); if (phase === 'race') cue('El celular se desconectó', true); });
-  });
-}
-function camSay(text, ok) { try { if (CAM.conn && CAM.conn.open) CAM.conn.send({ t: 'say', text, ok: !!ok }); } catch (e) {} }
-function camData(d) {
-  if (!d) return;
-  if (d.t === 'pause') { CAM.paused = !!d.on; return; }
-  if (d.t !== 'p') return;
-  const l = d.l; CAM.lm = l; if (!l) return;
-  CAM.rx = performance.now(); CAM.seen = CAM.clock = typeof d.ts === 'number' ? d.ts : CAM.rx;
-  const vis = (i) => l[i][2] > 0.45;
+// Cada celular conectado es un jugador (J1 = tú, J2..J4 corren en los carriles de al lado)
+const CS = [0, 1, 2, 3].map(() => ({ steps: [], side: 0, base: null, jumpAt: -1e9, clock: 0, stumbleT: 0 }));
+const CAM = { get on() { return !!MVLink.players[0]; }, get paused() { return !!(MVLink.players[0] && MVLink.players[0].paused); }, get lm() { const p = MVLink.players[0]; return p ? p.lm : null; } };
+const hum = (r) => (r.human !== undefined && MVLink.players[r.human] ? r.human : -1);
+function camSay(text, ok, slot) { MVLink.say(text, ok, slot === undefined ? 0 : slot); }
+MVLink.onPose((l, ts, d, slot) => {
+  const C = CS[slot]; C.clock = ts;
+  const vis = (i) => l[i] && l[i][2] > 0.45;
   if (!(vis(1) && vis(2) && vis(7) && vis(8))) return;
   const shY = (l[1][1] + l[2][1]) / 2, hipY = (l[7][1] + l[8][1]) / 2, torso = Math.max(0.05, hipY - shY);
   // Pasos: las rodillas suben y bajan alternadas al trotar en el sitio
-  if (vis(9) && vis(10)) {
-    const diff = (l[9][1] - l[10][1]) / torso;
-    const side = diff > 0.07 ? 1 : diff < -0.07 ? -1 : CAM.side;
-    if (side !== CAM.side && CAM.side !== 0) CAM.steps.push(CAM.seen);
-    CAM.side = side;
-  }
-  CAM.steps = CAM.steps.filter((t) => CAM.seen - t < 1500);
+  if (vis(9) && vis(10)) { const diff = (l[9][1] - l[10][1]) / torso; const side = diff > 0.07 ? 1 : diff < -0.07 ? -1 : C.side; if (side !== C.side && C.side !== 0) C.steps.push(ts); C.side = side; }
+  C.steps = C.steps.filter((t) => ts - t < 1500);
   // Salto: la cadera sube por encima de su altura normal
-  if (CAM.base === null) CAM.base = hipY;
-  const up = (CAM.base - hipY) / torso;
-  if (up > 0.2 && CAM.seen - CAM.jumpAt > 600) { CAM.jumpAt = CAM.seen; }
-  if (up < 0.08) CAM.base = lerp(CAM.base, hipY, 0.04);
+  if (C.base === null) C.base = hipY;
+  const up = (C.base - hipY) / torso;
+  if (up > 0.2 && ts - C.jumpAt > 600) C.jumpAt = ts;
+  if (up < 0.08) C.base = lerp(C.base, hipY, 0.04);
+});
+function camCadence(slot = 0) { return MVLink.fresh(slot) ? CS[slot].steps.length / 1.5 : 0; }
+function camSpeed(vmax, slot = 0) { return vmax * clamp((camCadence(slot) - 0.6) / 2.6, 0, 1); }
+// Quién corre: J1 en tu carril; J2, J3 y J4 en los carriles más cercanos
+function assignHumans() {
+  const others = RUNNERS.filter((r) => !r.me).sort((a, b) => Math.abs(a.lane - ME.lane) - Math.abs(b.lane - ME.lane));
+  RUNNERS.forEach((r) => { if (r.baseName === undefined) r.baseName = r.name; r.name = r.baseName; delete r.human; });
+  ME.human = 0;
+  MVLink.players.forEach((p, slot) => { if (!p || slot === 0) return; const r = others.shift(); if (!r) return; r.human = slot; r.name = 'Jugador ' + (slot + 1); });
 }
-function camCadence() { return CAM.on && !CAM.paused && performance.now() - CAM.rx < 800 ? CAM.steps.length / 1.5 : 0; }
-function camSpeed(vmax) { return vmax * clamp((camCadence() - 0.6) / 2.6, 0, 1); }
 let camDrawn = null;
 function camStick() {
   const l = CAM.lm; if (!l) return false;
@@ -837,10 +833,39 @@ function camStick() {
   if (l[0][2] > 0.4) { const n = P(0); h += `<circle cx="${n[0].toFixed(1)}" cy="${n[1].toFixed(1)}" r="9"/>`; }
   $('stick').setAttribute('transform', ''); $('stick').innerHTML = h; return true;
 }
-// La conexión se prepara desde que abre el juego: así el código y el QR ya están listos al tocar el botón
-setTimeout(() => { try { camOpen(); } catch (e) {} }, 300);
-$('goCam').onclick = () => { $('main').classList.add('off'); $('cam').classList.add('on'); $('cam').parentNode.classList.add('camOn'); camOpen(); };
-$('camBack').onclick = () => { $('main').classList.remove('off'); $('cam').classList.remove('on'); $('cam').parentNode.classList.remove('camOn'); };
+// Conexión de celulares (hasta 4): se prepara desde que abre el juego para que el QR ya esté listo
+function plsDraw() { $('pls').innerHTML = [0, 1, 2, 3].map((k) => { const p = MVLink.players[k]; return `<b class="${p ? '' : 'off'}" style="background:${MVLink.COLORS[k]}">J${k + 1}${p ? ' ✓' : ''}</b>`; }).join(''); }
+setTimeout(() => { try { MVLink.open((t, ok) => { $('cst').textContent = t; $('cst').classList.toggle('ok', !!ok); }); $('ccode').textContent = MVLink.code; const q = MVLink.qr(6); if (q) $('qr').src = q; plsDraw(); } catch (e) {} }, 300);
+MVLink.onChange = () => { plsDraw(); if (menuOn === 'start') startMenu(); };
+// ---------- Menús con la mano (como el Kinect): levanta la mano y desliza por la flecha ----------
+let menuOn = null, PAUSED = false;
+function startMenu() {
+  menuOn = 'start'; $('connect').classList.add('on'); const n = MVLink.count();
+  MVHand.menu({ kicker: 'MIVIBRA MOVIMIENTO', title: '100 m con vallas', sub: n ? (n === 1 ? 'Celular conectado. Trota en el sitio y salta en cada valla.' : n + ' corredores conectados: cada uno en su carril.') : 'Conecta hasta 4 celulares (uno por corredor), o mira la carrera con el control.',
+    items: [{ id: 'play', label: n > 1 ? '¡Correr! (' + n + ' jugadores)' : '¡Correr!', icon: '▶' }, { id: 'snd', label: SND.on ? 'Sonido: sí' : 'Sonido: no', icon: '♪' }, { id: 'exit', label: 'Salir', icon: '✕' }], back: 'exit', onPick: menuPick });
+}
+function pauseGame() {
+  if (menuOn || MVHand.open || phase === 'wait') return; PAUSED = true; menuOn = 'pause'; SND.beatStop();
+  MVHand.menu({ kicker: 'CARRERA EN PAUSA', title: 'Pausa', items: [{ id: 'resume', label: 'Continuar', icon: '▶' }, { id: 'again', label: 'Repetir carrera', icon: '↻' }, { id: 'exit', label: 'Salir', icon: '☰' }], back: 'resume', onPick: menuPick });
+}
+function endMenu() {
+  menuOn = 'end'; MVHand.pauseEnabled = false; const w = results[0];
+  MVHand.menu({ kicker: 'FIN DE LA CARRERA', title: w ? '¡' + w.name + ' gana!' : 'Fin', dim: 0.25, items: [{ id: 'again', label: 'Correr otra vez', icon: '↻' }, { id: 'edit', label: 'Cambiar mi avatar', icon: '☺' }, { id: 'exit', label: 'Salir', icon: '✕' }], back: 'exit', onPick: menuPick });
+}
+function menuPick(id) {
+  const was = menuOn; menuOn = null; PAUSED = false;
+  if (id === 'resume') return;
+  if (id === 'snd') { SND.init(); SND.toggle(); $('bSnd').textContent = SND.on ? 'Sonido: sí' : 'Sonido: no'; return startMenu(); }
+  if (id === 'play') return begin(true);
+  if (id === 'again') { if (was === 'end' || was === 'pause') { assignHumans(); reset(); go(Q === 0 ? 'marks' : 'intro'); MVLink.say('¡Otra carrera! Prepárate', true); } return; }
+  if (id === 'edit') { location.href = '../editor/' + location.search; return; }
+  if (id === 'exit') { if (window.parent !== window) window.parent.postMessage({ mv: 'close' }, '*'); else history.back(); }
+}
+MVHand.onPause = () => pauseGame();
+addEventListener('keydown', (e) => {
+  if (MVHand.key(e)) { e.preventDefault(); return; }
+  if ((e.key === 'Escape' || e.key === 'p' || e.key === 'MediaPlayPause') && phase !== 'wait') { pauseGame(); e.preventDefault(); }
+});
 
 // ================= Bucle =================
 const clock = new THREE.Clock(); let T = 0, liveTick = 0, fpsN = 0, fpsT = 0, fpsSlow = 0;
@@ -890,7 +915,7 @@ function frame() {
   fpsN++; fpsT += real;
   if (fpsT > 1) { const fps = fpsN / fpsT; fpsN = 0; fpsT = 0; fpsSlow = fps < 40 ? fpsSlow + 1 : 0; if (fpsSlow >= 3 && Q > 0 && !QFIX) { Q--; fpsSlow = 0; applyQ(); } window.MVFPS = Math.round(fps); }
   if (Q === 0) RUNNERS.forEach((r, i) => { const a = r.vrm ? r.vrm.scene : r.A; a.getWorldPosition(blobs[i].position); blobs[i].position.y = 0.02; });
-  if (phase !== 'wait') { update(dt, T); driveVRM(dt); } else { const a = T * 0.05; setCam(new THREE.Vector3(Math.cos(a) * 110, 55, -50 + Math.sin(a) * 110), new THREE.Vector3(0, 0, -50), 1); crowdTick(T); }
+  if (phase !== 'wait' && !PAUSED) { update(dt, T); driveVRM(dt); } else { const a = T * 0.05; setCam(new THREE.Vector3(Math.cos(a) * 110, 55, -50 + Math.sin(a) * 110), new THREE.Vector3(0, 0, -50), 1); crowdTick(T); }
   // Pantalla gigante en vivo: primer plano del jugador (cada 2 cuadros)
   if ((liveTick++ % [30, 3, 2][Q]) === 0) { const f = phase === 'podium' ? new THREE.Vector3(POD.x, 1.8, POD.z) : ME.A.position.clone().add(new THREE.Vector3(0, 1.3, 0)); liveCam.position.set(f.x + 2.2, f.y + 0.4, f.z - 4.2); liveCam.lookAt(f); R.setRenderTarget(liveRT); R.render(S, liveCam); R.setRenderTarget(null); }
   if (Q === 0) R.render(S, cam); else composer.render();
@@ -898,22 +923,21 @@ function frame() {
 R.setAnimationLoop(frame);
 
 function begin(sound) {
-  $('start').remove(); $('ctrl').style.display = 'flex';
-  if (sound) SND.init(); else { SND.init(); SND.toggle(); $('bSnd').textContent = 'Sonido: no'; }
+  const st = $('start'); if (st) st.remove(); $('connect').classList.remove('on'); $('ctrl').style.display = 'flex';
+  SND.init(); if (!sound && SND.on) SND.toggle(); $('bSnd').textContent = SND.on ? 'Sonido: sí' : 'Sonido: no';
+  assignHumans();
   reset(); $('hudT').textContent = 'Carril ' + ME.num + ' · ' + ME.name; if (Q === 0) { camPos.set(7.5, 0.7, -4.5); camLook.set(-0.5, 0.5, 0.3); }
+  MVLink.players.forEach((p, k) => { if (p) MVLink.say(k === 0 ? '¡A correr! Trota en el sitio y salta en las vallas' : '¡Corres en el carril ' + (RUNNERS.find((r) => r.human === k) || {}).num + '!', true, k); });
+  MVHand.pauseEnabled = true;
   go(Q === 0 ? 'marks' : 'intro');   // en TV, directo a la salida
 }
-$('go').dataset.wait = 1; $('go').textContent = 'Cargando atletas…'; $('go').disabled = true; $('goMute').disabled = true;
-vrmReady.then(() => { delete $('go').dataset.wait; $('go').textContent = 'Empezar con sonido'; $('go').disabled = false; $('goMute').disabled = false; });
-$('go').onclick = () => begin(true);
-$('camGo').onclick = () => { camSay('¡A correr! Trota en el sitio y salta en las vallas', true); begin(true); };
-$('goMute').onclick = () => begin(false);
+vrmReady.then(() => { const c = document.querySelector('#start .card'); if (c) c.style.display = 'none'; startMenu(); });
 $('bSkip').onclick = () => { reset(); go('marks'); };
-$('bAgain').onclick = () => { reset(); go('intro'); };
+$('bAgain').onclick = () => { MVHand.close(); menuOn = null; PAUSED = false; assignHumans(); reset(); go('intro'); };
 $('bSnd').onclick = () => { const on = SND.toggle(); $('bSnd').textContent = 'Sonido: ' + (on ? 'sí' : 'no'); };
 const TEST = { i: 0, g: 'idle' };
 POSES.runA = () => POSES.run(Math.PI / 2, 1); POSES.runB = () => POSES.run(0, 1); POSES.hurdleT = () => POSES.hurdle();
-window.MVD = { S, info: () => ({ calls: R.info.render.calls, tris: R.info.render.triangles, geos: R.info.memory.geometries, tex: R.info.memory.textures, NS }), CAM, camData, R: RUNNERS, test: (i, g, side) => { TEST.i = i; TEST.g = g; TEST.side = !!side; phase = 'test'; pt = 0; ['title','lower','big','cue','hud','clock','pace','phone','res','banner','note'].forEach((x) => show(x, 0)); }, step: (n, d = 1 / 60) => { for (let i = 0; i < n; i++) { T += d * slow; update(d * slow, T); } }, go: (p) => { reset(); go(p); }, get phase() { return phase; }, results: () => results };
+window.MVD = { S, info: () => ({ calls: R.info.render.calls, tris: R.info.render.triangles, geos: R.info.memory.geometries, tex: R.info.memory.textures, NS }), CAM, CS, assignHumans, menuPick: (id) => { MVHand.close(); menuPick(id); }, pauseGame, get menu() { return menuOn; }, R: RUNNERS, test: (i, g, side) => { TEST.i = i; TEST.g = g; TEST.side = !!side; phase = 'test'; pt = 0; ['title','lower','big','cue','hud','clock','pace','phone','res','banner','note'].forEach((x) => show(x, 0)); }, step: (n, d = 1 / 60) => { for (let i = 0; i < n; i++) { T += d * slow; update(d * slow, T); } }, go: (p) => { reset(); go(p); }, get phase() { return phase; }, results: () => results };
 </script>
 </body>
 </html>

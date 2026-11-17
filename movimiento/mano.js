@@ -8,10 +8,15 @@
   const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 
   // ---------------- Conexión con el celular ----------------
+  const COLORS = ['#FF6A3D', '#2F7DF6', '#34D399', '#F43F5E'];
   const MVLink = {
-    peer: null, conn: null, code: '', url: '', on: false, lm: null, ts: 0, rx: 0, paused: false,
-    listeners: [], status: () => {},
+    peer: null, code: '', url: '', on: false, lm: null, ts: 0, rx: 0, paused: false,
+    players: [null, null, null, null],   // hasta 4 celulares: cada uno es un jugador
+    listeners: [], status: () => {}, onChange: null,
+    get conn() { const p = this.players.find(Boolean); return p ? p.conn : null; },
+    COLORS,
     onPose(fn) { this.listeners.push(fn); },
+    count() { return this.players.filter(Boolean).length; },
     open(status) {
       if (status) this.status = status;
       if (this.peer) return;
@@ -22,23 +27,29 @@
       this.status('Esperando el celular…', false);
       peer.on('error', (e) => { if (e.type === 'unavailable-id') { peer.destroy(); this.peer = null; this.open(); } else this.status('Error de conexión (' + e.type + ')', false); });
       peer.on('connection', (c) => {
-        if (this.conn) try { this.conn.close(); } catch (e) {}
-        this.conn = c;
-        c.on('open', () => { this.on = true; this.status('¡Celular conectado! Levanta la mano para usar el menú', true); });
-        c.on('data', (d) => this.data(d));
-        c.on('close', () => { this.on = false; this.lm = null; this.status('Se desconectó el celular', false); });
+        c.on('open', () => {
+          const slot = this.players.findIndex((p) => !p);
+          if (slot < 0) { try { c.send({ t: 'full' }); } catch (e) {} setTimeout(() => c.close(), 500); return; }
+          const P = { conn: c, slot, lm: null, ts: 0, rx: 0, paused: false, color: COLORS[slot] }; this.players[slot] = P;
+          try { c.send({ t: 'slot', n: slot + 1, color: COLORS[slot] }); } catch (e) {}
+          this.on = true; this.status(this.count() === 1 ? '¡Celular conectado! Levanta la mano para usar el menú' : this.count() + ' celulares conectados', true);
+          if (this.onChange) this.onChange();
+          c.on('data', (d) => this.data(d, P));
+          c.on('close', () => { if (this.players[slot] === P) this.players[slot] = null; this.on = this.count() > 0; this.lm = this.on ? this.lm : null; this.status(this.on ? this.count() + ' celulares conectados' : 'Se desconectó el celular', this.on); if (this.onChange) this.onChange(); });
+        });
       });
     },
     qr(size) { try { const q = qrcode(0, 'M'); q.addData(this.url); q.make(); return q.createDataURL(size || 6, 2); } catch (e) { return ''; } },
-    say(text, ok) { try { if (this.conn && this.conn.open) this.conn.send({ t: 'say', text, ok: !!ok }); } catch (e) {} },
-    data(d) {
+    say(text, ok, slot) { this.players.forEach((p) => { if (p && (slot === undefined || p.slot === slot)) try { if (p.conn.open) p.conn.send({ t: 'say', text, ok: !!ok }); } catch (e) {} }); },
+    data(d, P) {
       if (!d) return;
-      if (d.t === 'pause') { this.paused = !!d.on; return; }
+      if (d.t === 'pause') { P.paused = !!d.on; this.paused = this.players.some((p) => p && p.paused); return; }
       if (d.t !== 'p' || !d.l) return;
-      this.lm = d.l; this.rx = performance.now(); this.ts = typeof d.ts === 'number' ? d.ts : this.rx;
-      for (const f of this.listeners) try { f(d.l, this.ts, d); } catch (e) { console.error(e); }
+      P.lm = d.l; P.rx = performance.now(); P.ts = typeof d.ts === 'number' ? d.ts : P.rx;
+      this.lm = d.l; this.rx = P.rx; this.ts = P.ts;
+      for (const f of this.listeners) try { f(d.l, P.ts, d, P.slot); } catch (e) { console.error(e); }
     },
-    fresh() { return this.on && !this.paused && this.lm && performance.now() - this.rx < 800; },
+    fresh(slot) { const now = performance.now(); if (slot !== undefined) { const p = this.players[slot]; return !!(p && !p.paused && p.lm && now - p.rx < 800); } return this.players.some((p) => p && !p.paused && p.lm && now - p.rx < 800); },
   };
 
   // ---------------- Estilos y piezas de pantalla ----------------
@@ -129,7 +140,8 @@ html:not(.q0) .mvh-dim{backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6p
       return false;
     },
     // Llega una pose del celular
-    feed(l, ts) {
+    feed(l, ts, slot) {
+      if (this.owner !== undefined && this.owner !== slot && performance.now() - this.ownerT < 1500) return;
       const dt = this.lastTs ? clamp((ts - this.lastTs) / 1000, 0, 0.2) : 0.03; this.lastTs = ts;
       const v = (i) => l[i] && l[i][2] > 0.45;
       if (!(v(1) && v(2) && v(7) && v(8))) { this.active = false; if (built) cur.classList.remove('on'); this.ringSet(0); return; }
@@ -138,6 +150,7 @@ html:not(.q0) .mvh-dim{backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6p
       const up = (w, e) => v(w) && l[w][1] < hipY - 0.2 * torso && (!v(e) || l[w][1] < l[e][1] + 0.08 * torso);
       // ¿qué mano manda? la derecha (6); si no está arriba, la izquierda (5)
       let w = up(6, 4) ? 6 : up(5, 3) ? 5 : -1;
+      if (w >= 0) { this.owner = slot; this.ownerT = performance.now(); }
       if (this.open && w >= 0) {
         const sx = 1 - l[w][0], side = w === 6 ? 1 : -1;
         const tx = clamp(0.5 + (sx - midX - side * 0.35 * torso) / (torso * 1.5), 0, 1), ty = clamp(0.5 + (l[w][1] - (shY - 0.05 * torso)) / (torso * 1.15), 0, 1);
@@ -176,6 +189,6 @@ html:not(.q0) .mvh-dim{backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6p
       this.paint();
     },
   };
-  MVLink.onPose((l, ts) => MVHand.feed(l, ts));
+  MVLink.onPose((l, ts, d, slot) => MVHand.feed(l, ts, slot));
   window.MVLink = MVLink; window.MVHand = MVHand;
 })();
