@@ -87,6 +87,7 @@ export function normalizeAnimeRecipe(input = {}) {
 /** Convierte la receta plana del motor actual al esquema estructurado v2. */
 export function legacyToAnimeRecipe(legacy = {}) {
   const l = isObject(legacy) ? legacy : {};
+  if (isObject(l.animeRecipe)) return normalizeAnimeRecipe(l.animeRecipe);
   const skin = color(l.skin, ANIME_DEFAULT.body.skin);
   const hair = color(l.hair, ANIME_DEFAULT.hair.color);
   const eye = color(l.eyes, ANIME_DEFAULT.face.eyes.color);
