@@ -789,6 +789,7 @@ class PlayerActivity : ComponentActivity() {
     private var recoverN = 0               // reconexiones seguidas (se reinicia cuando vuelve a ir bien un rato)
     private var stableSince = 0L
     private var lastPos = -1L
+    private var lastBuf = -1L
     private var stuckSince = 0L
     /**
      * Detector de congelamiento: revisa cada segundo. Si se queda "cargando" o la imagen no avanza ~6 s sin dar error
@@ -801,16 +802,20 @@ class PlayerActivity : ComponentActivity() {
             if (!startedOk || !p.playWhenReady || p.playbackSuppressionReason != Player.PLAYBACK_SUPPRESSION_REASON_NONE || errorView.visibility == View.VISIBLE) { stuckSince = 0; return }
             val now = android.os.SystemClock.uptimeMillis()
             val pos = p.currentPosition
+            val buf = p.bufferedPosition
             val moving = p.playbackState == Player.STATE_READY && p.isPlaying && pos != lastPos
-            lastPos = pos
+            // Si sigue llegando video (el búfer crece), no está congelado: solo va lento. Reconectar ahí lo empeora.
+            val loading = buf > lastBuf + 200
+            lastPos = pos; lastBuf = buf
             if (moving) {
                 stuckSince = 0
                 if (recoverN > 0 && now - stableSince > 30_000) recoverN = 0
                 return
             }
             if (p.playbackState == Player.STATE_ENDED) return
+            if (loading) { stuckSince = 0; return }
             if (stuckSince == 0L) { stuckSince = now; return }
-            if (now - stuckSince >= (if (live) 6_000 else 9_000)) { stuckSince = 0; recover("La señal se congeló") }
+            if (now - stuckSince >= (if (live) 8_000 else 15_000)) { stuckSince = 0; recover("La señal se congeló") }
         }
     }
     /**
@@ -821,7 +826,7 @@ class PlayerActivity : ComponentActivity() {
         val p = player ?: return
         recoverN++
         stableSince = android.os.SystemClock.uptimeMillis()
-        if (!live) startPosition = maxOf(0L, p.currentPosition - 2000)
+        if (!live) startPosition = p.currentPosition
         if (recoverN > 5) {
             recoverN = 0
             if (attemptIndex < attempts.size - 1) { attemptIndex++; retries = 0; toastInfo("Probando otra versión de la señal…"); startAttempt(); return }
