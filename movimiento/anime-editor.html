@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Anime Motion Studio · MiVibra TV</title>
+<style>
+:root{color-scheme:dark;--bg:#10131b;--panel:#191e2a;--line:#30394a;--muted:#9ba8bd;--accent:#ff7048;--blue:#6e9cff}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 35% 20%,#26304a 0,#10131b 55%);color:#f6f7fb;font:15px Inter,system-ui,sans-serif;min-height:100vh;overflow:hidden}
+#app{height:100vh;display:grid;grid-template-columns:minmax(300px,1fr) minmax(360px,440px);gap:14px;padding:14px}
+#stage{position:relative;min-width:0;overflow:hidden;border:1px solid #ffffff16;border-radius:26px;background:linear-gradient(150deg,#28334a88,#10131b66)}
+#view{position:absolute;inset:0}#view canvas{width:100%;height:100%;display:block}
+.brand{position:absolute;top:20px;left:22px;font-weight:900;letter-spacing:.12em;font-size:12px;color:#dce5f7}.brand b{color:var(--accent)}
+#stageHint{position:absolute;bottom:18px;left:20px;color:#c4cee0;font-size:12px}
+#panel{background:#171c28ee;border:1px solid #ffffff18;border-radius:26px;display:flex;flex-direction:column;min-height:0;overflow:hidden;box-shadow:0 20px 70px #0005}
+.head{padding:20px 20px 12px;border-bottom:1px solid var(--line)}.eyebrow{font-size:10px;letter-spacing:.2em;color:var(--accent);font-weight:900}.head h1{font-size:22px;margin:6px 0}.head p{margin:0;color:var(--muted);font-size:12px}
+#tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;padding:12px}
+.tab,.choice,.swatch,.action{border:1px solid var(--line);background:#222a39;color:#dfe7f5;border-radius:12px;padding:10px;cursor:pointer;font:inherit}
+.tab{font-size:12px;font-weight:750}.tab.active,.choice.active{border-color:var(--accent);background:#ff704822;color:#fff}
+#controls{padding:4px 16px 18px;overflow:auto;flex:1}.group{padding:12px 0;border-bottom:1px solid #ffffff12}.group h3{font-size:11px;letter-spacing:.12em;color:#9eabc0;margin:0 0 10px;text-transform:uppercase}
+.choices{display:flex;flex-wrap:wrap;gap:7px}.choice{font-size:12px;padding:9px 11px}.swatch{width:30px;height:30px;padding:0;border-radius:50%;border:2px solid #ffffff50}.swatch.active{outline:2px solid var(--accent);outline-offset:2px}
+input[type=text]{width:100%;background:#222a39;border:1px solid var(--line);color:white;padding:12px;border-radius:12px}
+#footer{padding:12px 16px;border-top:1px solid var(--line);display:grid;grid-template-columns:1fr 1fr;gap:8px}.action{font-weight:800}.primary{background:var(--accent);color:#1a1010;border-color:var(--accent)}.wide{grid-column:1/-1}
+#toast{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);background:#111923;border:1px solid #ffffff30;padding:11px 16px;border-radius:14px;display:none;z-index:5;max-width:90%;font-size:13px}
+button:focus-visible,input:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+@media(max-width:800px){body{overflow:auto}#app{height:auto;min-height:100vh;display:flex;flex-direction:column;padding:8px}#stage{height:44vh;min-height:280px;flex:none}#panel{min-height:54vh}.head{padding:15px 16px 10px}#controls{max-height:40vh}}
+@media(min-width:801px) and (max-width:1100px){#app{grid-template-columns:minmax(260px,1fr) minmax(330px,390px)}}
+</style>
+<script type="importmap">{"imports":{"three":"./vendor/three-0.183.2/three.module.min.js","three/addons/":"./vendor/three-0.183.2/addons/"}}</script>
+</head>
+<body>
+<div id="app">
+ <section id="stage"><div id="view"></div><div class="brand">MIVIBRA <b>·</b> ANIME MOTION STUDIO</div><div id="stageHint">Arrastra para girar el personaje · Vista previa 3D</div></section>
+ <section id="panel">
+  <header class="head"><div class="eyebrow">CREA TU IDENTIDAD</div><h1>Tu personaje, tu estilo.</h1><p>Personaliza cada detalle y lleva tu avatar a los juegos de MiVibra TV.</p></header>
+  <nav id="tabs"></nav><main id="controls"></main>
+  <footer id="footer"><button class="action primary" id="save">Guardar personaje</button><button class="action" id="random">Aleatorio</button><button class="action wide" id="close">Volver a MiVibra TV</button></footer>
+ </section>
+</div><div id="toast"></div>
+<script type="module">
+import * as THREE from './vendor/three-0.183.2/three.module.min.js';
+import { build } from './avatar.js';
+import { normalizeAnimeRecipe, legacyToAnimeRecipe, animeToLegacyRecipe, encodeAnimeRecipe, decodeAnimeRecipe, ANIME_DEFAULT } from './anime-motion-studio.js';
+const $=id=>document.getElementById(id), IN_APP=window.parent!==window;
+let recipe=normalizeAnimeRecipe(ANIME_DEFAULT),tab='body',avatar=null,buildId=0,yaw=.25,dragX=null;
+const tabs=[['body','Cuerpo'],['face','Rostro'],['hair','Cabello'],['outfit','Vestuario'],['accessories','Accesorios'],['identity','Personalidad']];
+const skin=['#f6d3b8','#ecbc96','#d9a074','#c58b62','#a8714a','#8d5a3b','#6e432a','#4f2e1c'];
+const hairColors=['#141010','#3a2416','#6b3a1e','#a0632f','#d9a640','#f0d590','#b8b8bc','#c0392b','#2F7DF6','#8E5CF7','#FF6A3D','#34D399'];
+const eyeColors=['#3a2416','#6b3a1e','#2a6db0','#2f8f5b','#6b6f75','#141010','#8E5CF7','#FF6A3D'];
+const clothes=['#FF6A3D','#FFB13D','#F43F5E','#8E5CF7','#2F7DF6','#34D399','#14B8A6','#F4F5F6','#9CA3AF','#1F2937','#111214','#EC4899'];
+const stage=$('view'),renderer=new THREE.WebGLRenderer({alpha:true,antialias:!/Android TV|SMART-TV|Tizen/i.test(navigator.userAgent)});
+renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));renderer.setSize(stage.clientWidth,stage.clientHeight);renderer.toneMapping=THREE.NeutralToneMapping;stage.appendChild(renderer.domElement);
+const scene=new THREE.Scene();scene.add(new THREE.HemisphereLight('#f1f6ff','#6a6058',1.6));
+const key=new THREE.DirectionalLight('#fff4e8',2.4);key.position.set(2.5,4,4);scene.add(key);
+const rim=new THREE.DirectionalLight('#cfe2ff',1.1);rim.position.set(-3,2.5,-3);scene.add(rim);
+const camera=new THREE.PerspectiveCamera(30,1,.1,50),turn=new THREE.Group();scene.add(turn);
+const floor=new THREE.Mesh(new THREE.CylinderGeometry(.75,.8,.05,40),new THREE.MeshStandardMaterial({color:'#d9dde1',roughness:.55}));floor.position.y=-.03;scene.add(floor);
+const ring=new THREE.Mesh(new THREE.TorusGeometry(.78,.012,8,64),new THREE.MeshBasicMaterial({color:'#ff7048'}));ring.rotation.x=Math.PI/2;ring.position.y=.002;scene.add(ring);
+function resize(){const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();camera.position.set(0,1.05,h>w?4.3:3.5);camera.lookAt(0,.82,0)}addEventListener('resize',resize);resize();
+stage.addEventListener('pointerdown',e=>{dragX={x:e.clientX,yaw};stage.setPointerCapture(e.pointerId)});
+stage.addEventListener('pointermove',e=>{if(dragX)yaw=dragX.yaw+(e.clientX-dragX.x)*.01});
+stage.addEventListener('pointerup',()=>dragX=null);
+async function rebuild(){const id=++buildId;try{const a=await build(animeToLegacyRecipe(recipe),{lite:/Android TV|SMART-TV|Tizen/i.test(navigator.userAgent)});if(id!==buildId)return;if(avatar)turn.remove(avatar.scene);avatar=a;turn.add(a.scene)}catch(e){toast('No se pudo construir el personaje: '+e.message)}}
+let last=performance.now();function loop(now){const dt=Math.min(.05,(now-last)/1000);last=now;if(!dragX)yaw+=dt*.12;turn.rotation.y=yaw;renderer.render(scene,camera);requestAnimationFrame(loop)}requestAnimationFrame(loop);
+function toast(s){const t=$('toast');t.textContent=s;t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',3500)}
+function choices(title,key,values,labels){return '<section class="group"><h3>'+title+'</h3><div class="choices">'+values.map((v,i)=>'<button class="choice '+(key.split('.').reduce((o,k)=>o[k],recipe)===v?'active':'')+'" data-path="'+key+'" data-value="'+v+'">'+(labels?labels[i]:v)+'</button>').join('')+'</div></section>'}
+function swatches(title,key,values){const current=key.split('.').reduce((o,k)=>o[k],recipe);return '<section class="group"><h3>'+title+'</h3><div class="choices">'+values.map(c=>'<button class="swatch '+(current===c?'active':'')+'" style="background:'+c+'" aria-label="'+c+'" data-path="'+key+'" data-value="'+c+'"></button>').join('')+'</div></section>'}
+function render(){
+ $('tabs').innerHTML=tabs.map(([k,l])=>'<button class="tab '+(tab===k?'active':'')+'" data-tab="'+k+'">'+l+'</button>').join('');
+ let h='';
+ if(tab==='body')h=choices('Modelo','body.type',['male','female'],['Masculino','Femenino'])+choices('Complexión','body.build',['slim','balanced','athletic','broad'],['Delgada','Equilibrada','Atlética','Robusta'])+swatches('Tono de piel','body.skin',skin)+choices('Estatura','body.height',[1.32,1.42,1.52,1.62,1.72],['Baja','Media-baja','Media','Media-alta','Alta']);
+ if(tab==='face')h=choices('Forma del rostro','face.shape',['soft','angular','round','heart'],['Suave','Angular','Redonda','Corazón'])+choices('Estilo de ojos','face.eyes.style',['anime-large','almond','round','sharp','happy'],['Anime grandes','Almendrados','Redondos','Afilados','Alegres'])+swatches('Color de ojos','face.eyes.color',eyeColors)+choices('Pupila','face.eyes.pupil',['round','star','slit'],['Redonda','Estrella','Vertical'])+choices('Cejas','face.eyebrows.style',['natural','thick','arched','straight','thin'],['Naturales','Gruesas','Arqueadas','Rectas','Finas'])+choices('Nariz','face.nose',['small','button','defined','soft'],['Pequeña','Botón','Definida','Suave'])+choices('Boca','face.mouth',['smile','wide-smile','neutral','open','small'],['Sonrisa','Gran sonrisa','Neutral','Abierta','Pequeña'])+choices('Expresión','face.expression',['happy','neutral','confident','surprised','serious'],['Feliz','Neutral','Confiada','Sorprendida','Seria'])+choices('Maquillaje','face.makeup',['none','natural','blush','liner','lip-color'],['Ninguno','Natural','Rubor','Delineado','Labios']);
+ if(tab==='hair')h=choices('Peinado','hair.style',['short-messy','short-spiky','long-straight','long-wavy','ponytail','bob','undercut','curly','side-part','mohawk'],['Corto despeinado','Puntiagudo','Largo liso','Ondulado','Cola','Bob','Undercut','Rizado','De lado','Cresta'])+swatches('Color del cabello','hair.color',hairColors)+choices('Estilo adicional','hair.extra',['none','bun','braids','twin-buns'],['Ninguno','Moño','Trenzas','Dos moños'])+choices('Barba y bigote','hair.beard',['none','stubble','goatee','short','full','mustache'],['Sin barba','Sombra','Candado','Corta','Completa','Bigote']);
+ if(tab==='outfit')h=choices('Parte superior','outfit.upper',['Casual','Casual2','Beach','Punk','Adventurer','Farmer','Worker','Suit'],['Camiseta','Clásica','Deportiva','Chaqueta','Aventura','Camisa','Trabajo','Elegante'])+swatches('Color superior','outfit.colors.upper',clothes)+swatches('Detalles superiores','outfit.colors.upperDetail',clothes)+choices('Parte inferior','outfit.lower',['Beach','Casual','Casual2','Punk','Adventurer','Worker','Suit'],['Pantaloneta','Bermuda','Jean','Jean roto','Cargo','Trabajo','Vestir'])+swatches('Color inferior','outfit.colors.lower',clothes)+swatches('Detalles inferiores','outfit.colors.lowerDetail',clothes)+choices('Calzado','outfit.feet',['Casual2','Casual','Beach','Adventurer','Punk','Suit'],['Tenis','Tenis altos','Chanclas','Botas','Botas punk','Zapatos'])+swatches('Color del calzado','outfit.colors.shoes',clothes)+choices('Estampado','outfit.print',['none','mv','number'],['Ninguno','Logo MV','Número']);
+ if(tab==='accessories')h=choices('Gafas','accessories.glasses',['none','sunglasses','reading'],['Ninguna','Sol','Lectura'])+choices('Gorra o gorro','accessories.headwear',['none','mv-cap','cap','beanie'],['Ninguno','Gorra MV','Gorra','Gorro'])+choices('Audífonos','accessories.headphones',[false,true],['No','Sí'])+choices('Aretes','accessories.earrings',[false,true],['No','Sí'])+swatches('Color de accesorios','accessories.color',clothes);
+ if(tab==='identity')h='<section class="group"><h3>Nombre del personaje</h3><input id="characterName" type="text" maxlength="24" value="'+recipe.name.replace(/"/g,'&quot;')+'"></section>'+choices('Presentación','face.expression',['happy','confident','serious','surprised'],['Alegre','Confiada','Seria','Sorprendida']);
+ $('controls').innerHTML=h;
+}
+function setPath(path,value){const keys=path.split('.');let obj=recipe;keys.slice(0,-1).forEach(k=>obj=obj[k]);obj[keys.at(-1)]=value;recipe=normalizeAnimeRecipe(recipe);render();rebuild()}
+$('tabs').addEventListener('click',e=>{const b=e.target.closest('[data-tab]');if(b){tab=b.dataset.tab;render()}});
+$('controls').addEventListener('click',e=>{const b=e.target.closest('[data-path]');if(!b)return;let v=b.dataset.value;if(v==='true')v=true;else if(v==='false')v=false;else if(!Number.isNaN(Number(v))&&v.trim()!=='')v=Number(v);setPath(b.dataset.path,v)});
+$('controls').addEventListener('input',e=>{if(e.target.id==='characterName'){recipe.name=e.target.value.slice(0,24)}});
+$('random').onclick=()=>{const pick=a=>a[Math.floor(Math.random()*a.length)];recipe=normalizeAnimeRecipe({...recipe,body:{...recipe.body,type:pick(['male','female']),skin:pick(skin)},hair:{...recipe.hair,color:pick(hairColors)},face:{...recipe.face,eyes:{...recipe.face.eyes,color:pick(eyeColors)}},outfit:{...recipe.outfit,colors:{...recipe.outfit.colors,upper:pick(clothes),lower:pick(clothes)}}});render();rebuild()};
+function db(){return new Promise((res,rej)=>{const r=indexedDB.open('mivibra-movimiento',1);r.onupgradeneeded=()=>r.result.createObjectStore('avatar');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+function saveLocal(buf,name){return db().then(d=>new Promise((res,rej)=>{const t=d.transaction('avatar','readwrite');t.objectStore('avatar').put({vrm:buf,name,at:Date.now()},'me');t.oncomplete=res;t.onerror=()=>rej(t.error)}))}
+function parentSave(buf,name){return new Promise((res,rej)=>{const timer=setTimeout(()=>{removeEventListener('message',on);rej(new Error('La aplicación no respondió'))},60000);function on(e){if(e.source!==window.parent||!e.data||e.data.mv!=='avatar-saved')return;clearTimeout(timer);removeEventListener('message',on);e.data.ok?res():rej(new Error(e.data.msg||'No se pudo guardar'))}addEventListener('message',on);window.parent.postMessage({mv:'avatar-save',vrm:buf,name},'*',[buf])})}
+function getFromApp(){if(!IN_APP)return Promise.resolve(null);return new Promise(res=>{const t=setTimeout(()=>{removeEventListener('message',on);res(null)},15000);function on(e){if(e.source!==window.parent||!e.data||e.data.mv!=='avatar')return;clearTimeout(t);removeEventListener('message',on);res(e.data.vrm||null)}addEventListener('message',on);window.parent.postMessage({mv:'avatar-get'},'*')})}
+$('save').onclick=async()=>{const btn=$('save');btn.disabled=true;try{const buf=encodeAnimeRecipe(recipe);await saveLocal(buf,recipe.name);if(IN_APP)await parentSave(encodeAnimeRecipe(recipe),recipe.name);toast('Personaje guardado en tu cuenta MiVibra')}catch(e){toast('Error al guardar: '+e.message)}finally{btn.disabled=false}};
+$('close').onclick=()=>{if(IN_APP)window.parent.postMessage({mv:'close'},'*');else history.back()};
+addEventListener('keydown',e=>{if(IN_APP&&e.key==='Escape')window.parent.postMessage({mv:'close'},'*')});
+async function init(){const stored=await getFromApp();const saved=stored||await db().then(d=>new Promise(res=>{const r=d.transaction('avatar','readonly').objectStore('avatar').get('me');r.onsuccess=()=>res(r.result&&r.result.vrm||null);r.onerror=()=>res(null)})).catch(()=>null);if(saved){const parsed=decodeAnimeRecipe(saved);if(parsed)recipe=parsed;else toast('No pudimos leer el avatar guardado. Crea uno nuevo para continuar.')}render();await rebuild()}
+init();
+</script>
+</body></html>
