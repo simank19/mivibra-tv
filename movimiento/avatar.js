@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as skClone } from 'three/addons/utils/SkeletonUtils.js';
+import { build as buildAnimeAvatar } from './anime-avatar.js';
 
 const KIT = new URL('./kit/', import.meta.url).href;
 
@@ -359,7 +360,7 @@ function chestPrint(r, lite, tops, bones, wrap) {
 // ---------- Armar avatar ----------
 export function setEyeStyle(st) { makeFace.style = st; }
 makeFace.style = 'pintada';   // elegido: ojos almendrados con delineado, cejas arqueadas y labios (cara pintada)
-export async function build(recipe, opts = {}) {
+async function buildLegacy(recipe, opts = {}) {
   const r = fix(recipe), lite = !!opts.lite;
   const parts = await Promise.all(['body', 'head', 'legs', 'feet'].map((k) => part(r.g, r[k], k)));
   const root = skClone(parts[0].scene);           // el torso trae el esqueleto principal
@@ -474,4 +475,17 @@ export async function build(recipe, opts = {}) {
     dispose() { wrap.traverse((o) => { if (o.geometry && o.isSkinnedMesh) o.geometry.dispose(); }); },
   };
   return av;
+}
+
+// Los avatares Anime Motion Studio usan el mismo contrato de rig que los juegos.
+export async function build(recipe, opts = {}) {
+  const r = fix(recipe);
+  if (r.mvStyle === 'anime-game') {
+    const avatar = await buildAnimeAvatar(r, Object.assign({}, opts, { height: opts.height || r.animeHeight || 1.42 }));
+    const shape = { slim: 0.92, balanced: 1, athletic: 1.06, broad: 1.13 }[r.animeBuild] || 1;
+    avatar.scene.scale.x *= shape;
+    avatar.scene.scale.z *= shape;
+    return avatar;
+  }
+  return buildLegacy(r, opts);
 }
