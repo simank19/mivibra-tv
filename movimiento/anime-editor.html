@@ -38,7 +38,8 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--blue);outline-o
 </div><div id="toast"></div>
 <script type="module">
 import * as THREE from './vendor/three-0.183.2/three.module.min.js';
-import { build, CATALOG } from './avatar.js';
+import { build } from './anime-avatar.js';
+import { CATALOG } from './avatar.js';
 import { normalizeAnimeRecipe, legacyToAnimeRecipe, animeToLegacyRecipe, encodeAnimeRecipe, decodeAnimeRecipe, ANIME_DEFAULT } from './anime-motion-studio.js';
 const $=id=>document.getElementById(id), IN_APP=window.parent!==window;
 let recipe=normalizeAnimeRecipe(ANIME_DEFAULT),tab='body',avatar=null,buildId=0,yaw=.25,dragX=null;
