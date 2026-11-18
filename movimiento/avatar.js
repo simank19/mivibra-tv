@@ -480,6 +480,12 @@ async function buildLegacy(recipe, opts = {}) {
 // Los avatares Anime Motion Studio usan el mismo contrato de rig que los juegos.
 export async function build(recipe, opts = {}) {
   const r = fix(recipe);
-  if (r.mvStyle === 'anime-game') return buildAnimeAvatar(r, opts);
+  if (r.mvStyle === 'anime-game') {
+    const avatar = await buildAnimeAvatar(r, Object.assign({}, opts, { height: opts.height || r.animeHeight || 1.42 }));
+    const shape = { slim: 0.92, balanced: 1, athletic: 1.06, broad: 1.13 }[r.animeBuild] || 1;
+    avatar.scene.scale.x *= shape;
+    avatar.scene.scale.z *= shape;
+    return avatar;
+  }
   return buildLegacy(r, opts);
 }
