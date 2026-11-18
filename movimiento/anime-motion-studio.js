@@ -134,7 +134,7 @@ export function animeToLegacyRecipe(input = {}) {
   const beard = ['none', 'stubble', 'goatee', 'short', 'full'];
   const headwear = { none: 0, 'mv-cap': 1, cap: 2, beanie: 3 };
   return {
-    v: 1, name: a.name, g: a.body.type === 'female' ? 'f' : 'm',
+    v: 1, mvStyle: 'anime-game', name: a.name, g: a.body.type === 'female' ? 'f' : 'm',
     skin: a.body.skin, hair: a.hair.color, eyes: a.face.eyes.color,
     head: a.hair.style, body: a.outfit.upper, legs: a.outfit.lower, feet: a.outfit.feet,
     face: [Math.max(0, eyeStyles.indexOf(a.face.eyes.style)), Math.max(0, browStyles.indexOf(a.face.eyebrows.style)), Math.max(0, mouths.indexOf(a.face.mouth))],
