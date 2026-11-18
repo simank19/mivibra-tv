@@ -30,7 +30,7 @@ const normMap = {
   leftLowerLeg:'LowerLegL', rightLowerLeg:'LowerLegR',
   leftFoot:'FootL', rightFoot:'FootR'
 };
-function makeHair(head, color, feminine) {
+function makeHair(head, color, feminine, style = 'Casual') {
   const group = new THREE.Group(); group.name = 'AnimeHair'; head.add(group);
   sphere(group, 'HairCap', color, [0,.31,-.015], [.49,.42,.43]);
   // Flequillo en mechones separados: silueta legible incluso a distancia de TV.
@@ -40,19 +40,25 @@ function makeHair(head, color, feminine) {
     bang.rotation.z = (i-2)*-.12;
   }
   if (feminine) {
-    sphere(group,'HairBack',color,[0,-.28,-.12],[.43,.62,.31]);
+    const longStyle = ['Adventurer','SciFi','Formal','Casual'].includes(style);
+    sphere(group,'HairBack',color,[0,-.28,-.12],longStyle?[.46,.72,.34]:[.43,.48,.31]);
     for (const s of [-1,1]) {
-      const lock = capsule(group,'LongLock',color,.105,.72,[s*.37,-.35,.0],[0,0,s*.08]);
+      const lock = capsule(group,'LongLock',color,.105,longStyle ? .82 : .48,[s*.37,longStyle ? -.4 : -.24,.0],[0,0,s*.08]);
       lock.scale.set(1,1,.9);
     }
-    sphere(group,'Ponytail',color,[.02,.12,-.43],[.2,.48,.2]).rotation.x=-.3;
+    if (style==='Casual' || style==='Worker') sphere(group,'Ponytail',color,[.02,.12,-.43],[.2,.48,.2]).rotation.x=-.3;
+    if (style==='Punk') sphere(group,'TwinBunL',color,[-.32,.3,-.02],[.18,.2,.18]);
+    if (style==='Punk') sphere(group,'TwinBunR',color,[.32,.3,-.02],[.18,.2,.18]);
   } else {
     sphere(group,'SideHairL',color,[.42,-.03,.03],[.16,.28,.2]);
     sphere(group,'SideHairR',color,[-.42,-.03,.03],[.16,.28,.2]);
-    for (let i=0;i<4;i++) {
-      const spike=sphere(group,'Spike'+i,color,[(i-1.5)*.18,.48,.03],[.12,.25,.12]);
-      spike.rotation.z=(i-1.5)*-.28;
+    const spikeCount=style==='Punk'?7:style==='Suit'?2:4;
+    for (let i=0;i<spikeCount;i++) {
+      const x=(i-(spikeCount-1)/2)*.14;
+      const spike=sphere(group,'Spike'+i,color,[x,style==='Punk' ? .52 : .43,.03],[.105,style==='Punk' ? .32 : .19,.11]);
+      spike.rotation.z=(i-(spikeCount-1)/2)*-.22;
     }
+    if (style==='Suit' || style==='Casual2') sphere(group,'SidePart',color,[.12,.37,.23],[.3,.12,.18]);
   }
   return group;
 }
@@ -62,6 +68,9 @@ function makeFace(head, recipe, skin, hair) {
   const eyeGroups=[];
   for (const side of [-1,1]) {
     const eye = new THREE.Group(); eye.position.set(side*.205,.015,.405); eye.name='EyeGroup'; face.add(eye);
+    const eyeStyle=Array.isArray(recipe.face)?recipe.face[0]:0;
+    eye.scale.y=eyeStyle===1 ? .82 : eyeStyle===2 ? 1.12 : eyeStyle===3 ? .72 : 1;
+    eye.scale.x=eyeStyle===1 ? 1.12 : eyeStyle===3 ? .92 : 1;
     sphere(eye,'Sclera','#fff',[0,0,0],[.155,.205,.065]);
     sphere(eye,'Iris',eyeColor,[0,-.005,.056],[.091,.135,.025]);
     sphere(eye,'Pupil','#100d12',[0,-.005,.078],[.047,.09,.018]);
@@ -110,15 +119,15 @@ function createCharacter(recipe, opts) {
   const head=bone('Head',neck,[0,.12,0]); bones.Head=head;
   // Tronco en capas: cuello, torso y prenda superior.
   capsule(root,'NeckSkin',skin,.105,.13,[0,1.49,0]);
-  const torsoMesh=capsule(root,'BodyBase',skin,female?.205:.23,.39,[0,1.19,0]);
-  torsoMesh.scale.x=female?.94:1.06;
-  const shirt=capsule(root,'TopGarment',top,female?.218:.245,.37,[0,1.205,.018]);
-  shirt.scale.x=female?.96:1.08;
+  const torsoMesh=capsule(root,'BodyBase',skin,female ? .205 : .23,.39,[0,1.19,0]);
+  torsoMesh.scale.x=female ? .94 : 1.06;
+  const shirt=capsule(root,'TopGarment',top,female ? .218 : .245,.37,[0,1.205,.018]);
+  shirt.scale.x=female ? .96 : 1.08;
   sphere(root,'Collar',topDetail,[0,1.405,.04],[.12,.055,.12]);
   // Cadera y piernas con proporción videojuego anime.
-  sphere(root,'Pelvis',bottom,[0,.91,0],[female?.25:.27,.19,.16]);
+  sphere(root,'Pelvis',bottom,[0,.91,0],[female ? .25 : .27,.19,.16]);
   for (const side of ['L','R']) {
-    const s=sign(side), x=s*(female?.135:.145);
+    const s=sign(side), x=s*(female ? .135 : .145);
     const upper=bone('UpperLeg'+side,hips,[x,-.08,0]); bones[upper.name]=upper;
     capsule(upper,'Thigh',bottom,.115,.27,[0,-.17,0]);
     const knee=bone('LowerLeg'+side,upper,[0,-.34,0]); bones[knee.name]=knee;
@@ -143,10 +152,10 @@ function createCharacter(recipe, opts) {
     sphere(upper,'SleeveCuff',topDetail,[s*.255,0,0],[.035,.095,.095]);
   }
   // Cabeza grande y mandíbula suave; el modelo femenino tiene mandíbula más estrecha.
-  sphere(head,'HeadShape',skin,[0,0,0],[female?.39:.405,.49,.36]);
-  sphere(head,'Jaw',skin,[0,-.19,.075],[female?.29:.32,.25,.3]);
+  sphere(head,'HeadShape',skin,[0,0,0],[female ? .39 : .405,.49,.36]);
+  sphere(head,'Jaw',skin,[0,-.19,.075],[female ? .29 : .32,.25,.3]);
   const facial=makeFace(head,recipe,skin,hairColor);
-  makeHair(head,hairColor,female);
+  makeHair(head,hairColor,female,recipe.head||'Casual');
   // Accesorios sencillos y ligeros.
   if (recipe.glasses) {
     for (const s of [-1,1]) {
