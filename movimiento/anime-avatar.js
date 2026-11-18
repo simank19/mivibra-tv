@@ -118,14 +118,14 @@ function createCharacter(recipe, opts) {
   const neck=bone('Neck',chest,[0,.16,0]); bones.Neck=neck;
   const head=bone('Head',neck,[0,.12,0]); bones.Head=head;
   // Tronco en capas: cuello, torso y prenda superior.
-  capsule(root,'NeckSkin',skin,.105,.13,[0,1.49,0]);
-  const torsoMesh=capsule(root,'BodyBase',skin,female ? .205 : .23,.39,[0,1.19,0]);
+  capsule(neck,'NeckSkin',skin,.105,.13,[0,0,0]);
+  const torsoMesh=capsule(torso,'BodyBase',skin,female ? .205 : .23,.39,[0,0,0]);
   torsoMesh.scale.x=female ? .94 : 1.06;
-  const shirt=capsule(root,'TopGarment',top,female ? .218 : .245,.37,[0,1.205,.018]);
+  const shirt=capsule(torso,'TopGarment',top,female ? .218 : .245,.37,[0,.015,.018]);
   shirt.scale.x=female ? .96 : 1.08;
-  sphere(root,'Collar',topDetail,[0,1.405,.04],[.12,.055,.12]);
+  sphere(chest,'Collar',topDetail,[0,.085,.04],[.12,.055,.12]);
   // Cadera y piernas con proporción videojuego anime.
-  sphere(root,'Pelvis',bottom,[0,.91,0],[female ? .25 : .27,.19,.16]);
+  sphere(hips,'Pelvis',bottom,[0,0,0],[female ? .25 : .27,.19,.16]);
   for (const side of ['L','R']) {
     const s=sign(side), x=s*(female ? .135 : .145);
     const upper=bone('UpperLeg'+side,hips,[x,-.08,0]); bones[upper.name]=upper;
@@ -173,9 +173,9 @@ function createCharacter(recipe, opts) {
     capsule(head,'Headband',recipe.acc||'#222',.035,.55,[0,.34,-.01],[0,0,Math.PI/2]);
   }
   // Prenda inferior y detalles de diseño.
-  const belt=capsule(root,'WaistBand',topDetail,.025,.36,[0,1.0,.01]); belt.rotation.z=Math.PI/2;
+  const belt=capsule(hips,'WaistBand',topDetail,.025,.36,[0,.09,.01]); belt.rotation.z=Math.PI/2;
   if (recipe.print) {
-    const emblem=sphere(root,'MVEmblem',topDetail,[.09,1.28,.255],[.045,.045,.012]);
+    const emblem=sphere(torso,'MVEmblem',topDetail,[.09,.09,.255],[.045,.045,.012]);
     emblem.material=mat(recipe.print===1?'#ffffff':'#ffcf4a');
   }
   // Base de pies en Y=0; escala uniforme a la altura solicitada.
