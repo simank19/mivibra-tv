@@ -39,8 +39,8 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--blue);outline-o
 <script type="module">
 import * as THREE from './vendor/three-0.183.2/three.module.min.js';
 import { build } from './anime-avatar.js';
-import { CATALOG } from './avatar.js';
-import { normalizeAnimeRecipe, legacyToAnimeRecipe, animeToLegacyRecipe, encodeAnimeRecipe, decodeAnimeRecipe, ANIME_DEFAULT } from './anime-motion-studio.js';
+import { CATALOG, encode as encodeLegacyAvatar } from './avatar.js';
+import { normalizeAnimeRecipe, animeToLegacyRecipe, decodeAnimeRecipe, ANIME_DEFAULT } from './anime-motion-studio.js';
 const $=id=>document.getElementById(id), IN_APP=window.parent!==window;
 let recipe=normalizeAnimeRecipe(ANIME_DEFAULT),tab='body',avatar=null,buildId=0,yaw=.25,dragX=null;
 const tabs=[['body','Cuerpo'],['face','Rostro'],['hair','Cabello'],['outfit','Vestuario'],['accessories','Accesorios'],['identity','Personalidad']];
@@ -85,7 +85,7 @@ function db(){return new Promise((res,rej)=>{const r=indexedDB.open('mivibra-mov
 function saveLocal(buf,name){return db().then(d=>new Promise((res,rej)=>{const t=d.transaction('avatar','readwrite');t.objectStore('avatar').put({vrm:buf,name,at:Date.now()},'me');t.oncomplete=res;t.onerror=()=>rej(t.error)}))}
 function parentSave(buf,name){return new Promise((res,rej)=>{const timer=setTimeout(()=>{removeEventListener('message',on);rej(new Error('La aplicación no respondió'))},60000);function on(e){if(e.source!==window.parent||!e.data||e.data.mv!=='avatar-saved')return;clearTimeout(timer);removeEventListener('message',on);e.data.ok?res():rej(new Error(e.data.msg||'No se pudo guardar'))}addEventListener('message',on);window.parent.postMessage({mv:'avatar-save',vrm:buf,name},'*',[buf])})}
 function getFromApp(){if(!IN_APP)return Promise.resolve(null);return new Promise(res=>{const t=setTimeout(()=>{removeEventListener('message',on);res(null)},15000);function on(e){if(e.source!==window.parent||!e.data||e.data.mv!=='avatar')return;clearTimeout(t);removeEventListener('message',on);res(e.data.vrm||null)}addEventListener('message',on);window.parent.postMessage({mv:'avatar-get'},'*')})}
-$('save').onclick=async()=>{const btn=$('save');btn.disabled=true;try{const buf=encodeAnimeRecipe(recipe);await saveLocal(buf,recipe.name);if(IN_APP)await parentSave(encodeAnimeRecipe(recipe),recipe.name);toast('Personaje guardado en tu cuenta MiVibra')}catch(e){toast('Error al guardar: '+e.message)}finally{btn.disabled=false}};
+$('save').onclick=async()=>{const btn=$('save');btn.disabled=true;try{const buf=encodeLegacyAvatar(animeToLegacyRecipe(recipe));await saveLocal(buf,recipe.name);if(IN_APP)await parentSave(buf.slice(0),recipe.name);toast('Personaje guardado en tu cuenta MiVibra')}catch(e){toast('Error al guardar: '+e.message)}finally{btn.disabled=false}};
 $('close').onclick=()=>{if(IN_APP)window.parent.postMessage({mv:'close'},'*');else history.back()};
 addEventListener('keydown',e=>{if(IN_APP&&e.key==='Escape')window.parent.postMessage({mv:'close'},'*')});
 async function init(){const stored=await getFromApp();const saved=stored||await db().then(d=>new Promise(res=>{const r=d.transaction('avatar','readonly').objectStore('avatar').get('me');r.onsuccess=()=>res(r.result&&r.result.vrm||null);r.onerror=()=>res(null)})).catch(()=>null);if(saved){const parsed=decodeAnimeRecipe(saved);if(parsed)recipe=parsed;else toast('No pudimos leer el avatar guardado. Crea uno nuevo para continuar.')}render();await rebuild()}
