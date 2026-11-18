@@ -226,6 +226,10 @@ class MainActivity : ComponentActivity() {
         val req = try { JSONObject(json) } catch (_: Exception) { null }
         if (req?.optBoolean("ext") == true && openExternalPlayer(req)) return
         PlayerActivity.pendingRequest = json
+        // La vista previa del Inicio se apaga ANTES de abrir el reproductor: si no, por un momento hay dos conexiones
+        // con la misma cuenta y los proveedores de una sola pantalla rechazan el canal (403/458)
+        preview.release()
+        js("window.MV&&MV.onPreview&&MV.onPreview('stopped')")
         startForResult(Intent(this, PlayerActivity::class.java)) { _, data ->
             val r = data?.getStringExtra("result") ?: JSONObject().put("id", "").toString()
             js("window.MV&&MV.onPlayerClosed&&MV.onPlayerClosed($r)")

@@ -51,6 +51,16 @@ import org.json.JSONObject
 class PlayerActivity : ComponentActivity() {
 
     companion object {
+        /** Un solo cliente para todo el reproductor: las conexiones se reutilizan entre pedazos de video y entre canales. */
+        val playerHttp: okhttp3.OkHttpClient by lazy {
+            okhttp3.OkHttpClient.Builder()
+                .connectTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                .retryOnConnectionFailure(true)
+                .followRedirects(true).followSslRedirects(true)
+                .connectionPool(okhttp3.ConnectionPool(6, 2, java.util.concurrent.TimeUnit.MINUTES))
+                .build()
+        }
         /** El pedido llega por aquí para no pasar listas enormes por el Intent. */
         @Volatile var pendingRequest: String? = null
         /** Solo un reproductor a la vez: si hay uno en la ventana flotante, se cierra al abrir otro. */
@@ -186,6 +196,7 @@ class PlayerActivity : ComponentActivity() {
         })
 
         createPlayer()
+        ui.postDelayed(stallCheck, 1000)
         playIndex(index, req.optLong("startMs", 0))
     }
 
@@ -605,7 +616,7 @@ class PlayerActivity : ComponentActivity() {
 
     private fun current(): JSONObject = queue.optJSONObject(index) ?: JSONObject()
 
-    private lateinit var http: DefaultHttpDataSource.Factory
+    private lateinit var http: androidx.media3.datasource.okhttp.OkHttpDataSource.Factory
 
     /** Formas de abrir un canal: la URL tal cual, forzando HLS, con otro User-Agent, .ts/.m3u8 y señales alternativas. */
     private data class Attempt(val url: String, val forceHls: Boolean, val ua: String?)
@@ -692,12 +703,26 @@ class PlayerActivity : ComponentActivity() {
 
     private val vlcUa = "VLC/3.0.20 LibVLC/3.0.20"
 
+    /**
+     * Más paciencia con los pedazos de video que fallan: cada pedazo se reintenta varias veces esperando 0,5 · 1 · 2 · 4 s
+     * (antes un solo pedazo malo detenía todo el canal). No se insiste con errores que no se arreglan reintentando (404, 410).
+     */
+    @OptIn(UnstableApi::class)
+    private class PatientErrors : androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy(6) {
+        override fun getRetryDelayMsFor(info: androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy.LoadErrorInfo): Long {
+            val e = info.exception
+            if (e is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException && (e.responseCode == 404 || e.responseCode == 410)) return C.TIME_UNSET
+            if (e is androidx.media3.common.ParserException) return C.TIME_UNSET
+            return minOf(4000L, 500L shl (info.errorCount - 1).coerceIn(0, 3))
+        }
+        override fun getMinimumLoadableRetryCount(dataType: Int): Int = if (dataType == C.DATA_TYPE_MANIFEST) 4 else 6
+    }
+
     private fun createPlayer() {
         val first = current()
-        http = DefaultHttpDataSource.Factory()
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(8000)
-            .setReadTimeoutMs(15000)
+        // OkHttp: reutiliza conexiones (menos tiempo y menos "conexiones abiertas" con el proveedor), sigue redirecciones
+        // http↔https y reintenta solo cuando una conexión se cae
+        http = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(playerHttp)
             .setUserAgent(first.optString("ua").ifBlank { Net.UA })
         val referer = first.optString("ref")
         if (referer.isNotBlank()) http.setDefaultRequestProperties(mapOf("Referer" to referer))
@@ -716,8 +741,11 @@ class PlayerActivity : ComponentActivity() {
             .setMediaSourceFactory(DefaultMediaSourceFactory(
                 androidx.media3.datasource.DefaultDataSource.Factory(this, http),
                 // Así más archivos se pueden adelantar (los que no traen índice): sin esto, al adelantar volvían al inicio
-                androidx.media3.extractor.DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true).setConstantBitrateSeekingAlwaysEnabled(true)))
+                androidx.media3.extractor.DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true).setConstantBitrateSeekingAlwaysEnabled(true))
+                .setLoadErrorHandlingPolicy(PatientErrors()))
             .setLoadControl(load)
+            // El Wi-Fi no entra en ahorro de energía mientras se ve (en muchos TV Box eso causa microcortes)
+            .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
         p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
             .setPreferredAudioLanguage(audioLang)
@@ -741,6 +769,7 @@ class PlayerActivity : ComponentActivity() {
                     hideLoading()
                     view.setKeepContentOnPlayerReset(true)
                     retries = 0
+                    if (!startedOk) { startedOk = true; stableSince = android.os.SystemClock.uptimeMillis() }
                     errorView.visibility = View.GONE
                     // Ya abrió: se recuerda qué enlace funcionó (la app lo usará primero la próxima vez)
                     attempts.getOrNull(attemptIndex)?.let { at ->
@@ -753,6 +782,71 @@ class PlayerActivity : ComponentActivity() {
         })
         view.player = p
         player = p
+    }
+
+    // ---------- Recuperación cuando el video ya estaba andando ----------
+    private var startedOk = false          // ya se vio imagen con este canal/película
+    private var recoverN = 0               // reconexiones seguidas (se reinicia cuando vuelve a ir bien un rato)
+    private var stableSince = 0L
+    private var lastPos = -1L
+    private var stuckSince = 0L
+    /**
+     * Detector de congelamiento: revisa cada segundo. Si se queda "cargando" o la imagen no avanza ~6 s sin dar error
+     * (pasa mucho en vivo), reconecta solo: en vivo vuelve al directo; en películas sigue donde ibas.
+     */
+    private val stallCheck = object : Runnable {
+        override fun run() {
+            ui.postDelayed(this, 1000)
+            val p = player ?: return
+            if (!startedOk || !p.playWhenReady || p.playbackSuppressionReason != Player.PLAYBACK_SUPPRESSION_REASON_NONE || errorView.visibility == View.VISIBLE) { stuckSince = 0; return }
+            val now = android.os.SystemClock.uptimeMillis()
+            val pos = p.currentPosition
+            val moving = p.playbackState == Player.STATE_READY && p.isPlaying && pos != lastPos
+            lastPos = pos
+            if (moving) {
+                stuckSince = 0
+                if (recoverN > 0 && now - stableSince > 30_000) recoverN = 0
+                return
+            }
+            if (p.playbackState == Player.STATE_ENDED) return
+            if (stuckSince == 0L) { stuckSince = now; return }
+            if (now - stuckSince >= (if (live) 6_000 else 9_000)) { stuckSince = 0; recover("La señal se congeló") }
+        }
+    }
+    /**
+     * Reconecta el mismo enlace sin mostrar error: espera 1 · 2 · 4 · 8 s entre intentos. Después de 5 intentos
+     * prueba la versión de respaldo (en películas, desde el mismo minuto).
+     */
+    private fun recover(why: String, error: PlaybackException? = null) {
+        val p = player ?: return
+        recoverN++
+        stableSince = android.os.SystemClock.uptimeMillis()
+        if (!live) startPosition = maxOf(0L, p.currentPosition - 2000)
+        if (recoverN > 5) {
+            recoverN = 0
+            if (attemptIndex < attempts.size - 1) { attemptIndex++; retries = 0; toastInfo("Probando otra versión de la señal…"); startAttempt(); return }
+            if (error != null) { showFinalError(error); return }
+            attemptIndex = 0; startAttempt(); return
+        }
+        val wait = (1000L shl (recoverN - 1)).coerceAtMost(8000L)
+        info.text = "Reconectando… ($recoverN)"; info.visibility = View.VISIBLE; info.alpha = 1f
+        ui.postDelayed({
+            val q = player ?: return@postDelayed
+            if (live) { q.seekToDefaultPosition(); q.prepare() }
+            else if (q.playerError != null || q.playbackState == Player.STATE_IDLE) { q.prepare(); q.seekTo(startPosition) }
+            else q.seekTo(startPosition)   // obliga a volver a pedir el pedazo que se quedó colgado
+            q.play()
+            ui.postDelayed({ if (player?.playbackState == Player.STATE_READY) info.visibility = View.GONE }, 2500)
+        }, wait)
+    }
+    /** Errores que se arreglan reintentando (red, servidor ocupado, pedazo dañado). */
+    private fun recoverable(e: PlaybackException): Boolean {
+        var c: Throwable? = e
+        while (c != null) {
+            if (c is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException) return c.responseCode == 403 || c.responseCode == 429 || c.responseCode == 458 || c.responseCode == 509 || c.responseCode >= 500
+            c = c.cause
+        }
+        return e.errorCode in 2000..2999 || e.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED || e.errorCode == PlaybackException.ERROR_CODE_UNSPECIFIED || e.errorCode == PlaybackException.ERROR_CODE_TIMEOUT
     }
 
     /** Explica en palabras simples por qué falló, con el código para poder revisarlo. */
@@ -795,6 +889,8 @@ class PlayerActivity : ComponentActivity() {
         if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
             p.seekToDefaultPosition(); p.prepare(); return
         }
+        // Ya se estaba viendo: no es que el enlace no sirva, es un corte. Se reconecta el mismo enlace, sin pantalla de error.
+        if (startedOk && recoverable(error)) { recover("Corte de señal", error); return }
         val transient = error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ||
             error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
         if (transient && retries < 1) {
@@ -811,7 +907,11 @@ class PlayerActivity : ComponentActivity() {
             startAttempt()
             return
         }
-        hideLoading()
+        showFinalError(error)
+    }
+
+    private fun showFinalError(error: PlaybackException) {
+        hideLoading(); info.visibility = View.GONE
         errorView.text = (if (live) "Este canal no está transmitiendo ahora.\n\nLos canales de eventos (los que empiezan con una hora) solo funcionan cuando el evento está en vivo.\n\n" + explain(error) else "No se pudo reproducir este contenido.\n\n" + explain(error)) +
             (if (live) "\n\nPrueba otro canal con ▲ ▼." else "\n\nVuelve atrás e intenta de nuevo.")
         errorView.visibility = View.VISIBLE
@@ -947,6 +1047,7 @@ class PlayerActivity : ComponentActivity() {
         attempts = buildAttempts(item)
         attemptIndex = 0
         retries = 0
+        startedOk = false; recoverN = 0; stuckSince = 0; lastPos = -1
         startPosition = startMs
         startAttempt()
         // Sin recuadro con el nombre del canal (pedido); solo se actualiza el botón de favorito
