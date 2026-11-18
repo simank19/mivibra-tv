@@ -136,7 +136,7 @@ export function animeToLegacyRecipe(input = {}) {
   return {
     v: 1, name: a.name, g: a.body.type === 'female' ? 'f' : 'm',
     skin: a.body.skin, hair: a.hair.color, eyes: a.face.eyes.color,
-    head: a.outfit.head, body: a.outfit.upper, legs: a.outfit.lower, feet: a.outfit.feet,
+    head: a.hair.style, body: a.outfit.upper, legs: a.outfit.lower, feet: a.outfit.feet,
     face: [Math.max(0, eyeStyles.indexOf(a.face.eyes.style)), Math.max(0, browStyles.indexOf(a.face.eyebrows.style)), Math.max(0, mouths.indexOf(a.face.mouth))],
     beard: Math.max(0, beard.indexOf(a.hair.beard)),
     makeup: ({ none: 0, natural: 1, blush: 1, liner: 0, 'lip-color': 3 })[a.face.makeup] || 0,
