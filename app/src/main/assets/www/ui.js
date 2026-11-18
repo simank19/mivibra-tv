@@ -1709,6 +1709,7 @@
     // Reproducción instantánea: los enlaces de los addons se piden ya (película o el capítulo que sigue)
     if (MV.stremioPrefetch) setTimeout(function () {
       if (it.st && it.st.id && it.type !== 'series') MV.stremioPrefetch(it.st.type, it.st.id);
+      else if (it.type === 'movie' && it.url) { var im = (it._meta && it._meta.imdb) || it.imdb; if (im) MV.stremioPrefetch('movie', im); }
       else if (it.episodes && it.episodes.length) {
         // El que toca: después del último que se vio (o el primero)
         var nx = 0;
@@ -2511,7 +2512,7 @@
           '<button class="iconbtn f" data-act="listEpg" data-arg="' + l.id + '" aria-label="Guía EPG">' + IC.guide + '</button>' +
           '<button class="iconbtn f" data-act="listDelete" data-arg="' + l.id + '" aria-label="Eliminar">' + IC.trash + '</button></div>';
       }).join('') : '<p class="muted">' + (provBlock ? 'Aún no has agregado listas propias.' : 'No has agregado listas.') + '</p>') +
-      '<div class="line"><div class="t"><b>Elegir de dónde reproducir</b><span>Antes de ver una película o capítulo muestra la lista de enlaces y fuentes para escoger (apagado: arranca solo con el mejor).</span></div><button class="toggle f' + (P.askSource !== false ? ' on' : '') + '" data-act="askSrcToggle" aria-label="Elegir de dónde reproducir"></button></div>' +
+      '<div class="line"><div class="t"><b>Elegir de dónde reproducir</b><span>Apagado (recomendado): la película arranca sola con el mejor enlace de todas tus fuentes (listas, Xtream y addons) y las demás quedan de respaldo. Encendido: antes muestra la lista para escoger.</span></div><button class="toggle f' + (P.askSource === true ? ' on' : '') + '" data-act="askSrcToggle" aria-label="Elegir de dónde reproducir"></button></div>' +
       '<div class="line"><div class="t"><b>Cargar el catálogo completo de los addons</b><span>Después de abrir, sigue pidiendo en segundo plano todas las páginas de cada catálogo (anime, películas, series…) hasta traerlo todo. Apágalo si tu equipo va lento.</span></div><button class="toggle f' + (P.stDeep !== false ? ' on' : '') + '" data-act="stDeepToggle"></button></div>' +
       '<div class="line"><div class="t"><b>Actualizar addons al abrir la app</b><span>Vuelve a pedir los catálogos de tus addons cada vez que abres MiVibra (si está apagado, se guardan 12 horas).</span></div><button class="toggle f' + (P.stAutoRefresh ? ' on' : '') + '" data-act="stAutoToggle" aria-label="Actualizar addons al abrir la app"></button></div>' +
       '<div class="line"><div class="t"><b>Actualizar addons ahora</b><span>Vuelve a cargar todos los addons y plugins (catálogos nuevos, cambios de configuración).</span></div><button class="btn ghost f" data-act="stRefreshNow">Actualizar</button></div>' +
@@ -2784,7 +2785,16 @@
     var go = function (url) {
       // Con varias fuentes (la misma película en varias listas) se muestra la lista para elegir de dónde verla
       var alts = (it.alts || []).filter(function (u) { return u && u !== url && !/^stalker:|^yt:/.test(u); });
-      if (P.askSource !== false && alts.length && !/^stalker:/.test(url)) {
+      // Todas tus fuentes juntas: si los addons ya tienen enlaces de esta película (se piden al abrir la ficha), van de respaldo
+      // detrás de tus listas (M3U, Xtream…). No se espera a nadie: solo se suman los que ya están listos.
+      var imdb = (it._meta && it._meta.imdb) || it.imdb || '';
+      var fromAddons = imdb && MV.stCached && it.type === 'movie' ? MV.stCached('movie', imdb) : null;
+      if (fromAddons && fromAddons.length) {
+        var extra = MV.stAutoSort(fromAddons.slice(), { name: MV.cleanTitle(it.name) || it.name, alt: it.orig || '', year: it.year || '' }).map(function (x) { return x.url; }).slice(0, 6);
+        it.alts = (it.alts || []).concat(extra.filter(function (u) { return (it.alts || []).indexOf(u) < 0 && u !== url; }));
+        alts = alts.concat(extra.filter(function (u) { return alts.indexOf(u) < 0 && u !== url; }));
+      }
+      if (P.askSource === true && alts.length && !/^stalker:/.test(url)) {
         sourcePick(it, [url].concat(alts)).then(function (r) { launch({ queue: [q(it, { url: r.url, alts: r.alts })], index: 0, live: false, startMs: prog ? prog.pos : 0 }, { item: it }); }).catch(function () {});
         return;
       }
@@ -2793,7 +2803,7 @@
     };
     if (it.ia) { MV.toast('Preparando película…'); MV.archiveUrl(it).then(go).catch(function (e) { MV.toast(e.message); }); }
     else if (it.url) go(it.url);
-    else if (it.st && MV.stremioPick && (MV.stAlt(it.st.id, it._meta && it._meta.imdb), true)) MV.stremioPick(it.st.type, it.st.id, MV.cleanTitle(it.name) || it.name, false, false, { year: it.year || '', alt: it.orig || '', olang: it.olang || '' }).then(function (s) { if (s.ua) it.ua = s.ua; if (s.ref) it.ref = s.ref; it.alts = s.rest || []; go(s.url); }).catch(function (e) { if (e.message !== 'cancelado') MV.toast(e.message, 6000); });
+    else if (it.st && MV.stremioPick && (MV.stAlt(it.st.id, it._meta && it._meta.imdb), true)) MV.stremioPick(it.st.type, it.st.id, MV.cleanTitle(it.name) || it.name, false, false, { year: it.year || '', alt: it.orig || '', olang: it.olang || '' }).then(function (s) { it._stLid = s.lid; if (s.ua) it.ua = s.ua; if (s.ref) it.ref = s.ref; it.alts = s.rest || []; go(s.url); }).catch(function (e) { if (e.message !== 'cancelado') MV.toast(e.message, 6000); });
     else MV.toast('Este contenido ya no está disponible en tus listas');
   };
   /** Siguiente capítulo de un addon: se busca en el mismo addon que funcionó, con la misma fuente si está (sin preguntar). */
@@ -2963,6 +2973,8 @@
     });
     if (r && r.replaced) { ctx = replaced; replaced = null; if (!ctx) return; }
     else { if (!playing) return; ctx = playing; playing = null; }
+    // El addon que te funcionó (viste más de un minuto) va primero la próxima vez
+    if (ctx.item && ctx.item._stLid && r && r.position > 60000) try { var wl = MV.load('stWorkedLid', {}) || {}; wl[ctx.item._stLid] = Date.now(); MV.save('stWorkedLid', wl); } catch (e) {}
     if (MV.ach) try { MV.ach.onWatched(ctx, r || {}); } catch (e) {}
     MV.kidsSessionEnd();
     if (ctx.noRecord) { MV.rerender(); return; }
@@ -3287,7 +3299,7 @@
     stPrefSet: function (id) { P.stPref = id || ''; MV.savePrefs(); var l = MV.stPrefList && MV.stPrefList(); MV.toast(l ? 'Se reproducirá primero desde ' + l.name : 'Se mostrará la lista de enlaces para elegir'); MV.rerender(); },
     showHidden: function () { MV._showHidden = !MV._showHidden; MV.rerender(); },
     srcPick: function (i) { if (MV._srcPick) MV._srcPick(i); },
-    askSrcToggle: function (_, el) { P.askSource = P.askSource === false; MV.savePrefs(); if (el) el.classList.toggle('on', P.askSource !== false); MV.toast(P.askSource !== false ? 'Antes de reproducir podrás elegir la fuente' : 'Se reproducirá solo con el mejor enlace'); },
+    askSrcToggle: function (_, el) { P.askSource = P.askSource !== true; MV.savePrefs(); if (el) el.classList.toggle('on', P.askSource === true); MV.toast(P.askSource === true ? 'Antes de reproducir podrás elegir la fuente' : 'Se reproducirá solo con el mejor enlace'); },
     stDeepToggle: function (_, el) {
       P.stDeep = P.stDeep === false; MV.savePrefs(); if (el) el.classList.toggle('on', P.stDeep !== false);
       MV.toast(P.stDeep !== false ? 'Los addons se completarán en segundo plano (puede tardar unos minutos)' : 'Los addons cargarán solo lo principal');

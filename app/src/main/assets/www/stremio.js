@@ -247,7 +247,7 @@
     var k = type + '|' + id + '|' + (only || ''), c = ST_MEM[k];
     if (c && Date.now() - c.t < 15 * 60e3) return c.p;
     var p = rawStreams(type, id, only).then(function (st) {
-      if (st.length) return st;
+      if (st.length) { (ST_MEM[k] || {}).v = st; return st; }
       return altId(type, id).then(function (a) { return a && a !== id ? rawStreams(type, a, only).then(function (r) { if (!r.length) r.failed = (r.failed || 0) + (st.failed || 0); return r; }) : st; });
     });
     ST_MEM[k] = { t: Date.now(), p: p };
@@ -256,6 +256,8 @@
     var ks = Object.keys(ST_MEM); if (ks.length > 60) delete ST_MEM[ks[0]];
     return p;
   };
+  /** Enlaces de los addons ya listos en memoria (sin esperar): para sumarlos como respaldo a una película de tus listas. */
+  MV.stCached = function (type, id) { var c = ST_MEM[type + '|' + id + '|']; return c && c.v && Date.now() - c.t < 15 * 60e3 ? c.v : null; };
   /** Pide los enlaces en segundo plano (al abrir la ficha), para que al darle Reproducir ya estén. */
   var PF = 0;
   MV.stremioPrefetch = function (type, id) { if (!id || !lists().length || PF) return; PF = 1; MV.stremioStreams(type, id).catch(function () {}).then(function () { PF = 0; }); };
@@ -294,9 +296,9 @@
         var r = got.filter(Boolean).reduce(function (a, b) { return a.concat(b); }, []).sort(function (a, b) { return score(a) - score(b); });
         r.failed = failed + got.filter(function (g) { return g === null; }).length; resolve(r);
       }
-      var soft = setTimeout(function () { if (got.some(function (g) { return g && g.length; })) out(); }, 5000);
+      var soft = setTimeout(function () { if (got.some(function (g) { return g && g.length; })) out(); }, 5000), early = 0;
       if (!left) out();
-      jobs.forEach(function (j, i) { j.then(function (r) { got[i] = r || []; if (--left === 0) out(); }); });
+      jobs.forEach(function (j, i) { j.then(function (r) { got[i] = r || []; if (--left === 0) out(); else if (r && r.length && !early) early = setTimeout(out, 1200); }); });
     });
   };
 
@@ -333,10 +335,31 @@
     if (opts.year) { var ys = (txt.match(/\b(19|20)\d{2}\b/g) || []).map(Number); if (ys.length && !ys.some(function (y) { return Math.abs(y - +opts.year) <= 1; })) return false; }
     return true;
   }
+  /** Calidad pensada para arrancar rápido y sin trabarse en el TV: 1080p primero, luego 720p; 4K y cámaras al final. */
+  function qRank(x) {
+    var t = (x.src + ' ' + x.title + ' ' + x.url).toLowerCase();
+    if (/\b(cam|camrip|hdcam|telesync|\bts\b|tc)\b/.test(t)) return 6;
+    if (/1080p|fhd/.test(t)) return 0;
+    if (/720p/.test(t)) return 1;
+    if (/2160p|\b4k\b|uhd/.test(t)) return 3;
+    if (/480p|360p|\bsd\b/.test(t)) return 4;
+    return 2;
+  }
+  function extRank(x) { var u = x.url.toLowerCase().split('?')[0]; return /\.(mp4|m3u8)$/.test(u) ? 0 : /\.(mkv|webm|ts)$/.test(u) ? 1 : 2; }
+  /** El mejor enlace para reproducir solo: tu idioma, del título correcto, buena calidad y formato que abre rápido;
+      también cuenta la fuente que ya te funcionó antes. */
+  MV.stAutoSort = function (st, opts, anime) {
+    var rank = { lat: 0, es: 1, sub: 2, '': 3, cast: 4 }, okL = MV.load('stWorkedLid', {}) || {};
+    return st.map(function (x, i) {
+      var l = rank[MV.stLang(x)], other = titleMatch(x, opts) ? 0 : 1;
+      return { x: x, k: other * 1000 + l * 100 + qRank(x) * 10 + extRank(x) * 2 - (okL[x.lid] ? 1 : 0), i: i };
+    }).sort(function (a, b) { return a.k - b.k || a.i - b.i; }).map(function (o) { return o.x; });
+  };
   MV.stremioPick = function (type, id, title, showAll, skipPref, opts) {
     if (opts && !opts.name) opts.name = title;
     // Por defecto se muestra siempre la lista de enlaces para elegir (Ajustes › Reproductor › Elegir de dónde reproducir)
-    var ask = S.prefs.askSource !== false;
+    // Por defecto arranca solo con el mejor enlace (de todas tus fuentes); solo pregunta si lo activas en Ajustes
+    var ask = S.prefs.askSource === true || !!showAll;
     var pref = !ask && !showAll && !skipPref && MV.stPrefList();
     MV.toast(pref ? 'Buscando en ' + (pref.name || 'tu addon preferido') + '…' : 'Buscando enlaces en tus addons…', 3000);
     MV._stTorrents = 0;
@@ -383,7 +406,13 @@
       function withRest(x) { x.rest = st.filter(function (y) { return y !== x && !y._other; }).map(function (y) { return y.url; }).slice(0, 8); return x; }
       // El addon preferido va primero en la lista
       if (S.prefs.stPref) st = st.filter(function (x) { return x.lid === S.prefs.stPref; }).concat(st.filter(function (x) { return x.lid !== S.prefs.stPref; }));
-      if (!ask && st.length === 1 && !st[0]._other) return withRest(st[0]);
+      if (!ask) {
+        // Automático: el mejor primero y el resto de respaldo (si el primero no abre, el reproductor sigue solo con el siguiente)
+        st = MV.stAutoSort(st, opts, anime);
+        var best = withRest(st[0]); best.rest = st.slice(1).filter(function (y) { return !y._other; }).map(function (y) { return y.url; }).slice(0, 10);
+        MV.toast('Reproduciendo · ' + (st[0].src || 'mejor enlace'), 2000);
+        return best;
+      }
       return new Promise(function (resolve, reject) {
         MV._stPick = function (i) { MV.closeModal(true); resolve(withRest(st[+i])); };
         MV.modal('<h2>Elige el enlace</h2><p class="muted">' + st.length + ' opciones de tus addons para “' + esc(title) + '”.</p><div class="stpick">' +
