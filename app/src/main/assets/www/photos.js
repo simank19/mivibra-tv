@@ -236,6 +236,14 @@
       '<div class="phwt"><b>Tus fotos</b><span>' + list.length.toLocaleString('es-CO') + (list.length === 1 ? ' foto' : ' fotos') + '</span>' +
       '<div class="btns"><button class="btn ghost sm f" data-act="nav" data-arg="photos">Ver todas</button><button class="btn ghost sm f" data-act="photoAdd">Agregar</button></div></div></section>';
   };
+  // Recuadro pequeño junto a deportes y la hora (la foto se ve grande y va cambiando)
+  MV.photoTile = function () {
+    var list = allPhotos();
+    if (!list.length) return '<section class="vtile vphoto empty" aria-label="Fotos"><b>Tus fotos</b><span>De la galería, una USB, Drive, MEGA o el celular</span><button class="btn sm f" data-act="photoAdd">Agregar fotos</button></section>';
+    setTimeout(widgetStart, 50);
+    return '<section class="vtile vphoto" aria-label="Fotos"><button class="phwf f" data-act="photoView" data-arg="0" aria-label="Ver fotos en pantalla completa"><img class="a on" alt=""><img class="b" alt=""><span class="cap"></span></button>' +
+      '<div class="vph-b"><b>Tus fotos</b><span>' + list.length.toLocaleString('es-CO') + (list.length === 1 ? ' foto' : ' fotos') + '</span><button class="vph-all f" data-act="nav" data-arg="photos" aria-label="Ver todas las fotos">Ver todas</button></div></section>';
+  };
   function widgetStart() {
     clearInterval(wT);
     var fr = document.querySelector('.phwf'); if (!fr) return;

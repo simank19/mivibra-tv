@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Fútbol playa · MiVibra Movimiento</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#1d1f24;color:#fff;font-family:Manrope,Inter,system-ui,sans-serif}
+canvas{display:block}
+.glass{background:rgba(24,26,30,.6);border:1px solid rgba(255,255,255,.22);border-radius:20px;box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 14px 34px -14px rgba(0,0,0,.6)}
+html:not(.q0) .glass{backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+html.q0 .glass{background:rgba(24,26,30,.82)}
+.ui{position:fixed;z-index:5}
+small{display:block;font-size:11px;letter-spacing:.2em;font-weight:800;color:#D6D9DC}
+#hud{left:20px;top:18px;padding:10px 16px}#hud b{font-size:20px}
+#score{left:50%;top:16px;transform:translateX(-50%);padding:10px 16px;display:grid;grid-template-columns:auto auto auto;gap:6px 12px;align-items:center}
+#score .nm{font-weight:800;font-size:16px;display:flex;align-items:center;gap:8px}#score .nm i{width:10px;height:10px;border-radius:50%}
+#score .shots{display:flex;gap:6px}#score .shots span{width:20px;height:20px;border-radius:50%;border:2px solid rgba(255,255,255,.35);display:grid;place-items:center;font-size:12px;font-weight:900}
+#score .shots span.g{background:#34D399;border-color:#34D399;color:#0b2a1f}#score .shots span.x{background:#F43F5E;border-color:#F43F5E}
+#score .tot{font-size:30px;font-weight:900;min-width:40px;text-align:center}
+#cue{left:50%;top:132px;transform:translateX(-50%);padding:12px 22px;font-size:24px;font-weight:800;white-space:nowrap;display:none}
+#cue.on{display:block}#cue.hot{background:rgba(255,106,61,.88);border-color:#FFB13D}
+#big{left:0;right:0;top:24%;text-align:center;display:none;pointer-events:none}#big.on{display:block}
+#big b{display:block;font-size:110px;font-weight:900;text-shadow:0 6px 0 #FF6A3D,0 18px 50px rgba(0,0,0,.6)}
+#big span{display:inline-block;margin-top:6px;font-size:24px;font-weight:800;padding:8px 18px;border-radius:99px;background:rgba(24,26,30,.7)}
+#meter{left:20px;bottom:20px;width:290px;padding:12px 16px;display:none}#meter.on{display:block}
+#meter .bar{height:14px;border-radius:99px;background:rgba(255,255,255,.12);margin-top:8px;overflow:hidden}
+#meter .bar i{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,#34D399,#FFB13D,#FF6A3D)}
+#phone{right:20px;bottom:20px;width:170px;padding:10px 12px;display:none}#phone.on{display:block}
+#phone svg{display:block;margin:4px auto 0}#phone path,#phone circle{stroke:#34D399;stroke-width:6;stroke-linecap:round;fill:none}
+#connect{right:20px;top:110px;width:300px;padding:14px;display:none;text-align:center}#connect.on{display:block}
+#connect img{width:160px;height:160px;border-radius:14px;background:#fff;padding:6px;display:block;margin:8px auto}
+#connect .code{font-size:32px;font-weight:900;letter-spacing:.16em}
+#connect .st{font-size:14px;margin-top:6px;color:#E4E6E8}#connect .st.ok{color:#34D399;font-weight:800}
+#connect i{display:block;font-size:12px;color:#C9CDD2;margin-top:8px;font-style:normal;line-height:1.4}
+#loading{left:50%;top:50%;transform:translate(-50%,-50%);padding:18px 26px;font-weight:800;font-size:18px}
+#keys{left:50%;bottom:22px;transform:translateX(-50%);padding:8px 14px;font-size:13px;color:#E4E6E8;display:none}#keys.on{display:block}
+#credit{position:fixed;left:50%;bottom:6px;transform:translateX(-50%);font-size:11px;color:rgba(255,255,255,.75);z-index:5;white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+</style>
+</head>
+<body>
+<div id="hud" class="ui glass"><small>MIVIBRA MOVIMIENTO · PLAYA</small><b>Fútbol playa · penales</b></div>
+<div id="score" class="ui glass"><span class="nm"><i id="c0"></i><span id="n0">Tú</span></span><span class="shots" id="s0"></span><span class="tot" id="t0">0</span><span class="nm"><i id="c1"></i><span id="n1">MiVibra</span></span><span class="shots" id="s1"></span><span class="tot" id="t1">0</span></div>
+<div id="cue" class="ui glass"></div>
+<div id="big" class="ui"><b id="bigT"></b><span id="bigS"></span></div>
+<div id="meter" class="ui glass"><small id="mt">FUERZA</small><div class="bar"><i id="mbar"></i></div></div>
+<div id="phone" class="ui glass"><small>CÁMARA DEL CELULAR</small><svg width="146" height="170" viewBox="0 0 150 176"><g id="stick"></g></svg></div>
+<div id="connect" class="ui glass"><small>JUEGA CON TU CUERPO · HASTA 2</small><img id="qr" alt="Código QR para conectar el celular"><div class="code" id="code">······</div><div class="st" id="cst">Preparando…</div><i>Para patear: patea de verdad (hacia el lado donde quieres que vaya). Para atajar: muévete a los lados, tírate y levanta los brazos.</i></div>
+<div id="keys" class="ui glass"></div>
+<div id="loading" class="ui glass">Preparando la playa…</div>
+<div id="credit">Avatares con piezas CC0 de Quaternius · público: Mike Koenig y jordiroquer (CC BY 3.0) · aves: swiftoid (CC0)</div>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@2.0.4/dist/qrcode.js"></script>
+<script src="../mano.js"></script>
+<script type="importmap">{"imports":{"three":"../vendor/three-0.183.2/three.module.min.js","three/addons/":"../vendor/three-0.183.2/addons/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { loadAnims, Animator } from '../anim.js';
+import { build as buildAvatar, decode as decodeAvatar, DEFAULT, PRESETS } from '../avatar.js';
+import { Espejo, celebrate, facesCam, portraitSnap, reachArm } from '../espejo.js';
+import { makeSound } from '../sonido.js';
+import { buildBeach, BEACH_FX, readSaved, fromApp, bodyReader, tex } from '../playa.js';
+
+const $ = (id) => document.getElementById(id);
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x)), lerp = (a, b, k) => a + (b - a) * k, rnd = (a, b) => a + Math.random() * (b - a);
+const IS_TV = /Tizen|Web0S|webOS|SMART-TV|SmartTV|NetCast|HbbTV|BRAVIA|AFT[A-Z]|Android TV|GoogleTV|MiTV|Mi TV|TCL|Hisense|CrKey/i.test(navigator.userAgent) || (/Android/i.test(navigator.userAgent) && !/Mobile/i.test(navigator.userAgent) && screen.width >= 1280);
+const QP = new URLSearchParams(location.search).get('q'); const Q = QP !== null ? clamp(+QP | 0, 0, 2) : IS_TV ? 0 : 2;
+document.documentElement.classList.toggle('q0', Q === 0);
+const R = new THREE.WebGLRenderer({ antialias: Q === 2, powerPreference: 'high-performance' });
+R.setPixelRatio(Math.min(devicePixelRatio, Q === 2 ? 1.75 : 1, (Q === 0 ? 960 : 2000) / innerWidth)); R.setSize(innerWidth, innerHeight);
+R.toneMapping = THREE.NeutralToneMapping; R.toneMappingExposure = 1.05; R.shadowMap.enabled = Q > 0; R.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.prepend(R.domElement);
+const S = new THREE.Scene();
+const cam = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.05, 400);
+addEventListener('resize', () => { R.setSize(innerWidth, innerHeight); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
+
+// ---------- Playa, arco y balón (medidas de fútbol playa: arco de 5,5 × 2,2 m, penal a 9 m) ----------
+const GZ = -9, GW = 5.5, GH = 2.2;
+const BEACH = buildBeach(S, Q, { ads: [[0, -14, 26, 0], [-13, -4, 18, Math.PI / 2], [13, -4, 18, -Math.PI / 2]], crowd: [[-12, -18, 12, -15.5, 70], [-18, -12, -14.5, 6, 40], [14.5, -12, 18, 6, 40]], seaZ: 40 });
+const M = BEACH.M;
+const postM = M('#ffffff');
+[-1, 1].forEach((s) => { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, GH, 10), postM); p.position.set(s * GW / 2, GH / 2, GZ); p.castShadow = Q > 0; S.add(p); });
+const cross = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, GW + 0.12, 10), postM); cross.rotation.z = Math.PI / 2; cross.position.set(0, GH, GZ); S.add(cross);
+const netTex = tex(128, 64, (g, w, h) => { g.clearRect(0, 0, w, h); g.strokeStyle = 'rgba(255,255,255,.8)'; g.lineWidth = 2; for (let i = 0; i <= w; i += 8) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, h); g.stroke(); } for (let j = 0; j <= h; j += 8) { g.beginPath(); g.moveTo(0, j); g.lineTo(w, j); g.stroke(); } });
+netTex.wrapS = netTex.wrapT = THREE.RepeatWrapping; netTex.repeat.set(6, 3);
+const netM = new THREE.MeshBasicMaterial({ map: netTex, transparent: true, side: THREE.DoubleSide, depthWrite: false });
+const netBack = new THREE.Mesh(new THREE.PlaneGeometry(GW, GH), netM); netBack.position.set(0, GH / 2, GZ - 1.2); S.add(netBack);
+const netTop = new THREE.Mesh(new THREE.PlaneGeometry(GW, 1.2), netM); netTop.rotation.x = Math.PI / 2; netTop.position.set(0, GH, GZ - 0.6); S.add(netTop);
+[-1, 1].forEach((s) => { const n = new THREE.Mesh(new THREE.PlaneGeometry(1.2, GH), netM); n.rotation.y = Math.PI / 2; n.position.set(s * GW / 2, GH / 2, GZ - 0.6); S.add(n); });
+// líneas en la arena (cinta azul) y punto penal
+const lineM = new THREE.MeshBasicMaterial({ color: '#2F7DF6' });
+const line = (w, d, x, z) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), lineM); m.rotation.x = -Math.PI / 2; m.position.set(x, 0.015, z); S.add(m); };
+line(26, 0.1, 0, GZ); line(0.1, 9, -13, GZ + 4.5); line(0.1, 9, 13, GZ + 4.5); line(26, 0.1, 0, 0.5);
+const spot = new THREE.Mesh(new THREE.CircleGeometry(0.15, 16), new THREE.MeshBasicMaterial({ color: '#ffffff' })); spot.rotation.x = -Math.PI / 2; spot.position.set(0, 0.016, 0); S.add(spot);
+const ballTex = tex(256, 128, (g, w, h) => { g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); const cols = ['#FF6A3D', '#2F7DF6', '#FFB13D', '#8E5CF7']; for (let i = 0; i < 12; i++) { g.fillStyle = cols[i % 4]; g.beginPath(); const x = (i % 6) * w / 6 + 20, y = i < 6 ? h * 0.3 : h * 0.72; for (let k = 0; k < 5; k++) { const a = k / 5 * Math.PI * 2; g.lineTo(x + Math.cos(a) * 14, y + Math.sin(a) * 14); } g.fill(); } });
+const BR = 0.11, ball = new THREE.Mesh(new THREE.SphereGeometry(BR, 20, 14), M('#ffffff', { map: ballTex })); ball.castShadow = Q > 0; S.add(ball);
+const ballSh = new THREE.Mesh(new THREE.CircleGeometry(0.12, 14), new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.3, depthWrite: false })); ballSh.rotation.x = -Math.PI / 2; S.add(ballSh);
+// mira para apuntar con el control
+const aimM = new THREE.Mesh(new THREE.RingGeometry(0.16, 0.22, 24), new THREE.MeshBasicMaterial({ color: '#FFB13D', toneMapped: false, depthTest: false })); aimM.renderOrder = 3; aimM.visible = false; S.add(aimM);
+
+// ---------- Sonido ----------
+const SND = makeSound({ files: ['ovacion', 'aplausos', 'aves', 'estadio-ambiente'], fx: BEACH_FX });
+let sndOn = false;
+function sndStart() { const r = SND.init(); if (!sndOn) { sndOn = true; SND.loop('olas', 0.35); SND.loop('aves', 0.18); SND.loop('estadio-ambiente', 0.12); } return r; }
+
+// ---------- Avatares ----------
+const P = [{ name: 'Tú', av: null, slot: 0 }, { name: 'MiVibra', av: null, slot: 1, cpu: true }];
+let ANIMS = null, myRec = null;
+async function makeAv(rec) { const a = await buildAvatar(rec, { lite: Q === 0 }); a.scene.traverse((o) => { if (o.isMesh) o.castShadow = Q > 0; }); S.add(a.scene); if (ANIMS) a.anim = new Animator(a, ANIMS); return a; }
+async function loadAvatars() {
+  const acc = await fromApp(); myRec = acc && acc.vrm ? decodeAvatar(acc.vrm) : null;
+  if (!myRec) { const s = await readSaved(); myRec = s && s.vrm ? decodeAvatar(s.vrm) : null; }
+  if (!myRec) myRec = Object.assign({}, DEFAULT, { name: 'Tú' });
+  ANIMS = await loadAnims().catch(() => null);
+  P[0].av = await makeAv(myRec); P[0].name = myRec.name || 'Tú';
+  P[1].av = await makeAv(PRESETS[4]); P[1].rec = PRESETS[4];
+}
+
+// ---------- Cuerpo (celular) ----------
+const BODY = [bodyReader(), bodyReader()], EJ = [new Espejo(), new Espejo()], CELS = [{}, {}];
+MVLink.onPose((l, ts, d, slot) => { if (slot < 2 && l) { BODY[slot].feed(l, ts); EJ[slot].feed(d); } });
+const camOf = (k) => !P[k].cpu && MVLink.fresh(P[k].slot);
+
+// ---------- Estado ----------
+// Tanda: 5 penales cada uno, alternando quién patea; si empatan, muerte súbita.
+const G = { state: 'load', mode: 'cpu', shots: [[], []], kicker: 0, t: 0, paused: false, aim: { x: 0, y: 0.8, phase: 0, lockX: null, pow: 0 }, flight: null, keeper: { x: 0, vx: 0, dive: 0, reachY: 1.6, guess: 0 }, res: null, lvl: 1 };
+const LVL = [{ name: 'Fácil', save: 0.25, err: 0.2 }, { name: 'Normal', save: 0.42, err: 0.12 }, { name: 'Difícil', save: 0.58, err: 0.07 }];
+function keeperOf() { return 1 - G.kicker; }
+function goals(k) { return G.shots[k].filter(Boolean).length; }
+function drawScore() {
+  [0, 1].forEach((k) => { $('n' + k).textContent = P[k].name; $('c' + k).style.background = MVLink.COLORS[k]; $('t' + k).textContent = goals(k);
+    const n = Math.max(5, G.shots[0].length, G.shots[1].length); let h = ''; for (let i = 0; i < n; i++) { const v = G.shots[k][i]; h += `<span class="${v === undefined ? '' : v ? 'g' : 'x'}">${v === undefined ? '' : v ? '✓' : '✕'}</span>`; } $('s' + k).innerHTML = h; });
+}
+function decided() {
+  const a = G.shots[0], b = G.shots[1], ga = goals(0), gb = goals(1);
+  if (a.length <= 5 && b.length <= 5) { const ra = 5 - a.length, rb = 5 - b.length; if (ga + ra < gb || gb + rb < ga) return true; if (a.length === 5 && b.length === 5) return ga !== gb; return false; }
+  return a.length === b.length && ga !== gb;
+}
+
+// ---------- Interfaz ----------
+function cue(t, hot) { $('cue').textContent = t; $('cue').classList.toggle('hot', !!hot); $('cue').classList.add('on'); clearTimeout(cue.h); cue.h = setTimeout(() => $('cue').classList.remove('on'), 3200); }
+function big(t, s, ms) { $('bigT').textContent = t; $('bigS').textContent = s || ''; $('big').classList.add('on'); clearTimeout(big.h); big.h = setTimeout(() => $('big').classList.remove('on'), ms || 2000); }
+function keys(t) { $('keys').textContent = t || ''; $('keys').classList.toggle('on', !!t); }
+
+// ---------- Ronda ----------
+function nextShot() {
+  if (decided()) return endGame();
+  const k = G.shots[0].length <= G.shots[1].length ? 0 : 1; G.kicker = k; const kp = keeperOf();
+  G.state = 'aim'; G.t = 0; G.res = null; G.flight = null; Object.assign(G.aim, { x: 0, y: 0.9, phase: Math.random() * 6, lockX: null, pow: 0 }); Object.assign(G.keeper, { x: 0, vx: 0, dive: 0, reachY: 1.6, guess: rnd(-1, 1) });
+  ball.position.set(0, BR, 0); G.kickFrom = performance.now() + 600;
+  drawScore(); MVHand.pauseEnabled = true;
+  const kickHuman = !P[k].cpu, keepHuman = !P[kp].cpu;
+  if (kickHuman) { cue(camOf(k) ? P[k].name + ': ¡patea! (hacia el lado donde quieres que vaya)' : P[k].name + ': ← → apunta y OK; luego OK para la fuerza', true); MVLink.say('¡Te toca patear! Patea de verdad', true, P[k].slot); }
+  else cue(P[k].name + ' va a patear… ' + (camOf(kp) ? '¡muévete y atájala!' : '¡OK o ← → para lanzarte!'));
+  if (keepHuman) MVLink.say('¡Ataja! Muévete a los lados y levanta los brazos', true, P[kp].slot);
+  keys(kickHuman && !camOf(k) ? '← → apuntar · OK fijar · OK patear' : keepHuman && !camOf(kp) ? '← → lanzarte hacia ese lado' : '');
+}
+function shoot(tx, ty, pow) {
+  const from = new THREE.Vector3(0, BR, 0), T = lerp(0.95, 0.55, pow), to = new THREE.Vector3(tx, ty, GZ);
+  G.flight = { from, to, T, t: 0, saved: false, out: Math.abs(tx) > GW / 2 - 0.05 || ty > GH - 0.05 };
+  G.state = 'flight'; G.t = 0; SND.play('patada', 1, rnd(0.95, 1.05)); keys('');
+  // la máquina de arquero adivina (más fácil de engañar en las esquinas)
+  if (P[keeperOf()].cpu) { const lv = LVL[G.lvl]; const right = Math.random() < lv.save + 0.25 ? Math.sign(tx || 1) : Math.sign(rnd(-1, 1)); G.keeper.guess = right * (Math.abs(tx) > 1.6 ? rnd(1.2, 2.2) : rnd(0.2, 1.4)); G.keeper.cpuReach = Math.random() < lv.save ? 1.05 : 0.7; }
+}
+function result(goal, why) {
+  G.state = 'result'; G.t = 0; G.shots[G.kicker].push(goal); drawScore();
+  const k = G.kicker, kp = keeperOf(); G.res = { goal, by: goal ? k : kp };
+  CELS[G.res.by].t = 0; CELS[G.res.by].style = null;
+  if (goal) { big('¡GOOOL!', P[k].name + (why ? ' · ' + why : ''), 2200); SND.play('ovacion', 0.9); MVLink.say('¡Gol!', true, P[k].slot); if (!P[kp].cpu) MVLink.say('Te hicieron gol', false, P[kp].slot); }
+  else { big(why === 'Afuera' ? '¡AFUERA!' : '¡ATAJADA!', why === 'Afuera' ? P[k].name + ' la mandó afuera' : P[kp].name + ' la sacó', 2200); SND.play(why === 'Afuera' ? 'arena' : 'aplausos', 0.8); if (!P[kp].cpu && why !== 'Afuera') MVLink.say('¡Atajada!', true, P[kp].slot); }
+  setTimeout(nextShot, 3200);
+}
+function endGame() {
+  G.state = 'end'; MVHand.pauseEnabled = false; keys(''); const w = goals(0) > goals(1) ? 0 : 1; G.win = w; CELS[w].t = 0; CELS[w].style = null;
+  const title = P[w].cpu ? 'Gana MiVibra' : (G.mode === 'cpu' ? '¡Ganaste la tanda!' : '¡Gana ' + P[w].name + '!');
+  big(title, '¡Celebra! Tu avatar baila contigo', 2400); SND.play('ovacion'); SND.play('aplausos', 0.7, 1, 1);
+  const slots = [0, 1].filter((k) => !P[k].cpu && MVLink.players[P[k].slot]).map((k) => P[k].slot);
+  setTimeout(() => MVPhoto.take({ title, sub: 'Fútbol playa · penales ' + goals(0) + ' – ' + goals(1), slots: !P[w].cpu && MVLink.players[P[w].slot] ? [P[w].slot] : slots.slice(0, 1), snap: () => portraitSnap(R, S, P[w].av), done: endMenu }), 1800);
+}
+function endMenu() {
+  MVHand.menu({ kicker: 'FIN DE LA TANDA', title: goals(0) + ' – ' + goals(1), sub: P[G.win].name + ' gana', dim: 0.25, items: [{ id: 'again', label: 'Revancha', icon: '↻' }, { id: 'menu', label: 'Menú principal', icon: '☰' }, { id: 'edit', label: 'Cambiar mi avatar', icon: '☺' }, { id: 'exit', label: 'Salir', icon: '✕' }], back: 'menu', onPick: menuPick });
+}
+
+// ---------- Escena por cuadro ----------
+const tmp = new THREE.Vector3();
+function kickPose(av, u) {   // pierna derecha atrás → adelante
+  const N = av.humanoid.getNormalizedBoneNode, a = u < 0.5 ? lerp(0, 0.9, u / 0.5) : lerp(0.9, -1.3, (u - 0.5) / 0.5);
+  N('rightUpperLeg').quaternion.setFromEuler(new THREE.Euler(a, 0, 0)); N('rightLowerLeg').quaternion.setFromEuler(new THREE.Euler(u < 0.5 ? 1.2 * u * 2 : lerp(1.2, 0.1, (u - 0.5) * 2), 0, 0));
+  N('leftUpperArm').quaternion.setFromEuler(new THREE.Euler(0, 0, -0.6)); N('rightUpperArm').quaternion.setFromEuler(new THREE.Euler(0, 0, 0.9));
+}
+function frameScene(dt, now) {
+  const k = G.kicker, kp = keeperOf(), A = P[k].av, K = P[kp].av; if (!A || !K) return;
+  BEACH.update(now / 1000);
+  // ---- pateador
+  let ax = 0, az = 1.6, run = false, kickU = -1;
+  if (G.state === 'flight' || G.state === 'result') { const u = G.flight ? clamp(G.flight.t / 0.25 + 0.5, 0, 1) : 1; az = 0.45; kickU = G.state === 'flight' && G.flight.t < 0.4 ? u : -1; }
+  else if (G.state === 'run') { const u = clamp(G.t / 0.7, 0, 1); az = lerp(1.9, 0.45, u); ax = lerp(-0.5, -0.25, u); run = true; }
+  else { az = 1.9; ax = -0.5; }
+  const celebK = G.state === 'result' && G.res && G.res.by === k, celebP = G.state === 'result' && G.res && G.res.by === kp;
+  const partyA = celebK || (G.state === 'end' && G.win === k);
+  A.scene.position.set(ax, 0, az); A.scene.rotation.y = lerp(A.scene.rotation.y, partyA ? 0 : Math.PI, 0.12);
+  if (A.anim) { A.anim.play(run ? 'Run' : 'Idle', { fade: 0.2 }); A.anim.update(dt); }
+  if (partyA) { celebrate(A, dt, camOf(k) ? EJ[P[k].slot] : null, CELS[k], facesCam(A.scene, cam)); }
+  else if (kickU >= 0) kickPose(A, kickU);
+  else if (camOf(k)) EJ[P[k].slot].apply(A, dt, { arms: 1, spine: 0.6, head: 1 }, facesCam(A.scene, cam));
+  A.update(dt);
+  // ---- arquero
+  const KP = G.keeper; let kx = KP.x;
+  K.scene.position.set(kx, 0, GZ + 0.35); K.scene.rotation.y = 0;
+  K.scene.rotation.z = lerp(K.scene.rotation.z, -KP.dive * 0.9, 0.25); K.scene.position.y = Math.abs(KP.dive) * 0.35;
+  if (K.anim) { K.anim.play('Idle', { fade: 0.2 }); K.anim.update(dt); }
+  if (celebP || (G.state === 'end' && G.win === kp)) { K.scene.rotation.z = lerp(K.scene.rotation.z, 0, 0.2); celebrate(K, dt, camOf(kp) ? EJ[P[kp].slot] : null, CELS[kp], facesCam(K.scene, cam)); }
+  else {
+    if (camOf(kp)) EJ[P[kp].slot].apply(K, dt, { arms: 1, spine: 0.7, head: 1 }, facesCam(K.scene, cam));
+    // manos hacia la pelota cuando viene
+    if (G.state === 'flight' && !camOf(kp)) { reachArm(K, 'left', ball.position, 0.9); reachArm(K, 'right', ball.position, 0.9); }
+  }
+  K.update(dt);
+  // ---- balón
+  if (G.state === 'flight' && G.flight) {
+    const F = G.flight, u = clamp(F.t / F.T, 0, 1);
+    if (!F.saved) { ball.position.lerpVectors(F.from, F.to, u); ball.position.y = lerp(F.from.y, F.to.y, u) + Math.sin(u * Math.PI) * 0.6 * (1 - F.to.y / 3); ball.rotation.x -= dt * 18; }
+    else { F.vy -= 9.8 * dt; ball.position.addScaledVector(F.v, dt); ball.position.y = Math.max(BR, ball.position.y + F.vy * dt); F.v.multiplyScalar(0.985); }
+  }
+  ballSh.position.set(ball.position.x, 0.02, ball.position.z); ballSh.material.opacity = clamp(0.35 - ball.position.y * 0.1, 0.08, 0.35);
+}
+function camera(dt) {
+  const kp = keeperOf(), keepHuman = !P[kp].cpu && P[G.kicker].cpu;
+  let p, l;
+  if (G.state === 'menu' || G.state === 'load') { const a = performance.now() / 7000; p = new THREE.Vector3(Math.sin(a) * 9, 3.2, -2 + Math.cos(a) * 9); l = new THREE.Vector3(0, 1, GZ + 2); }
+  else if (G.state === 'end' && P[G.win].av) { const s = P[G.win].av.scene.position; p = new THREE.Vector3(s.x + 0.6, 1.5, s.z + (s.z < -5 ? 3 : 3)); l = new THREE.Vector3(s.x, 1.0, s.z); }
+  else if (keepHuman) { p = new THREE.Vector3(G.keeper.x * 0.3, 2.3, GZ - 4.2); l = new THREE.Vector3(0, 0.9, 0); }
+  else { p = new THREE.Vector3(0.6, 1.7, 4.4); l = new THREE.Vector3(0, 1.0, GZ); }
+  const k = 1 - Math.exp(-dt * 3); cam.position.lerp(p, k); cam.userData.l = (cam.userData.l || l.clone()).lerp(l, k); cam.lookAt(cam.userData.l);
+}
+
+// ---------- Lógica por cuadro ----------
+function logic(dt) {
+  G.t += dt; const k = G.kicker, kp = keeperOf(), KP = G.keeper;
+  if (G.state === 'aim') {
+    if (P[k].cpu) { if (G.t > 1.6) { G.state = 'run'; G.t = 0; const lv = LVL[G.lvl]; G.pending = { x: rnd(-2.4, 2.4) * (Math.random() < 0.6 ? 1 : 0.5), y: rnd(0.25, 1.9), pow: rnd(0.45, 0.9) }; if (Math.random() < lv.err) { G.pending.x = Math.sign(G.pending.x || 1) * rnd(2.9, 3.6); } } }
+    else if (camOf(k)) {
+      const B = BODY[P[k].slot];
+      if (B.kickAt > (G.kickFrom || 0)) { G.pending = { x: clamp(B.kickSide * 1.8 + rnd(-0.3, 0.3), -3.2, 3.2), y: clamp(0.2 + B.kickPow * 1.7, 0.15, 2.5), pow: B.kickPow }; G.state = 'run'; G.t = 0; }
+      else if (G.t > 9) { G.pending = { x: rnd(-1.5, 1.5), y: 0.4, pow: 0.3 }; G.state = 'run'; G.t = 0; cue('Patada suave: patea más fuerte la próxima'); }
+    } else {
+      // control: la mira va y viene; OK la fija y después OK patea con la fuerza de la barra
+      if (G.aim.lockX === null) { G.aim.x = Math.sin(G.t * 1.6 + G.aim.phase) * 2.6; G.aim.y = 0.5 + (Math.sin(G.t * 2.3) + 1) * 0.6; }
+      else { G.aim.pow = (Math.sin(G.t * 3.2) + 1) / 2; $('mbar').style.width = Math.round(G.aim.pow * 100) + '%'; }
+      aimM.visible = true; aimM.position.set(G.aim.lockX ?? G.aim.x, G.aim.y, GZ + 0.05); $('meter').classList.toggle('on', G.aim.lockX !== null);
+    }
+  } else aimM.visible = false;
+  if (G.state === 'run' && G.t > 0.7) { const p = G.pending; shoot(p.x, p.y, p.pow); $('meter').classList.remove('on'); }
+  // arquero
+  if (G.state === 'aim' || G.state === 'run' || G.state === 'flight') {
+    if (camOf(kp)) { const B = BODY[P[kp].slot]; const tx = clamp(B.x * 0.85 + B.lean * 1.4, -2.7, 2.7); KP.x = lerp(KP.x, tx, 0.3); KP.dive = clamp(B.lean * 0.9, -1, 1); KP.reachY = B.armsUp ? 2.25 : B.oneUp ? 1.95 : 1.45; if (performance.now() - B.jumpAt < 500) KP.reachY += 0.35; }
+    else if (!P[kp].cpu) { KP.x = clamp(KP.x + KP.vx * dt, -2.7, 2.7); KP.vx *= 0.9; KP.dive = lerp(KP.dive, clamp(KP.vx / 4, -1, 1), 0.2); KP.reachY = 1.9; }
+    else if (G.state === 'flight' && G.flight.t > 0.12) { KP.x = lerp(KP.x, G.keeper.guess, 0.16); KP.dive = clamp((KP.x) / 2.2, -1, 1); KP.reachY = 2.1; }
+    else { KP.x = Math.sin(G.t * 2) * 0.25; KP.dive = 0; }
+  }
+  if (G.state === 'flight') {
+    const F = G.flight; F.t += dt;
+    if (!F.saved && F.t >= F.T) {
+      const bx = F.to.x, by = F.to.y, reach = P[kp].cpu ? (G.keeper.cpuReach || 0.9) : camOf(kp) ? 1.0 : 0.9;
+      const saved = !F.out && Math.abs(bx - KP.x) < reach + Math.abs(KP.dive) * 0.4 && by < KP.reachY + 0.2;
+      if (F.out) return result(false, 'Afuera');
+      if (saved) { F.saved = true; F.v = new THREE.Vector3(rnd(-2, 2), 0, 5); F.vy = 3; SND.play('toque'); return result(false); }
+      SND.play('red'); return result(true, Math.abs(bx) > 1.8 ? 'al ángulo' : '');
+    }
+  }
+}
+
+// ---------- Menús con la mano ----------
+function plsDraw() {}
+function startMenu() {
+  G.state = 'menu'; MVHand.pauseEnabled = false; $('connect').classList.add('on'); keys(''); const n = MVLink.count();
+  MVHand.menu({ kicker: 'MIVIBRA MOVIMIENTO · PLAYA', title: 'Fútbol playa', sub: 'Tanda de penales: pateas y atajas por turnos. ' + (n ? 'Celular conectado.' : 'Conecta el celular o usa el control.'),
+    items: [{ id: 'cpu', label: 'Penales contra MiVibra', icon: '▶' }, { id: 'two', label: '2 jugadores', icon: '⚔' }, { id: 'lvl', label: 'Dificultad: ' + LVL[G.lvl].name, icon: '★' }, { id: 'exit', label: 'Salir', icon: '✕' }], back: 'exit', onPick: menuPick });
+}
+function pause() { if (G.state === 'menu' || G.state === 'end' || MVHand.open) return; G.paused = true;
+  MVHand.menu({ kicker: 'EN PAUSA', title: 'Pausa', items: [{ id: 'resume', label: 'Continuar', icon: '▶' }, { id: 'again', label: 'Reiniciar', icon: '↻' }, { id: 'menu', label: 'Menú principal', icon: '☰' }, { id: 'exit', label: 'Salir', icon: '✕' }], back: 'resume', onPick: menuPick }); }
+async function setMode(mode) {
+  G.mode = mode; P[0].name = mode === 'two' ? 'Jugador 1' : (myRec && myRec.name) || 'Tú'; P[1].cpu = mode !== 'two'; P[1].name = mode === 'two' ? 'Jugador 2' : 'MiVibra';
+  const want = mode === 'two' ? PRESETS[0] : PRESETS[4]; if (P[1].rec !== want) { S.remove(P[1].av.scene); P[1].av = await makeAv(want); P[1].rec = want; }
+}
+function menuPick(id) {
+  G.paused = false;
+  if (id === 'resume') return;
+  if (id === 'lvl') { G.lvl = (G.lvl + 1) % 3; return startMenu(); }
+  if (id === 'two' && MVLink.count() < 2) { cue('Para 2 jugadores conecta 2 celulares con el mismo código', true); return startMenu(); }
+  if (id === 'menu') return startMenu();
+  if (id === 'cpu' || id === 'two' || id === 'again') {
+    sndStart(); $('connect').classList.remove('on'); $('loading').style.display = ''; $('loading').textContent = 'Preparando…';
+    setMode(id === 'again' ? G.mode : id).then(() => { $('loading').style.display = 'none'; BODY.forEach((b) => b.recenter()); G.shots = [[], []]; G.win = -1; SND.play('pito'); big('¡Penales!', '5 cada uno · ' + (G.mode === 'two' ? '2 jugadores' : 'contra MiVibra'), 1600); setTimeout(nextShot, 1500); });
+    return;
+  }
+  if (id === 'edit') { location.href = '../editor/' + location.search; return; }
+  if (id === 'exit') { if (window.parent !== window) window.parent.postMessage({ mv: 'close' }, '*'); else history.back(); }
+}
+MVHand.onPause = () => pause();
+addEventListener('keydown', (e) => {
+  if (MVHand.key(e)) { e.preventDefault(); return; }
+  if (e.key === 'Escape' || e.key === 'p' || e.key === 'MediaPlayPause') { pause(); e.preventDefault(); return; }
+  const k = G.kicker, kp = keeperOf(), ok = e.key === 'Enter' || e.key === ' ' || e.keyCode === 23;
+  if (G.state === 'aim' && !P[k].cpu && !camOf(k) && ok) {
+    if (G.aim.lockX === null) { G.aim.lockX = G.aim.x; G.t = 0; } else { G.pending = { x: G.aim.lockX, y: G.aim.y, pow: G.aim.pow }; G.state = 'run'; G.t = 0; }
+  }
+  if (!P[kp].cpu && !camOf(kp) && (G.state === 'run' || G.state === 'flight' || G.state === 'aim')) {
+    if (e.key === 'ArrowLeft') G.keeper.vx = -7; if (e.key === 'ArrowRight') G.keeper.vx = 7; if (ok) G.keeper.vx = Math.sign(G.keeper.x || rnd(-1, 1)) * 7;
+  }
+  e.preventDefault();
+});
+function stickDraw() {
+  const p = MVLink.players[0], l = p && p.lm; $('phone').classList.toggle('on', !!l && G.state !== 'menu'); if (!l) return;
+  const Pt = (i) => [15 + (1 - l[i][0]) * 120, 10 + l[i][1] * 160], Bn = [[1, 2], [1, 3], [3, 5], [2, 4], [4, 6], [1, 7], [2, 8], [7, 8], [7, 9], [9, 11], [8, 10], [10, 12]];
+  $('stick').innerHTML = Bn.filter(([a, b]) => l[a] && l[b] && l[a][2] > 0.4 && l[b][2] > 0.4).map(([a, b]) => { const q = Pt(a), r = Pt(b); return `<path d="M${q[0].toFixed(0)} ${q[1].toFixed(0)}L${r[0].toFixed(0)} ${r[1].toFixed(0)}"/>`; }).join('');
+}
+
+// ---------- Bucle ----------
+let last = performance.now(), sN = 0;
+function loop(now) {
+  requestAnimationFrame(loop);
+  let dt = Math.min(0.05, (now - last) / 1000); last = now; if (G.paused) dt = 0;
+  if (G.state !== 'menu' && G.state !== 'load' && G.state !== 'end') logic(dt);
+  if (G.state === 'end') G.t += dt;
+  frameScene(dt, now);
+  if ((sN++ % (Q === 0 ? 4 : 2)) === 0) stickDraw();
+  camera(dt || 0.016); R.render(S, cam);
+}
+MVLink.open((txt, ok) => { $('cst').textContent = txt; $('cst').classList.toggle('ok', !!ok); if (MVLink.code) { $('code').textContent = MVLink.code; if (!$('qr').src) $('qr').src = MVLink.qr(5); } });
+MVLink.onChange = () => { if (G.state === 'menu' && MVHand.open) startMenu(); };
+setTimeout(() => { if (MVLink.code) { $('code').textContent = MVLink.code; const q = MVLink.qr(5); if (q) $('qr').src = q; } }, 400);
+drawScore(); requestAnimationFrame(loop);
+loadAvatars().then(() => { $('loading').style.display = 'none'; startMenu(); }).catch((e) => { console.error(e); $('loading').textContent = 'No se pudo cargar el avatar'; });
+window.MVF = { G, P, BODY, pick: (id) => { MVHand.close(); menuPick(id); }, shoot, nextShot };
+</script>
+</body>
+</html>

@@ -33,8 +33,9 @@ const GROUP = {
   spine: ['spine', 'chest', 'upperChest', 'neck'], head: ['head'],
   arms: ['leftShoulder', 'rightShoulder', 'leftUpperArm', 'leftLowerArm', 'leftHand', 'rightUpperArm', 'rightLowerArm', 'rightHand'],
   legs: ['leftUpperLeg', 'leftLowerLeg', 'rightUpperLeg', 'rightLowerLeg'],
+  armL: ['leftShoulder', 'leftUpperArm', 'leftLowerArm', 'leftHand'], armR: ['rightShoulder', 'rightUpperArm', 'rightLowerArm', 'rightHand'],
 };
-const ALL = [].concat(GROUP.spine, GROUP.head, GROUP.arms, GROUP.legs);
+const ALL = [].concat(GROUP.spine, GROUP.head, GROUP.arms, GROUP.legs);   // armL/armR son partes de arms
 const qI = new THREE.Quaternion();
 
 // Resuelve los giros de los huesos a partir de puntos 3D (X izquierda del avatar, Y arriba, Z adelante)
@@ -215,4 +216,51 @@ export function snapCanvas(R, draw, w = 520) {
   draw(); const src = R.domElement, k = Math.min(1, w / src.width), c = document.createElement('canvas');
   c.width = Math.round(src.width * k); c.height = Math.round(src.height * k); c.getContext('2d').drawImage(src, 0, 0, c.width, c.height);
   return c.toDataURL('image/jpeg', 0.82);
+}
+
+// Foto de la cara: una cámara aparte, de frente al avatar a la altura de la cabeza (para las fotos de celebración)
+const _h = new THREE.Vector3(), _fw = new THREE.Vector3(), _q = new THREE.Quaternion();
+export function portraitCam(av, aspect = 0.8, dist = 1.75) {
+  const cam = new THREE.PerspectiveCamera(32, aspect, 0.05, 200);
+  const head = av.humanoid.getRawBoneNode('head') || av.scene; head.getWorldPosition(_h);
+  av.scene.getWorldQuaternion(_q); _fw.set(0, 0, 1).applyQuaternion(_q); _fw.y = 0; _fw.normalize();
+  cam.position.copy(_h).addScaledVector(_fw, dist); cam.position.y += 0.05;
+  const look = _h.clone(); look.y -= 0.32; cam.lookAt(look);   // cara y medio cuerpo (brazos arriba)
+  return cam;
+}
+// Dibuja la escena con esa cámara en un lienzo vertical y la devuelve como imagen
+export function portraitSnap(R, S, av, opts = {}) {
+  if (!av) return '';
+  const W = opts.w || 360, Hh = opts.h || 450, cam = portraitCam(av, W / Hh, opts.dist || 1.75);
+  const old = new THREE.Vector2(); R.getSize(old); const pr = R.getPixelRatio();
+  R.setPixelRatio(1); R.setSize(W, Hh, false); R.render(S, cam);
+  const c = document.createElement('canvas'); c.width = W; c.height = Hh; c.getContext('2d').drawImage(R.domElement, 0, 0, W, Hh, 0, 0, W, Hh);
+  R.setPixelRatio(pr); R.setSize(old.x, old.y, false);
+  return c.toDataURL('image/jpeg', 0.85);
+}
+
+// Brazo que alcanza un punto (para sostener la raqueta, recibir la bola, etc.): IK de dos huesos.
+// side: 'left' | 'right'. target: punto en el mundo. k: cuánto manda (0..1). El codo cae hacia abajo y afuera.
+const _s = new THREE.Vector3(), _e = new THREE.Vector3(), _hd = new THREE.Vector3(), _qa = new THREE.Quaternion();
+export function reachArm(av, side, target, k = 1, poleY = -1) {
+  const N = av.humanoid.getNormalizedBoneNode, Rw = av.humanoid.getRawBoneNode, p = side === 'left' ? 'left' : 'right';
+  const sh = Rw(p + 'UpperArm'), el = Rw(p + 'LowerArm'), ha = Rw(p + 'Hand'); if (!sh || !el || !ha) return;
+  av._arm = av._arm || {};
+  av.update(); av.scene.updateMatrixWorld(true);
+  let L = av._arm[p]; if (!L) { sh.getWorldPosition(_s); el.getWorldPosition(_e); ha.getWorldPosition(_hd); L = av._arm[p] = { l1: _s.distanceTo(_e), l2: _e.distanceTo(_hd) }; }
+  sh.getWorldPosition(_s);
+  const d = target.clone().sub(_s); const dist = Math.max(0.05, Math.min(d.length(), (L.l1 + L.l2) * 0.995));
+  av.scene.getWorldQuaternion(_qa); const qi = _qa.clone().invert();
+  const dl = d.applyQuaternion(qi).normalize();
+  const pole = new THREE.Vector3(p === 'right' ? -0.5 : 0.5, poleY, -0.25).normalize();
+  const a1 = Math.acos(Math.max(-1, Math.min(1, (L.l1 * L.l1 + dist * dist - L.l2 * L.l2) / (2 * L.l1 * dist))));
+  let axis = new THREE.Vector3().crossVectors(dl, pole); if (axis.lengthSq() < 1e-6) axis.set(0, 0, 1); axis.normalize();
+  const upDir = dl.clone().applyAxisAngle(axis, a1);
+  const lowDir = dl.clone().multiplyScalar(dist).sub(upDir.clone().multiplyScalar(L.l1)).normalize();
+  const PW = new THREE.Quaternion(); ['hips', 'spine', 'chest', 'upperChest', p + 'Shoulder'].forEach((n) => { const b = N(n); if (b) PW.multiply(b.quaternion); });
+  const q1 = new THREE.Quaternion().setFromUnitVectors(REST[p + 'UpperArm'], upDir.applyQuaternion(PW.clone().invert()));
+  const W1 = PW.clone().multiply(q1);
+  const q2 = new THREE.Quaternion().setFromUnitVectors(REST[p + 'LowerArm'], lowDir.applyQuaternion(W1.invert()));
+  N(p + 'UpperArm').quaternion.slerp(q1, k); N(p + 'LowerArm').quaternion.slerp(q2, k);
+  const hn = N(p + 'Hand'); if (hn) hn.quaternion.slerp(qI, k * 0.7);
 }

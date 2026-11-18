@@ -80,7 +80,7 @@ html.q0 .glass{backdrop-filter:none!important;-webkit-backdrop-filter:none!impor
   <div class="note glass" id="note">El público son los avatares de otros jugadores de MiVibra: primero tus amigos, luego quienes estén conectados.</div>
   <div class="lower glass" id="lower"></div>
   <div class="big" id="big"></div>
-  <div class="hud glass" id="hud"><small>ATLETISMO · 100 M CON VALLAS</small><b id="hudT">Carril 5</b></div>
+  <div class="hud glass" id="hud"><small id="hudK">ATLETISMO · 100 M CON VALLAS</small><b id="hudT">Carril 5</b></div>
   <div class="clock glass" id="clock"><small>TIEMPO · <span id="posT">—</span></small><b id="clk">0.00</b></div>
   <div class="cue glass" id="cue"></div>
   <div class="pace glass" id="pace"><small>RITMO (TROTA EN EL SITIO)</small><div class="bar"><i id="paceBar"></i></div></div>
@@ -115,7 +115,13 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { loadAnims, Animator } from '../anim.js';
-import { Espejo, celebrate, facesCam, snapCanvas } from '../espejo.js';
+import { Espejo, celebrate, facesCam, snapCanvas, portraitSnap } from '../espejo.js';
+import { makeSound } from '../sonido.js';
+// Un mismo estadio para tres pruebas: 100 m con vallas, 100 m planos y salto largo
+const MODE = window.MV_MODE || new URLSearchParams(location.search).get('modo') || 'vallas';
+const EVT_ = 0;
+const EVT = { vallas: '100 m con vallas', planos: '100 m planos', salto: 'Salto largo' }[MODE] || '100 m con vallas';
+document.title = 'MiVibra Movimiento — ' + EVT; addEventListener('DOMContentLoaded', () => {}); queueMicrotask(() => { const k = document.getElementById('hudK'); if (k) k.textContent = 'ATLETISMO · ' + EVT.toUpperCase(); const h = document.querySelector('#start h1'); if (h) h.textContent = EVT; });
 import { build as buildAvatar, decode as decodeAvatar, PRESETS, DEFAULT, fix as fixAvatar, preload as preloadAvatars } from '../avatar.js';
 
 const $ = (id) => document.getElementById(id);
@@ -205,7 +211,7 @@ function drawClock(txt) { const { g } = clockTex.userData; g.fillStyle = '#05070
 drawClock('0.00');
 
 // Vallas: más espacio entre cada una (8 vallas, 13 m a la primera y 10,5 m entre ellas)
-const HURDLES = []; for (let k = 0; k < 8; k++) HURDLES.push(-(13 + k * 10.5));
+const HURDLES = []; if (MODE === 'vallas') for (let k = 0; k < 8; k++) HURDLES.push(-(13 + k * 10.5));
 const hurdleBar = Mt('#ffffff', { map: tex(64, 8, (g) => { for (let i = 0; i < 8; i++) { g.fillStyle = i % 2 ? '#1A1B1D' : '#fff'; g.fillRect(i * 8, 0, 8, 8); } }) });
 const hurdleLeg = Mt('#E4E6E8', { metalness: 0.5, roughness: 0.3 }), hurdleFoot = Mt('#2F7DF6');
 const hurdleObjs = [];
@@ -214,6 +220,22 @@ for (let i = 0; i < LANES; i++) for (const z of HURDLES) {
   h.add(box(1.0, 0.13, 0.04, hurdleBar, 0, 0.84, 0));
   [-0.48, 0.48].forEach((s) => { h.add(box(0.04, 0.84, 0.04, hurdleLeg, s, 0.42, 0)); h.add(box(0.05, 0.05, 0.62, hurdleFoot, s, 0.025, 0.28)); });
   S.add(h); hurdleObjs.push({ g: h, lane: i, z, hit: 0 });
+}
+
+// Salto largo: foso de arena y tabla de batida en el carril del jugador (a 40 m de la salida)
+const BOARD = -40, LJX = laneX(4);
+const ljMarks = new THREE.Group(), sandPuff = [];
+if (MODE === 'salto') {
+  const sandTex = tex(128, 512, (g, w, h) => { g.fillStyle = '#E8CF98'; g.fillRect(0, 0, w, h); for (let i = 0; i < 2500; i++) { g.fillStyle = Math.random() < 0.5 ? 'rgba(160,120,60,.18)' : 'rgba(255,245,215,.35)'; g.fillRect(Math.random() * w, Math.random() * h, 2, 2); } });
+  const sand = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.06, 9.5), new THREE.MeshStandardMaterial({ map: sandTex, roughness: 1 })); sand.position.set(LJX, 0.02, BOARD - 1.2 - 4.75); sand.receiveShadow = true; S.add(sand);
+  const rim = new THREE.MeshStandardMaterial({ color: '#f4f5f6', roughness: 0.6 });
+  [-1, 1].forEach((sd) => S.add(box(0.08, 0.08, 9.6, rim, LJX + sd * 1.49, 0.04, BOARD - 1.2 - 4.75)));
+  S.add(box(1.22, 0.025, 0.2, new THREE.MeshStandardMaterial({ color: '#ffffff' }), LJX, 0.013, BOARD + 0.1));
+  S.add(box(1.22, 0.026, 0.1, new THREE.MeshStandardMaterial({ color: '#4a8a3a' }), LJX, 0.013, BOARD - 0.05));   // plastilina: si la pisas es nulo
+  // marcas de distancia cada metro al lado del foso
+  for (let m = 3; m <= 9; m++) { const tx = tex(64, 32, (g) => { g.fillStyle = '#fff'; g.font = '900 26px Manrope,sans-serif'; g.textAlign = 'center'; g.fillText(m + ' m', 32, 25); }); const pl = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.25), new THREE.MeshBasicMaterial({ map: tx, transparent: true })); pl.rotation.x = -Math.PI / 2; pl.position.set(LJX + 1.85, 0.02, BOARD - m); S.add(pl); S.add(box(0.3, 0.012, 0.03, rim, LJX + 1.62, 0.01, BOARD - m)); }
+  S.add(ljMarks);
+  for (let i = 0; i < 14; i++) { const m = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 4), new THREE.MeshLambertMaterial({ color: '#d9bd85' })); m.visible = false; S.add(m); sandPuff.push({ m, v: new THREE.Vector3() }); }
 }
 
 // Gradas ovaladas (con huecos) + techo de vigas + torres de luz
@@ -252,7 +274,7 @@ for (let i = 0; i < 8; i++) {
   S.add(box(0.8, 30, 0.8, Mt('#9aa0aa', { metalness: 0.6 }), x, 15, z));
   const panel = new THREE.Group(); panel.position.set(x, 31, z); panel.lookAt(CX, 0, CZ);
   for (let r = 0; r < 3; r++) for (let c = 0; c < 5; c++) { const l = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.3), lampM); l.position.set((c - 2) * 1.05, (r - 1) * 1.05, 0.2); panel.add(l); }
-  const gl = glow('#fff1d6', 13); gl.position.z = 1; panel.add(gl);
+  if (Q > 0) { const gl = glow('#fff1d6', 13); gl.position.z = 1; panel.add(gl); }   // en TV sin halos grandes (pesan mucho)
   S.add(panel); towers.push(panel);
 }
 // Haces de luz que barren en la presentación y el podio
@@ -538,26 +560,30 @@ const aCell = new Float32Array(NS), aFrame = new Float32Array(NS);
 crowdGeo.setAttribute('aCell', new THREE.InstancedBufferAttribute(aCell, 1));
 const frameAttr = new THREE.InstancedBufferAttribute(aFrame, 1); frameAttr.setUsage(THREE.DynamicDrawUsage); crowdGeo.setAttribute('aFrame', frameAttr);
 const crowdMat = new THREE.MeshBasicMaterial({ map: crowdTex, alphaTest: 0.45, side: THREE.DoubleSide, color: '#e9d8cc' });
+// El público se anima en la tarjeta gráfica (saltos, pose y la ola): el procesador del TV ya no mueve 4.000 personas
+const CU = { uT: { value: 0 }, uEx: { value: 0.4 }, uWave: { value: 0 } };
+const aPh = new Float32Array(NS), aEx = new Float32Array(NS), aAng = new Float32Array(NS);
+crowdGeo.setAttribute('aPh', new THREE.InstancedBufferAttribute(aPh, 1)); crowdGeo.setAttribute('aEx', new THREE.InstancedBufferAttribute(aEx, 1)); crowdGeo.setAttribute('aAng', new THREE.InstancedBufferAttribute(aAng, 1));
 crowdMat.onBeforeCompile = (sh) => {
-  sh.vertexShader = 'attribute float aCell;\nattribute float aFrame;\n' + sh.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\n#ifdef USE_MAP\n vMapUv = vec2((vMapUv.x + aCell) / ' + CROWD_COLS + '.0, (vMapUv.y + 3.0 - aFrame) / 4.0);\n#endif');
+  Object.assign(sh.uniforms, CU);
+  const head = `attribute float aCell; attribute float aPh; attribute float aEx; attribute float aAng;
+uniform float uT; uniform float uEx; uniform float uWave;
+float cEx() { float e = uEx * aEx; if (uWave > 0.5 && sin(aAng * 3.0 - uT * 2.2) > 0.85) e = max(e, 1.4); return e; }
+float cFrame(float e) { return e > 0.75 ? (sin(uT * 4.5 + aPh) > 0.0 ? 1.0 : 2.0) : (e > 0.45 ? (sin(uT * 9.0 + aPh) > 0.3 ? 3.0 : 0.0) : 0.0); }
+`;
+  sh.vertexShader = head + sh.vertexShader
+    .replace('#include <uv_vertex>', '#include <uv_vertex>\n#ifdef USE_MAP\n vMapUv = vec2((vMapUv.x + aCell) / ' + CROWD_COLS + '.0, (vMapUv.y + 3.0 - cFrame(cEx())) / 4.0);\n#endif')
+    .replace('#include <begin_vertex>', '#include <begin_vertex>\n { float e = cEx(); transformed.y += e > 0.75 ? max(0.0, sin(uT * 7.0 + aPh)) * 0.2 * e : 0.0; }');
 };
-const crowdMesh = new THREE.InstancedMesh(crowdGeo, crowdMat, NS); crowdMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); S.add(crowdMesh);
+const crowdMesh = new THREE.InstancedMesh(crowdGeo, crowdMat, NS); S.add(crowdMesh);
 const col = new THREE.Color(), dmy = new THREE.Object3D(); dmy.rotation.order = 'YXZ';
 const cph = new Float32Array(NS), cex = new Float32Array(NS), csc = new Float32Array(NS);
-seats.forEach((s, i) => { aCell[i] = Math.floor(Math.random() * CROWD_COLS); cph[i] = Math.random() * 6.28; cex[i] = rnd(0.5, 1.2); csc[i] = rnd(0.9, 1.06); });
+seats.forEach((s, i) => { aCell[i] = Math.floor(Math.random() * CROWD_COLS); cph[i] = aPh[i] = Math.random() * 6.28; cex[i] = aEx[i] = rnd(0.5, 1.2); csc[i] = rnd(0.9, 1.06); aAng[i] = s.a;
+  dmy.position.set(s.x, s.y + 0.02, s.z); dmy.rotation.set(0, s.yaw, 0); dmy.scale.setScalar(csc[i]); dmy.updateMatrix(); crowdMesh.setMatrixAt(i, dmy.matrix); });
+crowdMesh.instanceMatrix.needsUpdate = true;
 let excite = 0.4, waveOn = false;
 const tmpV = new THREE.Vector3();
-function crowdTick(t) {
-  for (let i = 0; i < NS; i++) {
-    const s = seats[i];
-    let e = excite * cex[i];
-    if (waveOn) { const w = Math.sin(s.a * 3 - t * 2.2); if (w > 0.85) e = Math.max(e, 1.4); }
-    const jump = e > 0.75 ? Math.max(0, Math.sin(t * 7 + cph[i])) * 0.2 * e : 0;
-    aFrame[i] = e > 0.75 ? (Math.sin(t * 4.5 + cph[i]) > 0 ? 1 : 2) : e > 0.45 ? (Math.sin(t * 9 + cph[i]) > 0.3 ? 3 : 0) : 0;
-    dmy.position.set(s.x, s.y + 0.02 + jump, s.z); dmy.rotation.set(0, s.yaw, 0); dmy.scale.set(csc[i], csc[i], csc[i]); dmy.updateMatrix(); crowdMesh.setMatrixAt(i, dmy.matrix);
-  }
-  crowdMesh.instanceMatrix.needsUpdate = true; frameAttr.needsUpdate = true;
-}
+function crowdTick(t) { CU.uT.value = t; CU.uEx.value = excite; CU.uWave.value = waveOn ? 1 : 0; }
 // Nombres de algunos jugadores del público (cerca de la salida)
 const TAGS = ['@laurita_run', '@camilo.fit', '@mafe', '@juanpa', '@sofi_dance', '@papá_brandon', '@andres10', '@vale'].map((n) => { const s = seats.filter((x) => x.row < 3 && x.z > -14 && x.z < 10)[Math.floor(Math.random() * 40)] || seats[0]; const el = document.createElement('div'); el.className = 'tag'; el.textContent = n; $('tags').appendChild(el); return { s, el }; });
 
@@ -591,44 +617,30 @@ function confettiTick(dt, t) { if (!confetti.visible) return; cf.forEach((c, i) 
 function medal(color) { const g = new THREE.Group(); const rib = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.018, 6, 20, Math.PI), Mt('#2F7DF6')); rib.rotation.z = Math.PI; rib.position.y = 0.08; g.add(rib); const d = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.02, 24), Mt(color, { metalness: 0.9, roughness: 0.25, emissive: color, emissiveIntensity: 0.25 })); d.rotation.x = Math.PI / 2; d.position.set(0, -0.1, 0.02); g.add(d); return g; }
 
 // ================= Sonido (sintetizado, sin archivos) =================
-// Sonido liviano: cada efecto se "graba" una sola vez al empezar (OfflineAudioContext) y después solo se reproduce.
-// Antes cada pisada, ovación o golpe armaba filtros en vivo y el TV se trababa; ahora reproducir es casi gratis.
+// Sonido del estadio: público y aplausos grabados de verdad (en bucle), ovaciones reales y efectos cortos
+// "grabados" una sola vez a 44,1 kHz. Reproducir es casi gratis, así que no traba el TV.
 const SND = (() => {
-  let ac = null, master, crowdG = null, crowdSrc = null, on = true, beatSrc = null, ready = null;
-  const B = {}, SR = Q === 0 ? 22050 : 32000;
-  const NOISE = new Map();
-  function noiseBuf(c) { if (NOISE.has(c)) return NOISE.get(c); const b = c.createBuffer(1, c.sampleRate * 2, c.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; NOISE.set(c, b); return b; }
-  function nz(c, t, dur, type, freq, gain, attack = 0.005, q = 0.7, sweep) { const s = c.createBufferSource(); s.buffer = noiseBuf(c); s.loop = true; const f = c.createBiquadFilter(); f.type = type; f.frequency.setValueAtTime(freq, t); if (sweep) f.frequency.exponentialRampToValueAtTime(sweep, t + dur * 0.9); f.Q.value = q; const g = c.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(gain, t + attack); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); s.connect(f); f.connect(g); g.connect(c.destination); s.start(t, Math.random()); s.stop(t + dur + 0.05); }
-  function tn(c, t, freq, dur, type = 'sine', gain = 0.2, sweepTo) { const o = c.createOscillator(), g = c.createGain(); o.type = type; o.frequency.setValueAtTime(freq, t); if (sweepTo) o.frequency.exponentialRampToValueAtTime(sweepTo, t + dur * 0.6); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(gain, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); if (type === 'sawtooth') { const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 2200; o.connect(f); f.connect(g); } else o.connect(g); g.connect(c.destination); o.start(t); o.stop(t + dur + 0.05); }
-  const R = {
-    gun: [1.3, (c) => { nz(c, 0, 0.35, 'lowpass', 4000, 1.2, 0.001); nz(c, 0, 1.2, 'lowpass', 600, 0.5, 0.001); }],
-    step: [0.08, (c) => nz(c, 0, 0.06, 'lowpass', 380, 0.3, 0.002)],
-    whoosh: [1, (c) => nz(c, 0, 0.9, 'bandpass', 300, 0.3, 0.3, 1.2, 2400)],
-    ding: [1, (c) => { tn(c, 0, 988, 0.5, 'sine', 0.18); tn(c, 0.18, 784, 0.7, 'sine', 0.18); }],
-    click: [0.05, (c) => nz(c, 0, 0.03, 'highpass', 5000, 0.15)],
-    boom: [1.1, (c) => { nz(c, 0, 0.5, 'lowpass', 900, 0.6, 0.002); for (let i = 0; i < 10; i++) nz(c, 0.2 + i * 0.06, 0.04, 'highpass', 4000, 0.08); }],
-    cheer: [3, (c) => { nz(c, 0, 2.8, 'bandpass', 1100, 0.55, 0.25, 0.4); nz(c, 0, 2.2, 'bandpass', 2400, 0.2, 0.3, 1); for (let i = 0; i < 4; i++) tn(c, Math.random() * 1.2, 1800 + Math.random() * 800, 0.35, 'sine', 0.04); }],
-    fanfare: [3.2, (c) => { [[523, 0], [659, 0.18], [784, 0.36], [1047, 0.54], [784, 0.9], [1047, 1.08]].forEach(([f, w]) => { tn(c, w, f, 0.5, 'sawtooth', 0.09); tn(c, w, f * 1.005, 0.5, 'sawtooth', 0.06); }); [[523, 659, 784], [587, 740, 880], [659, 831, 988]].forEach((ch, i) => ch.forEach((f) => tn(c, 1.5 + i * 0.5, f, 1.4, 'sawtooth', 0.05))); }],
-    crowd: [2, (c) => { const s = c.createBufferSource(); s.buffer = noiseBuf(c); const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 800; f.Q.value = 0.5; s.connect(f); f.connect(c.destination); s.start(0); }],
-    // ritmo de la presentación: 8 s en bucle (antes un temporizador cada 250 ms)
-    beat: [8, (c) => { for (let n = 0; n < 32; n++) { const t = n * 0.25; if (n % 2 === 0) tn(c, t, 140, 0.25, 'sine', 0.5, 45); nz(c, t, 0.05, 'highpass', 7000, n % 2 ? 0.12 : 0.06); if (n % 8 === 4) nz(c, t, 0.18, 'bandpass', 1800, 0.25, 0.002, 0.8); if (n % 4 === 0) tn(c, t, [220, 262, 196, 247][(n / 4) % 4], 0.4, 'sawtooth', 0.035); } }],
-  };
-  async function render(name) { const [dur, fn] = R[name]; const oc = new OfflineAudioContext(1, Math.ceil(dur * SR), SR); fn(oc); B[name] = await oc.startRendering(); }
-  function init() {
-    if (ac) return; const AC = window.AudioContext || window.webkitAudioContext; try { ac = new AC({ latencyHint: 'playback' }); } catch (e) { ac = new AC(); }
-    master = ac.createGain(); master.gain.value = 0.8; master.connect(ac.destination);
-    ready = (async () => { for (const n of ['step', 'gun', 'cheer', 'whoosh', 'ding', 'boom', 'click', 'crowd', 'beat', 'fanfare']) { try { await render(n); } catch (e) {} await new Promise((r) => setTimeout(r, 0)); }
-      if (B.crowd) { crowdSrc = ac.createBufferSource(); crowdSrc.buffer = B.crowd; crowdSrc.loop = true; crowdG = ac.createGain(); crowdG.gain.value = 0; crowdSrc.connect(crowdG); crowdG.connect(master); crowdSrc.start(); } })();
-  }
-  function play(name, gain = 1, rate = 1) { if (!ac || !on || !B[name]) return null; const s = ac.createBufferSource(); s.buffer = B[name]; s.playbackRate.value = rate; let n = s; if (gain !== 1) { const g = ac.createGain(); g.gain.value = gain; s.connect(g); n = g; } n.connect(master); s.start(); return s; }
-  let lastStep = 0;
+  const S = makeSound({
+    files: ['estadio-ambiente', 'ovacion', 'aplausos', 'aplausos-bucle', 'fuegos'],
+    fx: {
+      gun: [1.4, (c, H) => { H.nz(c, 0, 0.25, 'lowpass', 6000, 1.2, 0.001); H.nz(c, 0.01, 1.3, 'lowpass', 900, 0.55, 0.002); H.tn(c, 0, 90, 0.35, 'sine', 0.6, 40); }],
+      step: [0.12, (c, H) => { H.nz(c, 0, 0.07, 'bandpass', 900, 0.35, 0.002, 1.2); H.tn(c, 0, 110, 0.08, 'sine', 0.25, 60); }],
+      whoosh: [1, (c, H) => H.nz(c, 0, 0.8, 'bandpass', 400, 0.25, 0.25, 1.1, 2600)],
+      ding: [1.2, (c, H) => { H.tn(c, 0, 988, 0.6, 'sine', 0.2); H.tn(c, 0, 1976, 0.3, 'sine', 0.05); H.tn(c, 0.18, 784, 0.8, 'sine', 0.2); }],
+      click: [0.05, (c, H) => H.nz(c, 0, 0.03, 'highpass', 5000, 0.15)],
+      boom: [0.9, (c, H) => { H.tn(c, 0, 160, 0.25, 'triangle', 0.5, 70); H.nz(c, 0, 0.35, 'bandpass', 1400, 0.4, 0.002, 2); for (let i = 0; i < 6; i++) H.nz(c, 0.12 + i * 0.07, 0.05, 'bandpass', 2500, 0.12, 0.002, 3); }],
+      fanfare: [3.2, (c, H) => { [[523, 0], [659, 0.18], [784, 0.36], [1047, 0.54], [784, 0.9], [1047, 1.08]].forEach(([f, w]) => { H.tn(c, w, f, 0.5, 'triangle', 0.13); H.tn(c, w, f * 2, 0.3, 'sine', 0.03); }); [[523, 659, 784], [587, 740, 880], [659, 831, 988]].forEach((ch, i) => ch.forEach((f) => H.tn(c, 1.5 + i * 0.5, f, 1.4, 'triangle', 0.07, null, 0.05))); }],
+    },
+  });
+  let lastStep = 0, crowdOn = false;
   return {
-    init, get on() { return on; }, toggle() { on = !on; if (crowdG) crowdG.gain.value = 0; if (!on) this.beatStop(); return on; },
-    crowd(level) { if (!ac || !crowdG) return; crowdG.gain.setTargetAtTime(on ? 0.04 + level * 0.32 : 0, ac.currentTime, 0.4); },
-    cheer() { play('cheer', 1, 0.95 + Math.random() * 0.1); }, gun() { play('gun'); }, whoosh() { play('whoosh'); }, ding() { play('ding'); }, click() { play('click'); }, boom() { play('boom'); }, fanfare() { play('fanfare'); },
-    step(p) { const now = performance.now(); if (now - lastStep < 90) return; lastStep = now; play('step', 0.4 + 0.6 * p, 0.9 + Math.random() * 0.2); },
-    beatStart() { if (!ac || !on || beatSrc) return; const go = () => { if (beatSrc || !B.beat) return; beatSrc = ac.createBufferSource(); beatSrc.buffer = B.beat; beatSrc.loop = true; beatSrc.connect(master); beatSrc.start(); }; if (B.beat) go(); else if (ready) ready.then(go); },
-    beatStop() { if (beatSrc) { try { beatSrc.stop(); } catch (e) {} beatSrc = null; } },
+    init() { const r = S.init(); if (r && !crowdOn) { crowdOn = true; S.loop('estadio-ambiente', 0.25); } return r; }, get on() { return S.on; }, toggle() { return S.toggle(); },
+    crowd(level) { S.setLoop('estadio-ambiente', 0.18 + level * 0.55, 0.5); },
+    cheer() { S.play('ovacion', 0.85, 0.96 + Math.random() * 0.08); }, gun() { S.play('gun'); }, whoosh() { S.play('whoosh', 0.8); }, ding() { S.play('ding'); }, click() { S.play('click'); }, boom() { S.play('boom'); },
+    fanfare() { S.play('fanfare', 0.8); S.play('aplausos', 0.8); S.play('fuegos', 0.45, 1, 1.2); },
+    step(p) { const now = performance.now(); if (now - lastStep < 90) return; lastStep = now; S.play('step', 0.35 + 0.5 * p, 0.9 + Math.random() * 0.2); },
+    // en la presentación: aplausos rítmicos del público en vez de la música sintetizada
+    beatStart() { S.loop('aplausos-bucle', 0.35); }, beatStop() { S.stopLoop('aplausos-bucle'); },
   };
 })();
 
@@ -664,12 +676,74 @@ function go(ph) {
   phase = ph; pt = 0; if (ph === 'podium') { podPhoto = false; podDone = false; RUNNERS.forEach((r) => (r.cel = null)); }
   ['title', 'lower', 'big', 'cue', 'hud', 'clock', 'pace', 'phone', 'res', 'banner', 'note'].forEach((x) => show(x, 0));
   TAGS.forEach((t) => t.el.classList.remove('on'));
-  if (ph === 'intro') { excite = 0.9; waveOn = false; SND.beatStart(); SND.whoosh(); SND.cheer(); title('MIVIBRA MOVIMIENTO', '100 m con vallas', 'Estadio MiVibra · Final'); setTimeout(() => phase === 'intro' && show('note', 1), 2500); }
+  if (ph === 'intro') { excite = 0.9; waveOn = false; SND.beatStart(); SND.whoosh(); SND.cheer(); title('MIVIBRA MOVIMIENTO', EVT, 'Estadio MiVibra · Final'); setTimeout(() => phase === 'intro' && show('note', 1), 2500); }
   if (ph === 'present') { excite = 0.6; }
   if (ph === 'marks') { SND.beatStop(); excite = 0.12; big('En sus marcas…'); }
   if (ph === 'race') { excite = 0.85; waveOn = true; SND.gun(); SND.cheer(); flashScreen(0.5); show('hud', 1); show('clock', 1); show('pace', 1); show('phone', 1); raceT = 0; RUNNERS.forEach((r) => { r.d = -0.55; r.v = 0; r.ph = 0; r.done = false; r.t = 0; r.react = hum(r) >= 0 ? 0.08 : rnd(0.12, 0.22); r.nextH = 0; r.vmax = r.me ? 9.05 : rnd(8.55, 9.0); r.lastStep = 0; }); if (INST.length) setTimeout(syncInst, 0); hurdleObjs.forEach((h) => { h.hit = 0; h.g.rotation.x = 0; }); }
+  if (ph === 'lj') { excite = 0.5; waveOn = false; SND.beatStop(); show('hud', 1); show('pace', 1); show('phone', 1); RUNNERS.forEach((r) => { r.vmax = r.vmax || 9.2 + (r.lvl || 8) * 0.04; }); ljStart(); }
   if (ph === 'finish') { excite = 1.3; waveOn = false; SND.cheer(); SND.ding(); }
   if (ph === 'podium') { excite = 1.2; podiumDone = false; }
+}
+// ---------- Salto largo: 3 intentos cada uno, gana el mejor salto ----------
+const LJ = { st: 'off', who: null, i: 0, round: 0, t: 0, z: 0, v: 0, zt: 0, D: 0, T: 0, foul: false, keyJump: false, cpuAt: 0, mark: null };
+function ljStart() { LJ.round = 0; LJ.i = 0; RUNNERS.forEach((r) => { r.best = 0; r.tries = []; r.done = false; r.t = 0; }); ljMarks.clear(); ljNext(); }
+function ljNext() {
+  if (LJ.i >= RUNNERS.length) { LJ.i = 0; LJ.round++; }
+  if (LJ.round >= 3) { LJ.st = 'done'; results = RUNNERS.slice().sort((a, b) => (b.best || 0) - (a.best || 0)); showResults(); show('cue', 0); setTimeout(() => { if (phase === 'lj') go('podium'); }, 3800); return; }
+  const r = LJ.who = RUNNERS[LJ.i++]; Object.assign(LJ, { st: 'ready', t: 0, z: 2, v: 0, foul: false, keyJump: false, cpuAt: BOARD + rnd(-0.05, 0.4) - (Math.random() < 0.08 ? 0.5 : 0) });
+  const hs = hum(r) >= 0 ? hum(r) : r.me && CAM.on ? 0 : -1;
+  big(r.me ? 'Tu salto' : 'Salta ' + r.name, 'Intento ' + (LJ.round + 1) + ' de 3' + (r.best ? ' · mejor ' + r.best.toFixed(2) + ' m' : ''));
+  if (hs >= 0) camSay('¡Tu turno! Trota para tomar impulso y salta en la tabla blanca', true, hs);
+  $('hudT').textContent = r.name + (r.best ? ' · mejor ' + r.best.toFixed(2) + ' m' : '');
+}
+function ljUpdate(dt, t) {
+  const r = LJ.who; if (!r) return; LJ.t += dt;
+  const hs = hum(r) >= 0 ? hum(r) : r.me && CAM.on ? 0 : -1, human = hs >= 0, keyMe = r.me && !human;
+  // los demás miran desde el costado del foso
+  RUNNERS.forEach((q, i) => { apply(q.A, POSES.idle(t, i), 0.15); if (q === r) return; const x = LJX + 3.2 + (i % 2) * 0.9, z = BOARD - 2 - i * 1.2; q.A.position.set(x, 0, z); q.A.rotation.y = -Math.PI / 2; q.clip = 'Idle'; q.clipSpeed = 1; q.clipTime = null; q.clipLoop = true; });
+  r.A.rotation.y = Math.PI;
+  if (LJ.st === 'ready') {
+    r.A.position.set(LJX, 0, LJ.z); r.clip = 'Idle'; r.clipTime = null; r.clipLoop = true;
+    cue(human ? '¡Trota en el sitio para tomar impulso!' : keyMe ? 'Toma impulso solo · OK para saltar en la tabla' : 'Turno de ' + r.name);
+    setCam(new THREE.Vector3(LJX + 3, 1.7, LJ.z + 4.5), new THREE.Vector3(LJX, 1.0, LJ.z - 4), 0.06);
+    if (LJ.t > 1.8) { LJ.st = 'run'; LJ.t = 0; SND.whoosh(); show('big', 0); }
+  } else if (LJ.st === 'run') {
+    const target = human ? camSpeed(r.vmax || 9.5, hs) : (r.vmax || 9.5) * (r.me ? 0.92 : rnd(0.88, 0.98)) * (1 - Math.exp(-LJ.t / 1.1));
+    LJ.v = lerp(LJ.v, target, human ? 0.06 : 0.12); LJ.z -= LJ.v * dt;
+    r.A.position.set(LJX, 0, LJ.z); r.clip = 'Run'; r.clipSpeed = clamp(LJ.v / 8, 0.45, 1.25); r.clipTime = null; r.clipLoop = true;
+    r.ph = (r.ph || 0) + LJ.v * dt * 2.2; const st = Math.floor(r.ph / Math.PI); if (st !== r.lastStep) { r.lastStep = st; if (r.me || human) SND.step(clamp(LJ.v / 9, 0.3, 1)); }
+    const left = LJ.z - BOARD;
+    cue(left > 8 ? (human ? '¡Más rápido! Trota fuerte' : 'Tomando impulso…') : human ? '¡SALTA en la tabla!' : keyMe ? '¡OK para saltar!' : r.name + ' llega a la tabla…', left < 8);
+    $('paceBar').style.width = Math.round(clamp(LJ.v / 9.2, 0, 1) * 100) + '%';
+    setCam(new THREE.Vector3(LJX + 6.5, 1.8, LJ.z + 1.5), new THREE.Vector3(LJX, 1.0, LJ.z - 4), 0.12);
+    let go2 = false;
+    if (human && left < 9 && CS[hs].clock - CS[hs].jumpAt < 300) go2 = true;
+    if (keyMe && LJ.keyJump && left < 9) go2 = true;
+    if (!human && !keyMe && LJ.z <= LJ.cpuAt) go2 = true;
+    if (go2) {
+      LJ.zt = LJ.z; LJ.foul = LJ.z < BOARD - 0.02;
+      LJ.D = clamp(LJ.v * LJ.v / 11.5 * rnd(0.94, 1.03), 1.2, 9.4); LJ.T = 0.5 + LJ.D * 0.055; LJ.st = 'air'; LJ.t = 0; SND.whoosh(); excite = 1;
+    } else if (LJ.z < BOARD - 0.35) { LJ.foul = true; LJ.zt = LJ.z; LJ.D = 1.4; LJ.T = 0.45; LJ.st = 'air'; LJ.t = 0; }
+  } else if (LJ.st === 'air') {
+    const u = clamp(LJ.t / LJ.T, 0, 1), z = LJ.zt - LJ.D * u, h = Math.sin(u * Math.PI) * (0.45 + LJ.D * 0.07);
+    r.A.position.set(LJX, h, z); r.clip = 'Jump'; r.clipLoop = false; r.clipTime = (0.2 + u * 0.6) * 1.042;
+    setCam(new THREE.Vector3(LJX + 5.2, 1.5, LJ.zt - LJ.D * 0.5 + 1.0), new THREE.Vector3(LJX, 0.7, LJ.zt - LJ.D * 0.6), 0.1);
+    if (u >= 1) {
+      LJ.st = 'land'; LJ.t = 0; const lz = LJ.zt - LJ.D, meas = +(BOARD - lz).toFixed(2);
+      SND.boom(); sandPuff.forEach((p) => { p.m.visible = true; p.m.position.set(LJX + rnd(-0.3, 0.3), 0.08, lz + rnd(-0.2, 0.3)); p.v.set(rnd(-1.2, 1.2), rnd(1, 2.4), rnd(-0.6, 1.2)); });
+      const ok = !LJ.foul && lz < BOARD - 1.2 + 0.2;
+      r.tries.push(ok ? meas : 0); if (ok && meas > (r.best || 0)) r.best = meas;
+      ljMarks.clear(); if (ok) { const f = new THREE.Group(); f.add(box(0.03, 0.6, 0.03, new THREE.MeshStandardMaterial({ color: '#fff' }), 0, 0.3, 0)); f.add(box(0.25, 0.16, 0.01, new THREE.MeshStandardMaterial({ color: r.shirt }), 0.13, 0.52, 0)); f.position.set(LJX - 1.6, 0, lz); ljMarks.add(f); }
+      if (ok) { big(meas.toFixed(2) + ' m', (meas >= (r.best || 0) && r.tries.filter(Boolean).length > 1 ? '¡Su mejor marca! · ' : '') + r.name); SND.cheer(); if (hs >= 0) camSay('¡' + meas.toFixed(2) + ' metros!', true, hs); }
+      else { big('NULO', LJ.zt < BOARD - 0.02 ? 'Pisó después de la tabla' : 'No saltó a tiempo'); SND.boom(); if (hs >= 0) camSay('Nulo: salta antes de la línea verde', false, hs); }
+      excite = ok && meas > 7 ? 1.2 : 0.6;
+    }
+  } else if (LJ.st === 'land') {
+    const lz = LJ.zt - LJ.D; r.A.position.set(LJX, 0, lz); r.clip = LJ.t > 0.6 ? ((r.tries[r.tries.length - 1] || 0) > 6.5 ? 'Victory' : 'Idle') : 'Jump'; r.clipLoop = LJ.t > 0.6; r.clipTime = LJ.t > 0.6 ? null : 0.95;
+    sandPuff.forEach((p) => { if (!p.m.visible) return; p.v.y -= 9 * dt; p.m.position.addScaledVector(p.v, dt); if (p.m.position.y < 0.03) p.m.visible = false; });
+    setCam(new THREE.Vector3(LJX + 4.2, 1.6, lz + 2.2), new THREE.Vector3(LJX, 0.8, lz), 0.06);
+    if (LJ.t > 3.0) { show('big', 0); ljNext(); }
+  }
 }
 function standings() { return RUNNERS.slice().sort((a, b) => (b.done - a.done) || (a.done ? a.t - b.t : b.d - a.d)); }
 
@@ -700,7 +774,7 @@ function update(dt, t) {
     setCam(new THREE.Vector3(r.x + 0.9, 1.55, -3.1), new THREE.Vector3(r.x, 1.35, 0), idx === 0 && pt < 0.6 ? 0.06 : 0.09);
     RUNNERS.forEach((q, i) => { const me = q === r; q.A.rotation.y = lerp(q.A.rotation.y, me ? Math.PI + 0.25 : Math.PI, 0.1); apply(q.A, me ? POSES[q.g](lt) : POSES.idle(t, i), me ? 0.2 : 0.12); q.clip = me ? 'Victory' : 'Idle'; q.clipSpeed = 1; q.clipTime = null; });
     flashTick(0.01);
-    if (pt > per * RUNNERS.length + 0.4) go('marks');
+    if (pt > per * RUNNERS.length + 0.4) go(MODE === 'salto' ? 'lj' : 'marks');
   } else if (phase === 'marks') {
     show('lower', 0);
     setCam(new THREE.Vector3(7.5, 0.7, -4.5), new THREE.Vector3(-0.5, 0.5, 0.3), 0.05);
@@ -708,6 +782,8 @@ function update(dt, t) {
     if (pt > 2.6 && pt - dt <= 2.6) { big('Listos…'); excite = 0.03; }
     RUNNERS.forEach((r) => { r.A.position.set(r.x, 0, 0.55); r.A.rotation.y = Math.PI; apply(r.A, setOn ? POSES.set() : POSES.marks(), 0.08); r.clip = null; });
     if (pt > 4.3 + Math.random() * 0.01) { show('big', 0); go('race'); big('¡YA!'); setTimeout(() => show('big', 0), 700); }
+  } else if (phase === 'lj') {
+    ljUpdate(dt, t); flashTick(0.01);
   } else if (phase === 'race' || phase === 'finish') {
     raceT += dt;
     let leaderD = 0;
@@ -763,7 +839,7 @@ function update(dt, t) {
     const next = HURDLES.find((hz) => hz < -ME.d - 0.2);
     if (phase === 'race') { if (next !== undefined && -ME.d - next < 4.5) cue('¡SALTA!', true); else if (raceT < 2) cue('¡Trota en el sitio, rápido!'); else show('cue', 0); }
     if (!camStick()) stick(ME.ph, next !== undefined && -ME.d - next < 1.5 ? 'jump' : 'run');
-    if (CAM.on && phase === 'race') { CS[0].stumbleT -= dt; if (CS[0].stumbleT > 0) cue('¡Tropezaste! Salta en cada valla', true); else if (camCadence() < 0.8 && !ME.done) cue('¡Trota en el sitio para avanzar!', true); }
+    if (CAM.on && phase === 'race') { CS[0].stumbleT -= dt; if (CS[0].stumbleT > 0) cue(HURDLES.length ? '¡Tropezaste! Salta en cada valla' : '¡Más rápido!', true); else if (camCadence() < 0.8 && !ME.done) cue('¡Trota en el sitio para avanzar!', true); }
     // Cámaras de carrera
     const mz = -ME.d;
     if (phase === 'race') {
@@ -784,7 +860,7 @@ function update(dt, t) {
       const mine = results.indexOf(ME) + 1, w = top[0];
       const title = hum(w) >= 0 || w === ME ? '¡' + w.name + ' gana el oro!' : mine <= 3 ? '¡Al podio! ' + mine + '.° lugar' : '¡' + w.name + ' gana el oro!';
       big('¡Celebra!', 'Foto del podio en 3 segundos', 1600);
-      MVPhoto.take({ title, sub: '100 m con vallas · ' + (ME.t ? ME.t.toFixed(2) + ' s' : ''), slots: hs.length ? hs : (MVLink.players[0] ? [0] : []), snap: () => snapCanvas(R, () => (Q === 0 ? R.render(S, cam) : composer.render())), done: () => { podDone = true; } }); }
+      MVPhoto.take({ title, sub: EVT + ' · ' + (MODE === 'salto' ? (ME.best ? ME.best.toFixed(2) + ' m' : '') : ME.t ? ME.t.toFixed(2) + ' s' : ''), slots: hs.length ? hs : (MVLink.players[0] ? [0] : []), snap: () => { const who = top.find((r) => hum(r) >= 0 && r.vrm) || (top.includes(ME) ? ME : top[0]); return portraitSnap(R, S, who.vrm); }, done: () => { podDone = true; } }); }
     if ((podDone || pt > 20) && !menuOn && !MVHand.open) endMenu();
     if (!podiumDone) { podiumDone = true; if (!results.length) results = standings(); show('res', 0); const top = results.slice(0, 3); $('banner').innerHTML = '¡' + top[0].name + ' gana el oro!'; show('banner', 1); SND.fanfare(); setTimeout(SND.cheer, 400); confettiStart(); }
     const top = results.slice(0, 3);
@@ -804,7 +880,7 @@ function update(dt, t) {
 }
 function showResults() {
   const medalC = ['#FFC83D', '#C9CED6', '#C67B45'];
-  $('res').innerHTML = `<h2>Resultados · 100 m con vallas</h2>` + results.map((r, i) => `<div class="row${r.me ? ' me' : ''}"><span class="pos" style="${i < 3 ? 'background:' + medalC[i] : ''}">${i + 1}</span><span class="av" style="width:22px;height:22px;border-radius:50%;background:${r.shirt};border:2px solid #fff;display:inline-block"></span>${r.name}${r.me ? ' (tú)' : ''}<span class="t">${r.t.toFixed(2)} s</span></div>`).join('');
+  $('res').innerHTML = `<h2>Resultados · ${EVT}</h2>` + results.map((r, i) => `<div class="row${r.me ? ' me' : ''}"><span class="pos" style="${i < 3 ? 'background:' + medalC[i] : ''}">${i + 1}</span><span class="av" style="width:22px;height:22px;border-radius:50%;background:${r.shirt};border:2px solid #fff;display:inline-block"></span>${r.name}${r.me ? ' (tú)' : ''}<span class="t">${MODE === 'salto' ? (r.best ? r.best.toFixed(2) + ' m' : 'Nulo') : r.t.toFixed(2) + ' s'}</span></div>`).join('');
   show('res', 1);
 }
 function reset() {
@@ -861,7 +937,7 @@ MVLink.onChange = () => { plsDraw(); if (menuOn === 'start') startMenu(); };
 let menuOn = null, PAUSED = false;
 function startMenu() {
   menuOn = 'start'; $('connect').classList.add('on'); const n = MVLink.count();
-  MVHand.menu({ kicker: 'MIVIBRA MOVIMIENTO', title: '100 m con vallas', sub: n ? (n === 1 ? 'Celular conectado. Trota en el sitio y salta en cada valla.' : n + ' corredores conectados: cada uno en su carril.') : 'Conecta hasta 4 celulares (uno por corredor), o mira la carrera con el control.',
+  MVHand.menu({ kicker: 'MIVIBRA MOVIMIENTO', title: EVT, sub: n ? (n === 1 ? (MODE === 'vallas' ? 'Celular conectado. Trota en el sitio y salta en cada valla.' : MODE === 'salto' ? 'Celular conectado. Trota para tomar impulso y salta en la tabla.' : 'Celular conectado. Trota en el sitio lo más rápido que puedas.') : n + ' corredores conectados: cada uno en su carril.') : 'Conecta hasta 4 celulares (uno por corredor), o mira la carrera con el control.',
     items: [{ id: 'play', label: n > 1 ? '¡Correr! (' + n + ' jugadores)' : '¡Correr!', icon: '▶' }, { id: 'snd', label: SND.on ? 'Sonido: sí' : 'Sonido: no', icon: '♪' }, { id: 'exit', label: 'Salir', icon: '✕' }], back: 'exit', onPick: menuPick });
 }
 function pauseGame() {
@@ -885,6 +961,7 @@ MVHand.onPause = () => pauseGame();
 addEventListener('keydown', (e) => {
   if (MVHand.key(e)) { e.preventDefault(); return; }
   if ((e.key === 'Escape' || e.key === 'p' || e.key === 'MediaPlayPause') && phase !== 'wait') { pauseGame(); e.preventDefault(); }
+  if ((e.key === 'Enter' || e.key === ' ' || e.keyCode === 23) && phase === 'lj') { LJ.keyJump = true; e.preventDefault(); }
 });
 
 // ================= Bucle =================
@@ -937,7 +1014,7 @@ function frame() {
   if (Q === 0) RUNNERS.forEach((r, i) => { const a = r.vrm ? r.vrm.scene : r.A; a.getWorldPosition(blobs[i].position); blobs[i].position.y = 0.02; });
   if (phase !== 'wait' && !PAUSED) { update(dt, T); driveVRM(dt); } else { const a = T * 0.05; setCam(new THREE.Vector3(Math.cos(a) * 110, 55, -50 + Math.sin(a) * 110), new THREE.Vector3(0, 0, -50), 1); crowdTick(T); }
   // Pantalla gigante en vivo: primer plano del jugador (cada 2 cuadros)
-  if ((liveTick++ % [30, 3, 2][Q]) === 0) { const f = phase === 'podium' ? new THREE.Vector3(POD.x, 1.8, POD.z) : ME.A.position.clone().add(new THREE.Vector3(0, 1.3, 0)); liveCam.position.set(f.x + 2.2, f.y + 0.4, f.z - 4.2); liveCam.lookAt(f); R.setRenderTarget(liveRT); R.render(S, liveCam); R.setRenderTarget(null); }
+  if ((liveTick++ % [60, 3, 2][Q]) === 0) { const f = phase === 'podium' ? new THREE.Vector3(POD.x, 1.8, POD.z) : ME.A.position.clone().add(new THREE.Vector3(0, 1.3, 0)); liveCam.position.set(f.x + 2.2, f.y + 0.4, f.z - 4.2); liveCam.lookAt(f); R.setRenderTarget(liveRT); R.render(S, liveCam); R.setRenderTarget(null); }
   if (Q === 0) R.render(S, cam); else composer.render();
 }
 R.setAnimationLoop(frame);
@@ -946,8 +1023,8 @@ function begin(sound) {
   const st = $('start'); if (st) st.remove(); $('connect').classList.remove('on'); $('ctrl').style.display = 'flex';
   SND.init(); if (!sound && SND.on) SND.toggle(); $('bSnd').textContent = SND.on ? 'Sonido: sí' : 'Sonido: no';
   assignHumans();
-  reset(); $('hudT').textContent = 'Carril ' + ME.num + ' · ' + ME.name; if (Q === 0) { camPos.set(7.5, 0.7, -4.5); camLook.set(-0.5, 0.5, 0.3); }
-  MVLink.players.forEach((p, k) => { if (p) MVLink.say(k === 0 ? '¡A correr! Trota en el sitio y salta en las vallas' : '¡Corres en el carril ' + (RUNNERS.find((r) => r.human === k) || {}).num + '!', true, k); });
+  reset(); $('hudT').textContent = MODE === 'salto' ? ME.name : 'Carril ' + ME.num + ' · ' + ME.name; if (Q === 0) { camPos.set(7.5, 0.7, -4.5); camLook.set(-0.5, 0.5, 0.3); }
+  MVLink.players.forEach((p, k) => { if (p) MVLink.say(k === 0 ? (MODE === 'vallas' ? '¡A correr! Trota en el sitio y salta en las vallas' : MODE === 'salto' ? 'Salto largo: trota para tomar impulso y salta en la tabla blanca' : '¡A correr! Trota en el sitio lo más rápido que puedas') : '¡Corres en el carril ' + (RUNNERS.find((r) => r.human === k) || {}).num + '!', true, k); });
   MVHand.pauseEnabled = true;
   go(Q === 0 ? 'marks' : 'intro');   // en TV, directo a la salida
 }
@@ -957,7 +1034,7 @@ $('bAgain').onclick = () => { MVHand.close(); menuOn = null; PAUSED = false; ass
 $('bSnd').onclick = () => { const on = SND.toggle(); $('bSnd').textContent = 'Sonido: ' + (on ? 'sí' : 'no'); };
 const TEST = { i: 0, g: 'idle' };
 POSES.runA = () => POSES.run(Math.PI / 2, 1); POSES.runB = () => POSES.run(0, 1); POSES.hurdleT = () => POSES.hurdle();
-window.MVD = { S, info: () => ({ calls: R.info.render.calls, tris: R.info.render.triangles, geos: R.info.memory.geometries, tex: R.info.memory.textures, NS }), CAM, CS, assignHumans, menuPick: (id) => { MVHand.close(); menuPick(id); }, pauseGame, get menu() { return menuOn; }, R: RUNNERS, test: (i, g, side) => { TEST.i = i; TEST.g = g; TEST.side = !!side; phase = 'test'; pt = 0; ['title','lower','big','cue','hud','clock','pace','phone','res','banner','note'].forEach((x) => show(x, 0)); }, step: (n, d = 1 / 60) => { for (let i = 0; i < n; i++) { T += d * slow; update(d * slow, T); } }, go: (p) => { reset(); go(p); }, get phase() { return phase; }, results: () => results };
+window.MVD = { S, info: () => ({ calls: R.info.render.calls, tris: R.info.render.triangles, geos: R.info.memory.geometries, tex: R.info.memory.textures, NS }), CAM, CS, LJ, assignHumans, menuPick: (id) => { MVHand.close(); menuPick(id); }, pauseGame, get menu() { return menuOn; }, R: RUNNERS, test: (i, g, side) => { TEST.i = i; TEST.g = g; TEST.side = !!side; phase = 'test'; pt = 0; ['title','lower','big','cue','hud','clock','pace','phone','res','banner','note'].forEach((x) => show(x, 0)); }, step: (n, d = 1 / 60) => { for (let i = 0; i < n; i++) { T += d * slow; update(d * slow, T); } }, go: (p) => { reset(); go(p); }, get phase() { return phase; }, results: () => results };
 </script>
 </body>
 </html>

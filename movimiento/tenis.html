@@ -64,7 +64,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { loadAnims, Animator } from '../anim.js';
 import { build as buildAvatar, decode as decodeAvatar, DEFAULT, PRESETS } from '../avatar.js';
-import { Espejo, celebrate, facesCam, snapCanvas } from '../espejo.js';
+import { Espejo, celebrate, facesCam, snapCanvas, portraitSnap, reachArm } from '../espejo.js';
 
 const $ = (id) => document.getElementById(id);
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x)), lerp = (a, b, k) => a + (b - a) * k, rnd = (a, b) => a + Math.random() * (b - a);
@@ -173,13 +173,13 @@ async function loadAvatars() {
   SIDES[0].av = await makeAv(myRec); SIDES[0].name = myRec.name || 'Tú';
   SIDES[1].av = await makeAv(PRESETS[3]); SIDES[1].name = 'MiVibra';
 }
-function swingAnim(a, strong) { if (!a || !a.anim) return; a.anim.play('Punch', { loop: false, speed: strong ? 1.9 : 1.5, fade: 0.06 }); a.anim.setTime(0.08); a.swingT = 0.5; }
+function swingAnim(a, strong) { if (!a) return; a.swingT = strong ? 0.42 : 0.36; a.swingK = strong ? 1.3 : 1; }
 
 // ---------- Estado del juego ----------
 // Lado 0: cerca de la cámara (z > 0). Lado 1: al fondo (z < 0).
 const G = { state: 'load', mode: 'cpu', lvl: 1, sc: [0, 0], server: 0, serveN: 0, t: 0, paused: false, rally: 0, last: -1, bounces: [0, 0], bounceSide: -1, serving: false, winTo: 11 };
 const B = { p: new THREE.Vector3(0, 1.1, 1.3), v: new THREE.Vector3(), live: false, held: true };
-const PADS = [{ x: 0.2, y: 1.0, vx: 0, tx: 0.2, smash: 0 }, { x: -0.2, y: 1.0, vx: 0, tx: -0.2 }];
+const PADS = [{ x: 0.2, y: 1.0, vx: 0, tx: 0.2, smash: 0, hand: 'right' }, { x: -0.2, y: 1.0, vx: 0, tx: -0.2, hand: 'right' }];
 const LVL = [{ name: 'Fácil', sp: 1.5, err: 0.18, react: 0.32, pace: 0.85 }, { name: 'Normal', sp: 2.3, err: 0.1, react: 0.22, pace: 1 }, { name: 'Difícil', sp: 3.4, err: 0.05, react: 0.14, pace: 1.15 }];
 const GRAV = 7.5;          // un poco menos que la real: deja tiempo de reaccionar con la cámara del celular
 const PZ = HALF + 0.32;    // plano donde golpea cada raqueta
@@ -261,9 +261,13 @@ MVLink.onPose((l, ts, d, slot) => {
   // la mano que juega: la más alejada del cuerpo (o la que ya veníamos siguiendo)
   let k = H.k; if (!v(k) || cand.some((i) => i !== k && Math.abs(l[i][0] - shX) > Math.abs(l[k][0] - shX) + sw * 0.5)) k = cand.sort((a, b) => Math.abs(l[b][0] - shX) - Math.abs(l[a][0] - shX))[0]; H.k = k;
   // espejo: si mueves la mano a tu derecha, la raqueta va a la derecha de la pantalla
+  // el cuerpo: dar un paso a tu derecha mueve al avatar a la derecha (un ancho de hombros ≈ medio metro en la mesa)
+  if (H.sh0 === null || H.sh0 === undefined) H.sh0 = shX;
+  H.body = clamp((H.sh0 - shX) / sw * 0.55, -1.3, 1.3);
+  // la mano: dónde está respecto a tus hombros (a tu derecha = positivo); cruzada al otro lado = revés
   const hx = (shX - l[k][0]) / sw, hy = (shY - l[k][1]) / sw;
-  const bodyX = 0.5 - shX;   // también cuenta dar pasos a los lados
-  H.x = clamp(bodyX * 2.2 + hx * 0.32, -1.1, 1.1); H.y = clamp(hy, -1.5, 1.5);
+  H.right = k === 6;
+  H.x = clamp(H.body + hx * 0.42, -1.25, 1.25); H.y = clamp(hy, -1.5, 1.5);
   H.hist.push({ ts, x: H.x, y: hy }); H.hist = H.hist.filter((h) => ts - h.ts < 260);
   const o = H.hist[0]; if (o && ts - o.ts > 80) { const sp = Math.hypot(H.x - o.x, (hy - o.y) * 0.5) / ((ts - o.ts) / 1000); if (sp > 4.2) { H.smashT = 0.45; H.swingAt = performance.now(); } else if (sp > 1.6) H.swingAt = performance.now(); }
 });
@@ -322,7 +326,7 @@ function physics(dt) {
 function drivePads(dt) {
   [0, 1].forEach((side) => {
     const P = PADS[side], c = ctl(side), ox = P.x;
-    if (c === 'cam') { const H = HAND[slotOf(side)]; P.tx = H.x * (side === 0 ? 1 : 1); P.y = lerp(P.y, TH + 0.28 + clamp(H.y, -0.3, 1) * 0.25, 0.3); H.smashT -= dt; P.x = lerp(P.x, P.tx, 0.45); }
+    if (c === 'cam') { const H = HAND[slotOf(side)]; P.tx = H.x; P.y = lerp(P.y, TH + 0.28 + clamp(H.y, -0.3, 1) * 0.25, 0.3); H.smashT -= dt; P.x = lerp(P.x, P.tx, 0.45); P.bx = lerp(P.bx ?? 0, H.body ?? 0, 0.35); P.hand = H.right === false ? 'left' : 'right'; }
     else if (c === 'key') { P.x = clamp(P.x + P.vk * 2.6 * dt, -1.1, 1.1); P.smash -= dt; P.y = lerp(P.y, TH + 0.3, 0.2); }
     else {
       const lv = LVL[G.lvl]; P.react = (P.react || 0) - dt;
@@ -332,21 +336,40 @@ function drivePads(dt) {
       P.x += clamp(P.tx - P.x, -lv.sp * dt, lv.sp * dt); P.y = lerp(P.y, TH + 0.3, 0.2);
     }
     P.vx = (P.x - ox) / Math.max(dt, 1e-3);
+    if (c !== 'cam') {
+      // control y máquina: el cuerpo sigue a la raqueta con algo de retraso; si la raqueta se va lejos al otro lado, sale un revés
+      P.hand = 'right'; const rs = side === 0 ? 1 : -1, fore = P.x - rs * 0.3;
+      if (P.bx === undefined) P.bx = fore;
+      const goal = Math.abs(P.x - P.bx) < 0.55 ? P.bx : fore; P.bx += clamp(goal - P.bx, -2.4 * dt, 2.4 * dt);
+    }
+    // nunca tan lejos que el brazo no alcance la raqueta
+    P.bx = clamp(P.bx, P.x - 0.6, P.x + 0.6);
   });
 }
 function placeScene(dt, now) {
   [0, 1].forEach((side) => {
-    const P = PADS[side], pm = PAD[side], z = (side === 0 ? 1 : -1) * PZ, sw = SIDES[side].av ? SIDES[side].av.swingT || 0 : 0;
-    pm.position.set(P.x, P.y + Math.sin(sw * 6) * 0.05, z); pm.rotation.set(0, side === 0 ? 0 : Math.PI, clamp(-P.vx * 0.08, -0.5, 0.5) + (side === 0 ? -0.25 : 0.25));
-    pm.rotation.x = -sw * 1.2 * (side === 0 ? 1 : -1);
-    const a = SIDES[side].av; if (!a) return;
-    // el cuerpo va detrás de la raqueta, con la mano derecha cerca de ella
-    a.scene.position.set(clamp(P.x - (side === 0 ? 0.32 : -0.32), -1.6, 1.6), 0, (side === 0 ? 1 : -1) * (PZ + 0.38)); a.scene.rotation.y = SIDES[side].rot;
+    const P = PADS[side], pm = PAD[side], dz = side === 0 ? 1 : -1, z = dz * PZ, a = SIDES[side].av;
+    // swing: la raqueta hace un arco hacia la mesa (derecha o revés según de qué lado del cuerpo está)
+    const swT = a ? a.swingT || 0 : 0, dur = a && a.swingK > 1 ? 0.42 : 0.36, u = swT > 0 ? 1 - swT / dur : 0, arc = Math.sin(u * Math.PI);
+    const rightW = side === 0 ? 1 : -1, handSign = P.hand === 'left' ? -rightW : rightW, back = (P.x - (P.bx ?? P.x)) * handSign < -0.02;
+    const sx = arc * 0.22 * (back ? 1 : -1) * handSign, sz = -dz * arc * 0.28 * (a && a.swingK || 1), sy = arc * 0.08;
+    pm.position.set(P.x + sx, P.y + sy, z + sz);
+    pm.rotation.set(-dz * arc * 0.9, side === 0 ? 0 : Math.PI, (back ? 0.9 : -0.35) * handSign * dz + clamp(-P.vx * 0.05, -0.3, 0.3));
+    if (!a) return;
+    a.scene.position.set(clamp(P.bx ?? P.x, -1.7, 1.7), 0, dz * (PZ + 0.24)); a.scene.rotation.y = SIDES[side].rot;
+    a.swingT = Math.max(0, (a.swingT || 0) - dt);
     const party = (G.state === 'point' && G.pw === side) || (G.state === 'end' && G.win === side);
-    if (a.anim) { a.swingT = Math.max(0, (a.swingT || 0) - dt); if (a.swingT <= 0 || party) a.anim.play(party ? 'Idle' : Math.abs(P.vx) > 0.8 ? 'Walk' : 'Idle', { fade: 0.25, speed: Math.abs(P.vx) > 0.8 ? 1.4 : 1 }); a.anim.update(dt); }
+    const bvx = P.bvxS = lerp(P.bvxS || 0, ((P.bx ?? 0) - (P.bx0 ?? P.bx ?? 0)) / Math.max(dt, 1e-3), 0.2); P.bx0 = P.bx;
+    if (a.anim) { a.anim.play(party ? 'Idle' : Math.abs(bvx) > 0.5 ? 'Walk' : 'Idle', { fade: 0.25, speed: Math.abs(bvx) > 0.5 ? 1.5 : 1 }); a.anim.update(dt); }
     const E = ctl(side) === 'cam' ? EJ[slotOf(side)] : null;
     if (party) celebrate(a, dt, E, CELS[side], facesCam(a.scene, cam));
-    else if (E) E.apply(a, dt, { arms: a.swingT > 0 ? 0.25 : 1, spine: 0.6, head: 1, legs: 0 }, facesCam(a.scene, cam));
+    else {
+      // tronco: gira con el golpe (hacia la izquierda en la derecha, al revés en el revés) y se agacha un poco listo para jugar
+      const sp = a.humanoid.getNormalizedBoneNode('spine'); if (sp) sp.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0.18, arc * 0.5 * (back ? -1 : 1) * handSign * dz, 0)));
+      if (E) E.apply(a, dt, P.hand === 'left' ? { armR: 1, head: 1 } : { armL: 1, head: 1 }, facesCam(a.scene, cam));
+      // el brazo de la raqueta la alcanza siempre: estirado, doblado o cruzado (revés)
+      const hold = pm.position.clone(); hold.y -= 0.17; reachArm(a, P.hand || 'right', hold, 1);
+    }
     a.update(dt);
   });
   // la bola en la mano de quien saca
@@ -381,7 +404,7 @@ function endGame() {
   const title = G.mode === 'cpu' ? (w === 0 ? '¡Ganaste!' : 'Gana MiVibra') : '¡Gana ' + SIDES[w].name + '!';
   big(title, '¡Celebra! Tu avatar baila contigo', 2400);
   const ps = ctl(w) === 'cam' && MVLink.players[slotOf(w)] ? [slotOf(w)] : (G.mode === 'cpu' && MVLink.players[0] ? [0] : []);
-  setTimeout(() => MVPhoto.take({ title, sub: 'Tenis de mesa · ' + G.sc[0] + ' – ' + G.sc[1], slots: ps, snap: () => snapCanvas(R, () => R.render(S, cam)), done: endMenu }), 1800);
+  setTimeout(() => MVPhoto.take({ title, sub: 'Tenis de mesa · ' + G.sc[0] + ' – ' + G.sc[1], slots: ps, snap: () => portraitSnap(R, S, SIDES[w].av), done: endMenu }), 1800);
 }
 function endMenu() {
   const w = G.win;
@@ -406,7 +429,7 @@ function menuPick(id) {
   if (id === 'cpu' || id === 'two' || id === 'again') {
     SND.init(); $('connect').classList.remove('on'); $('loading').style.display = ''; $('loading').textContent = 'Preparando…';
     setMode(id === 'again' ? G.mode : id).then(() => {
-      $('loading').style.display = 'none'; G.win = -1; [0, 1].forEach((k) => { const a = SIDES[k].av; if (a) a.swingT = 0; }); G.sc = [0, 0]; G.server = Math.random() < 0.5 ? 0 : 1; G.serveN = 0; PADS[0].x = 0.2; PADS[1].x = -0.2;
+      $('loading').style.display = 'none'; HAND.forEach((H) => (H.sh0 = null)); G.win = -1; [0, 1].forEach((k) => { const a = SIDES[k].av; if (a) a.swingT = 0; }); G.sc = [0, 0]; G.server = Math.random() < 0.5 ? 0 : 1; G.serveN = 0; PADS[0].x = 0.2; PADS[1].x = -0.2;
       big(G.mode === 'two' ? '¡A jugar!' : '¡A jugar!', 'Partido a ' + G.winTo + ' · ' + (G.mode === 'two' ? '2 jugadores' : 'contra MiVibra (' + LVL[G.lvl].name + ')'), 1600);
       MVLink.players.forEach((p, k) => { if (p) MVLink.say(k < 2 ? (G.mode === 'two' ? 'Eres ' + SIDES[k].name + (k === 0 ? ' (cerca)' : ' (al fondo)') : 'Mueve la mano: la raqueta te sigue') : 'Esta partida es de 2', true, k); });
       newPoint();

@@ -1134,6 +1134,24 @@ html[data-theme="gris"] .dialog, html[data-theme="gris"] .dialog.glass { backgro
 .vclock .wxt b { font: 700 19px/1.1 var(--ui); }
 .vclock .wxt span { font: 500 10.5px var(--ui); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vclock .wxs { grid-column: 1 / -1; font: 500 10.5px/1.35 var(--ui); color: var(--muted); }
+/* Fotos junto a deportes y hora: la foto grande a la izquierda; deportes y hora compactos a la derecha */
+.vtiles.wph { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); }
+.vstack { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.vtiles.wph .vstack .vtile { min-height: 0; flex: 1; padding: 8px 10px; }
+.vtiles.wph .vsport .vsm-nav, .vtiles.wph .vsport .vsm-l, .vtiles.wph .vsm-empty span { display: none; }
+.vtiles.wph .vsm-main { gap: 3px; } .vtiles.wph .vsm-t img, .vtiles.wph .vsm-t i { width: 16px; height: 16px; }
+.vtiles.wph .vsm-t b { font-size: 12px; } .vtiles.wph .vsm-t em { font-size: 13px; } .vtiles.wph .vsm-empty b { font-size: 12px; }
+.vtiles.wph .vclock .dg b { font-size: 24px; } .vtiles.wph .vclock .dd { margin-top: 1px; }
+.vtiles.wph .vclock .wx { display: flex; align-items: center; gap: 6px; padding-top: 4px; margin-top: 4px; }
+.vtiles.wph .vclock .wxi svg { width: 20px; height: 20px; } .vtiles.wph .vclock .wxt b { font-size: 14px; } .vtiles.wph .vclock .wxt span, .vtiles.wph .vclock .wxs { display: none; }
+.vphoto { position: relative; padding: 0 !important; overflow: hidden; min-height: 168px; }
+.vphoto .phwf { position: absolute; inset: 0; width: 100%; aspect-ratio: auto; border: 0; border-radius: 0; }
+.vphoto .phwf .cap { display: none; }
+.vph-b { position: absolute; left: 0; right: 0; bottom: 0; padding: 22px 10px 8px; display: flex; align-items: flex-end; gap: 6px; background: linear-gradient(transparent, rgba(0,0,0,.65)); pointer-events: none; }
+.vph-b b { font: 700 13px var(--ui); color: #fff; white-space: nowrap; } .vph-b span { font: 500 11px var(--ui); color: rgba(255,255,255,.8); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vph-all { pointer-events: auto; white-space: nowrap; flex: none; height: 26px; padding: 0 10px; border-radius: 13px; border: 1px solid rgba(255,255,255,.35); background: rgba(0,0,0,.35); color: #fff; font: 700 11px var(--ui); }
+.vphoto.empty { padding: 12px !important; display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+.vphoto.empty b { font: 700 14px var(--ui); } .vphoto.empty span { font: 500 11px var(--ui); color: var(--muted); }
 /* Continuar viendo más pequeño */
 .vcont { padding: 10px 14px; gap: 4px; }
 .vcont .hd b { font-size: 13px; } .vcont .hd span { font-size: 11px; }

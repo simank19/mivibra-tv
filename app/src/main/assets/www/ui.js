@@ -777,7 +777,9 @@
         }).join('') + '<button class="vth all f" data-act="nav" data-arg="live" aria-label="Ver todos los canales">' + IC.grid + '<span>Todos</span></button></div></section>';
     }
     var c0 = cont.find(function (c) { return c.dur > 0; }), it0 = c0 && MV.resolve(c0);
-    out += '<div class="vside"><div class="vtiles">' + (MV.sportsMini ? MV.sportsMini() : '') + clockTile() + '</div>';
+    // fotos al lado de deportes y la hora (estos dos más pequeños, uno encima del otro)
+    var phT = MV.photoTile && !MV.isKids() ? MV.photoTile() : '';
+    out += '<div class="vside"><div class="vtiles' + (phT ? ' wph' : '') + '">' + phT + (phT ? '<div class="vstack">' : '') + (MV.sportsMini ? MV.sportsMini() : '') + clockTile() + (phT ? '</div>' : '') + '</div>';
     if (it0) {
       reg(it0);
       var pct = Math.max(0, Math.min(1, c0.pos / c0.dur)), left = Math.max(0, Math.round((c0.dur - c0.pos) / 60));
@@ -791,7 +793,6 @@
         '<button class="vall f" data-act="nav" data-arg="movies">' + IC.movie + 'Elegir una película</button></section>';
     }
     out += homeWidgets() + '</div></div>';
-    if (MV.photoWidget && !MV.isKids()) out += MV.photoWidget();
     out += '<div class="vchips chips" role="tablist" aria-label="Categorías">' + HCHIPS.map(function (c) {
       return '<button class="chip f' + (homeChip === c[0] ? ' on' : '') + '" role="tab" aria-selected="' + (homeChip === c[0]) + '" data-act="homeChip" data-arg="' + c[0] + '" data-fid="hc-' + c[0] + '">' + c[1] + '</button>';
     }).join('') + '<button class="chip f" data-act="nav" data-arg="utils">' + IC.grid + 'Todas las secciones</button></div>';
@@ -2346,7 +2347,7 @@
     var access = A ? A.hasStorageAccess() : true;
     var pads = A ? JSON.parse(A.gamepads()) : [];
     return top('Juegos', '<button class="pill f" data-act="consoleOpen">' + IC.games.replace('<svg', '<svg width="18" height="18"') + 'Modo consola</button><button class="pill f" data-act="remoteQR">' + IC.phone.replace('<svg', '<svg width="18" height="18"') + 'Celular como mando</button>') +
-      (MV.VIEWS.movimiento ? '<section class="row"><h3>Juegos de MiVibra</h3><button class="banner glass f" data-act="nav" data-arg="movimiento" data-fid="g-mvm" style="width:100%;text-align:left;cursor:pointer"><div class="t"><b>MiVibra Movimiento</b><br><span class="muted">Deportes con tu avatar y la cámara del celular: 100 m con vallas, bolos y tenis de mesa</span></div><span class="btn f" style="pointer-events:none">Jugar</span></button></section>' : '') +
+      (MV.VIEWS.movimiento ? '<section class="row"><h3>Juegos de MiVibra</h3><button class="banner glass f" data-act="nav" data-arg="movimiento" data-fid="g-mvm" style="width:100%;text-align:left;cursor:pointer"><div class="t"><b>MiVibra Movimiento</b><br><span class="muted">Deportes con tu avatar y la cámara del celular: 100 m con atletismo, bolos, tenis de mesa y playa</span></div><span class="btn f" style="pointer-events:none">Jugar</span></button></section>' : '') +
       (!access ? '<div class="banner glass"><div class="t"><b>Permite el acceso a la memoria, USB y discos duros</b><br><span class="muted">Así MiVibra TV encuentra tus ROMs en cualquier unidad conectada.</span></div><button class="btn f" data-act="storageAccess">Permitir acceso</button></div>' : '') +
       '<div class="btns" style="margin-bottom:16px"><button class="btn f" data-act="scanRoms">' + IC.refresh + 'Buscar juegos</button><button class="btn ghost f" data-act="romRoots">' + IC.usb + 'Carpetas y unidades</button><button class="btn ghost f" data-act="romsFromPhone">' + IC.phone + 'Enviar desde el celular</button><button class="btn ghost f" data-act="romDownload">' + IC.download + 'Descargar desde enlace</button><button class="btn ghost f" data-act="importBios">Importar BIOS</button></div>' +
       '<p class="muted" style="margin:-6px 0 14px">' + (pads.length ? 'Mandos conectados: ' + pads.map(function (p) { return esc(p.name); }).join(', ') : 'Sin mandos físicos conectados. Usa un mando Bluetooth/USB o tu celular.') + '</p>' +

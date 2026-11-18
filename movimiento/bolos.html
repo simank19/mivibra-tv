@@ -71,7 +71,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { loadAnims, Animator } from '../anim.js';
 import { build as buildAvatar, decode as decodeAvatar, DEFAULT, PRESETS } from '../avatar.js';
-import { Espejo, celebrate, facesCam, snapCanvas } from '../espejo.js';
+import { Espejo, celebrate, facesCam, snapCanvas, portraitSnap } from '../espejo.js';
 
 const $ = (id) => document.getElementById(id);
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x)), lerp = (a, b, k) => a + (b - a) * k;
@@ -153,6 +153,36 @@ if (Q === 0) {
     const mg = mergeGeometries(gs); if (!mg) return; const m = new THREE.Mesh(mg, list[0].material); S.add(m); list.forEach((o) => (o.visible = false)); });
 }
 
+// ---------- Máquina que recoge y coloca los pinos ----------
+// Baja la mesa, levanta los pinos que quedaron de pie, la barra barre los caídos al fondo y la mesa los vuelve a poner (o pone 10 nuevos).
+const deck = new THREE.Group(), deckMat = M('#2c2640'), deckTop = M('#8E5CF7');
+deck.add(new THREE.Mesh(new THREE.BoxGeometry(LW + 0.1, 0.06, 1.25), deckMat)); const dk2 = new THREE.Mesh(new THREE.BoxGeometry(LW + 0.12, 0.02, 1.27), deckTop); dk2.position.y = 0.04; deck.add(dk2);
+for (let r = 0; r < 4; r++) for (let i = 0; i <= r; i++) { const h = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.03, 10), M('#FFB13D')); h.position.set((i - r / 2) * 0.3048, -0.04, HEAD - r * 0.264 - (HEAD - 0.4)); deck.add(h); }
+deck.position.set(0, 2.6, -18.69); S.add(deck);
+const bar = new THREE.Mesh(new THREE.BoxGeometry(LW + 0.12, 0.22, 0.05), M('#FF6A3D')); bar.position.set(0, 2.6, -17.6); S.add(bar);
+// Animación según el tiempo desde que empezó (u en segundos). full: 10 pinos nuevos; si no, vuelven los que quedaron de pie.
+function pinsetter(u, full) {
+  const k = (a, b) => clamp((u - a) / (b - a), 0, 1), e = (x) => x * x * (3 - 2 * x);
+  const down1 = e(k(0, 0.45)), lift = e(k(0.55, 0.9)), sweep = e(k(0.95, 1.65)), place = e(k(1.7, 2.2)), up = e(k(2.25, 2.6));
+  // barra: baja, barre hacia el foso y vuelve a subir
+  bar.position.y = lerp(2.6, 0.12, down1) + up * 2.5; bar.position.z = lerp(-17.6, -20.2, sweep) + (up > 0 ? lerp(0, 2.6, up) : 0);
+  // mesa: baja a recoger, sube con los pinos de pie, baja a ponerlos, sube
+  const dy = u < 0.55 ? lerp(2.6, 0.42, down1) : u < 1.7 ? lerp(0.42, 1.0, lift) : u < 2.25 ? lerp(1.0, 0.42, place) : lerp(0.42, 2.6, up);
+  deck.position.y = dy;
+  if (u >= 1.7 && full && !pinsetter.rack) { pinsetter.rack = true; resetPins(true); }
+  PINS.forEach((p) => {
+    if (p.down && !p.gone) {   // caídos: la barra los empuja al foso
+      if (p.z > bar.position.z - 0.08 && sweep > 0) p.z = bar.position.z - 0.08;
+      if (p.z < -19.95) { p.gone = true; p.m.visible = false; }
+      p.lift = 0; return;
+    }
+    if (p.gone) return;
+    // de pie: suben y bajan con la mesa
+    p.lift = u < 0.55 || u >= 2.22 ? 0 : Math.max(0, dy - 0.42);
+  });
+  if (u >= 2.6) pinsetter.rack = false;
+}
+
 // ---------- Sonidos reales ----------
 const SND = { ac: null, buf: {}, roll: null, rollG: null,
   async init() { if (this.ac) return; try { this.ac = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: Q === 0 ? 'playback' : 'interactive' }); } catch (e) { return; }
@@ -184,24 +214,29 @@ async function loadAvatar() {
 // ---------- Jugadores (1 a 4, por turnos) ----------
 let ANIMS = null; const PL = [];
 function newRolls() { return [[], [], [], [], [], [], [], [], [], []]; }
-async function setPlayers(n) {
-  for (let k = 1; k < n; k++) if (!PL[k]) {
+async function setPlayers(n, cpu) {
+  // la máquina juega como un jugador más (al final de la tanda)
+  const total = n + (cpu ? 1 : 0);
+  for (let k = 1; k < total; k++) if (PL[k] && !!PL[k].cpu !== (cpu && k === n)) { S.remove(PL[k].av.scene); PL[k] = null; }
+  for (let k = 1; k < total; k++) if (!PL[k]) {
+    if (cpu && k === n) { const rec = Object.assign({}, PRESETS[3], { name: 'MiVibra' }); const a = await buildAvatar(rec, { lite: Q === 0 }); a.scene.traverse((o) => { if (o.isMesh) o.castShadow = Q > 0; }); a.scene.rotation.y = Math.PI; a.scene.visible = false; S.add(a.scene); if (ANIMS) a.anim = new Animator(a, ANIMS); PL[k] = { name: 'MiVibra', rolls: null, av: a, slot: -1, color: '#8E5CF7', cpu: true }; continue; }
     const rec = Object.assign({}, PRESETS[(k * 2 - 1) % PRESETS.length], { name: 'Jugador ' + (k + 1) });
     const a = await buildAvatar(rec, { lite: Q === 0 }); a.scene.traverse((o) => { if (o.isMesh) o.castShadow = Q > 0; });
     a.scene.rotation.y = Math.PI; a.scene.visible = false; S.add(a.scene); if (ANIMS) a.anim = new Animator(a, ANIMS);
     PL[k] = { name: rec.name, rolls: null, av: a, slot: k, color: MVLink.COLORS[k] };
   }
-  G.np = n; PL.forEach((p, k) => { p.rolls = newRolls(); p.av.scene.visible = k === 0; });
+  PL.length = total; G.np = total; G.cpu = !!cpu; PL.forEach((p, k) => { p.rolls = newRolls(); p.av.scene.visible = k === 0; });
   if (!PL[0].own) PL[0].own = PL[0].name; PL[0].name = n > 1 && /^t[uú]$/i.test(PL[0].own) ? 'Jugador 1' : PL[0].own;
   setCur(0);
 }
+function turnName(P) { return /^t[uú]$/i.test(P.name) ? 'Tu turno' : 'Turno de ' + P.name; }
 function setCur(k) {
   G.cur = k; const P = PL[k]; PL.forEach((p, i) => { p.av.scene.visible = i === k; });
   av = P.av; hy0 = av.humanoid.getNormalizedBoneNode('hips').position.y; G.rolls = P.rolls;
-  $('who').textContent = (G.np > 1 ? 'Turno de ' : 'Línea 7 · ') + P.name;
+  $('who').textContent = G.np > 1 ? turnName(P) : 'Línea 7 · ' + P.name;
 }
 // celular de quien tiene el turno (si no tiene celular propio, sirve cualquiera: se pueden pasar el celular)
-function turnSlot() { const s = PL[G.cur] ? PL[G.cur].slot : 0; return MVLink.players[s] ? s : -1; }
+function turnSlot() { if (PL[G.cur] && PL[G.cur].cpu) return -2; const s = PL[G.cur] ? PL[G.cur].slot : 0; return MVLink.players[s] ? s : -1; }
 const N = (n) => av.humanoid.getNormalizedBoneNode(n);
 function resetBones() { if (!av) return; Object.values(av.humanoid.normalizedHumanBones).forEach((n) => n.quaternion.identity()); N('hips').position.y = hy0; }
 const mix = (a, b, k) => { const o = {}; new Set([...Object.keys(a), ...Object.keys(b)]).forEach((key) => { o[key] = lerp(a[key] || 0, b[key] || 0, k); }); return o; };
@@ -222,11 +257,11 @@ function pose(p) {
 let G = { np: 1, cur: 0, frame: 0, roll: 0, rolls: [[], [], [], [], [], [], [], [], [], []], state: 'load', t: 0, aimX: 0, spin: 0, power: 0, meterOn: false, speed: 0, hook: 0, standing: null };
 const ball2 = { x: 0, z: 0, vx: 0, vz: 0, gut: false, live: false, y: BR };
 function resetPins(all) {
-  PINS.forEach((p) => { if (all || !p.down) { p.x = p.x0; p.z = p.z0; p.vx = p.vz = 0; p.down = false; p.gone = false; p.tilt = 0; p.ax = new THREE.Vector3(1, 0, 0); p.spin = 0; p.m.visible = true; } else { p.gone = true; p.m.visible = false; } });
+  PINS.forEach((p) => { if (all || !p.down) { p.x = p.x0; p.z = p.z0; p.vx = p.vz = 0; p.down = false; p.gone = false; p.tilt = 0; p.ax = new THREE.Vector3(1, 0, 0); p.spin = 0; p.lift = 0; p.m.visible = true; } else { p.gone = true; p.m.visible = false; } });
 }
 function placePins() {
   const q1 = new THREE.Quaternion(), q2 = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
-  PINS.forEach((p) => { if (p.gone) return; q1.setFromAxisAngle(p.ax, p.tilt); q2.setFromAxisAngle(up, p.spin); p.m.quaternion.copy(q2).multiply(q1); p.m.position.set(p.x, Math.sin(p.tilt) * 0.055, p.z); });
+  PINS.forEach((p) => { if (p.gone) return; q1.setFromAxisAngle(p.ax, p.tilt); q2.setFromAxisAngle(up, p.spin); p.m.quaternion.copy(q2).multiply(q1); p.m.position.set(p.x, Math.sin(p.tilt) * 0.055 + (p.lift || 0), p.z); });
 }
 // Física sencilla en el plano: bola contra pinos y pinos entre sí
 function physics(dt) {
@@ -314,7 +349,7 @@ function meter(p, txt1, txt2, title) { $('mbar').style.width = (clamp(p, 0, 1) *
 const CAMS = { hist: [], state: 'hold', backT: 0, cx0: null, arm: 6 };
 MVLink.onPose((l, ts, d, slot) => {
   if (!l || G.state !== 'aim' && G.state !== 'swing') return;
-  const ts0 = turnSlot(); if (ts0 >= 0 && slot !== ts0) return;
+  const ts0 = turnSlot(); if (ts0 === -2 || (ts0 >= 0 && slot !== ts0)) return;
   const v = (i) => l[i] && l[i][2] > 0.45; if (!(v(1) && v(2) && v(7) && v(8))) return;
   const shY = (l[1][1] + l[2][1]) / 2, hipY = (l[7][1] + l[8][1]) / 2, torso = Math.max(0.06, hipY - shY), cx = 1 - (l[7][0] + l[8][0]) / 2;
   if (CAMS.cx0 === null) CAMS.cx0 = cx;
@@ -336,8 +371,8 @@ MVLink.onPose((l, ts, d, slot) => {
 // Tu avatar copia lo que haces (brazos, tronco y cabeza) mientras apuntas o esperas, y celebra contigo
 const EJ = [0, 1, 2, 3].map(() => new Espejo()), CEL = {};
 MVLink.onPose((l, ts, d, slot) => { if (EJ[slot]) EJ[slot].feed(d); });
-function myEJ() { const s = turnSlot(); return s >= 0 ? EJ[s] : (EJ.find((e) => e.fresh()) || EJ[0]); }
-function useCamera() { const s = turnSlot(); return s >= 0 ? MVLink.fresh(s) : MVLink.fresh(); }
+function myEJ() { const s = Math.max(-1, turnSlot()); if (PL[G.cur] && PL[G.cur].cpu) return null; return s >= 0 ? EJ[s] : (EJ.find((e) => e.fresh()) || EJ[0]); }
+function useCamera() { const s = turnSlot(); if (s === -2) return false; return s >= 0 ? MVLink.fresh(s) : MVLink.fresh(); }
 MVHand.onPause = () => pause();
 function stickDraw() {
   const l = MVLink.lm; $('phone').classList.toggle('on', !!(MVLink.on && l)); if (!l) return;
@@ -348,13 +383,24 @@ function stickDraw() {
 
 // ---------- Flujo del turno ----------
 function newRoll() {
-  G.state = 'aim'; G.t = 0; G.power = 0; G.meterOn = false; G.hitT = 0; G.relT = null; CAMS.state = 'hold'; CAMS.cx0 = null; ball2.live = false; ball2.gut = false; ball2.y = BR;
+  G.state = 'aim'; G.t = 0; G.cel = 0; G.power = 0; G.meterOn = false; G.hitT = 0; G.relT = null; CAMS.state = 'hold'; CAMS.cx0 = null; ball2.live = false; ball2.gut = false; ball2.y = BR;
   MVHand.pauseEnabled = true; drawScore();
   const f = G.frame + 1, r = G.rolls[G.frame].length + 1;
+  if (PL[G.cur] && PL[G.cur].cpu) { cpuTurn(); return; }
   cue(useCamera() ? 'Muévete para apuntar · lleva el brazo atrás y lanza' : 'Turno ' + f + ' · bola ' + r + ' · ← → apunta y OK para lanzar');
   meter(0, '—', '', useCamera() ? 'FUERZA DEL BRAZO' : 'FUERZA');
   $('keys').classList.toggle('on', !useCamera());
 }
+// La máquina apunta, se balancea y lanza (con algo de error, para que se le pueda ganar)
+function cpuTurn() {
+  cue('Turno de MiVibra'); meter(0, '—', '', 'MIVIBRA'); $('keys').classList.remove('on');
+  const left = G.standing ?? 10, aim = left === 10 ? -0.06 + (Math.random() - 0.5) * 0.18 : (PINS.filter((p) => !p.down && !p.gone).reduce((a, p) => a + p.x, 0) / Math.max(1, left)) - 0.18 + (Math.random() - 0.5) * 0.16;
+  const t0 = performance.now();
+  const go = () => { if (G.paused) return setTimeout(go, 300); if (G.state !== 'aim') return;
+    G.aimX = clamp(aim, -0.42, 0.42); startSwing(); setTimeout(() => { if (G.state === 'swing') release(rnd(0.62, 0.95), rnd(-0.35, 0.35)); }, 950); };
+  setTimeout(go, 1500);
+}
+const rnd = (a, b) => a + Math.random() * (b - a);
 function startSwing() { if (G.state !== 'aim') return; G.state = 'swing'; G.t = 0; }
 function release(power, hook) {
   if (G.state !== 'aim' && G.state !== 'swing') return;
@@ -382,13 +428,14 @@ function settle() {
   let nextFrame = false, resetAll = false;
   if (f < 9) { if (first && down === 10) { nextFrame = true; } else if (!first) nextFrame = true; }
   else { const t = r.reduce((a, b) => a + b, 0); if (r.length === 3 || (r.length === 2 && r[0] + r[1] < 10)) { if (G.cur < G.np - 1) nextFrame = true; else { G.state = 'end'; drawScore(); setTimeout(endGame, 2400); return; } } else resetAll = (r.length === 1 && down === 10) || (r.length === 2 && (r[1] === 10 || r[0] + r[1] === 10)) || (r.length === 2 && r[0] === 10 && down === before && before === 10); }
-  G.state = 'sweep'; G.t = 0;
+  G.state = 'sweep'; G.t = 0; G.sw0 = G.cel > 0 ? 1.5 : 0.35; G.swFull = nextFrame || resetAll; pinsetter.rack = false;
   setTimeout(() => {
-    if (nextFrame) { const nx = (G.cur + 1) % G.np; if (nx === 0) G.frame++; resetPins(true); G.standing = 10; if (G.np > 1) { setCur(nx); big('Turno de ' + PL[nx].name, 'Turno ' + (G.frame + 1) + ' de 10', 1800); const s1 = turnSlot(); if (s1 >= 0) MVLink.say('¡Es tu turno! Lanza la bola', true, s1); } }
+    if (nextFrame) { const nx = (G.cur + 1) % G.np; if (nx === 0) G.frame++; resetPins(true); G.standing = 10; if (G.np > 1) { setCur(nx); big(turnName(PL[nx]), 'Turno ' + (G.frame + 1) + ' de 10', 1800); const s1 = turnSlot(); if (s1 >= 0) MVLink.say('¡Es tu turno! Lanza la bola', true, s1); } }
     else if (resetAll) { resetPins(true); G.standing = 10; }
     else { resetPins(false); G.standing = PINS.filter((p) => !p.gone).length; }
+    PINS.forEach((p) => (p.lift = 0)); deck.position.y = 2.6; bar.position.set(0, 2.6, -17.6);
     newRoll();
-  }, 2400);
+  }, (G.sw0 + 2.7) * 1000);
 }
 function endGame(after) {
   MVHand.pauseEnabled = false;
@@ -398,12 +445,12 @@ function endGame(after) {
     else { const tot = scores()[9] || 0; title = tot >= 120 ? '¡Juegazo!' : '¡Buen juego!'; sub = 'Bolos · ' + tot + ' puntos'; }
     big(title, '¡Celebra! Tu avatar baila contigo', 2600); drawScore();
     const slot = MVLink.players[PL[wi].slot] ? PL[wi].slot : MVLink.players.findIndex(Boolean);
-    setTimeout(() => MVPhoto.take({ title, sub, slots: slot >= 0 ? [slot] : [], snap: () => snapCanvas(R, () => R.render(S, cam)), done: () => endGame(true) }), 1800);
+    setTimeout(() => MVPhoto.take({ title, sub, slots: slot >= 0 ? [slot] : [], snap: () => portraitSnap(R, S, av), done: () => endGame(true) }), 1800);
     return;
   }
   if (G.np > 1) { const rk = PL.slice(0, G.np).map((p) => ({ p, t: scores(p.rolls)[9] || 0 })).sort((a, b) => b.t - a.t); drawScore();
     rk.forEach(({ p }, i) => { if (MVLink.players[p.slot]) MVLink.say(i === 0 ? '¡Ganaste! ' + rk[0].t + ' puntos' : 'Quedaste ' + (i + 1) + '.°', i === 0, p.slot); });
-    return MVHand.menu({ kicker: 'FIN DEL JUEGO', title: '¡Gana ' + rk[0].p.name + '!', sub: rk.map((x, i) => (i + 1) + '. ' + x.p.name + ' — ' + x.t).join('   ·   '), items: [{ id: 'again', label: 'Jugar otra vez', icon: '↻' }, { id: 'play', label: 'Cambiar jugadores', icon: '☺' }, { id: 'exit', label: 'Salir', icon: '✕' }], back: 'exit', onPick: menuPick }); }
+    return MVHand.menu({ kicker: 'FIN DEL JUEGO', title: '¡Gana ' + rk[0].p.name + '!', sub: rk.map((x, i) => (i + 1) + '. ' + x.p.name + ' — ' + x.t).join('   ·   '), items: [{ id: 'again', label: 'Jugar otra vez', icon: '↻' }, { id: 'menu', label: 'Cambiar jugadores', icon: '☺' }, { id: 'exit', label: 'Salir', icon: '✕' }], back: 'exit', onPick: menuPick }); }
   const tot = scores()[9] || 0;
   MVHand.menu({ kicker: 'FIN DEL JUEGO', title: tot + ' puntos', sub: tot >= 150 ? '¡Juegazo!' : tot >= 90 ? '¡Muy bien!' : 'Sigue practicando: ¡la próxima es mejor!', items: [{ id: 'again', label: 'Jugar otra vez', icon: '↻' }, { id: 'edit', label: 'Cambiar mi avatar', icon: '☺' }, { id: 'exit', label: 'Salir', icon: '✕' }], back: 'exit', onPick: menuPick });
 }
@@ -414,9 +461,11 @@ function pause() {
 function menuPick(id) {
   G.paused = false;
   if (id === 'resume') return;
-  if (id === 'play') return countMenu();
-  if (/^n[1-4]$/.test(id) || id === 'again') { const n = id === 'again' ? (G.np || 1) : +id[1]; SND.init(); G.state = 'load'; $('loading').style.display = ''; $('loading').textContent = n > 1 ? 'Preparando jugadores…' : 'Preparando…';
-    setPlayers(n).then(() => { $('loading').style.display = 'none'; G.frame = 0; G.standing = 10; resetPins(true); $('connect').classList.remove('on'); if (n > 1) { big('Turno de ' + PL[0].name, n + ' jugadores · 10 turnos', 1800); MVLink.players.forEach((p, k) => { if (p) MVLink.say(k < n ? (k === 0 ? 'Empiezas tú' : 'Eres ' + PL[k].name + '. Espera tu turno') : 'Esta partida es de ' + n, true, k); }); } newRoll(); }); return; }
+  if (id === 'play' || id === 'players') return countMenu();
+  if (id === 'friends') return countMenu();
+  if (/^n[1-4]$/.test(id) || id === 'cpu' || id === 'again') { const cpu = id === 'cpu' || (id === 'again' && G.cpu), n = id === 'again' ? (G.np || 1) - (G.cpu ? 1 : 0) : id === 'cpu' ? 1 : +id[1]; SND.init(); G.state = 'load'; $('loading').style.display = ''; $('loading').textContent = n > 1 ? 'Preparando jugadores…' : 'Preparando…';
+    setPlayers(n, cpu).then(() => { $('loading').style.display = 'none'; G.frame = 0; G.standing = 10; resetPins(true); $('connect').classList.remove('on'); if (n > 1) { big(turnName(PL[0]), n + ' jugadores · 10 turnos', 1800); MVLink.players.forEach((p, k) => { if (p) MVLink.say(k < n ? (k === 0 ? 'Empiezas tú' : 'Eres ' + PL[k].name + '. Espera tu turno') : 'Esta partida es de ' + n, true, k); }); } newRoll(); }); return; }
+  if (id === 'menu') return startMenu();
   if (id === 'cam') { $('connect').classList.add('on'); return startMenu(); }
   if (id === 'edit') { location.href = '../editor/' + location.search; return; }
   if (id === 'exit') { if (window.parent !== window) window.parent.postMessage({ mv: 'close' }, '*'); else history.back(); }
@@ -429,7 +478,7 @@ function countMenu() {
 function startMenu() {
   G.state = 'menu';
   MVHand.menu({ kicker: 'MIVIBRA MOVIMIENTO', title: 'Bolos', sub: MVLink.on ? 'Celular conectado: levanta la mano y desliza por la flecha.' : 'Conecta el celular para jugar con tu cuerpo, o usa el control.',
-    items: [{ id: 'play', label: 'Jugar (1 a 4 jugadores)', icon: '▶' }, { id: 'cam', label: MVLink.on ? MVLink.count() + (MVLink.count() > 1 ? ' celulares conectados ✓' : ' celular conectado ✓') : 'Conectar celulares', icon: '◉' }, { id: 'exit', label: 'Salir', icon: '✕' }], back: 'exit', onPick: menuPick });
+    items: [{ id: 'cpu', label: 'Jugar contra MiVibra', icon: '▶' }, { id: 'friends', label: 'Con amigos (2 a 4, por tandas)', icon: '☺' }, { id: 'cam', label: MVLink.on ? MVLink.count() + (MVLink.count() > 1 ? ' celulares conectados ✓' : ' celular conectado ✓') : 'Conectar celulares', icon: '◉' }, { id: 'exit', label: 'Salir', icon: '✕' }], back: 'exit', onPick: menuPick });
 }
 
 // ---------- Control remoto ----------
@@ -437,6 +486,7 @@ addEventListener('keydown', (e) => {
   if (MVHand.key(e)) { e.preventDefault(); return; }
   if (e.key === 'Escape' || e.key === 'p' || e.key === 'MediaPlayPause') { pause(); e.preventDefault(); return; }
   if (G.state !== 'aim' && G.state !== 'swing') return;
+  if (PL[G.cur] && PL[G.cur].cpu) { e.preventDefault(); return; }
   if (e.key === 'ArrowLeft') G.aimX = clamp(G.aimX - 0.04, -0.42, 0.42);
   if (e.key === 'ArrowRight') G.aimX = clamp(G.aimX + 0.04, -0.42, 0.42);
   if (e.key === 'ArrowUp') G.spin = clamp(G.spin + 0.25, -1, 1);
@@ -448,9 +498,9 @@ addEventListener('keydown', (e) => {
 // ---------- Cámara de TV ----------
 const cp = new THREE.Vector3(), cl = new THREE.Vector3(), tP = new THREE.Vector3(), tL = new THREE.Vector3();
 function camera(dt) {
-  if ((G.cel > 0 && G.state === 'sweep') || G.state === 'end') { const x = av ? av.scene.position.x : 0, z = av ? av.scene.position.z : 0.4; tP.set(x - 0.35, 1.25, z - 2.5); tL.set(x, 0.85, z); }
+  if ((G.cel > 0 && G.state === 'sweep' && G.t < G.sw0) || G.state === 'end' || G.state === 'menu') { const x = av ? av.scene.position.x : 0, z = av ? av.scene.position.z : 0.4; tP.set(x - 0.35, 1.25, z - 2.5); tL.set(x, 0.85, z); }
   else if (G.state === 'roll' && ball2.z > -14) { tP.set(ball2.x * 0.4 + 0.3, 0.7, Math.min(ball2.z + 2.6, 3)); tL.set(ball2.x * 0.2, 0.2, ball2.z - 6); }
-  else if (G.state === 'roll' || G.state === 'sweep' || G.state === 'end') { tP.set(0.45, 0.65, -16.4); tL.set(0, 0.2, -18.8); }
+  else if (G.state === 'roll' || G.state === 'sweep' || G.state === 'end') { tP.set(0.55, 0.8, -15.9); tL.set(0, 0.35, -18.9); }
   else if (G.state === 'menu' || G.state === 'load') { tP.set(1.4, 2.2, 6.6); tL.set(0, 0.5, -12); }
   else { const x = av ? av.scene.position.x : 0, z = av ? av.scene.position.z : 3; tP.set(x + 0.55, 1.75, z + 3.0); tL.set(x * 0.6, 0.45, -12); }
   const k = 1 - Math.exp(-dt * (G.state === 'roll' ? 6 : 3)); cp.lerp(tP, k); cl.lerp(tL, k); cam.position.copy(cp); cam.lookAt(cl);
@@ -477,13 +527,13 @@ function loop(now) {
     } else if (G.state === 'roll' || G.state === 'sweep') { p = P_FOLLOW; z = 0.35; }
     av.scene.position.set(ax, 0, z);
     // celebrando (chuza, spare o fin del juego): el avatar se voltea hacia ti y celebra contigo (o baila solo)
-    G.cel = Math.max(0, (G.cel || 0) - dt); const celeb = G.cel > 0 || G.state === 'end';
+    G.cel = Math.max(0, (G.cel || 0) - dt); const celeb = G.cel > 0 || G.state === 'end' || G.state === 'menu';
     av.scene.rotation.y = lerp(av.scene.rotation.y, celeb ? 0.15 : Math.PI, 1 - Math.exp(-dt * 5));
     if (celeb) { if (av.anim) { av.anim.play('Idle', { fade: 0.3 }); av.anim.update(dt); } celebrate(av, dt, myEJ(), CEL, facesCam(av.scene, cam)); }
     else {
       // de pie (apuntando, en el menú o mirando los pinos): animación natural + lo que hagas frente al celular
       const natural = av.anim && (G.state === 'aim' || G.state === 'menu' || G.state === 'load' || (G.state === 'sweep' && G.t > 1.2));
-      if (natural) { av.anim.play('Idle', { fade: 0.35 }); av.anim.update(dt); myEJ().apply(av, dt, { arms: 1, spine: 0.7, head: 1, legs: 0 }, facesCam(av.scene, cam)); } else { if (av.anim) av.anim.stop(); resetBones(); pose(p); }
+      if (natural) { av.anim.play('Idle', { fade: 0.35 }); av.anim.update(dt); { const e = myEJ(); if (e) e.apply(av, dt, { arms: 1, spine: 0.7, head: 1, legs: 0 }, facesCam(av.scene, cam)); } } else { if (av.anim) av.anim.stop(); resetBones(); pose(p); }
     }
     av.update(dt);
   }
@@ -499,7 +549,7 @@ function loop(now) {
     const moving = PINS.some((p) => !p.gone && Math.hypot(p.vx, p.vz) > 0.03);
     if (G.state === 'roll' && !ball2.live && (!moving || G.t > 7)) { G.state = 'settling'; setTimeout(settle, 700); }
     if (G.state === 'roll' && G.t > 9) { ball2.live = false; }
-  } else placePins();
+  } else { if (G.state === 'sweep' && G.t > G.sw0) pinsetter(G.t - G.sw0, G.swFull); placePins(); }
   // trayectoria prevista
   aim.visible = G.state === 'aim';
   if (aim.visible) { const pos = aimGeo.attributes.position, hk = -(G.spin || 0); for (let j = 0; j <= NSEG; j++) { const d = 0.4 + j / NSEG * 17.6, x = G.aimX + 0.18 + hk * 0.45 * Math.pow(Math.max(0, d - 7) / 11, 2) * 0.5, z = 0.15 - d, w = 0.08 + j / NSEG * 0.05; pos.setXYZ(j * 2, x - w, 0.005, z); pos.setXYZ(j * 2 + 1, x + w, 0.005, z); } pos.needsUpdate = true; aimGeo.computeBoundingSphere(); }
@@ -513,7 +563,7 @@ MVLink.open((txt, ok) => { $('cst').textContent = txt; $('cst').classList.toggle
 resetPins(true); G.standing = 10; drawScore();
 requestAnimationFrame(loop);
 loadAvatar().then(() => { $('loading').style.display = 'none'; startMenu(); }).catch((e) => { console.error(e); $('loading').textContent = 'No se pudo cargar el avatar'; });
-window.MVB = { G, PL, EJ, setPlayers, ball2, PINS, settle: () => settle(), release: (p, h) => { startSwing(); release(p, h); }, pick: (id) => { MVHand.close(); menuPick(id); }, scores };
+window.MVB = { G, PL, EJ, pinsetter, knockSome: (n) => PINS.slice(0, n).forEach((p) => { p.down = true; p.tilt = 1.5; p.x += (Math.random() - 0.5) * 0.3; }), setPlayers, ball2, PINS, settle: () => settle(), release: (p, h) => { startSwing(); release(p, h); }, pick: (id) => { MVHand.close(); menuPick(id); }, scores };
 </script>
 </body>
 </html>

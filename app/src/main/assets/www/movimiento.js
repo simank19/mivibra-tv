@@ -124,7 +124,7 @@
         '<button class="btn ghost f" data-act="mvEditor">' + (m ? 'Editar mi avatar' : 'Crear mi avatar') + '</button></div>' +
         '<p class="mvm-st">' + (m ? 'Tu avatar <b>' + esc(m.name) + '</b> está guardado en tu cuenta · ' + when : signed ? 'Aún no has creado tu avatar: mientras tanto corres con uno de ejemplo.' : 'Inicia sesión en MiVibra para que tu avatar te siga a todos tus equipos.') + '</p></div>' +
       '</div>' +
-      '<div class="mvm-grid">' + [['100 m con vallas', 'Hasta 4 corredores', 1, 'vallas/'], ['Bolos', 'Hasta 4 jugadores · por tandas', 1, 'bolos/'], ['Tenis de mesa', 'Nuevo · contra MiVibra o 1 vs 1', 1, 'tenis/'], ['Boxeo', 'Próximamente'], ['Salto largo', 'Próximamente'], ['Penales', 'Próximamente']].map(function (g) {
+      '<div class="mvm-grid">' + [['100 m con vallas', 'Hasta 4 corredores', 1, 'vallas/'], ['100 m planos', 'Nuevo · hasta 4 corredores', 1, 'planos/'], ['Salto largo', 'Nuevo · 3 intentos', 1, 'salto/'], ['Bolos', 'Contra MiVibra o hasta 4', 1, 'bolos/'], ['Tenis de mesa', 'Derecha y revés', 1, 'tenis/'], ['Voleibol de playa', 'Nuevo · 2 contra 2', 1, 'voley/'], ['Fútbol playa', 'Nuevo · penales', 1, 'futbol/'], ['Boxeo', 'Próximamente']].map(function (g) {
         return '<button class="mvm-card glass f' + (g[2] ? '' : ' soon') + '" data-act="' + (g[2] ? 'mvPlay' : 'mvSoon') + '" data-arg="' + (g[3] || 'vallas/') + '"><b>' + g[0] + '</b><span>' + g[1] + '</span></button>';
       }).join('') + '</div>';
   };

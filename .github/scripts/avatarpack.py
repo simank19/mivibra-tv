@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Arma MiVibra Movimiento para GitHub Pages (site/movimiento):
-el editor de avatares caricatura (piezas CC0 de Quaternius), los juegos (vallas, bolos, tenis de mesa) y la cámara del celular;
+el editor de avatares caricatura (piezas CC0 de Quaternius), los juegos (vallas, 100 m planos, salto largo, bolos, tenis de mesa, voleibol y fútbol de playa) y la cámara del celular;
 además deja
 el editor de avatares VRM Avatar Maker (MIT, piezas CC0 de MakeHuman) en español y con la marca MiVibra,
 más el juego de 100 m con vallas, que corre con el avatar guardado en el mismo navegador.
@@ -50,7 +50,7 @@ def main():
     shutil.move(os.path.join(out, 'editor'), os.path.join(out, 'editor-vrm'))
     os.makedirs(os.path.join(out, 'editor'), exist_ok=True)
     shutil.copy(os.path.join(OVR, 'editor.html'), os.path.join(out, 'editor', 'index.html'))
-    for f in ('avatar.js', 'anim.js', 'animaciones.json', 'mano.js', 'espejo.js'):
+    for f in ('avatar.js', 'anim.js', 'animaciones.json', 'mano.js', 'espejo.js', 'sonido.js', 'playa.js'):
         shutil.copy(os.path.join(OVR, f), os.path.join(out, f))
     for d in ('kit', 'sonidos'):
         shutil.copytree(os.path.join(OVR, d), os.path.join(out, d))
@@ -58,11 +58,21 @@ def main():
     if os.path.exists(os.path.join(OVR, 'bolos.html')):
         os.makedirs(os.path.join(out, 'bolos'), exist_ok=True)
         shutil.copy(os.path.join(OVR, 'bolos.html'), os.path.join(out, 'bolos', 'index.html'))
+    for game in ('futbol', 'voley'):
+        if os.path.exists(os.path.join(OVR, game + '.html')):
+            os.makedirs(os.path.join(out, game), exist_ok=True)
+            shutil.copy(os.path.join(OVR, game + '.html'), os.path.join(out, game, 'index.html'))
     if os.path.exists(os.path.join(OVR, 'tenis.html')):
         os.makedirs(os.path.join(out, 'tenis'), exist_ok=True)
         shutil.copy(os.path.join(OVR, 'tenis.html'), os.path.join(out, 'tenis', 'index.html'))
     os.makedirs(os.path.join(out, 'vallas'), exist_ok=True)
     shutil.copy(os.path.join(OVR, 'vallas.html'), os.path.join(out, 'vallas', 'index.html'))
+    # el mismo estadio para 100 m planos y salto largo (solo cambia el modo)
+    vh = open(os.path.join(OVR, 'vallas.html'), encoding='utf-8').read()
+    for mode in ('planos', 'salto'):
+        os.makedirs(os.path.join(out, mode), exist_ok=True)
+        with open(os.path.join(out, mode, 'index.html'), 'w', encoding='utf-8') as f:
+            f.write(vh.replace('<script type="importmap">', '<script>window.MV_MODE = "' + mode + '";</script>\n<script type="importmap">', 1))
     shutil.copytree(os.path.join(OVR, 'addons3'), os.path.join(out, 'vendor', 'three-0.183.2', 'addons'), dirs_exist_ok=True)
     os.makedirs(os.path.join(out, 'camara'), exist_ok=True)
     shutil.copy(os.path.join(OVR, 'camara.html'), os.path.join(out, 'camara', 'index.html'))
