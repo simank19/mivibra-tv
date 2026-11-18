@@ -22,7 +22,7 @@ export const ANIME_DEFAULT = Object.freeze({
     freckles: false,
     makeup: 'none',
   },
-  hair: { style: 'short-messy', color: '#1a120c', extra: 'none', beard: 'none' },
+  hair: { style: 'Casual', color: '#1a120c', extra: 'none', beard: 'none' },
   outfit: {
     head: 'Casual', upper: 'Casual', lower: 'Casual2', feet: 'Casual2',
     colors: { upper: '#FF6A3D', upperDetail: '#F4F5F6', lower: '#1F2937', lowerDetail: '#F4F5F6', shoes: '#F4F5F6', shoesDetail: '#FF6A3D' },
