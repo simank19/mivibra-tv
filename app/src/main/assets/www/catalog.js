@@ -1432,6 +1432,12 @@
       if (list.type === 'stremio' || list.type === 'mvplugin') ST_SESSION[list.id] = 1;
       // Addon guardado solo con la carga rápida: en segundo plano se completa con todo su catálogo
       if (fresh && deep && !cached.deep) fresh = false;
+      // Al revés: una carga rápida no reemplaza un addon que ya está completo (en el TV se perdían miles de títulos
+      // y por eso mostraba menos que el celular). El completo se renueva en segundo plano.
+      if (cached && !force && !deep && cached.deep && list.type === 'stremio' && cached.v === 8 && cached.sv === ST_V && cached.items && cached.items.length && cached.ts > Date.now() - 48 * 3600e3) {
+        if (!fresh) list._stale = true;
+        return cached.items.map(retag);
+      }
       // Lo guardado se vuelve a clasificar con las reglas actuales (+18, infantil, géneros, sin emojis)
       if (cached && !force && fresh) return cached.items.map(retag);
       // Mostrar ya lo guardado aunque tenga más de 12 horas; la lista se actualiza después en segundo plano, una por una
@@ -1477,6 +1483,7 @@
         if (items.length) { list.hadItems = true; list.zeroLoads = 0; } else list.zeroLoads = (list.zeroLoads || 0) + 1;
         // Incompleta: se guarda como "vieja" para que se vuelva a pedir en la próxima actualización (no en 12 horas)
         MV.idbSet(ck, { ts: partial ? Date.now() - 12 * 3600e3 : Date.now(), v: 8, sv: ST_V, items: items, deep: deep }); listStamp(list.id);
+        if (list.type === 'stremio') { var dm = MV.load('listDeep', {}) || {}; dm[list.id] = deep ? 1 : 0; MV.save('listDeep', dm); }
         return items;
       }).catch(function (e) {
         list.error = e.message || 'Error';
@@ -1606,8 +1613,10 @@
       MV.loadEpg(false);
       // En segundo plano (sin apuro): se leen las listas guardadas para poder actualizarlas y combinarlas después.
       // Solo si hay algo que actualizar: leerlas todas duplica la memoria y en TV modestos cerraba la app.
-      var tsm = MV.load('listTs', {}) || {};
+      var tsm = MV.load('listTs', {}) || {}, dpm = MV.load('listDeep', {}) || {};
       var anyStale = lists.some(function (l) {
+        // Addon que en este equipo nunca se completó: hay que completarlo (si no, el TV ve menos que el celular)
+        if (l.type === 'stremio' && P.stDeep !== false && !dpm[l.id]) return true;
         var age = l.type === 'web' || l.type === 'fb' ? 3600e3 : 12 * 3600e3;
         return !tsm[l.id] || tsm[l.id] < Date.now() - age || (P.stAutoRefresh && (l.type === 'stremio' || l.type === 'mvplugin'));
       });
