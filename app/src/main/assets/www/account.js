@@ -135,7 +135,7 @@
       var listsChanged = sig(next) !== sig(S.lists);
       if (listsChanged) { S.lists = next; MV.save('lists', S.lists); }
       lastPushed = missing.length ? '' : JSON.stringify(payload());
-      if (listsChanged) MV.reloadCatalog(false);
+      if (listsChanged) MV.syncCatalog();
     } finally { applying = false; }
     if (!acct.isAdmin()) setTimeout(function () { acct.pushOwn(); }, 3000);
     if (missing.length || (acct.isAdmin() && (cfg.lists || []).some(function (l) { var t = MV.listTombs ? MV.listTombs() : {}; return t[l.id] && (l.added || 0) <= t[l.id]; }))) setTimeout(function () { acct.push(); }, 500);

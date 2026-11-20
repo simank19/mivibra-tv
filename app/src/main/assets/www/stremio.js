@@ -359,9 +359,10 @@
     if (opts && !opts.name) opts.name = title;
     // Por defecto se muestra siempre la lista de enlaces para elegir (Ajustes › Reproductor › Elegir de dónde reproducir)
     // Por defecto arranca solo con el mejor enlace (de todas tus fuentes); solo pregunta si lo activas en Ajustes
-    var ask = S.prefs.askSource === true || !!showAll;
+    var ask = S.prefs.askSource === true;
     var pref = !ask && !showAll && !skipPref && MV.stPrefList();
-    MV.toast(pref ? 'Buscando en ' + (pref.name || 'tu addon preferido') + '…' : 'Buscando enlaces en tus addons…', 3000);
+    // Sin avisos técnicos: solo que se está abriendo
+    MV.toast('Abriendo…', 1500);
     MV._stTorrents = 0;
     MV._stDiag = {};
     var anime = /^(kitsu|mal|anilist|anidb)[:_]/i.test(id);
@@ -385,13 +386,16 @@
       if (S.prefs.latOnly && !showAll && st.length) {
         var lat = st.filter(function (x) { return latLink(x, anime, opts && opts.olang === 'es'); });
         if (!lat.length) {
-          return MV.confirm('Sin enlaces en español latino', 'Tus addons encontraron ' + st.length + (st.length === 1 ? ' enlace' : ' enlaces') + ' para “' + title + '”, pero ninguno dice que sea en latino. Tienes activado “Solo español latino”.', 'Ver todos los enlaces').then(function (y) {
+          return MV.confirm('No está en español latino', '“' + title + '” no está disponible en latino. ¿Quieres verla en otro idioma?', 'Ver en otro idioma').then(function (y) {
             if (!y) throw new Error('cancelado');
             return MV.stremioPick(type, id, title, true, true, opts);
           });
         }
         st = lat;
       }
+      var admin = MV.acct && MV.acct.isAdmin && MV.acct.isAdmin();
+      // A los usuarios no se les habla de addons ni torrents: solo que no está disponible (el detalle técnico, solo para el administrador)
+      if (!st.length && !admin) throw new Error('Este título no está disponible por ahora. Prueba más tarde.');
       if (!st.length && MV._stTorrents) throw new Error('Tus addons solo encontraron torrents (' + MV._stTorrents + '). MiVibra reproduce enlaces directos: en la configuración de Torrentio agrega un servicio debrid (Real-Debrid, AllDebrid, Premiumize…) y vuelve a instalarlo con el enlace nuevo.');
       if (!st.length) {
         var dg = MV._stDiag || {}, names = Object.keys(dg);
@@ -410,7 +414,6 @@
         // Automático: el mejor primero y el resto de respaldo (si el primero no abre, el reproductor sigue solo con el siguiente)
         st = MV.stAutoSort(st, opts, anime);
         var best = withRest(st[0]); best.rest = st.slice(1).filter(function (y) { return !y._other; }).map(function (y) { return y.url; }).slice(0, 10);
-        MV.toast('Reproduciendo · ' + (st[0].src || 'mejor enlace'), 2000);
         return best;
       }
       return new Promise(function (resolve, reject) {

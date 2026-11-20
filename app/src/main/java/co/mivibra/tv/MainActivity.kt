@@ -138,7 +138,9 @@ class MainActivity : ComponentActivity() {
 
     // ---------- Ventana flotante (PiP) del reproductor web ----------
     private var pipWanted = false
-    private fun pipSupported() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+    // En TV no hay ventana flotante: al salir de la app nada sigue corriendo en segundo plano
+    private fun pipSupported() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE) &&
+        (getSystemService(UI_MODE_SERVICE) as android.app.UiModeManager).currentModeType != Configuration.UI_MODE_TYPE_TELEVISION
     private fun pipParams(): PictureInPictureParams? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null
         val b = PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9))

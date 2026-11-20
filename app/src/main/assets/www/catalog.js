@@ -1361,8 +1361,30 @@
     });
   }
 
-  /** Episodios de una serie Xtream (se cargan al abrir la ficha). */
-  MV.loadEpisodes = function (item) {
+  /**
+   * Capítulos al instante: se guardan en el equipo; al abrir la ficha aparecen de una (sin esperar al servidor)
+   * y, si tienen más de 6 horas, se actualizan en segundo plano (onFresh avisa si llegaron capítulos nuevos).
+   */
+  MV.loadEpisodes = function (item, onFresh) {
+    if (item._epsAt && Date.now() - item._epsAt < 30 * 60e3 && (item.episodes || []).length) return Promise.resolve(item.episodes);
+    var k = 'eps:' + item.key;
+    function fresh() {
+      return fetchEpisodes(item).then(function (e) { item._epsAt = Date.now(); if (e && e.length) MV.idbSet(k, { ts: Date.now(), eps: e }); return e || []; });
+    }
+    return MV.idbGet(k).catch(function () { return null; }).then(function (c) {
+      if (c && c.eps && c.eps.length) {
+        item.episodes = c.eps; item._epsAt = Date.now();
+        if (Date.now() - c.ts > 6 * 3600e3) setTimeout(function () {
+          var before = c.eps.length; item.episodes = item.xt ? item.episodes : [];
+          fresh().then(function (e) { if (!e.length) item.episodes = c.eps; else if (onFresh && e.length !== before) onFresh(e); }, function () { item.episodes = c.eps; });
+        }, 1500);
+        return c.eps;
+      }
+      return fresh();
+    });
+  };
+  /** Pide los capítulos al servidor (Xtream, addons, Jellyfin/Plex, Stalker). */
+  function fetchEpisodes(item) {
     if (item.stks && !(item.episodes || []).length) return stkEpisodes(item);
     if ((item.jf || item.px) && !(item.episodes || []).length) return mediaEpisodes(item);
     if (item.st && !item.xt && !(item.episodes || []).length && MV.stremioEpisodes) return MV.stremioEpisodes(item).then(function (eps) { item.episodes = eps; return eps; });
@@ -1382,12 +1404,12 @@
       item.episodes = eps;
       return eps;
     });
-  };
+  }
 
   // ---------- Carga y combinación de todas las listas ----------
   function retag(o) { if (o.type === 'book') return o; try { return tags(o); } catch (e) { return o; } }
   var ST_V = 6, ST_SESSION = {}; // sube cuando cambia la forma de leer los addons (fuerza recargarlos)
-  function loadList(list, force, bg) {
+  function loadList(list, force, bg, stale) {
     // En segundo plano los addons se leen completos (todas las páginas de cada catálogo); al abrir, rápido
     var deep = !!bg && list.type === 'stremio' && P.stDeep !== false;
     var ck = 'list:' + list.id;
@@ -1403,6 +1425,9 @@
       if (fresh && deep && !cached.deep) fresh = false;
       // Lo guardado se vuelve a clasificar con las reglas actuales (+18, infantil, géneros, sin emojis)
       if (cached && !force && fresh) return cached.items.map(retag);
+      // Mostrar ya lo guardado aunque tenga más de 12 horas; la lista se actualiza después en segundo plano, una por una
+      if (cached && !force && stale && cached.v === 8 && cached.items && cached.items.length) { list._stale = true; return cached.items.map(retag); }
+      list._stale = false;
       var job;
       if (list.type === 'xtream') job = buildFromXtream(list);
       else if (list.type === 'stalker') job = buildFromStalker(list);
@@ -1443,13 +1468,23 @@
     });
   }
 
+  /** Hace fn con cada elemento, de a n al tiempo (cargar todas las listas juntas llenaba la memoria del TV). */
+  function pool(arr, n, fn) {
+    var out = new Array(arr.length), k = 0;
+    function next() { if (k >= arr.length) return Promise.resolve(); var i = k++; return Promise.resolve(fn(arr[i], i)).then(function (r) { out[i] = r; return next(); }); }
+    var ws = []; for (var j = 0; j < Math.min(n, arr.length); j++) ws.push(next());
+    return Promise.all(ws).then(function () { return out; });
+  }
   MV.reloadCatalog = function (force) {
-    S.loading = true; S.loadMsg = 'Cargando tus listas…'; MV.emit('catalog');
+    // Si ya hay contenido en pantalla, se sigue mostrando mientras se actualiza (nada de "Cargando tus listas" otra vez)
+    var had = S.items && S.items.length;
+    if (!had) { S.loading = true; S.loadMsg = 'Cargando tus listas…'; MV.emit('catalog'); }
     var lists = S.lists.filter(function (l) { return MV.listOn(l); });
     var failed = [];
-    return Promise.all(lists.map(function (l) {
-      return loadList(l, typeof force === 'function' ? force(l) : force).catch(function (e) { failed.push(l.name + ': ' + e.message); if (!l.count) l.zeroLoads = (l.zeroLoads || 0) + 1; return []; });
-    })).then(function (all) {
+    return pool(lists, 2, function (l) {
+      var f = typeof force === 'function' ? force(l) : force;
+      return loadList(l, f, false, !f).catch(function (e) { failed.push(l.name + ': ' + e.message); if (!l.count) l.zeroLoads = (l.zeroLoads || 0) + 1; return []; });
+    }).then(function (all) {
       // Listas con 0 elementos: se eliminan solas (si nunca trajeron nada, de una; si antes funcionaban, tras 2 cargas vacías seguidas)
       if (P.pruneEmpty !== false && MV.acct && MV.acct.canEditList) {
         // Solo las recién agregadas en este equipo: si una lista falla aquí pero funciona en otro equipo, no se borra de todos
@@ -1469,17 +1504,52 @@
       if (failed.length === 1) MV.toast('“' + failed[0].replace(': ', '”: '), 4000);
       else if (failed.length > 1) MV.toast(failed.length + ' listas no cargaron. Revísalas en Ajustes › Listas (puedes borrarlas juntas con "Seleccionar varias" › "Las que fallan").', 6000);
       MV.saveLists();
-      lastAll = all;
-      combine(all);
+      lastAll = all; setAll(lists, all);
+      return combine(all, true).then(function () {
       S.loading = false; MV.emit('catalog');
       MV.loadEpg(false);
+      // Las que se mostraron con lo guardado (más de 12 h) se actualizan ahora, de a una, sin bloquear
+      var stale = lists.map(function (l, i) { return l._stale ? i : -1; }).filter(function (i) { return i >= 0; });
+      if (stale.length) setTimeout(function () { refreshInBackground(lists, stale); }, 8000);
       setTimeout(function () { MV.checkDupes(false); }, 4000);
       // Después de la carga rápida, los addons se completan en segundo plano con todo su catálogo
       if (P.stDeep !== false) setTimeout(function () {
         var idx = lists.map(function (l, i) { return l.type === 'stremio' ? i : -1; }).filter(function (i) { return i >= 0 && lastAll === all; });
         if (idx.length) refreshInBackground(lists, idx);
       }, 30000);
+      });
     });
+  };
+
+  // ---------- Cambios de listas sin recargar todo ----------
+  // Lo último cargado de cada lista (por id): al activar, agregar o quitar una lista solo se carga ESA y se vuelve a combinar.
+  var ALLBY = {}, ALLSIG = {};
+  function lsig(l) { return [l.url || '', l.host || '', l.user || '', l.pass || '', l.mac || '', l.xtFormat || ''].join('|'); }
+  function setAll(lists, all) { lists.forEach(function (l, i) { if (all[i]) { ALLBY[l.id] = all[i]; ALLSIG[l.id] = lsig(l); } }); }
+  var syncing = null, syncAgain = false;
+  MV.syncCatalog = function () {
+    if (syncing) { syncAgain = true; return syncing; }
+    var lists = S.lists.filter(function (l) { return MV.listOn(l); });
+    if (!S.items || !S.items.length || !lastAll) return MV.reloadCatalog(false);
+    // Nuevas, o cuya dirección/usuario cambió
+    var need = lists.filter(function (l) { return !ALLBY[l.id] || ALLSIG[l.id] !== lsig(l); });
+    if (need.length === 1) MV.toast('Agregando “' + need[0].name + '”…', 2500);
+    syncing = pool(need, 2, function (l) {
+      var changed = ALLBY[l.id] && ALLSIG[l.id] !== lsig(l);
+      return loadList(l, changed, false, !changed).then(function (items) { ALLBY[l.id] = items; ALLSIG[l.id] = lsig(l); }, function (e) { l.error = e.message || 'Error'; ALLBY[l.id] = []; ALLSIG[l.id] = lsig(l); });
+    }).then(function () {
+      // Lo de listas apagadas o borradas se suelta de la memoria
+      var on = {}; lists.forEach(function (l) { on[l.id] = 1; }); Object.keys(ALLBY).forEach(function (id) { if (!on[id]) delete ALLBY[id]; });
+      var all = lists.map(function (l) { return ALLBY[l.id] || []; });
+      lastAll = all; MV.saveLists();
+      return combine(all, true);
+    }).then(function () {
+      MV.emit('catalog'); syncing = null;
+      var stale = lists.map(function (l, i) { return l._stale ? i : -1; }).filter(function (i) { return i >= 0; });
+      if (stale.length) setTimeout(function () { refreshInBackground(lists, stale); }, 8000);
+      if (syncAgain) { syncAgain = false; return MV.syncCatalog(); }
+    }, function (e) { syncing = null; console.warn(e); });
+    return syncing;
   };
 
   /**
@@ -1502,7 +1572,7 @@
         })).then(function (caches) {
           var all = caches.map(function (c) { return c ? c.items : []; });
           return chunked(all, function (it, i, arr) { arr[i] = retag(it); }).then(function () {
-            if (!lastAll) lastAll = all;
+            if (!lastAll) { lastAll = all; setAll(lists, all); }
             setTimeout(function () { MV.checkDupes(false); }, 4000);
             var stale = lists.map(function (l, i) {
               var c = caches[i], age = l.type === 'web' || l.type === 'fb' ? 3600e3 : 12 * 3600e3;
@@ -1522,7 +1592,7 @@
       var all = caches.map(function (c) { return c ? c.items : []; });
       S.loading = true; S.loadMsg = 'Preparando tu contenido…';
       return chunked(all, function (it, i, arr) { arr[i] = retag(it); }).then(function () {
-        lastAll = all; return combine(all, true);
+        lastAll = all; setAll(lists, all); return combine(all, true);
       }).then(function (ok) {
       if (ok === false) return;
       S.loading = false; MV.emit('catalog');
@@ -1545,7 +1615,7 @@
       if (k >= idxs.length) return Promise.resolve();
       var i = idxs[k++], l = lists[i];
       return loadList(l, false, true).then(function (items) {
-        if (lastAll && lastAll[i] !== undefined && items && items.length) { lastAll[i] = items; changed = true; }
+        if (lastAll && lastAll[i] !== undefined && items && items.length) { lastAll[i] = items; ALLBY[l.id] = items; ALLSIG[l.id] = lsig(l); changed = true; }
       }).catch(function () {}).then(next);
     }
     Promise.all([next(), next()]).then(function () {
@@ -1675,8 +1745,10 @@
   function listStamp(id) { var m = MV.load('listTs', {}) || {}; m[id] = Date.now(); MV.save('listTs', m); }
   function snapSig() {
     var ts = MV.load('listTs', {}) || {};
-    var ls = S.lists.filter(function (l) { return MV.listOn(l); }).map(function (l) { return [l.id, l.url || '', l.host || '', l.user || '', l.updatedAt || 0, ts[l.id] || 0]; });
-    return JSON.stringify([SNAP_V, (MV.device && (MV.device.versionCode || MV.device.version)) || '', ls, MV.CONTENT_PREFS.map(function (k) { return P[k]; }), P.dedupe !== false, P.adultOn || false]);
+    // Solo lo que cambia el contenido: qué listas están activas, su dirección y cuándo se descargaron.
+    // (Antes también la versión de la app y cualquier cambio de nombre: cada actualización volvía a "Cargando tus listas")
+    var ls = S.lists.filter(function (l) { return MV.listOn(l); }).map(function (l) { return [l.id, l.url || '', l.host || '', l.user || '', ts[l.id] || 0]; });
+    return JSON.stringify([SNAP_V, ls, MV.CONTENT_PREFS.map(function (k) { return P[k]; }), P.dedupe !== false, P.adultOn || false]);
   }
   var snapT = null;
   function snapLater() {
@@ -1865,7 +1937,7 @@
     // Lista del cliente: se queda junto a las del superadministrador y viaja con su cuenta
     if (MV.acct && MV.acct.managed() && !MV.acct.isAdmin()) list.own = true;
     S.lists.push(list); MV.saveLists();
-    return loadList(list, true).then(function () { MV.saveLists(); return MV.reloadCatalog(false); }).then(function () {
+    return loadList(list, true).then(function () { MV.saveLists(); return MV.syncCatalog(); }).then(function () {
       // Resumen de lo que aportó la lista (y por qué parte no se ve: repetidos o idioma)
       var mine = S.items.filter(function (i) { return i.list === list.id; });
       var vis = MV.visible(mine), c = { live: 0, movie: 0, series: 0, video: 0 };
@@ -1918,7 +1990,7 @@
       });
     }, Promise.resolve()).then(function () {
       MV.saveLists();
-      return MV.reloadCatalog(false).then(function () { return { added: fresh.length, skipped: arr.length - fresh.length, failed: failed }; });
+      return MV.syncCatalog().then(function () { return { added: fresh.length, skipped: arr.length - fresh.length, failed: failed }; });
     });
   };
   /** Borra varias listas de una vez (una sola recarga del contenido). */
@@ -1926,18 +1998,19 @@
     MV.addTombs(ids);
     S.lists = S.lists.filter(function (l) { return ids.indexOf(l.id) < 0; });
     ids.forEach(function (id) { MV.idbDel('list:' + id); MV.idbDel('raw:' + id); });
-    MV.saveLists(); return MV.reloadCatalog(false);
+    MV.saveLists(); return MV.syncCatalog();
   };
   // Revisión cada hora de las páginas web (sin interrumpir lo que estés viendo)
   setInterval(function () {
     if (S.loading || !S.lists.some(function (l) { return (l.type === 'web' || l.type === 'fb') && MV.listOn(l); })) return;
-    MV.reloadCatalog(false);
+    // Solo las páginas web se piden de nuevo; lo demás sigue como está
+    MV.reloadCatalog(function (l) { return l.type === 'web' || l.type === 'fb'; });
   }, 3600e3 + 30e3);
   MV.removeList = function (id) {
     MV.addTombs([id]);
     S.lists = S.lists.filter(function (l) { return l.id !== id; });
     MV.idbDel('list:' + id); MV.idbDel('raw:' + id);
-    MV.saveLists(); return MV.reloadCatalog(false);
+    MV.saveLists(); return MV.syncCatalog();
   };
 
   // ---------- Guía EPG ----------
@@ -2264,8 +2337,9 @@
     d.history = [entry].concat(d.history.filter(function (h) { return h.key !== it.key; })).slice(0, 150);
     if (res && !res.live && res.duration > 0) {
       var pct = res.position / res.duration;
-      if (pct > 0.95 || res.position < 20000) delete d.progress[it.key];
-      else d.progress[it.key] = Object.assign(entry, { pos: res.position, dur: res.duration });
+      d.progDel = d.progDel || {};
+      if (pct > 0.95 || res.position < 20000) { delete d.progress[it.key]; if (pct > 0.95) d.progDel[it.key] = now; }
+      else { d.progress[it.key] = Object.assign(entry, { pos: res.position, dur: res.duration }); delete d.progDel[it.key]; }
     }
     MV.savePdata(d);
   };
@@ -2398,7 +2472,12 @@
         Object.keys(rd.saved || {}).forEach(function (k) { if (!ld.saved[k] || (rd.saved[k].ts || 0) > (ld.saved[k].ts || 0)) ld.saved[k] = rd.saved[k]; });
         var hist = {}; (ld.history || []).concat(rd.history || []).forEach(function (h) { if (!hist[h.key] || hist[h.key].ts < h.ts) hist[h.key] = h; });
         ld.history = Object.keys(hist).map(function (k) { return hist[k]; }).sort(function (a, b) { return b.ts - a.ts; }).slice(0, 150);
-        Object.keys(rd.progress || {}).forEach(function (k) { if (!ld.progress[k] || (rd.progress[k].ts || 0) > (ld.progress[k].ts || 0)) ld.progress[k] = rd.progress[k]; });
+        // Lo que terminaste o quitaste de "Seguir viendo" en un equipo no vuelve a aparecer desde otro
+        ld.progDel = ld.progDel || {};
+        Object.keys(rd.progDel || {}).forEach(function (k) { if (!ld.progDel[k] || rd.progDel[k] > ld.progDel[k]) ld.progDel[k] = rd.progDel[k]; });
+        Object.keys(rd.progress || {}).forEach(function (k) { if ((ld.progDel[k] || 0) >= (rd.progress[k].ts || 0)) return; if (!ld.progress[k] || (rd.progress[k].ts || 0) > (ld.progress[k].ts || 0)) ld.progress[k] = rd.progress[k]; });
+        Object.keys(ld.progress).forEach(function (k) { if ((ld.progDel[k] || 0) >= (ld.progress[k].ts || 0)) delete ld.progress[k]; });
+        var dk = Object.keys(ld.progDel); if (dk.length > 400) dk.sort(function (a, b) { return ld.progDel[a] - ld.progDel[b]; }).slice(0, dk.length - 300).forEach(function (k) { delete ld.progDel[k]; });
         MV.save('pdata:' + pid, ld);
       });
       var managed = MV.acct && MV.acct.managed();
@@ -2417,7 +2496,7 @@
         if (!ll) { S.lists.push(rl); listsChanged = true; }
         else if ((rl.updatedAt || 0) > (ll.updatedAt || 0)) { Object.assign(ll, rl); listsChanged = true; }
       });
-      if (listsChanged) { MV.save('lists', S.lists); MV.reloadCatalog(false); }
+      if (listsChanged) { MV.save('lists', S.lists); MV.syncCatalog(); }
       // Google Drive de la cuenta (permiso y carpeta de juegos): lo más reciente gana
       var ld = MV.load('driveShared', null);
       if (r.drive && (!ld || (r.drive.at || 0) > (ld.at || 0))) { MV.save('driveShared', r.drive); if (MV.driveApply) setTimeout(function () { MV.driveApply(r.drive); }, 0); }

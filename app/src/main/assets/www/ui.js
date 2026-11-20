@@ -1752,7 +1752,8 @@
       // La carátula de la lista es la que corresponde a ese archivo; la de la ficha puede ser de otra película con el mismo nombre
     });
     if (it.type === 'series') {
-      MV.loadEpisodes(it).then(function (eps) {
+      // Si en segundo plano llegan capítulos nuevos, la ficha se vuelve a dibujar sola
+      MV.loadEpisodes(it, function () { if (view.name === 'detail' && view.arg === key) MV.rerender(); }).then(function (eps) {
         var box = document.getElementById('eps'); if (!box) return;
         if (!eps.length) { box.innerHTML = '<p class="muted">No se encontraron episodios.</p>'; var sp0 = document.getElementById('splay'); if (sp0) sp0.innerHTML = ''; return; }
         eps.sort(function (a, b) { return a.season - b.season || a.ep - b.ep; });
@@ -2462,7 +2463,7 @@
       c = Object.assign(JSON.parse(JSON.stringify(src)), { id: 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), own: true, fromUser: who.email, srcKey: k, enabled: true, added: Date.now(), updatedAt: Date.now() });
       S.lists.push(c);
     }
-    MV.saveLists(); MV.reloadCatalog(false).then(MV.rerender); MV.rerender();
+    MV.saveLists(); MV.syncCatalog().then(MV.rerender); MV.rerender();
     MV.toast(c.enabled !== false ? 'Lista activada' + (c.own ? ' (solo para ti)' : '') : 'Lista apagada');
   };
   UL_ACTS.ulShare = function (k) {
@@ -2475,12 +2476,12 @@
   UL_ACTS.myListsToggle = function () {
     var off = !MV.myOff(); try { localStorage.setItem('mv:myOff', off ? '1' : '0'); } catch (e) {}
     MV.toast(off ? 'Tus listas apagadas en este equipo (modo de prueba)' : 'Tus listas activadas de nuevo', 3500);
-    MV.reloadCatalog(false).then(MV.rerender); MV.rerender();
+    MV.syncCatalog().then(MV.rerender); MV.rerender();
   };
   UL_ACTS.provToggle = function () {
     P.provOff = !P.provOff; MV.savePrefs();
     MV.toast(P.provOff ? 'Listas incluidas apagadas: ves solo tus listas' : 'Listas incluidas activadas', 3500);
-    MV.reloadCatalog(false).then(MV.rerender); MV.rerender();
+    MV.syncCatalog().then(MV.rerender); MV.rerender();
   };
   SETTINGS.lists = function () {
     var provBlock = '';
@@ -2972,7 +2973,17 @@
       if (it) MV.toggleFav(it);
     });
     if (r && r.replaced) { ctx = replaced; replaced = null; if (!ctx) return; }
-    else { if (!playing) return; ctx = playing; playing = null; }
+    else if (playing) { ctx = playing; playing = null; }
+    else {
+      // En TV con poca memoria, Android a veces reinicia la app mientras ves algo y se pierde qué se estaba viendo.
+      // Con lo que devuelve el reproductor (id y posición) se guarda igual en "Seguir viendo".
+      if (!r || !r.id) return;
+      var id = r.id, base = id.split('#')[0], par = S.byKey[base] || (MV.reg && MV.reg[base]);
+      var m = id.indexOf('#') > 0 && id.split('#')[1].match(/^(\d+)x(\d+)$/);
+      if (par && m) { MV.recordPlay({ key: id, type: 'episode', name: par.name + ' · T' + m[1] + ' E' + m[2], poster: MV.poster(par), group: par.group, parent: par.key }, r); MV.recordPlay(par, null); }
+      else { var it1 = S.byKey[id] || (MV.reg && MV.reg[id]); if (it1) MV.recordPlay(it1, r); }
+      MV.rerender(); return;
+    }
     // El addon que te funcionó (viste más de un minuto) va primero la próxima vez
     if (ctx.item && ctx.item._stLid && r && r.position > 60000) try { var wl = MV.load('stWorkedLid', {}) || {}; wl[ctx.item._stLid] = Date.now(); MV.save('stWorkedLid', wl); } catch (e) {}
     if (MV.ach) try { MV.ach.onWatched(ctx, r || {}); } catch (e) {}
@@ -3750,7 +3761,7 @@
       MV.addList({ type: 'url', name: p.name, url: p.url, preset: true }).then(function () { MV.rerender(); MV.toast('Lista agregada'); }).catch(function (e) { MV.toast(e.message); });
     },
     listToggle: function (id) {
-      var l = S.lists.find(function (x) { return x.id === id; }); if (!MV.acct.canEditList(l)) return; l.enabled = l.enabled === false; if (l.enabled === false) l.error = ''; l.updatedAt = Date.now(); MV.saveLists(); MV.reloadCatalog(false).then(MV.rerender); MV.rerender(); },
+      var l = S.lists.find(function (x) { return x.id === id; }); if (!MV.acct.canEditList(l)) return; l.enabled = l.enabled === false; if (l.enabled === false) l.error = ''; l.updatedAt = Date.now(); MV.saveLists(); MV.syncCatalog().then(MV.rerender); MV.rerender(); },
     lselStart: function () { LSEL = {}; MV.rerender(); var r = document.querySelector('.selrow'); if (r) r.focus(); },
     lselCancel: function () { LSEL = null; MV.rerender(); },
     lselToggle: function (id, el) {

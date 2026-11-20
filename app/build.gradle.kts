@@ -108,4 +108,6 @@ dependencies {
     implementation("org.apache.commons:commons-compress:1.21")
     implementation("org.tukaani:xz:1.9")
     implementation("com.github.junrar:junrar:7.5.5")
+    // RAR 5 (junrar solo lee RAR 4): libarchive para Android
+    implementation("me.zhanghai.android.libarchive:library:1.1.6")
 }

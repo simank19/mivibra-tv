@@ -222,14 +222,18 @@ class PlayerActivity : ComponentActivity() {
         fun fmt(ms: Long): String { val t = ms / 1000; val h = t / 3600; val m = (t % 3600) / 60; val sec = t % 60; return if (h > 0) String.format(Locale.US, "%d:%02d:%02d", h, m, sec) else String.format(Locale.US, "%d:%02d", m, sec) }
         val gd = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
             override fun onDown(e: MotionEvent): Boolean { mode = 0; seekTo = -1; startY = e.y; return true }
+            // Un toque: solo muestra u oculta los controles (antes pausaba y se pausaba sin querer)
             override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-                val p = player ?: return true
-                if (p.isPlaying) { p.pause(); showHud("Pausa", androidx.media3.ui.R.drawable.exo_styled_controls_pause) } else { p.play(); showHud("Reproducir", androidx.media3.ui.R.drawable.exo_styled_controls_play) }
-                view.showController()
+                if (view.isControllerFullyVisible) view.hideController() else view.showController()
                 return true
             }
+            // Doble toque: en el centro pausa o sigue; a los lados atrasa o adelanta 30 s
             override fun onDoubleTap(e: MotionEvent): Boolean {
                 val p = player ?: return true
+                if (e.x > view.width * 0.3f && e.x < view.width * 0.7f) {
+                    if (p.isPlaying) { p.pause(); showHud("Pausa", androidx.media3.ui.R.drawable.exo_styled_controls_pause) } else { p.play(); showHud("Reproducir", androidx.media3.ui.R.drawable.exo_styled_controls_play) }
+                    return true
+                }
                 // Solo lo que de verdad es en vivo no se adelanta (una película dentro de una lista de canales sí)
                 if (liveNow(p)) { showHud("En vivo: no se puede adelantar"); return true }
                 if (!p.isCurrentMediaItemSeekable) { showHud("Este video no deja adelantar\n(el servidor no lo permite)"); return true }
@@ -1358,7 +1362,9 @@ class PlayerActivity : ComponentActivity() {
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         // Ventana pequeña al salir con Inicio (celular, tablet y Android TV que lo soporten)
-        if (Build.VERSION.SDK_INT >= 26 && player?.isPlaying == true && packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
+        // En TV no: al salir con Inicio el video se pausa (no sigue sonando ni gastando internet en segundo plano)
+        val tv = (getSystemService(UI_MODE_SERVICE) as android.app.UiModeManager).currentModeType == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
+        if (!tv && Build.VERSION.SDK_INT >= 26 && player?.isPlaying == true && packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
             try { enterPictureInPictureMode(android.app.PictureInPictureParams.Builder().build()) } catch (_: Exception) {}
         }
     }
