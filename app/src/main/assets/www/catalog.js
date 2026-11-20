@@ -423,16 +423,25 @@
     var base = xtBase(list), u = encodeURIComponent(list.user), p = encodeURIComponent(list.pass);
     var fmt = P.xtFormat === 'ts' ? 'ts' : 'm3u8';
     if (!list.epg) list.epg = base + '/xmltv.php?username=' + u + '&password=' + p;
+    var failed = [];
     function safe(pr) { return pr.catch(function () { return []; }); }
-    return Promise.all([
-      safe(xtGet(list, 'get_live_categories')),
-      safe(xtGet(list, 'get_live_streams', '', true)),
-      safe(xtGet(list, 'get_vod_categories')),
-      safe(xtGet(list, 'get_vod_streams', '', true)),
-      safe(xtGet(list, 'get_series_categories')),
-      safe(xtGet(list, 'get_series', '', true))
-    ]).then(function (r) {
+    // Las listas grandes (canales, películas, series) se piden una por una y se reintentan: antes, si en el TV fallaba
+    // la de películas o series (muy pesadas), la lista quedaba solo con canales y así se guardaba 12 horas
+    function big(action, type) {
+      var n = 0;
+      function go() { return xtGet(list, action, '', true).then(function (j) { if (!asList(j).length && n < 1) throw new Error('vacía'); return j; }); }
+      function again(e) { if (++n > 2) { failed.push(type); return []; } return new Promise(function (r) { setTimeout(r, 1500 * n); }).then(go).catch(again); }
+      return go().catch(again);
+    }
+    var tv = MV.device && MV.device.tv;
+    var cats = Promise.all([safe(xtGet(list, 'get_live_categories')), safe(xtGet(list, 'get_vod_categories')), safe(xtGet(list, 'get_series_categories'))]);
+    var bigs = tv
+      ? big('get_live_streams', 'live').then(function (a) { return big('get_vod_streams', 'movie').then(function (b) { return big('get_series', 'series').then(function (c) { return [a, b, c]; }); }); })
+      : Promise.all([big('get_live_streams', 'live'), big('get_vod_streams', 'movie'), big('get_series', 'series')]);
+    return Promise.all([cats, bigs]).then(function (x) {
+      var r = [x[0][0], x[1][0], x[0][1], x[1][1], x[0][2], x[1][2]];
       var lc = catMap(r[0]), vc = catMap(r[2]), sc = catMap(r[4]), out = [];
+      out._failed = failed;
       (asList(r[1])).forEach(function (c) {
         out.push(tags({ key: 'live:' + (c.epg_channel_id ? String(c.epg_channel_id).toLowerCase() : MV.norm(c.name)), type: 'live', name: c.name, logo: c.stream_icon, group: lc[c.category_id] || 'En vivo', tvg: c.epg_channel_id || '', num: c.num, url: base + '/live/' + u + '/' + p + '/' + c.stream_id + '.' + fmt, ua: list.ua || '', list: list.id }));
       });
@@ -1455,10 +1464,19 @@
         return buildFromM3U(MV.parseM3U(txt, list), list);
       });
       return job.then(function (items) {
-        list.count = items.length; list.updated = Date.now(); list.error = '';
+        var failedSecs = items._failed || [], partial = failedSecs.length > 0;
+        if (partial && cached && cached.items) {
+          // Lo que no cargó esta vez (por ejemplo las series) se toma de lo guardado, así no desaparece
+          var miss = {}; failedSecs.forEach(function (t) { miss[t] = 1; });
+          items = items.concat(cached.items.filter(function (o) { return miss[o.type]; }).map(retag));
+        }
+        // Cuántos canales, películas y series trajo (en Ajustes › Listas: así se ve si en este equipo faltó algo)
+        var cn = {}; items.forEach(function (o) { cn[o.type] = (cn[o.type] || 0) + 1; }); list.counts = cn;
+        list.count = items.length; list.updated = Date.now(); list.error = partial ? 'Algunas secciones no cargaron (' + failedSecs.join(', ') + '); se reintentará pronto' : '';
         // Para borrar listas vacías sin equivocarse: se recuerda si alguna vez trajo contenido y cuántas veces seguidas llegó vacía
         if (items.length) { list.hadItems = true; list.zeroLoads = 0; } else list.zeroLoads = (list.zeroLoads || 0) + 1;
-        MV.idbSet(ck, { ts: Date.now(), v: 8, sv: ST_V, items: items, deep: deep }); listStamp(list.id);
+        // Incompleta: se guarda como "vieja" para que se vuelva a pedir en la próxima actualización (no en 12 horas)
+        MV.idbSet(ck, { ts: partial ? Date.now() - 12 * 3600e3 : Date.now(), v: 8, sv: ST_V, items: items, deep: deep }); listStamp(list.id);
         return items;
       }).catch(function (e) {
         list.error = e.message || 'Error';
