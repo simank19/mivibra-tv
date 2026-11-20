@@ -1861,6 +1861,8 @@
       if (!dedupe || it.type === 'live' || it.type === 'video') return [];
       var y = yearOf(it), t = MV.norm(MV.cleanTitle(it.name || '').replace(/\((19|20)\d{2}\)/, '')), out = [];
       if (it.tid) out.push('t:' + it.tid);
+      // Listas Xtream que traen el número de TMDB: misma ficha = mismo título aunque el nombre esté en otro idioma
+      if (it.ltid && (!it.tid || it.tid.split(':')[1] !== String(it.ltid))) out.push('t:' + (it.type === 'series' ? 'tv' : 'movie') + ':' + it.ltid);
       if (t) out.push('n:' + it.type + ':' + t + ':' + y);
       if (it.poster && posterUse[it.poster] <= 4) out.push('p:' + it.type + ':' + it.poster.replace(/^https?:\/\//, '') + ':' + y);
       return out;

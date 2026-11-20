@@ -323,6 +323,12 @@ class Bridge(private val a: MainActivity) {
         a.runOnUiThread { a.startActivity(Intent(a, BrowserActivity::class.java).putExtra("url", url ?: "")) }
     }
 
+    /** Dictado por voz para una caja de texto de MiVibra (el texto vuelve a MV.voiceText). */
+    @JavascriptInterface
+    fun voiceInput(target: String) {
+        a.runOnUiThread { a.voiceDictate(target) }
+    }
+
     /** Diagnóstico y optimización MiVibra (integrado, sin instalar nada aparte). */
     @JavascriptInterface
     fun openDiag() {

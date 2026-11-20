@@ -308,6 +308,22 @@ class MainActivity : ComponentActivity() {
 
     override fun onSearchRequested(): Boolean { voiceSearch(); return true }
 
+    /** Micrófono del teclado: dicta y pone el texto en la caja (el buscador busca solo) */
+    fun voiceDictate(target: String) {
+        val i = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "es-CO")
+            .putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "Di lo que quieres buscar")
+        try {
+            startForResult(i) { code, data ->
+                val t = data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
+                if (code == RESULT_OK && !t.isNullOrBlank()) js("window.MV&&MV.voiceText&&MV.voiceText(" + JSONObject.quote(target) + "," + JSONObject.quote(t) + ")")
+            }
+        } catch (_: Exception) {
+            js("window.MV&&MV.toast&&MV.toast('Este equipo no tiene dictado por voz. Usa el celular como control para dictar.')")
+        }
+    }
+
     private var okLong = false
     private var introOn = false
     private var introSkipping = false

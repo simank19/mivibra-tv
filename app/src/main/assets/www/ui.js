@@ -1880,10 +1880,34 @@
       return '<div class="kr">' + r.split('').map(function (c) { return k(c, c); }).join('') +
         (ri === 3 ? '<button class="f w2" data-act="kbDel" data-v="' + target + '" aria-label="Borrar letra">⌫</button>' : '') + '</div>';
     }).join('') +
-      '<div class="kr"><button class="f w3" data-act="kbClear" data-v="' + target + '">Limpiar</button><button class="f w5" data-act="kb" data-arg=" " data-v="' + target + '">Espacio</button><button class="f w3 go" data-act="kbGo" data-v="' + target + '">Listo</button></div></div>';
+      '<div class="kr">' + (voiceOk() ? '<button class="f w2 mic" data-act="kbVoice" data-v="' + target + '" aria-label="Buscar por voz">' + IC.mic + '</button>' : '') + '<button class="f w3" data-act="kbClear" data-v="' + target + '">Limpiar</button><button class="f ' + (voiceOk() ? 'w4' : 'w5') + '" data-act="kb" data-arg=" " data-v="' + target + '">Espacio</button><button class="f w3 go" data-act="kbGo" data-v="' + target + '">Listo</button></div></div>';
   }
   /** Escribe en la caja indicada (el buscador general busca mientras escribes). */
   var kbT = null;
+  // ---------- Dictado por voz (micrófono del teclado y del buscador) ----------
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  function voiceOk() { return !!((A && A.voiceInput) || SR); }
+  MV.voiceText = function (target, t) {
+    t = String(t || '').trim(); if (!t) return;
+    var i = document.getElementById(target); if (!i) return;
+    if (target === 'searchIn') searchDone = false;
+    kbSet(target, function () { return t; });
+    if (target !== 'searchIn') { i.dispatchEvent(new Event('input', { bubbles: true })); }
+    else { clearTimeout(kbT); showResults(); saveRecent(t); }
+    MV.toast('«' + t + '»', 1800);
+  };
+  function voiceStart(target) {
+    if (A && A.voiceInput) { A.voiceInput(target); return; }
+    if (!SR) return MV.toast('Este navegador no permite dictar');
+    try {
+      var r = new SR(); r.lang = 'es-CO'; r.interimResults = false; r.maxAlternatives = 1;
+      MV.toast('Habla ahora…', 4000);
+      r.onresult = function (e) { MV.voiceText(target, e.results[0][0].transcript); };
+      r.onerror = function (e) { MV.toast(e.error === 'not-allowed' ? 'Permite el micrófono para dictar' : 'No te escuché, intenta otra vez'); };
+      r.start();
+    } catch (e) { MV.toast('No se pudo usar el micrófono'); }
+  }
+  MV.voiceStart = voiceStart;
   function kbSet(target, fn) {
     var i = document.getElementById(target); if (!i) return;
     i.value = fn(i.value || '');
@@ -1987,6 +2011,7 @@
   VIEWS.search = function () {
     var kb = MV.device.tv ? tvKbd('searchIn') : '';
     return top('Buscar') + '<div class="searchbar glass">' + IC.search + '<input class="in f" id="searchIn" value="' + esc(query) + '" placeholder="' + (MV.isKids() ? 'Busca tus dibujos, películas y canales…' : 'Título, canal, actor del título, género, año…') + '" autocomplete="off" enterkeyhint="search"' + (MV.device.tv ? ' inputmode="none"' : ' data-autofocus') + '>' +
+      (voiceOk() && !MV.device.tv ? '<button class="iconbtn f" data-act="kbVoice" data-v="searchIn" aria-label="Buscar por voz">' + IC.mic + '</button>' : '') +
       '<button class="iconbtn f" data-act="kbClear" aria-label="Borrar búsqueda">' + IC.close + '</button></div>' + kb +
       '<div class="chips" id="stypes"></div><div id="results"></div>';
   };
@@ -3894,6 +3919,7 @@
     // Búsqueda con teclado en pantalla
     kb: function (c, el) { var t = (el && el.dataset.v) || 'searchIn', fresh = t === 'searchIn' && searchDone; searchDone = false; kbSet(t, function (v) { return (fresh ? '' : v) + c; }); },
     kbDel: function (_, el) { var t = (el && el.dataset.v) || 'searchIn'; if (t === 'searchIn') searchDone = false; kbSet(t, function (v) { return v.slice(0, -1); }); },
+    kbVoice: function (_, el) { voiceStart((el && el.dataset.v) || 'searchIn'); },
     kbClear: function (_, el) { kbSet((el && el.dataset.v) || 'searchIn', function () { return ''; }); },
     kbGo: function (_, el) {
       var t = (el && el.dataset.v) || 'searchIn';

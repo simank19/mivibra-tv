@@ -514,7 +514,8 @@ html.tv .kbd2 { gap: 3px; padding: 6px; margin: 6px 0 8px; max-width: 500px; }
 html.tv .kbd2 .kr { gap: 3px; }
 html.tv .kbd2 .f { height: 27px; font-size: 12px; border-radius: 8px; }
 .kbd2 .f { flex: 1 1 0; min-width: 0; height: 32px; border-radius: 9px; border: 1px solid var(--line); background: rgba(255,255,255,.06); color: var(--text); font: 700 13px var(--ui); padding: 0; }
-.kbd2 .w2 { flex-grow: 2; } .kbd2 .w3 { flex-grow: 3; } .kbd2 .w5 { flex-grow: 5; }
+.kbd2 .w2 { flex-grow: 2; } .kbd2 .w3 { flex-grow: 3; } .kbd2 .w4 { flex-grow: 4; } .kbd2 .w5 { flex-grow: 5; }
+.kbd2 .mic svg { width: 22px; height: 22px; }
 .kbd2 .go { background: var(--accent); color: var(--on-accent); border-color: transparent; }
 /* TV: modo rendimiento — sin desenfoques ni animaciones costosas para que el control vaya fluido */
 html.tv #bg i { animation: none; }

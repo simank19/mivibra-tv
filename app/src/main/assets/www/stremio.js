@@ -83,6 +83,8 @@
     if (d && d.p) o.plot = d.p;
     if (d && d.g) o.genre = d.g;
     if (d && d.ol) o.olang = d.ol;
+    // Ficha de TMDB: con ella se juntan el mismo título de distintas listas aunque uno venga en inglés y otro en español
+    if (d && d.t && !o.tid) o.tid = (o.type === 'series' ? 'tv' : 'movie') + ':' + d.t;
     o.group = catFor(o.genre || '', an, o.type);
   };
   var trRunning = false;
@@ -91,12 +93,13 @@
     if (trRunning || !(S.prefs.tmdbKey || '').trim()) return;
     var es = ES(), seen = {};
     // Las series se revisan otra vez si se guardaron antes de reconocer novelas (v 2)
-    var todo = (S.items || []).filter(function (i) { if (!i.st || (es[i.st.id] && es[i.st.id].v === 3) || seen[i.st.id]) return false; seen[i.st.id] = 1; return true; });
+    var todo = (S.items || []).filter(function (i) { if (!i.st || (es[i.st.id] && es[i.st.id].v === 3 && ('t' in es[i.st.id] || !es[i.st.id].n)) || seen[i.st.id]) return false; seen[i.st.id] = 1; return true; });
     if (!todo.length) return;
     trRunning = true;
-    var n = 0, changed = 0;
+    var n = 0, changed = 0, tids = 0;
     function apply(id, d) {
       (S.items || []).forEach(function (it) {
+        if (it.st && it.st.id === id && d.t && !it.tid) { it.tid = (it.type === 'series' ? 'tv' : 'movie') + ':' + d.t; tids++; }
         if (!it.st || it.st.id !== id) return;
         if (d.n) it.name = d.n + (it.year && !/\(\d{4}\)/.test(d.n) && it.type === 'movie' ? ' (' + it.year + ')' : it.year && it.type === 'series' && !/\(\d{4}\)/.test(d.n) ? ' (' + it.year + ')' : '');
         if (d.p) it.plot = d.p;
@@ -106,7 +109,7 @@
     }
     function next() {
       var it = todo.shift();
-      if (!it) { if (--active === 0) { trRunning = false; MV.save('stEs', es); if (changed && MV.rerender) MV.rerender(); } return; }
+      if (!it) { if (--active === 0) { trRunning = false; MV.save('stEs', es); if (tids && MV.redupeLater) MV.redupeLater(); if (changed && MV.rerender) MV.rerender(); } return; }
       var id = it.st.id;
       // Con id de IMDb se busca exacto; anime (Kitsu, MAL…) y otros se buscan por nombre y año
       var q = /^tt\d+$/.test(id) ? MV.tmdb('/find/' + id, '&external_source=imdb_id&language=es-MX').then(function (r) { return r && ((r.movie_results || [])[0] || (r.tv_results || [])[0]); })
@@ -116,7 +119,7 @@
           return isAnimeIt(it) ? (rs.filter(function (x) { return x.original_language === 'ja' || (x.genre_ids || []).indexOf(16) >= 0; })[0] || null) : rs[0] || null;
         });
       q.then(function (x) {
-        var d = x ? { v: 3, ol: x.original_language || '', n: x.title || x.name || '', p: x.overview || '', g: (x.genre_ids || []).map(function (g) { return TMDB_G[g]; }).filter(Boolean).join(', ') } : { v: 3, n: '' };
+        var d = x ? { v: 3, t: x.id || 0, ol: x.original_language || '', n: x.title || x.name || '', p: x.overview || '', g: (x.genre_ids || []).map(function (g) { return TMDB_G[g]; }).filter(Boolean).join(', ') } : { v: 3, n: '' };
         // Telenovela solo si TMDB la marca como tal (género "Soap"): nada de adivinar por país
         if (x && it.type === 'series' && (x.genre_ids || []).indexOf(10766) >= 0 && !/telenovela/i.test(d.g)) d.g = 'Telenovela' + (d.g ? ', ' + d.g : '');
         es[id] = d; if (d.n || d.p) { apply(id, d); changed++; }
