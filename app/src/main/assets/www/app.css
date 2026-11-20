@@ -1490,3 +1490,12 @@ html.tv .bss > img, html.lite .bss > img { filter: none; }
 .chips.scrollx { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
 .chips.scrollx::-webkit-scrollbar { display: none; }
 .chips.scrollx .chip { flex: 0 0 auto; }
+/* Deportes: sección con filtros, favoritos y avisos */
+.spgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+.spitem { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.spitem .spcard { width: auto; }
+.spacts { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip.sm { height: 32px; padding: 0 12px; font-size: 12px; }
+.sp-bell { margin-left: auto; font-style: normal; font-size: 13px; }
+.vsm-all { border: 0; background: transparent; color: var(--muted); font: 600 10.5px var(--ui); padding: 4px 6px; border-radius: 8px; font-variant-numeric: tabular-nums; }
+button.vsm-empty { border: 0; background: transparent; color: var(--text); text-align: left; padding: 2px; border-radius: 12px; }

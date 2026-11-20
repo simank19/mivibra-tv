@@ -2504,6 +2504,9 @@
       var managed = MV.acct && MV.acct.managed();
       var prefs = { theme: P.theme, autoTheme: P.autoTheme, glass: P.glass, anim: P.anim, bgAnim: P.bgAnim, tmdbKey: managed ? '' : P.tmdbKey, ytKey: managed ? '' : P.ytKey, sgdbKey: managed ? '' : P.sgdbKey, subKey: managed ? '' : P.subKey, streamKeys: managed ? {} : P.streamKeys, covers: P.covers, kidsLimit: P.kidsLimit, parentPin: P.parentPin, adult: P.adult, audioLang: P.audioLang, subLang: P.subLang, updatedAt: P.updatedAt };
       MV.CONTENT_PREFS.forEach(function (k) { if (P[k] !== undefined) prefs[k] = P[k]; });
+      // Deportes: equipos favoritos y avisos (el aviso puesto en la TV suena en el celular)
+      ['sportFavs', 'sportRem', 'sportFavRemind', 'sportRegion'].forEach(function (k) { if (P[k] !== undefined) prefs[k] = P[k]; });
+      if (!managed && P.pandaKey) prefs.pandaKey = P.pandaKey;
       return { v: 1, updatedAt: Date.now(), device: P.deviceName, drive: MV.load('driveShared', null), profiles: S.profiles, pdata: pdata, prefs: prefs, listsDel: MV.listTombs(), lists: managed ? S.lists.filter(function (l) { return l.own; }).map(function (l) { var c = Object.assign({}, l); delete c.error; return c; }) : P.syncLists ? S.lists.map(function (l) { var c = Object.assign({}, l); delete c.error; return c; }) : null };
     },
     push: function () {

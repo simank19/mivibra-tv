@@ -5076,6 +5076,7 @@
       '<button class="utile glass f" data-act="nav" data-arg="webvids" data-fid="u-webvids"><span class="uic">' + IC.globe + '</span><b>Mis páginas</b><span>Videos de tus páginas web</span></button>' +
       '<button class="utile glass f" data-act="nav" data-arg="streams" data-fid="u-streams"><span class="uic">' + IC.play + '</span><b>Twitch y Kick</b><span>Transmisiones en vivo aquí mismo</span></button>' +
       '<button class="utile glass f" data-act="openDiag" data-fid="u-diag"><span class="uic">' + IC.settings + '</span><b>' + (MV.device.desktop ? 'Soporte MiVibra PC' : MV.device.tv ? 'Soporte MiVibra · TV box' : 'Diagnóstico MiVibra') + '</b><span>' + (MV.device.desktop ? 'Diagnóstico, limpieza y optimización de Windows' : 'Revisa y optimiza este equipo') + '</span></button>' +
+      '<button class="utile glass f" data-act="nav" data-arg="sports" data-fid="u-sports"><span class="uic">' + (IC.sports || IC.trophy) + '</span><b>Deportes</b><span>Partidos de hoy y mañana, tus equipos y avisos</span></button>' +
       '<button class="utile glass f" data-act="nav" data-arg="photos" data-fid="u-photos"><span class="uic">' + IC.image + '</span><b>Fotos</b><span>Galería, USB, Drive, MEGA o desde el celular</span></button>' +
       '' +
       '<button class="utile glass f" data-act="nav" data-arg="achievements" data-fid="u-ach"><span class="uic">' + IC.trophy + '</span><b>Logros</b><span>' + (MV.ach ? 'Nivel ' + MV.ach.level().n + ' · ' + MV.ach.level().title : 'Tu nivel y medallas') + '</span></button>' +

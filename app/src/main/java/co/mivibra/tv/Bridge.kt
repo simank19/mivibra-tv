@@ -323,6 +323,17 @@ class Bridge(private val a: MainActivity) {
         a.runOnUiThread { a.startActivity(Intent(a, BrowserActivity::class.java).putExtra("url", url ?: "")) }
     }
 
+    /** Aviso en el celular antes de un partido (notificación aunque la app esté cerrada). */
+    @JavascriptInterface
+    fun remindAt(key: String, at: Long, title: String, text: String) {
+        if (Build.VERSION.SDK_INT >= 33 && a.checkSelfPermission("android.permission.POST_NOTIFICATIONS") != android.content.pm.PackageManager.PERMISSION_GRANTED)
+            a.runOnUiThread { try { a.requestPermissions(arrayOf("android.permission.POST_NOTIFICATIONS"), 9911) } catch (_: Exception) {} }
+        if (at > System.currentTimeMillis()) ReminderReceiver.set(a, key, at, title, text)
+    }
+
+    @JavascriptInterface
+    fun remindCancel(key: String) { ReminderReceiver.cancel(a, key) }
+
     /** Dictado por voz para una caja de texto de MiVibra (el texto vuelve a MV.voiceText). */
     @JavascriptInterface
     fun voiceInput(target: String) {
