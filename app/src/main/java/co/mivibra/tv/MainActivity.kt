@@ -86,9 +86,23 @@ class MainActivity : ComponentActivity() {
 
             override fun onPageFinished(view: WebView, url: String) {
                 pageReady = true
+                // Si la vez anterior Android cerró la página por falta de memoria, la app arranca en modo liviano
+                val gone = getSharedPreferences("mv", MODE_PRIVATE).getLong("rendererGone", 0L)
+                if (System.currentTimeMillis() - gone < 6 * 3600_000L) web.evaluateJavascript("window.MV&&(MV.lowMem=true)", null)
                 val list = queue.toList()
                 queue.clear()
                 list.forEach { web.evaluateJavascript(it, null) }
+            }
+
+            /**
+             * En TV con poca memoria Android puede cerrar la página (el "renderizador") al cargar listas grandes.
+             * Antes eso cerraba toda la app; ahora se vuelve a abrir la pantalla sola y en modo liviano.
+             */
+            override fun onRenderProcessGone(view: WebView, detail: android.webkit.RenderProcessGoneDetail): Boolean {
+                getSharedPreferences("mv", MODE_PRIVATE).edit().putLong("rendererGone", System.currentTimeMillis()).apply()
+                try { (view.parent as? android.view.ViewGroup)?.removeView(view); view.destroy() } catch (_: Exception) {}
+                try { recreate() } catch (_: Exception) { finish() }
+                return true
             }
         }
         web.webChromeClient = WebChromeClient()
@@ -182,7 +196,7 @@ class MainActivity : ComponentActivity() {
         try { unregisterReceiver(storageReceiver) } catch (_: Exception) {}
         RemoteHub.server?.stop()
         RemoteHub.server = null
-        web.destroy()
+        try { web.destroy() } catch (_: Exception) {}
         super.onDestroy()
     }
 

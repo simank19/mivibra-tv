@@ -1499,7 +1499,7 @@
     if (!had) { S.loading = true; S.loadMsg = 'Cargando tus listas…'; MV.emit('catalog'); }
     var lists = S.lists.filter(function (l) { return MV.listOn(l); });
     var failed = [];
-    return pool(lists, 2, function (l) {
+    return pool(lists, (MV.lowMem || (MV.device && MV.device.tv)) ? 1 : 2, function (l) {
       var f = typeof force === 'function' ? force(l) : force;
       return loadList(l, f, false, !f).catch(function (e) { failed.push(l.name + ': ' + e.message); if (!l.count) l.zeroLoads = (l.zeroLoads || 0) + 1; return []; });
     }).then(function (all) {
@@ -1552,7 +1552,7 @@
     // Nuevas, o cuya dirección/usuario cambió
     var need = lists.filter(function (l) { return !ALLBY[l.id] || ALLSIG[l.id] !== lsig(l); });
     if (need.length === 1) MV.toast('Agregando “' + need[0].name + '”…', 2500);
-    syncing = pool(need, 2, function (l) {
+    syncing = pool(need, (MV.lowMem || (MV.device && MV.device.tv)) ? 1 : 2, function (l) {
       var changed = ALLBY[l.id] && ALLSIG[l.id] !== lsig(l);
       return loadList(l, changed, false, !changed).then(function (items) { ALLBY[l.id] = items; ALLSIG[l.id] = lsig(l); }, function (e) { l.error = e.message || 'Error'; ALLBY[l.id] = []; ALLSIG[l.id] = lsig(l); });
     }).then(function () {
@@ -1583,7 +1583,14 @@
       if (!fast) return startFull(lists);
       S.loading = false; MV.emit('catalog');
       MV.loadEpg(false);
-      // En segundo plano (sin apuro): se leen las listas guardadas para poder actualizarlas y combinarlas después
+      // En segundo plano (sin apuro): se leen las listas guardadas para poder actualizarlas y combinarlas después.
+      // Solo si hay algo que actualizar: leerlas todas duplica la memoria y en TV modestos cerraba la app.
+      var tsm = MV.load('listTs', {}) || {};
+      var anyStale = lists.some(function (l) {
+        var age = l.type === 'web' || l.type === 'fb' ? 3600e3 : 12 * 3600e3;
+        return !tsm[l.id] || tsm[l.id] < Date.now() - age || (P.stAutoRefresh && (l.type === 'stremio' || l.type === 'mvplugin'));
+      });
+      if (!anyStale) return;
       setTimeout(function () {
         Promise.all(lists.map(function (l) {
           return MV.idbGet('list:' + l.id).then(function (c) { return c && c.v >= 7 && c.items ? c : null; }).catch(function () { return null; });
@@ -1599,7 +1606,7 @@
             if (stale.length) refreshInBackground(lists, stale);
           });
         });
-      }, 12000);
+      }, (MV.lowMem || (MV.device && MV.device.tv)) ? 45000 : 12000);
     });
   };
   function startFull(lists) {
@@ -1636,7 +1643,9 @@
         if (lastAll && lastAll[i] !== undefined && items && items.length) { lastAll[i] = items; ALLBY[l.id] = items; ALLSIG[l.id] = lsig(l); changed = true; }
       }).catch(function () {}).then(next);
     }
-    Promise.all([next(), next()]).then(function () {
+    // En TV de a una (menos memoria al mismo tiempo)
+    var lowm = MV.lowMem || (MV.device && MV.device.tv);
+    Promise.all(lowm ? [next()] : [next(), next()]).then(function () {
       bgRunning = false;
       MV.saveLists();
       if (!changed) return;
