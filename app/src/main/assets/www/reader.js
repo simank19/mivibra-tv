@@ -114,7 +114,7 @@
     if (m.type === 'ready') { if (st) st.item = null; close(true); document.documentElement.classList.add('reader-open'); MV._mbOpen && MV._mbOpen(); }
     else if (m.type === 'closed') closeMb();
     else if (m.type === 'progress' && mbItem && m.id === mbItem.key) rememberRecent(mbItem, m.pct);
-    else if (m.type === 'cover' && m.id && /^data:image\//.test(m.data || '')) { var all = MV.load('bookCovers', {}) || {}, ks = Object.keys(all); if (ks.length > 80) delete all[ks[0]]; all[m.id] = m.data; MV.save('bookCovers', all); coverMem = null; }
+    else if (m.type === 'cover' && m.id && /^data:image\//.test(m.data || '')) { covers()[m.id] = m.data; coverSave(); }
   });
   MV.mbOpen = function () { return !!mb; };
 
@@ -299,15 +299,14 @@
   // Portada guardada para mostrarla en Lectura (cuando la lista no trae carátula)
   function saveCover(url) {
     if (!st || !st.item || !st.item.key) return;
-    var key = st.item.key, all = MV.load('bookCovers', {}) || {};
+    var key = st.item.key, all = covers();
     if (all[key]) return;
     var im = new Image();
     im.onload = function () {
       try {
         var w = 260, h = Math.round(im.naturalHeight * w / (im.naturalWidth || 1)) || 390, c = document.createElement('canvas');
         c.width = w; c.height = Math.min(h, 520); c.getContext('2d').drawImage(im, 0, 0, w, h);
-        var keys = Object.keys(all); if (keys.length > 80) delete all[keys[0]];
-        all[key] = c.toDataURL('image/jpeg', 0.78); MV.save('bookCovers', all); coverMem = null;
+        all[key] = c.toDataURL('image/jpeg', 0.74); coverSave();
       } catch (e) {}
     };
     im.src = url;
@@ -315,16 +314,15 @@
   /** Guarda una portada (achicada) para un libro, sin abrirlo. */
   function storeCover(key, url) {
     return new Promise(function (res) {
-      var all = MV.load('bookCovers', {}) || {};
+      var all = covers();
       if (all[key]) return res(all[key]);
       var im = new Image();
       im.onload = function () {
         try {
-          var w = 260, h = Math.round(im.naturalHeight * w / (im.naturalWidth || 1)) || 390, c = document.createElement('canvas');
-          c.width = w; c.height = Math.min(h, 520); c.getContext('2d').drawImage(im, 0, 0, w, h);
-          all = MV.load('bookCovers', {}) || {};
-          var keys = Object.keys(all); if (keys.length > 300) delete all[keys[0]];
-          all[key] = c.toDataURL('image/jpeg', 0.78); MV.save('bookCovers', all); coverMem = null; res(all[key]);
+          var w = 220, h = Math.round(im.naturalHeight * w / (im.naturalWidth || 1)) || 330, c = document.createElement('canvas');
+          c.width = w; c.height = Math.min(h, 440); c.getContext('2d').drawImage(im, 0, 0, w, h);
+          all = covers();
+          all[key] = c.toDataURL('image/jpeg', 0.74); coverSave(); res(all[key]);
         } catch (e) { res(''); }
       };
       im.onerror = function () { res(''); };
@@ -371,9 +369,22 @@
     }).catch(function () { return {}; });
   };
   // Se lee una sola vez (no en cada tarjeta) y se refresca al guardar una portada nueva
-  var coverMem = null;
-  MV.bookCover = function (key) { if (!coverMem) coverMem = MV.load('bookCovers', {}) || {}; return coverMem[key] || ''; };
-  MV.bookCoverReset = function () { coverMem = null; };
+  // Portadas guardadas en la base del equipo (antes en un espacio chico: pasado cierto número no se guardaban)
+  var coverMem = null, coverT = null;
+  function covers() { if (!coverMem) coverMem = MV.load('bookCovers', {}) || {}; return coverMem; }
+  MV.idbGet('bookCovers2').then(function (m) {
+    if (!m) { var old = MV.load('bookCovers', null); if (old && Object.keys(old).length) { MV.idbSet('bookCovers2', old); try { MV.save('bookCovers', {}); } catch (e) {} } return; }
+    var cur = covers(); Object.keys(cur).forEach(function (k) { m[k] = cur[k]; }); coverMem = m;
+  }).catch(function () {});
+  function coverSave() {
+    clearTimeout(coverT);
+    coverT = setTimeout(function () {
+      var ks = Object.keys(coverMem || {}); if (ks.length > 3000) ks.slice(0, ks.length - 3000).forEach(function (k) { delete coverMem[k]; });
+      MV.idbSet('bookCovers2', coverMem);
+    }, 1500);
+  }
+  MV.bookCover = function (key) { return covers()[key] || ''; };
+  MV.bookCoverReset = function () {};
 
   var THEMES = { dark: ['#141210', '#E9E3DB'], sepia: ['#F4ECD8', '#3B3024'], light: ['#FFFFFF', '#1A1A1A'] };
   function chapterHtml(i) {

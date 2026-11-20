@@ -191,8 +191,20 @@
 
   // ---------- Descripción: Google Books y, si no, Open Library ----------
   // Ficha y carátula oficial: Google Books y, si no, Open Library (se guarda en caché)
-  var META = null, PEND = {};
-  function metaCache() { if (!META) META = MV.load('bookMeta', {}) || {}; return META; }
+  // Se guardan en la base del equipo (antes en un espacio chico con tope de 400: con miles de libros las portadas se perdían)
+  var META = null, PEND = {}, metaT = null;
+  function metaCache() { if (!META) { META = MV.load('bookMeta', {}) || {}; } return META; }
+  MV.idbGet('bookMeta2').then(function (m) {
+    if (!m) { var old = MV.load('bookMeta', null); if (old) { MV.idbSet('bookMeta2', old); try { localStorage.removeItem('mv:bookMeta'); MV.save('bookMeta', {}); } catch (e) {} } return; }
+    var cur = metaCache(); Object.keys(cur).forEach(function (k) { m[k] = cur[k]; }); META = m;
+  }).catch(function () {});
+  function metaSave() {
+    clearTimeout(metaT);
+    metaT = setTimeout(function () {
+      var ks = Object.keys(META || {}); if (ks.length > 20000) ks.slice(0, ks.length - 20000).forEach(function (k) { delete META[k]; });
+      MV.idbSet('bookMeta2', META);
+    }, 2000);
+  }
   function metaOf(b) { return metaCache()[b.key] || null; }
   function stripTags(s) { var d = document.createElement('div'); d.innerHTML = String(s || '').replace(/<br\s*\/?>/gi, ' ').replace(/<\/p>/gi, ' '); return (d.textContent || '').replace(/\s+/g, ' ').trim(); }
   function splitTitle(b) {
@@ -238,7 +250,7 @@
     PEND[k] = local.then(function () { if (need()) return google().catch(function () {}); }).then(function () { if (!out.d || (!out.c && !out.lc)) return openlib().catch(function () {}); }).then(fromFile).then(function () {
       out.d = (out.d || '').replace(/\s*\(?(Source|Fuente):.*$/i, '').slice(0, 1200);
       delete PEND[k];
-      if (out.d || out.c || out.lc || out.a || out.g) { var ks = Object.keys(c); if (ks.length > 400) delete c[ks[0]]; c[k] = out; MV.save('bookMeta', c); }
+      if (out.d || out.c || out.lc || out.a || out.g) { c = metaCache(); c[k] = out; metaSave(); }
       return out;
     });
     return PEND[k];
@@ -285,11 +297,15 @@
   api.fetchDesc = fetchDesc;
 
   // ---------- Ficha: crece desde la portada ----------
-  function openDetail() {
-    var b = current(); if (!b) return;
-    sh.T = Math.round(sh.T); kick();
-    var slot = sh.slots.filter(function (x) { return x.idx === mod(Math.round(sh.T), sh.n) && Math.abs(x.r) < .5; })[0];
-    var rect = slot ? slot.cv.getBoundingClientRect() : null;
+  // Sin libro: el del centro del estante. Con libro (desde la cuadrícula o una recomendación): crece desde su tarjeta.
+  function openDetail(bArg, fromEl) {
+    var b = bArg || current(), rect = null; if (!b) return;
+    if (!bArg && sh) {
+      sh.T = Math.round(sh.T); kick();
+      var slot = sh.slots.filter(function (x) { return x.idx === mod(Math.round(sh.T), sh.n) && Math.abs(x.r) < .5; })[0];
+      rect = slot ? slot.cv.getBoundingClientRect() : null;
+    } else if (fromEl && fromEl.getBoundingClientRect) rect = fromEl.getBoundingClientRect();
+    var recs = MV.bookRecs ? MV.bookRecs(b, 12) : [];
     var mt0 = metaOf(b), pct = pctOf(b), sub = [b.author || (mt0 && mt0.a), b.group].filter(Boolean).join(' / ').toUpperCase() || (KINDS[b.kind] || 'LIBRO').toUpperCase();
     MV.reg[b.key] = b;
     var mt = metaOf(b), syn = b.plot || b.desc || b.description || (mt && mt.d) || '';
@@ -304,7 +320,12 @@
       (pct ? '<button class="btn ghost f" data-act="bookStart" data-arg="' + esc(b.key) + '">Desde el inicio</button>' : '') +
       (MV.bookFlags ? '<button class="btn ghost f" data-act="bookFav" data-arg="' + esc(b.key) + '">' + (MV.bookFlags.fav(b.key) ? '★ En favoritos' : '☆ Favorito') + '</button>' +
         (b.kind === 'pack' ? '' : '<button class="btn ghost f" data-act="bookRead" data-arg="' + esc(b.key) + '">' + (MV.bookFlags.read(b) ? '✓ Leído' : 'Marcar como leído') + '</button>') +
-        '<button class="btn ghost f" data-act="bookDel" data-arg="' + esc(b.key) + '">' + IC.trash + 'Borrar</button>' : '') + '</div></div></div>' +
+        '<button class="btn ghost f" data-act="bookDel" data-arg="' + esc(b.key) + '">' + IC.trash + 'Borrar</button>' : '') + '</div></div>' +
+      // Recomendaciones: mismo autor, mismo género o misma categoría
+      (recs.length ? '<div class="m bsrec"><div class="s">TAMBIÉN TE PUEDE GUSTAR</div><div class="bsrow">' + recs.map(function (r) {
+        MV.reg[r.key] = r; var im = cover(r);
+        return '<button class="bsr f" data-act="bookInfo" data-arg="' + esc(r.key) + '" title="' + esc(clean(r.name)) + '">' + (im ? '<img src="' + esc(im) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '<b>' + esc(clean(r.name)) + '</b></button>';
+      }).join('') + '</div></div>' : '') + '</div>' +
       '<div class="bsdp">' + coverHtml(b, true) + '</div>';
     MV.modal(html, {
       onOpen: function (d) {
@@ -329,6 +350,7 @@
     });
   }
   MV.ACT.bsOpen = function () { if (!moved) openDetail(); };
+  api.detail = function (b, el) { openDetail(b, el); };
   MV.ACT.bsStep = function (d) { step(+d); };
   MV.ACT.bookStart = function (key) {
     var all = MV.load('readPos', {}) || {}; delete all[key]; MV.save('readPos', all);
