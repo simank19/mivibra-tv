@@ -1543,12 +1543,33 @@
   // Lo último cargado de cada lista (por id): al activar, agregar o quitar una lista solo se carga ESA y se vuelve a combinar.
   var ALLBY = {}, ALLSIG = {};
   function lsig(l) { return [l.url || '', l.host || '', l.user || '', l.pass || '', l.mac || '', l.xtFormat || ''].join('|'); }
-  function setAll(lists, all) { lists.forEach(function (l, i) { if (all[i]) { ALLBY[l.id] = all[i]; ALLSIG[l.id] = lsig(l); } }); }
+  function setAll(lists, all) { lists.forEach(function (l, i) { if (all[i]) { ALLBY[l.id] = all[i]; ALLSIG[l.id] = lsig(l); } }); curSig = activeSig(); }
+  // Qué listas (y con qué dirección) forman lo que está en pantalla
+  var curSig = '';
+  function activeSig() { return S.lists.filter(function (l) { return MV.listOn(l); }).map(function (l) { return l.id + '=' + lsig(l); }).join('\n'); }
+  function readCaches(lists) {
+    return pool(lists, (MV.lowMem || (MV.device && MV.device.tv)) ? 1 : 3, function (l) {
+      return MV.idbGet('list:' + l.id).then(function (c) { return c && c.v >= 7 && c.items ? c : null; }).catch(function () { return null; });
+    });
+  }
   var syncing = null, syncAgain = false;
   MV.syncCatalog = function () {
     if (syncing) { syncAgain = true; return syncing; }
     var lists = S.lists.filter(function (l) { return MV.listOn(l); });
-    if (!S.items || !S.items.length || !lastAll) return MV.reloadCatalog(false);
+    if (!S.items || !S.items.length) return MV.reloadCatalog(false);
+    // La sincronización de la cuenta avisa cambios de nombre, orden, etc.: si las listas activas son las mismas, no se toca nada
+    if (curSig && activeSig() === curSig) return Promise.resolve();
+    if (!lastAll) {
+      // Se abrió desde el catálogo guardado: se leen las listas guardadas (sin descargar) y luego se aplica solo el cambio
+      syncing = readCaches(lists).then(function (caches) {
+        var all = caches.map(function (c) { return c ? c.items : []; });
+        return chunked(all, function (it, i, arr) { arr[i] = retag(it); }).then(function () {
+          lists.forEach(function (l, i) { if (caches[i]) { ALLBY[l.id] = all[i]; ALLSIG[l.id] = lsig(l); } });
+          lastAll = all; syncing = null; return MV.syncCatalog();
+        });
+      }, function () { syncing = null; return MV.reloadCatalog(false); });
+      return syncing;
+    }
     // Nuevas, o cuya dirección/usuario cambió
     var need = lists.filter(function (l) { return !ALLBY[l.id] || ALLSIG[l.id] !== lsig(l); });
     if (need.length === 1) MV.toast('Agregando “' + need[0].name + '”…', 2500);
@@ -1559,7 +1580,7 @@
       // Lo de listas apagadas o borradas se suelta de la memoria
       var on = {}; lists.forEach(function (l) { on[l.id] = 1; }); Object.keys(ALLBY).forEach(function (id) { if (!on[id]) delete ALLBY[id]; });
       var all = lists.map(function (l) { return ALLBY[l.id] || []; });
-      lastAll = all; MV.saveLists();
+      lastAll = all; curSig = activeSig(); MV.saveLists();
       return combine(all, true);
     }).then(function () {
       MV.emit('catalog'); syncing = null;
@@ -1590,11 +1611,11 @@
         var age = l.type === 'web' || l.type === 'fb' ? 3600e3 : 12 * 3600e3;
         return !tsm[l.id] || tsm[l.id] < Date.now() - age || (P.stAutoRefresh && (l.type === 'stremio' || l.type === 'mvplugin'));
       });
-      if (!anyStale) return;
+      var newer = snapNewer; snapNewer = false;
+      if (!anyStale && !newer) return;
       setTimeout(function () {
-        Promise.all(lists.map(function (l) {
-          return MV.idbGet('list:' + l.id).then(function (c) { return c && c.v >= 7 && c.items ? c : null; }).catch(function () { return null; });
-        })).then(function (caches) {
+        if (lastAll) return;   // ya se leyeron (p. ej. por un cambio de listas)
+        readCaches(lists).then(function (caches) {
           var all = caches.map(function (c) { return c ? c.items : []; });
           return chunked(all, function (it, i, arr) { arr[i] = retag(it); }).then(function () {
             if (!lastAll) { lastAll = all; setAll(lists, all); }
@@ -1603,16 +1624,15 @@
               var c = caches[i], age = l.type === 'web' || l.type === 'fb' ? 3600e3 : 12 * 3600e3;
               return !c || c.ts < Date.now() - age || (P.stAutoRefresh && (l.type === 'stremio' || l.type === 'mvplugin')) || (l.type === 'stremio' && P.stDeep !== false && !c.deep) ? i : -1;
             }).filter(function (i) { return i >= 0; });
-            if (stale.length) refreshInBackground(lists, stale);
+            if (stale.length) { snapNewerPending = newer; refreshInBackground(lists, stale); }
+            else if (newer) applyWhenIdle();
           });
         });
       }, (MV.lowMem || (MV.device && MV.device.tv)) ? 45000 : 12000);
     });
   };
   function startFull(lists) {
-    return Promise.all(lists.map(function (l) {
-      return MV.idbGet('list:' + l.id).then(function (c) { return c && c.v >= 7 && c.items ? c : null; }).catch(function () { return null; });
-    })).then(function (caches) {
+    return readCaches(lists).then(function (caches) {
       if (!caches.some(function (c) { return c && c.items.length; })) return MV.reloadCatalog(false);
       var all = caches.map(function (c) { return c ? c.items : []; });
       S.loading = true; S.loadMsg = 'Preparando tu contenido…';
@@ -1648,14 +1668,19 @@
     Promise.all(lowm ? [next()] : [next(), next()]).then(function () {
       bgRunning = false;
       MV.saveLists();
-      if (!changed) return;
-      // Se combina cuando no se esté usando el control (para que nada se mueva mientras navegas)
-      (function apply() {
-        if (S.loading) return;
-        if (Date.now() - (MV._lastKey || 0) < 4000 || (MV.modalOpen && MV.modalOpen())) { setTimeout(apply, 3000); return; }
-        combine(lastAll, true).then(function (ok) { if (ok !== false) MV.emit('catalog'); });
-      })();
+      if (!changed && !snapNewerPending) return;
+      applyWhenIdle();
     });
+  }
+  var snapNewerPending = false;
+  // Se combina cuando no se esté usando el control (para que nada se mueva mientras navegas)
+  function applyWhenIdle() {
+    snapNewerPending = false;
+    (function apply() {
+      if (S.loading || !lastAll) return;
+      if (Date.now() - (MV._lastKey || 0) < 4000 || (MV.modalOpen && MV.modalOpen())) { setTimeout(apply, 3000); return; }
+      combine(lastAll, true).then(function (ok) { if (ok !== false) MV.emit('catalog'); });
+    })();
   }
 
   // ---------- Canales repetidos: probar todas las señales y quedarse con la que funciona ----------
@@ -1774,7 +1799,9 @@
     var ts = MV.load('listTs', {}) || {};
     // Solo lo que cambia el contenido: qué listas están activas, su dirección y cuándo se descargaron.
     // (Antes también la versión de la app y cualquier cambio de nombre: cada actualización volvía a "Cargando tus listas")
-    var ls = S.lists.filter(function (l) { return MV.listOn(l); }).map(function (l) { return [l.id, l.url || '', l.host || '', l.user || '', ts[l.id] || 0]; });
+    // Las fechas de descarga ya NO entran: si una lista se actualizó y la app se cerró antes de guardar, se abre lo guardado
+    // y se vuelve a combinar en segundo plano (antes eso hacía buscar todo otra vez al abrir).
+    var ls = S.lists.filter(function (l) { return MV.listOn(l); }).map(function (l) { return [l.id, l.url || '', l.host || '', l.user || '']; });
     return JSON.stringify([SNAP_V, ls, MV.CONTENT_PREFS.map(function (k) { return P[k]; }), P.dedupe !== false, P.adultOn || false]);
   }
   var snapT = null;
@@ -1787,7 +1814,7 @@
         var items = S.items, idx = new Map(), alias = {};
         items.forEach(function (it, i) { idx.set(it, i); });
         Object.keys(S.byKey).forEach(function (k) { var o = S.byKey[k], i = idx.get(o); if (i !== undefined && items[i].key !== k) alias[k] = i; });
-        MV.idbSet('catalogSnap', { sig: snapSig(), at: Date.now(), items: items, alias: alias, books: S.books || [], hidden: S.hiddenDupes || {} });
+        MV.idbSet('catalogSnap', { sig: snapSig(), lts: MV.load('listTs', {}) || {}, at: Date.now(), items: items, alias: alias, books: S.books || [], hidden: S.hiddenDupes || {} });
       } catch (e) {}
     }, 15000);
   }
@@ -1801,9 +1828,14 @@
       S.books = sn.books || []; S.bookByKey = {}; S.books.forEach(function (b) { S.bookByKey[b.key] = b; });
       S.items = items; S.byKey = byKey; S.byTid = byTid; S.hiddenDupes = sn.hidden || {};
       derive(items);
+      curSig = activeSig();
+      // ¿Alguna lista se descargó después de guardar este catálogo? Entonces hay que volver a combinar (sin pantalla de carga)
+      var lts = MV.load('listTs', {}) || {}, old = sn.lts || {};
+      snapNewer = S.lists.some(function (l) { return MV.listOn(l) && (lts[l.id] || 0) > (old[l.id] || 0) + 1000; });
       return true;
     }).catch(function () { return false; });
   }
+  var snapNewer = false;
   var combineSeq = 0;
   function combine(all, async) {
     var mySeq = ++combineSeq;
