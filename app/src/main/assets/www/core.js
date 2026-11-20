@@ -201,6 +201,8 @@
     if (mhz && mhz < 1500) return 'low';
     if (!d.tv) return (ram && ram < 2500) ? 'mid' : 'high';
     if (d.webtv) return 'low';                          // Samsung/LG: el navegador del TV es modesto
+    // Android TV / TV box: modo liviano por defecto (se cerraba por memoria y los botones respondían tarde)
+    if (!d.desktop) return 'low';
     if ((ram && ram < 4600) || (cores && cores <= 4) || (mhz && mhz < 1900)) return 'mid';
     if (px && px > 3840 * 2160 * 0.9 && ram < 6000) return 'mid'; // 4K nativo con poca memoria
     return 'high';

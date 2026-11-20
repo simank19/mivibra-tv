@@ -145,7 +145,8 @@
   MV.buildFromStremio = function (list, deep) {
     // Rápida: ~500 por catálogo. Completa (en segundo plano): sigue pidiendo páginas hasta que el addon no tenga más.
     // Los topes son los mismos en todos los equipos, así el celular y la TV muestran lo mismo.
-    var LIM = deep ? { cat: 3000, pages: 160, genres: 60, cats: 160, total: 30000 } : { cat: 500, pages: 25, genres: 12, cats: 90, total: 8000 };
+    var tvLow = MV.device && MV.device.tv && !MV.device.desktop;
+    var LIM = deep ? (tvLow ? { cat: 1500, pages: 80, genres: 40, cats: 120, total: 15000 } : { cat: 3000, pages: 160, genres: 60, cats: 160, total: 30000 }) : { cat: 500, pages: 25, genres: 12, cats: 90, total: 8000 };
     var b = base(list.url);
     return MV.stremioManifest(list.url).then(function (man) {
       list.man = { name: man.name, resources: man.resources, types: man.types, idPrefixes: man.idPrefixes, logo: man.logo || '' };

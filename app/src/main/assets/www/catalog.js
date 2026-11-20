@@ -1981,7 +1981,26 @@
     });
     return n;
   };
+  // Con cientos de miles de títulos, recorrerlos en cada pantalla (y en cada tecla que redibuja) frenaba el TV
+  var VIS = typeof WeakMap === 'function' ? new WeakMap() : null, MEMO = {};
+  MV._catVer = 0;
+  MV.visSig = function () { var pr = MV.profile && MV.profile(); return [MV._catVer, MV.isKids(), pr ? pr.id : '', MV._showHidden ? 1 : 0, P.latOnly ? 1 : 0, P.stOnlyLinked ? 1 : 0, P.hideUnreleased, P.kidsLimit, Math.floor(Date.now() / 300e3)].join('|'); };
+  /** Lista derivada del catálogo (anime, doramas…) calculada una sola vez por versión del catálogo. */
+  MV.memoCat = function (k, fn) {
+    var m = MEMO[k]; if (m && m.v === MV._catVer) return m.r;
+    // Claves con variantes (plat:…, sug:…): solo se guarda la última de cada tipo
+    var pre = k.split(':')[0] + ':'; if (k.indexOf(':') > 0) Object.keys(MEMO).forEach(function (x) { if (x.indexOf(pre) === 0 && x !== k && pre !== 'chip:') delete MEMO[x]; });
+    var r = fn(); MEMO[k] = { v: MV._catVer, r: r }; return r;
+  };
   MV.visible = function (arr) {
+    if (VIS && arr && arr.length > 200) {
+      var sg = MV.visSig(), c = VIS.get(arr);
+      if (c && c.s === sg && c.n === arr.length) return c.r;
+      var r = visible0(arr); VIS.set(arr, { s: sg, n: arr.length, r: r }); return r;
+    }
+    return visible0(arr);
+  };
+  function visible0(arr) {
     var kids = MV.isKids();
     return arr.filter(function (i) {
       if (i.adult) return false;
@@ -1994,7 +2013,7 @@
       if (P.stOnlyLinked && i.st && !i.url && !i.xt && MV.stLinked && MV.stLinked(i) !== true) return false;
       return true;
     });
-  };
+  }
   MV.groups = function (arr) {
     var m = {}, order = [];
     arr.forEach(function (i) { var g = i.group || 'Sin categoría'; if (!m[g]) { m[g] = 0; order.push(g); } m[g]++; });
@@ -2462,6 +2481,7 @@
 
   var listeners = {};
   MV.on = function (ev, fn) { (listeners[ev] = listeners[ev] || []).push(fn); };
+  MV.on('catalog', function () { MV._catVer++; });
   MV.emit = function (ev, data) { (listeners[ev] || []).forEach(function (fn) { try { fn(data); } catch (e) { console.error(e); } }); };
 
   // ---------- Sincronización entre dispositivos (Firebase, opcional) ----------

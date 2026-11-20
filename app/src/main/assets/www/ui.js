@@ -292,6 +292,7 @@
   }
   function row(title, items, kind, sub, more) {
     if (!items || !items.length) return '';
+    if (MV.lite && items.length > 14) items = items.slice(0, 14);
     return '<section class="row"><h3>' + esc(title) + (sub ? ' <small>' + esc(sub) + '</small>' : '') + '</h3><div class="strip">' +
       items.map(function (it, i) { return card(it, kind, i); }).join('') +
       (more ? '<button class="btn ghost sm f" style="align-self:center;flex:0 0 auto" data-act="nav" data-arg="' + more + '">Ver todo</button>' : '') + '</div></section>';
@@ -604,8 +605,8 @@
     var html = seasonBanner() + loadingBlock();
     // "Continúa donde lo dejaste" ya está en el widget Continuar viendo (no se repite arriba)
     // Inicio como en la maqueta: título, las 8 categorías en tarjetas de color y luego En vivo y Continuar viendo
-    var anime = MV.visible(S.items.filter(function (i) { return i.anime && i.type !== 'live'; }));
-    var kd = MV.visible(S.items.filter(function (i) { return i.kdrama && i.type !== 'live'; }));
+    var anime = MV.visible(MV.memoCat('anime', function () { return S.items.filter(function (i) { return i.anime && i.type !== 'live'; }); }));
+    var kd = MV.visible(MV.memoCat('kd', function () { return S.items.filter(function (i) { return i.kdrama && i.type !== 'live'; }); }));
     var saved = MV.savedList ? MV.savedList().map(MV.resolve) : [];
     if (P.homeStyle !== 'cards') return vidrioHome(html, live, movies, series, anime, kd, favs, saved, cont);
     html = '<div class="hhead"><span>MiVibra TV</span><h1>Inicio</h1></div>' + homeCats([
@@ -628,7 +629,7 @@
     html += row('Anime', anime.slice(0, 30), 'poster', '', 'anime');
     html += row('K-Drama', kd.slice(0, 30), 'poster', '', 'kdrama');
     html += row('Novelas', MV.visible(S.novelas || []).slice(0, 30), 'poster', '', 'novelas');
-    var docs = MV.visible(S.items.filter(function (i) { return i.doc && i.type !== 'live'; }));
+    var docs = MV.visible(MV.memoCat('docs', function () { return S.items.filter(function (i) { return i.doc && i.type !== 'live'; }); }));
     html += row('Documentales', docs.slice(0, 30), 'poster', '', 'docs');
     var bks = visibleBooks();
     if (bks.length) {
@@ -708,7 +709,7 @@
     wxLoad();
   }, 15000);
   function chipItems(id, movies, series, anime, kd) {
-    var vis = function (f) { return MV.visible(S.items.filter(function (i) { return i.type !== 'live' && f(i); })); };
+    var vis = function (f) { return MV.visible(MV.memoCat('chip:' + id, function () { return S.items.filter(function (i) { return i.type !== 'live' && f(i); }); })); };
     if (id === 'movies') return movies; if (id === 'series') return series; if (id === 'anime') return anime; if (id === 'kdrama') return kd;
     if (id === 'novelas') return MV.visible(S.novelas || []);
     if (id === 'infantil') return vis(function (i) { return !i.anime && !i.adult && !i.doc && !!(i.kids || (i.animated && i.age != null && i.age <= 13)); });
@@ -965,11 +966,13 @@
     var src = streamUrl(it.tab, it.ch).replace('muted=false', 'muted=' + PV.mute);
     if (HL.dataset.src !== src) { HL.innerHTML = '<iframe src="' + esc(src) + '" allow="autoplay; encrypted-media" tabindex="-1"></iframe>'; HL.dataset.src = src; }
     PV.on = true; PV.mode = 'web'; PV.key = it.key; PV.sig = '';
-    clearInterval(PV.t); PV.t = setInterval(pvSync, 150); pvSync();
+    clearInterval(PV.t); PV.t = setInterval(pvSync, MV.lite ? 400 : 150); pvSync();
   }
   function heroPreview() {
     var it = MV._heroIt, box = heroBox();
     if (!box || !it || document.hidden) return;
+    // TV liviano: el canal de Inicio no se reproduce solo (un video detrás del menú gastaba memoria y frenaba el control)
+    if (MV.lite && MV.device.tv && P.heroPrevOn !== true) return;
     if (it.stream) { hlShow(it); return; }
     if (PV.on && PV.mode === 'web') pvStop();
     if (it.type !== 'live' || !it.url || it.stk) return;
@@ -979,7 +982,7 @@
       var r = box.getBoundingClientRect();
       PV.on = true; PV.mode = 'native'; PV.key = it.key; PV.sig = '';
       A.previewShow(it.url, it.ua || '', it.ref || '', r.left, r.top, r.width, r.height, window.innerWidth, 14, PV.mute);
-      clearInterval(PV.t); PV.t = setInterval(pvSync, 150);
+      clearInterval(PV.t); PV.t = setInterval(pvSync, MV.lite ? 400 : 150);
       setTimeout(pvSync, 50);
       return;
     }
@@ -1000,6 +1003,10 @@
   MV.stopHeroPreview = stopHeroPreview;
   document.addEventListener('visibilitychange', function () { if (document.hidden) stopHeroPreview(); else if (view.name === 'home') setTimeout(heroPreview, 400); });
   function suggested() {
+    var h0 = MV.pdata().history, hk = (h0[0] && h0[0].key) || '';
+    return MV.memoCat('sug:' + MV.visSig() + ':' + h0.length + ':' + hk, suggested0);
+  }
+  function suggested0() {
     var hist = MV.pdata().history, seen = {}, groups = {};
     hist.forEach(function (h) { seen[h.key] = 1; if (h.group) groups[h.group] = (groups[h.group] || 0) + 1; });
     var top3 = Object.keys(groups).sort(function (a, b) { return groups[b] - groups[a]; }).slice(0, 3);
@@ -1348,7 +1355,8 @@
       (shown.length ? '' : '<p class="muted">No hay categorías con ese nombre.</p>') + '</div>';
   }
   // ---------- Plataformas (separadores por servicio, según las categorías de tus listas) ----------
-  function platformCounts() {
+  function platformCounts() { return MV.memoCat('plat:' + MV.visSig(), platformCounts0); }
+  function platformCounts0() {
     var m = {};
     // Crunchyroll reúne todo el anime (también el que viene marcado de otra plataforma)
     MV.visible(S.items).forEach(function (i) { if (i.type === 'live') return; if (i.platform) m[i.platform] = (m[i.platform] || 0) + 1; if (i.anime && i.platform !== 'crunchyroll') m.crunchyroll = (m.crunchyroll || 0) + 1; });
