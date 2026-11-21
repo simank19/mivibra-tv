@@ -2471,7 +2471,6 @@
   var LSEL = null;
   function listKind(l) { return l.type === 'books' ? 'Enlaces de libros' + (MV.acct.canEditList(l) && l.url ? ' · ' + l.url : '') : l.type === 'mvplugin' ? 'Plugin de MiVibra' : l.type === 'stremio' ? 'Addon de Stremio' : l.type === 'fb' ? 'Firebase' + (MV.acct.canEditList(l) ? ' · ' + ((l.fb || {}).projectId || '') : '') : l.type === 'web' ? 'Página web' + (MV.acct.canEditList(l) ? ' · ' + (l.url || '') : '') : l.type === 'jellyfin' ? 'Jellyfin' : l.type === 'plex' ? 'Plex' : l.type === 'xtream' ? 'Xtream Codes' : l.type === 'stalker' ? 'Portal MAC · ' + (l.mac || '') : l.type === 'file' ? 'Archivo' : 'Lista M3U'; }
   // Listas agrupadas por tipo y con su estado (para que no sea una lista interminable)
-  var LGRP = null, LST = 'all';
   var LGROUPS = [['m3u', 'M3U'], ['xtream', 'Xtream Codes'], ['stalker', 'Portal MAC'], ['stremio', 'Addons'], ['other', 'Otras']];
   function listGroup(l) { return l.type === 'xtream' ? 'xtream' : l.type === 'stalker' ? 'stalker' : l.type === 'stremio' || l.type === 'mvplugin' ? 'stremio' : (!l.type || l.type === 'm3u' || l.type === 'file') ? 'm3u' : 'other'; }
   /** ok = cargó con contenido · bad = falló o llegó vacía · off = apagada · wait = aún no ha cargado */
@@ -2484,21 +2483,28 @@
   }
   var LSTATE = { ok: ['✓ Funciona', '#3ecf8e'], bad: ['✕ No funciona', '#ff6b6b'], off: ['○ Apagada', '#9aa0a6'], warn: ['⚠ A medias', '#f5a524'], wait: ['… Cargando', '#f5c84c'] };
   function stateTag(l) { var st = LSTATE[listState(l)]; return '<span style="display:inline-block;margin-right:6px;padding:1px 8px;border-radius:999px;font-weight:700;font-size:.85em;color:' + st[1] + ';border:1px solid ' + st[1] + '">' + st[0] + '</span>'; }
-  function listFilterBar(ED) {
-    if (ED.length < 4) return { html: '', list: ED };
+  // Desplegables por tipo: al tocar uno se abre solo ese (y se cierra el que estaba abierto)
+  var ACC = {};
+  function listAccordion(key, ED, rowFn, stateOf) {
+    stateOf = stateOf || listState;
+    if (ED.length < 4) return ED.map(rowFn).join('');
     var by = {}; ED.forEach(function (l) { var g = listGroup(l); (by[g] = by[g] || []).push(l); });
     var groups = LGROUPS.filter(function (g) { return by[g[0]]; });
-    if (!LGRP || (LGRP !== 'all' && !by[LGRP])) LGRP = groups.length > 1 ? groups[0][0] : 'all';
-    var inG = LGRP === 'all' ? ED : by[LGRP] || [];
-    var cnt = function (arr, st) { return arr.filter(function (l) { return listState(l) === st; }).length; };
-    var html = '<div class="chips" style="margin:6px 0">' + groups.map(function (g) {
-      var a = by[g[0]], bad = cnt(a, 'bad');
-      return '<button class="chip f' + (LGRP === g[0] ? ' on' : '') + '" data-act="lgrp" data-arg="' + g[0] + '">' + g[1] + ' (' + a.length + ')' + (bad ? ' · ' + bad + ' ✕' : '') + '</button>';
-    }).join('') + '<button class="chip f' + (LGRP === 'all' ? ' on' : '') + '" data-act="lgrp" data-arg="all">Todas (' + ED.length + ')</button></div>';
-    var sts = [['all', 'Todas'], ['ok', 'Funcionan'], ['bad', 'No funcionan'], ['off', 'Apagadas']].filter(function (x) { return x[0] === 'all' || cnt(inG, x[0]); });
-    if (LST !== 'all' && !cnt(inG, LST)) LST = 'all';
-    html += '<div class="chips" style="margin:0 0 8px">' + sts.map(function (x) { return '<button class="chip f' + (LST === x[0] ? ' on' : '') + '" data-act="lst" data-arg="' + x[0] + '">' + x[1] + (x[0] === 'all' ? '' : ' (' + cnt(inG, x[0]) + ')') + '</button>'; }).join('') + '</div>';
-    return { html: html, list: LST === 'all' ? inG : inG.filter(function (l) { return listState(l) === LST; }) };
+    var cnt = function (arr, st) { return arr.filter(function (l) { return stateOf(l) === st; }).length; };
+    var cur = ACC[key] || {};
+    return groups.map(function (g) {
+      var a = by[g[0]], open = cur.g === g[0], ok = cnt(a, 'ok'), bad = cnt(a, 'bad'), off = cnt(a, 'off'), warn = cnt(a, 'warn');
+      var sum = [ok ? '<span style="color:#3ecf8e">✓ ' + ok + '</span>' : '', bad ? '<span style="color:#ff6b6b">✕ ' + bad + '</span>' : '', warn ? '<span style="color:#f5a524">⚠ ' + warn + '</span>' : '', off ? '<span style="color:#9aa0a6">○ ' + off + '</span>' : ''].filter(Boolean).join(' &nbsp; ');
+      var h = '<button class="line f" style="width:100%;text-align:left;cursor:pointer;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:14px;color:inherit;font:inherit;margin:6px 0;padding:12px 14px" data-act="accTog" data-arg="' + key + ':' + g[0] + '" aria-expanded="' + open + '" data-fid="acc-' + key + '-' + g[0] + '"><div class="t"><b>' + (open ? '▾ ' : '▸ ') + g[1] + ' (' + a.length + ')</b><span>' + (sum || 'Sin probar') + '</span></div></button>';
+      if (!open) return h;
+      var st = cur.st || 'all';
+      var sts = [['all', 'Todas'], ['ok', 'Funcionan'], ['bad', 'No funcionan'], ['warn', 'A medias'], ['off', 'Apagadas']].filter(function (x) { return x[0] === 'all' || cnt(a, x[0]); });
+      if (st !== 'all' && !cnt(a, st)) st = 'all';
+      var shown = st === 'all' ? a : a.filter(function (l) { return stateOf(l) === st; });
+      return h + '<div style="padding:0 0 8px 14px;border-left:2px solid rgba(255,255,255,.15);margin:0 0 8px 6px">' +
+        (sts.length > 2 ? '<div class="chips" style="margin:6px 0">' + sts.map(function (x) { return '<button class="chip f' + (st === x[0] ? ' on' : '') + '" data-act="accSt" data-arg="' + key + ':' + x[0] + '">' + x[1] + (x[0] === 'all' ? '' : ' (' + cnt(a, x[0]) + ')') + '</button>'; }).join('') + '</div>' : '') +
+        shown.map(rowFn).join('') + '</div>';
+    }).join('');
   }
   function selBar() {
     if (edLists().length < 2) return '';
@@ -2523,16 +2529,17 @@
     if (A2.userLists == null && !A2.userListsLoading) setTimeout(function () { A2.loadUserLists(); }, 0);
     var head = '<div class="panel glass"><h2>Listas de tus usuarios</h2><p>Las listas que cada usuario agrega para él. Aquí aparecen apagadas: actívalas para usarlas en este equipo y, si quieres, compártelas con todos.</p>';
     if (A2.userListsLoading || A2.userLists == null) return head + '<div style="display:flex;gap:12px;align-items:center"><div class="spinner"></div><span class="muted">Buscando…</span></div></div>';
-    var rows = [];
-    (A2.userLists || []).forEach(function (d) {
-      (d.lists || []).forEach(function (l) {
-        var k = ulKey(d, l), c = ulCopy(k), on = !!(c && c.enabled !== false);
-        rows.push('<div class="line"><div class="t"><b>' + esc(l.name || 'Lista') + '</b><span>' + esc(listKind(l)) + (l.url ? ' · ' + esc(l.url) : l.host ? ' · ' + esc(l.host) : l.server ? ' · ' + esc(l.server) : '') + ' · de ' + esc(d.name || d.email) + (d.name ? ' (' + esc(d.email) + ')' : '') + (c && !c.own ? ' · compartida con todos' : c ? ' · solo para ti' : '') + '</span></div>' +
+    var rows = [], items = [];
+    (A2.userLists || []).forEach(function (d) { (d.lists || []).forEach(function (l) { items.push({ d: d, l: l, type: l.type }); }); });
+    // Estado: el de la copia activada en este equipo; si nunca la activaste, "sin probar"
+    var ulState = function (x) { var c = ulCopy(ulKey(x.d, x.l)); return c ? listState(c) : 'wait'; };
+    var ulRow = function (x) {
+        var d = x.d, l = x.l, k = ulKey(d, l), c = ulCopy(k), on = !!(c && c.enabled !== false);
+        return ('<div class="line"><div class="t"><b>' + esc(l.name || 'Lista') + '</b><span>' + (c ? stateTag(c) : '') + esc(listKind(l)) + (l.url ? ' · ' + esc(l.url) : l.host ? ' · ' + esc(l.host) : l.server ? ' · ' + esc(l.server) : '') + ' · de ' + esc(d.name || d.email) + (d.name ? ' (' + esc(d.email) + ')' : '') + (c && !c.own ? ' · compartida con todos' : c ? ' · solo para ti' : '') + '</span></div>' +
           (c && c.own ? '<button class="btn ghost sm f" data-act="ulShare" data-arg="' + esc(k) + '">Compartir con todos</button>' : '') +
           '<button class="toggle f' + (on ? ' on' : '') + '" data-act="ulToggle" data-arg="' + esc(k) + '" aria-label="Usar esta lista"></button></div>');
-      });
-    });
-    return head + (A2.userListsErr ? '<p style="color:#FF8A80">' + esc(A2.userListsErr) + '</p>' : '') + (rows.length ? rows.join('') : '<p class="muted">Ningún usuario ha agregado listas propias todavía.</p>') +
+    };
+    return head + (A2.userListsErr ? '<p style="color:#FF8A80">' + esc(A2.userListsErr) + '</p>' : '') + (items.length ? listAccordion('users', items, ulRow, ulState) : '<p class="muted">Ningún usuario ha agregado listas propias todavía.</p>') +
       '<div class="btns"><button class="btn ghost sm f" data-act="ulReload">' + IC.refresh + 'Actualizar</button></div></div>';
   }
   UL_ACTS.ulReload = function () { MV.acct.userLists = null; MV.acct.loadUserLists(); MV.rerender(); };
@@ -2585,8 +2592,8 @@
     }
     if (MV.acct.isAdmin()) share += '<div class="panel glass"><h2>Modo de prueba</h2><div class="line"><div class="t"><b>Usar mis listas en este equipo</b><span>' + (MV.myOff() ? 'Apagadas solo aquí: ves las listas de tus usuarios que activaste y las de este equipo. Tus usuarios no notan nada.' : 'Apágalo para probar solo con las listas de tus usuarios. No cambia nada para tus usuarios.') + '</span></div><button class="toggle f' + (MV.myOff() ? '' : ' on') + '" data-act="myListsToggle" aria-label="Usar mis listas en este equipo"></button></div></div>' + userListsBlock();
     return provBlock + share + '<div class="panel glass"><h2>' + (provBlock ? 'Mis listas' : 'Tus listas') + '</h2><p>' + (provBlock ? 'Agrega también tus propias listas: se suman a las incluidas (o las reemplazan si apagas las incluidas) y las usas cuando quieras. El administrador del servicio puede verlas y decidir si las incluye para todos. ' : '') + 'Todo el contenido de tus listas se combina: los canales repetidos aparecen una sola vez y se queda la señal que funciona.' + (MV.acct.isAdmin() ? ' <b>Eres superadministrador:</b> lo que cambies aquí llega a todos los usuarios (las listas en archivo solo quedan en este equipo; usa enlaces para compartirlas).' : '') + '</p>' +
-      selBar() + (function () { var fb = listFilterBar(ED); ED.__shown = fb.list; return fb.html; })() +
-      (ED.length ? (ED.__shown || ED).map(function (l) {
+      selBar() +
+      (ED.length ? listAccordion('my', ED, function (l) {
         if (LSEL) {
           var on = !!LSEL[l.id];
           return '<button class="line selrow f' + (on ? ' on' : '') + '" data-act="lselToggle" data-arg="' + l.id + '" data-fid="ls-' + l.id + '" aria-pressed="' + on + '"><i class="chk"></i><div class="t"><b>' + esc(l.name) + '</b><span>' + stateTag(l) + esc(listKind(l)) + ' · ' + (l.count || 0) + ' elementos' + (l.enabled === false ? ' · desactivada' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div></button>';
@@ -2595,7 +2602,7 @@
           '<button class="toggle f' + (l.enabled !== false ? ' on' : '') + '" data-act="listToggle" data-arg="' + l.id + '" aria-label="Activar lista"></button>' +
           '<button class="iconbtn f" data-act="listEpg" data-arg="' + l.id + '" aria-label="Guía EPG">' + IC.guide + '</button>' +
           '<button class="iconbtn f" data-act="listDelete" data-arg="' + l.id + '" aria-label="Eliminar">' + IC.trash + '</button></div>';
-      }).join('') : '<p class="muted">' + (provBlock ? 'Aún no has agregado listas propias.' : 'No has agregado listas.') + '</p>') +
+      }) : '<p class="muted">' + (provBlock ? 'Aún no has agregado listas propias.' : 'No has agregado listas.') + '</p>') +
       '<div class="line"><div class="t"><b>Elegir de dónde reproducir</b><span>Apagado (recomendado): la película arranca sola con el mejor enlace de todas tus fuentes (listas, Xtream y addons) y las demás quedan de respaldo. Encendido: antes muestra la lista para escoger.</span></div><button class="toggle f' + (P.askSource === true ? ' on' : '') + '" data-act="askSrcToggle" aria-label="Elegir de dónde reproducir"></button></div>' +
       '<div class="line"><div class="t"><b>Cargar el catálogo completo de los addons</b><span>Después de abrir, sigue pidiendo en segundo plano todas las páginas de cada catálogo (anime, películas, series…) hasta traerlo todo. Apágalo si tu equipo va lento.</span></div><button class="toggle f' + (P.stDeep !== false ? ' on' : '') + '" data-act="stDeepToggle"></button></div>' +
       '<div class="line"><div class="t"><b>Actualizar addons al abrir la app</b><span>Vuelve a pedir los catálogos de tus addons cada vez que abres MiVibra (si está apagado, se guardan 12 horas).</span></div><button class="toggle f' + (P.stAutoRefresh ? ' on' : '') + '" data-act="stAutoToggle" aria-label="Actualizar addons al abrir la app"></button></div>' +
@@ -3920,8 +3927,8 @@
       var l = S.lists.find(function (x) { return x.id === id; }); if (!MV.acct.canEditList(l)) return; l.enabled = l.enabled === false; if (l.enabled === false) l.error = ''; l.updatedAt = Date.now(); MV.saveLists(); MV.syncCatalog().then(MV.rerender); MV.rerender(); },
     lselStart: function () { LSEL = {}; MV.rerender(); var r = document.querySelector('.selrow'); if (r) r.focus(); },
     lselCancel: function () { LSEL = null; MV.rerender(); },
-    lgrp: function (g) { LGRP = g || 'all'; LST = 'all'; MV.rerender(); },
-    lst: function (x) { LST = x || 'all'; MV.rerender(); },
+    accTog: function (a) { var k = a.split(':')[0], g = a.split(':')[1], c = ACC[k] || {}; ACC[k] = c.g === g ? {} : { g: g, st: 'all' }; MV.rerender(); },
+    accSt: function (a) { var k = a.split(':')[0]; ACC[k] = Object.assign({}, ACC[k], { st: a.split(':')[1] }); MV.rerender(); },
     lselToggle: function (id, el) {
       if (!LSEL) return;
       if (LSEL[id]) delete LSEL[id]; else LSEL[id] = 1;
