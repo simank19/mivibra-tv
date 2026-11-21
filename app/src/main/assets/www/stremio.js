@@ -508,7 +508,8 @@
 
   /** Capítulos de una serie de Stremio (del addon que da la ficha o de Cinemeta). */
   MV.stremioEpisodes = function (item) {
-    var st = item.st, ls = lists();
+    // Sin ficha de addon (series de páginas web, catálogos propios…): se buscan solo por nombre
+    var st = item.st || { id: '', list: '' }, ls = lists();
     var own = ls.filter(function (l) { return l.id === st.list; })[0];
     var srcs = (own ? [own] : []).concat(ls.filter(function (l) { return l !== own && res(l.man || {}, 'meta') && prefixOk(l.man || {}, 'meta', st.id); }));
     var urls = srcs.filter(function (l) { return !l.man || res(l.man, 'meta'); }).map(function (l) { return base(l.url); });
@@ -525,7 +526,7 @@
     }
     // Se le pide la lista de capítulos a todos los que la dan (no solo al primero): algunos addons solo listan los capítulos que tienen
     var jobs = [];
-    urls.forEach(function (b) { tys.forEach(function (ty) { jobs.push(fetchMeta(b, ty, st.id)); }); });
+    if (st.id) urls.forEach(function (b) { tys.forEach(function (ty) { jobs.push(fetchMeta(b, ty, st.id)); }); });
     // Plan B: ningún addon dio capítulos con ese id (pasa con catálogos de TMDB o MAL que no tienen "meta").
     // Se busca la serie por nombre en Kitsu (anime) y en Cinemeta, y si el nombre trae "3rd Season" se toma esa temporada.
     function byName() {
@@ -564,7 +565,7 @@
           var m = l.filter(function (x) { return /^tt\d+/.test(x.imdb_id || x.id || ''); })[0];
           if (!m) return null;
           var tt = m.imdb_id || m.id;
-          MV.stAlt(st.id, tt);
+          if (st.id) MV.stAlt(st.id, tt);
           return fetchMeta(base(CINEMETA), 'series', tt).then(function (meta) {
             if (meta && sn && (meta.videos || []).some(function (v) { return +v.season === sn; })) meta = Object.assign({}, meta, { videos: meta.videos.filter(function (v) { return +v.season === sn; }) });
             return meta;

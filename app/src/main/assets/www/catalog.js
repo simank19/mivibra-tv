@@ -1397,7 +1397,12 @@
     if (item.stks && !(item.episodes || []).length) return stkEpisodes(item);
     if ((item.jf || item.px) && !(item.episodes || []).length) return mediaEpisodes(item);
     if (item.st && !item.xt && !(item.episodes || []).length && MV.stremioEpisodes) return MV.stremioEpisodes(item).then(function (eps) { item.episodes = eps; return eps; });
-    if (!item.xt) return Promise.resolve(item.episodes || []);
+    // Serie sin lista de capítulos propia (catálogos web, plataformas…): se buscan por nombre en tus addons
+    var byAddons = function (eps) {
+      if ((eps || []).length || item.type !== 'series' || !MV.stremioEpisodes || !(MV.stHasStreamers && MV.stHasStreamers())) return eps || [];
+      return MV.stremioEpisodes(item).then(function (e2) { if (e2.length) item.episodes = e2; return e2; }).catch(function () { return eps || []; });
+    };
+    if (!item.xt) return byAddons(item.episodes || []);
     var list = S.lists.find(function (l) { return l.id === item.xt.list; });
     if (!list) return Promise.resolve([]);
     var base = xtBase(list), u = encodeURIComponent(list.user), p = encodeURIComponent(list.pass);
@@ -1412,7 +1417,7 @@
       if (j.info) { item.plot = item.plot || j.info.plot; item.backdrop = item.backdrop || (j.info.backdrop_path && j.info.backdrop_path[0]); }
       item.episodes = eps;
       return eps;
-    });
+    }).then(byAddons);
   }
 
   // ---------- Carga y combinación de todas las listas ----------
