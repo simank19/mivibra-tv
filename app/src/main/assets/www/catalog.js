@@ -1399,7 +1399,7 @@
     if (item.st && !item.xt && !(item.episodes || []).length && MV.stremioEpisodes) return MV.stremioEpisodes(item).then(function (eps) { item.episodes = eps; return eps; });
     // Serie sin lista de capítulos propia (catálogos web, plataformas…): se buscan por nombre en tus addons
     var byAddons = function (eps) {
-      if ((eps || []).length || item.type !== 'series' || !MV.stremioEpisodes || !(MV.stHasStreamers && MV.stHasStreamers())) return eps || [];
+      if ((eps || []).length || item.type !== 'series' || !MV.stremioEpisodes || !(MV.stHasStreamers && MV.stHasStreamers())) return Promise.resolve(eps || []);
       return MV.stremioEpisodes(item).then(function (e2) { if (e2.length) item.episodes = e2; return e2; }).catch(function () { return eps || []; });
     };
     if (!item.xt) return byAddons(item.episodes || []);
