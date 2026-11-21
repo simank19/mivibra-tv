@@ -637,7 +637,7 @@ class PlayerActivity : ComponentActivity() {
         val (type, id) = addonSubId(item) ?: run { addonSubs = emptyList(); addonSubsNoId = true; addonSubsFor = item.optString("id"); return }
         addonSubsNoId = false
         val key = item.optString("id")
-        addonSubsFor = key; addonSubs = null
+        addonSubsFor = key; addonSubs = null; autoSubTries = 0
         val addons = subAddons
         Thread {
             val res = try { Subtitles.fromAddons(addons, type, id) } catch (_: Exception) { emptyList() }
@@ -656,6 +656,12 @@ class PlayerActivity : ComponentActivity() {
     private fun autoAddonSub(key: String) {
         if (subLang.isBlank() || extSub != null || autoSubDone == key || addonSubsFor != key) return
         val p = player ?: return
+        // Solo cuando el video ya está andando: poner el subtítulo reabre el video, y si se hace mientras
+        // todavía carga, muchos servidores (1 conexión por cuenta) se quedan colgados y queda en 00:00
+        if (p.playbackState != Player.STATE_READY || p.currentPosition < 3000) {
+            if (autoSubTries++ < 40) ui.postDelayed({ autoAddonSub(key) }, 2000)
+            return
+        }
         val want = when (subLang) { "en" -> "Inglés"; "pt" -> "Portugués"; else -> "Español" }
         // ¿El video ya trae subtítulos en ese idioma?
         val has = p.currentTracks.groups.any { g -> g.type == C.TRACK_TYPE_TEXT && (0 until g.length).any { i -> (g.getTrackFormat(i).language ?: "").lowercase().startsWith(subLang) } }
@@ -690,6 +696,7 @@ class PlayerActivity : ComponentActivity() {
         }
         m.close("Cerrar").show()
     }
+    private var autoSubTries = 0
     private var extSub: java.io.File? = null
     private var extSubName = ""
     private var extOffset = 0L
@@ -1199,7 +1206,9 @@ class PlayerActivity : ComponentActivity() {
         startPosition = p.currentPosition
         p.trackSelectionParameters = p.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, extSub == null).clearOverridesOfType(C.TRACK_TYPE_TEXT).build()
         extPending = extSub != null
-        startAttempt()
+        // se cierra la conexión anterior antes de abrir la nueva (los servidores con 1 conexión por cuenta se colgaban)
+        p.stop()
+        ui.postDelayed({ startAttempt() }, 400)
         toastInfo(msg)
     }
 
