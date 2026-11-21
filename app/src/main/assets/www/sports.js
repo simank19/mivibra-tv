@@ -6,7 +6,9 @@
   var P = function () { return S.prefs || {}; };
   // [deporte ESPN, liga, nombre, categoría, países donde es "local"]
   var LEAGUES = [
-    ['soccer', 'col.1', 'Liga colombiana', 'futbol', ['CO']],
+    ['soccer', 'col.1', 'Liga BetPlay', 'futbol', ['CO']],
+    ['soccer', 'col.copa', 'Copa BetPlay', 'futbol', ['CO']],
+    ['soccer', 'fifa.friendly', 'Amistosos de selecciones', 'futbol', []],
     ['soccer', 'conmebol.libertadores', 'Libertadores', 'futbol', ['CO', 'AR', 'BR', 'CL', 'PE', 'EC', 'UY', 'PY', 'BO', 'VE']],
     ['soccer', 'conmebol.sudamericana', 'Sudamericana', 'futbol', ['CO', 'AR', 'BR', 'CL', 'PE', 'EC', 'UY', 'PY', 'BO', 'VE']],
     ['soccer', 'fifa.worldq.conmebol', 'Eliminatorias', 'futbol', ['CO', 'AR', 'BR', 'CL', 'PE', 'EC', 'UY', 'PY', 'BO', 'VE']],
@@ -80,7 +82,7 @@
   // ---------- Datos ----------
   function ymd(d) { return d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2); }
   function fetchLeague(lg) {
-    var t = new Date(), m = new Date(Date.now() + 86400e3);
+    var t = new Date(Date.now() - 86400e3), m = new Date(Date.now() + 7 * 86400e3);
     return MV.getJSON('https://site.api.espn.com/apis/site/v2/sports/' + lg[0] + '/' + lg[1] + '/scoreboard?lang=es&region=' + region().toLowerCase() + '&dates=' + ymd(t) + '-' + ymd(m)).then(function (j) {
       var out = [];
       ((j && j.events) || []).forEach(function (ev) {
@@ -127,7 +129,13 @@
       }).filter(function (e) { return e && e.start - Date.now() < 36 * 3600e3; });
     });
   }
-  function keep(e, now) { return e.state === 'in' || (e.state === 'pre' && e.start - now < 36 * 3600e3 && e.start - now > -3 * 3600e3) || (e.state === 'post' && now - e.start < 5 * 3600e3); }
+  function keep(e, now) {
+    if (e.state === 'in') return true;
+    var near = lgScore(e) === 0 || isFav(e);   // ligas de tu país y tus equipos: la semana completa
+    if (e.state === 'pre') return e.start - now > -3 * 3600e3 && e.start - now < (near ? 7 * 86400e3 : 36 * 3600e3);
+    var today = new Date(e.start).toDateString() === new Date(now).toDateString();
+    return now - e.start < (near && today ? 16 * 3600e3 : 5 * 3600e3);
+  }
   function order(evs) {
     var rank = { 'in': 0, pre: 1, post: 2 };
     return evs.sort(function (a, b) { return rank[a.state] - rank[b.state] || (isFav(b) - isFav(a)) || (a.state === 'pre' ? a.start - b.start : 0) || lgScore(a) - lgScore(b) || a.start - b.start; });
@@ -220,7 +228,7 @@
       (e.teams.length ? teamRow(e, e.teams[0]) + teamRow(e, e.teams[1]) : '<div class="sp-t"><b>' + esc(e.name) + '</b></div>') +
       '<p>' + esc(line(e)) + '</p><div class="sp-ch">' + chHtml + '</div></button>';
   }
-  function homeList() { return DATA.events.slice(0, 16); }
+  function homeList() { return DATA.events.filter(function (e) { return e.state !== 'pre' || e.start - Date.now() < 36 * 3600e3; }).slice(0, 16); }
   function rowHtml() {
     var evs = homeList(); if (!evs.length) return '';
     var live = evs.filter(function (e) { return e.state === 'in'; }).length;
@@ -280,7 +288,7 @@
     if (CAT === 'esports' && !(P().pandaKey || '').trim()) return html + '<div class="panel glass"><h2>Esports</h2><p class="muted">Para ver partidos de League of Legends, Valorant, CS2, Dota 2 y más (con el canal oficial de Twitch o Kick), pega tu clave gratuita de PandaScore. Se crea en pandascore.co con tu correo.</p><div class="btns"><button class="btn f" data-act="sportSettings">Agregar clave</button></div></div>';
     var list = evs.filter(function (e) { return inCat(e, CAT); });
     if (!list.length) return html + '<p class="muted" style="margin:18px 4px">' + (DATA.loading || !DATA.ts ? 'Buscando partidos…' : CAT === 'fav' ? (favs().length ? 'Tus equipos no juegan hoy ni mañana.' : 'Marca tus equipos con la estrella ☆ en cualquier partido.') : 'No hay partidos hoy ni mañana.') + '</p>';
-    var groups = [['En vivo', list.filter(function (e) { return e.state === 'in'; })], ['Hoy', list.filter(function (e) { return e.state === 'pre' && dayWord(e.start) === 'Hoy'; })], ['Mañana', list.filter(function (e) { return e.state === 'pre' && dayWord(e.start) !== 'Hoy'; })], ['Terminados', list.filter(function (e) { return e.state === 'post'; })]];
+    var groups = [['En vivo', list.filter(function (e) { return e.state === 'in'; })], ['Hoy', list.filter(function (e) { return e.state === 'pre' && dayWord(e.start) === 'Hoy'; })], ['Mañana', list.filter(function (e) { return e.state === 'pre' && dayWord(e.start) === 'Mañana'; })], ['Próximos días', list.filter(function (e) { return e.state === 'pre' && dayWord(e.start) !== 'Hoy' && dayWord(e.start) !== 'Mañana'; })], ['Terminados', list.filter(function (e) { return e.state === 'post'; })]];
     groups.forEach(function (g) {
       if (!g[1].length) return;
       html += '<section class="row"><h3>' + g[0] + ' <small>' + g[1].length + '</small></h3><div class="spgrid">' + g[1].slice(0, 60).map(function (e) {
