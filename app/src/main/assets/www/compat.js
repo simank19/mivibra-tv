@@ -16,8 +16,12 @@
     root.removeChild(d);
   } catch (e) {}
 
-  if (sup('width', 'clamp(1px, 2px, 3px)') && sup('width', 'min(1px, 2px)')) return;
+  var noClamp = !(sup('width', 'clamp(1px, 2px, 3px)') && sup('width', 'min(1px, 2px)'));
+  var noAR = !sup('aspect-ratio', '1');
+  var noFV = false; try { document.querySelector(':focus-visible'); } catch (e) { noFV = true; }
+  if (!noClamp && !noAR && !noFV) return;
   root.classList.add('oldwv');
+  var AR = [];   // [selector, alto/ancho] de las reglas con aspect-ratio (se aplican con JS)
 
   // Toma los argumentos de una función CSS respetando paréntesis anidados (calc(), var()…)
   function args(s, i) {
@@ -34,6 +38,13 @@
   // Valor fijo (px/rem/em) si hay uno: es el que mejor aguanta sin la función
   function fixed(list) { for (var k = 0; k < list.length; k++) if (/^-?[\d.]+(px|rem|em)$/.test(list[k])) return list[k]; return list[0]; }
   function fix(css) {
+    // :focus-visible no existe: la regla entera se perdía (no se veía qué botón estaba elegido con el control)
+    if (noFV) css = css.replace(/:focus-visible/g, ':focus');
+    if (noAR) css.replace(/([^{}]+)\{([^{}]*?)aspect-ratio\s*:\s*([\d.]+)\s*(?:\/\s*([\d.]+))?/g, function (_, sel, body, w, h) {
+      sel = sel.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[\s\S]*\}/, '').trim(); if (!sel || sel[0] === '@') return _;
+      AR.push([sel, (+h || 1) / (+w || 1)]); return _;
+    });
+    if (!noClamp) return css;
     var rx = /(^|[^a-z-])(clamp|min|max)\(/gi, m, guard = 0;
     while ((m = rx.exec(css)) && guard++ < 5000) {
       var start = m.index + m[1].length, r = args(css, rx.lastIndex);
@@ -58,5 +69,23 @@
       st.textContent = fix(x.responseText);
       l.parentNode.insertBefore(st, l.nextSibling); l.disabled = true;
     } catch (e) {}
+  }
+  // aspect-ratio (Chrome 88+): sin él, los avatares al crear el perfil y otras miniaturas quedaban sin alto
+  if (noAR && AR.length) {
+    var sel = AR.map(function (x) { return x[0]; });
+    var applyAR = function () {
+      AR.forEach(function (x) {
+        var els; try { els = document.querySelectorAll(x[0]); } catch (e) { return; }
+        for (var k = 0; k < els.length; k++) {
+          var el = els[k]; if (el.style.height && !el.hasAttribute('data-arh')) continue;
+          var w = el.getBoundingClientRect().width; if (!w) continue;
+          el.style.height = Math.round(w * x[1]) + 'px'; el.setAttribute('data-arh', '1');
+        }
+      });
+    };
+    var t = 0, sched = function () { if (!t) t = setTimeout(function () { t = 0; applyAR(); }, 60); };
+    var start = function () { new MutationObserver(sched).observe(document.body, { childList: true, subtree: true }); window.addEventListener('resize', function () { var e = document.querySelectorAll('[data-arh]'); for (var k = 0; k < e.length; k++) e[k].style.height = ''; sched(); }); sched(); };
+    if (document.body) start(); else document.addEventListener('DOMContentLoaded', start);
+    void sel;
   }
 })();
