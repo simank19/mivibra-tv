@@ -2002,6 +2002,14 @@
   };
   function visible0(arr) {
     var kids = MV.isKids();
+    // Lo que ya viste, sigues viendo, marcaste o guardaste no se esconde por "Solo con enlaces"
+    var mine = {};
+    if (P.stOnlyLinked) try {
+      var pd = MV.pdata() || {};
+      (pd.history || []).forEach(function (h) { mine[h.key] = 1; });
+      Object.keys(pd.progress || {}).forEach(function (k) { mine[k.split('#')[0]] = 1; });
+      (MV.favs ? MV.favs() : []).forEach(function (k) { mine[typeof k === 'string' ? k : k.key] = 1; });
+    } catch (e) {}
     return arr.filter(function (i) {
       if (i.adult) return false;
       if (kids && !MV.kidsOk(i)) return false;
@@ -2010,7 +2018,7 @@
       if (hideUnrel(i)) return false;
       if (P.latOnly && !D.latOk(i)) return false;
       // Títulos de catálogos de addons: con "Solo con enlaces" se muestran únicamente los que ya se comprobó que tienen enlaces
-      if (P.stOnlyLinked && i.st && !i.url && !i.xt && MV.stLinked && MV.stLinked(i) !== true) return false;
+      if (P.stOnlyLinked && i.st && !i.url && !i.xt && MV.stLinked && MV.stLinked(i) !== true && !mine[i.key]) return false;
       return true;
     });
   }

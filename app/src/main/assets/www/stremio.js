@@ -443,11 +443,17 @@
   // ---------- "Solo con enlaces": se revisa en segundo plano qué títulos de los catálogos tienen enlaces ----------
   var LK = null;
   function lk() { if (!LK) { LK = MV.load('stLinks', {}) || {}; var now = Date.now(); Object.keys(LK).forEach(function (k) { if (now - LK[k].t > 2 * 86400e3) delete LK[k]; }); } return LK; }
-  MV.stLinked = function (it) { var c = lk()[it.st.type + ':' + it.st.id]; if (!c || (!c.ok && c.v !== 2)) return undefined; return S.prefs.latOnly && c.lat !== undefined && it.olang !== 'es' ? c.lat : c.ok; };
+  MV.stLinked = function (it) {
+    var c = lk()[it.st.type + ':' + it.st.id]; if (!c || (!c.ok && c.v !== 2)) return undefined;
+    // Un solo intento fallido no basta para esconderlo (a veces el addon tarda o falla ese día): se revisa otra vez
+    if (!c.ok && (c.miss || 1) < 2) return Date.now() - c.t > 6 * 3600e3 ? undefined : true;
+    // Anime y doramas se ven subtitulados aunque esté activo "Solo español latino"
+    return S.prefs.latOnly && c.lat !== undefined && it.olang !== 'es' && !it.anime && !it.kdrama ? c.lat : c.ok;
+  };
   /** Lo que se abrió y no trajo nada queda marcado: con "Solo con enlaces" deja de aparecer. */
   MV.stMarkDead = function (it) {
     if (!it || !it.st) return;
-    lk()[it.st.type + ':' + it.st.id] = { v: 2, ok: false, lat: false, t: Date.now() };
+    lk()[it.st.type + ':' + it.st.id] = { v: 2, ok: false, lat: false, t: Date.now(), miss: 2 };
     MV.save('stLinks', lk()); MV._stLinkV = (MV._stLinkV || 0) + 1;
   };
   var running = false, saveT = 0;
@@ -478,7 +484,8 @@
         // Se guarda si hay enlaces y si alguno es en latino (para cuando está activo "Solo español latino")
         // Si algún addon no respondió y no hubo enlaces, no se marca "sin enlaces": se vuelve a revisar después
         if (!st.length && st.failed) return;
-        lk()[it.st.type + ':' + it.st.id] = { v: 2, ok: st.length > 0, lat: st.some(function (x) { return latLink(x, anime, it.olang === 'es'); }), t: Date.now() };
+        var prev = lk()[it.st.type + ':' + it.st.id];
+        lk()[it.st.type + ':' + it.st.id] = { v: 2, ok: st.length > 0, lat: st.some(function (x) { return latLink(x, anime, it.olang === 'es'); }), t: Date.now(), miss: st.length ? 0 : ((prev && !prev.ok && prev.miss) || (prev && !prev.ok ? 1 : 0)) + 1 };
         if (st.length) found++;
       }).catch(function () {}).then(function () {
         n++;
