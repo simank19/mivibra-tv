@@ -1536,13 +1536,13 @@
   };
   /** Contenido +18 (solo desde Utilidades, con PIN). */
   // ---------- Carátulas +18: imagen sacada del propio video cuando la lista no trae carátula ----------
-  var ADQ = [], adBusy = 0, adSeen = {}, ACT_EXTRA = {};
+  var ADTQ = [], adBusy = 0, adSeen = {}, ACT_EXTRA = {};
   function adultThumbCan(it) { return MV.native && it && it.url && it.type !== 'live' && it.type !== 'series' && !/\.m3u8?(\?|$)/i.test(it.url) && !/^yt:/.test(it.url); }
   MV.adultThumbWant = function (it, force) {
     if (!adultThumbCan(it)) return;
     var t = MV.thumbs()[it.key];
     if (!force && (adSeen[it.key] || (t && (t.u || Date.now() - (t.fail || 0) < 7 * 864e5)) || (it.poster && !it._posterBad) || (P.covers && P.covers[it.key]))) return;
-    adSeen[it.key] = 1; ADQ.push(it); adPump();
+    adSeen[it.key] = 1; ADTQ.push(it); adPump();
   };
   MV.adultImgFail = function (el) {
     var k = el.getAttribute('data-k'), it = S.byKey[k] || MV.reg[k];
@@ -1553,9 +1553,9 @@
     el.replaceWith(sp);
   };
   function adPump() {
-    while (adBusy < 2 && ADQ.length) {
-      var it = ADQ.shift();
-      if (!MV.adultOk() || (view.name !== 'adult' && view.name !== 'detail')) { ADQ = []; adSeen = {}; return; }
+    while (adBusy < 2 && ADTQ.length) {
+      var it = ADTQ.shift();
+      if (!MV.adultOk() || (view.name !== 'adult' && view.name !== 'detail')) { ADTQ = []; adSeen = {}; return; }
       adBusy++;
       (function (it) {
         MV.call('videoFrame', [it.url, JSON.stringify({ 'User-Agent': it.ua || '', Referer: it.ref || '' }), 0.15]).then(function (u) {
