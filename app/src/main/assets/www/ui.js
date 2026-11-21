@@ -2857,8 +2857,8 @@
       MV.stremioPick('movie', id, name, false, false, { year: it.year || '', alt: it.orig || '', olang: it.olang, startMs: prog ? prog.pos : 0 });
     }).catch(function (e) { MV.toast(e.message || 'No se encontró en otras fuentes', 4000); });
   }
-  /** Capítulo de tus listas que no abrió: se busca en tus addons. Anime: por Kitsu con número absoluto
-   *  (como lo cuentan los addons de anime); si no, por IMDb con temporada y capítulo. */
+  /** Capítulo de tus listas que no abrió: se busca en tus addons. Anime de 1.ª temporada: por Kitsu
+   *  (como lo cuentan los addons de anime); lo demás, por IMDb con temporada y capítulo. */
   var KITSU = {};
   function kitsuId(name) {
     var k = MV.norm(name); if (KITSU[k] !== undefined) return Promise.resolve(KITSU[k]);
@@ -2874,8 +2874,6 @@
     var name = MV.cleanTitle(series.name) || series.name, label = name + ' T' + e.season + ' E' + e.ep;
     MV.toast('Buscando «' + label + '» en otras fuentes…', 3000);
     var anime = (MV.isAnimeIt && MV.isAnimeIt(series)) || series.anime;
-    var sorted = eps.slice().sort(function (a, b) { return a.season - b.season || a.ep - b.ep; });
-    var abs = sorted.indexOf(e) + 1;
     var opts = { name: name, alt: series.orig || '', olang: series.olang || '', year: series.year || '' };
     var byImdb = function () {
       var im = (series._meta && series._meta.imdb) || series.imdb || '';
@@ -2884,9 +2882,10 @@
         MV.stremioPick('series', id + ':' + e.season + ':' + e.ep, label, false, false, opts);
       });
     };
-    (anime ? kitsuId(name).then(function (kid) {
+    // En Kitsu cada temporada es una ficha aparte: se usa para la 1.ª temporada; las demás, por IMDb (temporada y capítulo)
+    (anime && +e.season <= 1 ? kitsuId(name).then(function (kid) {
       if (!kid) return byImdb();
-      MV.stremioPick('series', kid + ':' + (abs > 0 ? abs : e.ep), label, false, false, opts);
+      MV.stremioPick('series', kid + ':' + e.ep, label, false, false, opts);
     }) : byImdb()).catch(function (er) { MV.toast(er.message || 'No se encontró en otras fuentes', 4000); });
   }
   /** Siguiente capítulo de un addon: se busca en el mismo addon que funcionó, con la misma fuente si está (sin preguntar). */
