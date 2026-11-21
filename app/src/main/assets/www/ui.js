@@ -2885,8 +2885,12 @@
     var im = (it._meta && it._meta.imdb) || it.imdb || '';
     (/^tt\d+/.test(im) ? Promise.resolve(im) : findImdb(name, it.year || '', 'movie', it.orig)).then(function (id) {
       if (!id) throw new Error('No encontré «' + name + '» en otras fuentes');
-      MV.stremioPick('movie', id, name, false, false, { year: it.year || '', alt: it.orig || '', olang: it.olang, startMs: prog ? prog.pos : 0 });
-    }).catch(function (e) { MV.toast(e.message || 'No se encontró en otras fuentes', 4000); });
+      return MV.stremioPick('movie', id, name, false, false, { year: it.year || '', alt: it.orig || '', olang: it.olang, startMs: prog ? prog.pos : 0 });
+    }).then(function (s) {
+      // Se reproduce lo encontrado (sin volver a buscar si tampoco abre, para no quedar en un ciclo)
+      if (!s || !s.url) throw new Error('No se encontró en otras fuentes');
+      launch({ queue: [q(it, { url: s.url, ua: s.ua || '', ref: s.ref || '', alts: s.rest || [] })], index: 0, live: false, startMs: prog ? prog.pos : 0 }, { item: it });
+    }).catch(function (e) { if (e && e.message === 'cancelado') return; MV.toast((e && e.message) || 'No se encontró en otras fuentes', 4000); });
   }
   /** Capítulo de tus listas que no abrió: se busca en tus addons. Anime de 1.ª temporada: por Kitsu
    *  (como lo cuentan los addons de anime); lo demás, por IMDb con temporada y capítulo. */
@@ -2910,14 +2914,20 @@
       var im = (series._meta && series._meta.imdb) || series.imdb || '';
       return (/^tt\d+/.test(im) ? Promise.resolve(im) : findImdb(name, series.year || '', 'series', series.orig)).then(function (id) {
         if (!id) throw new Error('No encontré «' + name + '» en otras fuentes');
-        MV.stremioPick('series', id + ':' + e.season + ':' + e.ep, label, false, false, opts);
+        return MV.stremioPick('series', id + ':' + e.season + ':' + e.ep, label, false, false, opts);
       });
     };
     // En Kitsu cada temporada es una ficha aparte: se usa para la 1.ª temporada; las demás, por IMDb (temporada y capítulo)
     (anime && +e.season <= 1 ? kitsuId(name).then(function (kid) {
       if (!kid) return byImdb();
-      MV.stremioPick('series', kid + ':' + e.ep, label, false, false, opts);
-    }) : byImdb()).catch(function (er) { MV.toast(er.message || 'No se encontró en otras fuentes', 4000); });
+      return MV.stremioPick('series', kid + ':' + e.ep, label, false, false, opts);
+    }) : byImdb()).then(function (s) {
+      if (!s || !s.url) throw new Error('No se encontró en otras fuentes');
+      // Se reproduce el capítulo encontrado; si tampoco abre, no se vuelve a buscar (sin ciclos)
+      e.url = s.url; e.ua = s.ua || ''; e.ref = s.ref || ''; e.alts = s.rest || []; e._fbDone = true;
+      series._stLid = s.lid || ''; series._stSrc = s.src || '';
+      var i = eps.indexOf(e); if (i >= 0) MV.playEpisode(series, i);
+    }).catch(function (er) { if (er && er.message === 'cancelado') return; MV.toast((er && er.message) || 'No se encontró en otras fuentes', 4000); });
   }
   /** Siguiente capítulo de un addon: se busca en el mismo addon que funcionó, con la misma fuente si está (sin preguntar). */
   function sameAddonLink(series, e) {
@@ -2967,14 +2977,14 @@
       return;
     }
     var poster = MV.poster(series);
-    var queue = eps.slice(i).map(function (x) { return Object.assign({ id: series.key + '#' + x.season + 'x' + x.ep, url: x.url, title: series.name, subtitle: 'T' + x.season + ' E' + x.ep + ' · ' + x.title, ua: x.ua || '', ref: x.ref || '', poster: poster, stk: x.stk || null }, subInfo(series, x.season, x.ep), x.stId ? { stSubId: x.stId } : {}); });
+    var queue = eps.slice(i).map(function (x) { return Object.assign({ id: series.key + '#' + x.season + 'x' + x.ep, url: x.url, title: series.name, subtitle: 'T' + x.season + ' E' + x.ep + ' · ' + x.title, ua: x.ua || '', ref: x.ref || '', alts: x.alts || [], poster: poster, stk: x.stk || null }, subInfo(series, x.season, x.ep), x.stId ? { stSubId: x.stId } : {}); });
     var k = series.key + '#' + e.season + 'x' + e.ep, prog = resume !== false ? MV.progressOf(k) : null;
     // Capítulos descargados: se ven desde el archivo
     var dls = {}; MV.dlList().forEach(function (d) { if (d.status === 'done') dls[d.key] = 'file://' + d.file; });
     queue.forEach(function (x) { if (dls[x.id]) x.url = dls[x.id]; });
     // Si el capítulo no abre desde tu lista, se busca el mismo capítulo en tus addons
     var fb = !!(MV.stremioPick && MV.stHasStreamers && MV.stHasStreamers());
-    if (fb) queue.forEach(function (x) { if (!/^file:/.test(x.url || '')) x.fallback = true; });
+    if (fb) queue.forEach(function (x, k) { var ek = eps[i + k]; if (!/^file:/.test(x.url || '') && !(ek && ek._fbDone)) x.fallback = true; });
     launch({ queue: queue, index: 0, live: false, startMs: prog ? prog.pos : 0 }, { item: series, episodes: eps, start: i, fallbackSearch: fb ? function (r) { var ep = eps[i + ((r && r.index) || 0)]; if (ep) searchEpisodeElsewhere(series, eps, ep); } : null });
     if (series._stLid) setTimeout(function () { watchNextEp(series, eps, i); }, 3000);
   };
