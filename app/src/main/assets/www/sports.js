@@ -81,19 +81,28 @@
 
   // ---------- Datos ----------
   function ymd(d) { return d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2); }
+  // ESPN no siempre acepta rangos de fechas (en fútbol devolvía vacío): se pide día por día.
+  // Hoy y mañana para todas; la semana completa para las ligas de tu país.
+  function fetchDay(lg, day) {
+    return MV.getJSON('https://site.api.espn.com/apis/site/v2/sports/' + lg[0] + '/' + lg[1] + '/scoreboard?lang=es&region=' + region().toLowerCase() + (day ? '&dates=' + day : ''))
+      .then(function (j) { return (j && j.events) || []; }).catch(function () { return null; });
+  }
   function fetchLeague(lg) {
-    var t = new Date(Date.now() - 86400e3), m = new Date(Date.now() + 7 * 86400e3);
-    return MV.getJSON('https://site.api.espn.com/apis/site/v2/sports/' + lg[0] + '/' + lg[1] + '/scoreboard?lang=es&region=' + region().toLowerCase() + '&dates=' + ymd(t) + '-' + ymd(m)).then(function (j) {
-      var out = [];
-      ((j && j.events) || []).forEach(function (ev) {
+    var local = lg[4].indexOf(region()) >= 0, days = [''];
+    for (var d = 0; d < (local ? 7 : 2); d++) days.push(ymd(new Date(Date.now() + d * 86400e3)));
+    return Promise.all(days.map(function (dd) { return fetchDay(lg, dd); })).then(function (rs) {
+      if (rs.every(function (r) { return r === null; })) return null;
+      var out = [], seen = {};
+      [].concat.apply([], rs.map(function (r) { return r || []; })).forEach(function (ev) {
+        var push = function (e) { if (e && !seen[e.uid]) { seen[e.uid] = 1; out.push(e); } };
         // Tenis: cada torneo trae muchos partidos dentro
-        if (ev.groupings) ev.groupings.forEach(function (g) { (g.competitions || []).forEach(function (c) { var e = parse(ev, c, lg); if (e) out.push(e); }); });
-        else { var e = parse(ev, (ev.competitions || [])[0], lg); if (e) out.push(e); }
+        if (ev.groupings) ev.groupings.forEach(function (g) { (g.competitions || []).forEach(function (c) { push(parse(ev, c, lg)); }); });
+        else push(parse(ev, (ev.competitions || [])[0], lg));
       });
       // Tenis tiene cientos: solo los en juego y los próximos más cercanos
       if (lg[0] === 'tennis') out = out.filter(function (e) { return e.state === 'in' || (e.state === 'pre' && e.start - Date.now() < 6 * 3600e3); }).slice(0, 12);
       return out;
-    }).catch(function () { return null; });
+    });
   }
   function parse(ev, c, lg) {
     if (!c) return null;
