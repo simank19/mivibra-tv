@@ -281,7 +281,9 @@
     var jobs = ok.map(function (l) {
       return withTimeout(MV.getSmallJSON(base(l.url) + '/stream/' + tyFor(l.man || {}) + '/' + encodeURIComponent(id) + '.json'), 12000).then(function (j) {
         var all = (j && j.streams) || [];
-        MV._stTorrents = (MV._stTorrents || 0) + all.filter(function (s) { return s.infoHash && !s.url; }).length;
+        var tn = all.filter(function (s) { return s.infoHash && !s.url; }).length;
+        MV._stTorrents = (MV._stTorrents || 0) + tn;
+        if (tn) { MV._stTorSrc = MV._stTorSrc || []; if (MV._stTorSrc.indexOf(l.name) < 0) MV._stTorSrc.push(l.name); }
         var nd = all.filter(function (s) { return s.url && /^https?:/i.test(s.url); }).length, nt = all.length - nd;
         if (typeof D[l.name] !== 'number' || nd > D[l.name]) D[l.name] = nd || (nt ? nt + ' torrents (sin debrid no sirven)' : 0);
         return all.filter(function (s) { return s.url && /^https?:/i.test(s.url); }).map(function (s) {
@@ -368,6 +370,7 @@
     // Sin avisos técnicos: solo que se está abriendo
     MV.toast('Abriendo…', 1500);
     MV._stTorrents = 0;
+    MV._stTorSrc = [];
     MV._stDiag = {};
     var anime = /^(kitsu|mal|anilist|anidb)[:_]/i.test(id);
     if (pref) {
@@ -401,7 +404,7 @@
       // A los usuarios no se les habla de addons ni torrents: solo que no está disponible (el detalle técnico, solo para el administrador)
       if (!st.length && !st.failed && type === 'movie' && MV.stMarkDead) MV.stMarkDead({ st: { type: 'movie', id: id } });
       if (!st.length && !admin) throw new Error('Este título no está disponible por ahora. Prueba más tarde.');
-      if (!st.length && MV._stTorrents) throw new Error('Tus addons solo encontraron torrents (' + MV._stTorrents + '). MiVibra reproduce enlaces directos: en la configuración de Torrentio agrega un servicio debrid (Real-Debrid, AllDebrid, Premiumize…) y vuelve a instalarlo con el enlace nuevo.');
+      if (!st.length && MV._stTorrents) throw new Error('Este título no tiene enlaces directos en tus addons. Solo hay torrents (' + MV._stTorrents + ')' + ((MV._stTorSrc || []).length ? ', de: ' + MV._stTorSrc.join(', ') : '') + '. Esos no se pueden reproducir sin un servicio debrid; puedes quitar ese addon en Plugins si no lo usas.');
       if (!st.length) {
         var dg = MV._stDiag || {}, names = Object.keys(dg);
         if (!names.length) throw new Error('No tienes addons que den enlaces para ver (por ejemplo Torrentio con debrid). Instálalo en Plugins.');
