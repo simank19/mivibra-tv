@@ -60,6 +60,64 @@ function toonify(m, lite) {
   const line = new THREE.SkinnedMesh(m.geometry, new THREE.MeshBasicMaterial({ color: '#1b1412', side: THREE.BackSide }));
   line.bind(m.skeleton, m.bindMatrix); line.frustumCulled = false;
   line.onBeforeRender = () => {}; line.name = 'contorno';
-  line.material.onBeforeCompile = (sh) => { sh.vertexShader = sh.vertexShader.replace('#include <project_vertex>', 'transformed += normalize(objectNormal) * 0.006;\n#include <project_vertex>'); };
+  line.material.onBeforeCompile = (sh) => { sh.vertexShader = sh.vertexShader.replace('#include <project_vertex>', 'transformed += normalize(objectNormal) * 0.0035;\n#include <project_vertex>'); };
   m.parent.add(line);
+}
+
+// ---------- Avatar anime completo (cuerpo + peinado + accesorios) ----------
+// Receta: { anime: 1, cuerpo: 'hombre'|'mujer', pelo: id|'', peloColor: '#hex'|'', acc: [ids], tenis: id|'', alto: 1, ancho: 1, name }
+const BASE = new URL('./cuerpos/', import.meta.url).href;
+export const ANIME_DEFAULT = { anime: 1, cuerpo: 'hombre', pelo: 'pelo_puntas', peloColor: '', acc: [], tenis: '', alto: 1, ancho: 1, name: 'Tú' };
+export function fixAnime(r) {
+  const o = Object.assign({}, ANIME_DEFAULT, r || {});
+  if (o.cuerpo !== 'mujer') o.cuerpo = 'hombre';
+  o.acc = Array.isArray(o.acc) ? o.acc.filter((x) => typeof x === 'string').slice(0, 6) : [];
+  o.alto = Math.max(0.9, Math.min(1.1, +o.alto || 1)); o.ancho = Math.max(0.88, Math.min(1.15, +o.ancho || 1));
+  if (!/^#[0-9a-f]{6}$/i.test(o.peloColor || '')) o.peloColor = '';
+  o.name = String(o.name || 'Tú').slice(0, 24);
+  return o;
+}
+export function encodeAnime(r) { return new TextEncoder().encode('MVAN1' + JSON.stringify(fixAnime(r))).buffer; }
+export function decodeAnime(buf) {
+  try { const u = new Uint8Array(buf instanceof ArrayBuffer ? buf : buf.buffer || buf); const s = new TextDecoder().decode(u.slice(0, 8192)); return s.startsWith('MVAN1') ? fixAnime(JSON.parse(s.slice(5))) : null; } catch (e) { return null; }
+}
+const IDX = {};
+export function animeIndex(cuerpo) { if (!IDX[cuerpo]) IDX[cuerpo] = fetch(BASE + cuerpo + '/indice.json').then((r) => r.json()).catch(() => []); return IDX[cuerpo]; }
+const GL = {};
+function glb(url) { if (!GL[url]) GL[url] = new GLTFLoader().loadAsync(url); return GL[url]; }
+// Color del pelo: se toma el brillo de la textura y se pinta con el color elegido (sirve aunque el pelo venga negro)
+function tintHair(m, hex) {
+  const c = new THREE.Color(hex);
+  m.traverse((o) => {
+    if (!o.isMesh) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    mats.forEach((mt) => {
+      mt.userData.tint = { value: c };
+      mt.onBeforeCompile = (sh) => {
+        sh.uniforms.uTint = mt.userData.tint;
+        sh.fragmentShader = 'uniform vec3 uTint;\n' + sh.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\n{ float l = dot(diffuseColor.rgb, vec3(.3,.59,.11)); diffuseColor.rgb = uTint * clamp(.42 + l * 2.6, 0., 1.6); }');
+      };
+      mt.customProgramCacheKey = () => 'tint'; mt.needsUpdate = true;
+    });
+  });
+}
+export async function buildAnime(recipe, opts = {}) {
+  const r = fixAnime(recipe), dir = BASE + r.cuerpo + '/';
+  const [av, idx] = await Promise.all([loadCuerpo(BASE + r.cuerpo + '.glb', { toon: true, lite: opts.lite, recipe: r }), animeIndex(r.cuerpo)]);
+  const want = [r.pelo, r.tenis].concat(r.acc).filter(Boolean);
+  const items = idx.filter((it) => want.includes(it.id));
+  const scenes = await Promise.all(items.map((it) => Promise.all(it.archivos.map((a) => glb(dir + a.f).then((g) => ({ it, a, scene: g.scene.clone(true) }))))));
+  av.scene.updateMatrixWorld(true);
+  // el moño propio del cuerpo se esconde si lleva otro peinado
+  if (r.pelo) av.scene.traverse((o) => { if (o.isMesh && /^mono/.test(o.name)) o.visible = false; });
+  scenes.flat().forEach(({ it, a, scene }) => {
+    scene.traverse((o) => { if (o.isMesh) { o.frustumCulled = false; o.castShadow = !opts.lite; toonify(o, true); } });
+    if (it.tipo === 'pelo' && r.peloColor) tintHair(scene, r.peloColor);
+    av.scene.add(scene); scene.updateMatrixWorld(true);
+    const bone = av.bones[a.hueso] || av.bones.head; bone.attach(scene);
+  });
+  av.scene.scale.set(r.alto * r.ancho, r.alto, r.alto * r.ancho);
+  // en los juegos los personajes miden ~1,4 (los estadios se hicieron con ese tamaño)
+  if (opts.escala) av.scene.scale.multiplyScalar(opts.escala);
+  return av;
 }

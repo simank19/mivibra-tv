@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as skClone } from 'three/addons/utils/SkeletonUtils.js';
+import { buildAnime, decodeAnime, fixAnime } from './cuerpo.js';
 
 const KIT = new URL('./kit/', import.meta.url).href;
 
@@ -63,6 +64,7 @@ export function randomRecipe(rnd = Math.random, base = {}) {
     top: pick(SWATCH.cloth), top2: pick(['#F4F5F6', '#1F2937']), bottom: pick(['#1F2937', '#F4F5F6', '#2F7DF6', '#111214']), bottom2: pick(SWATCH.cloth), shoes: pick(['#F4F5F6', '#111214']), shoes2: pick(SWATCH.cloth), face: [Math.floor(rnd() * 4), Math.floor(rnd() * 3), Math.floor(rnd() * 3)] }, base);
 }
 export function fix(r) {   // receta válida siempre
+  if (r && r.anime) return fixAnime(r);   // personaje anime (editor nuevo)
   const o = Object.assign({}, DEFAULT, r || {}); if (o.g !== 'f') o.g = 'm'; const C = CATALOG[o.g];
   ['head', 'body', 'legs', 'feet'].forEach((k) => { if (!C[k].some((x) => x[0] === o[k])) o[k] = C[k][0][0]; });
   if (!Array.isArray(o.face) || o.face.length !== 3) o.face = [0, 0, 0];
@@ -71,6 +73,7 @@ export function fix(r) {   // receta válida siempre
 // Se guarda como bytes ("MVAV1" + JSON) para usar el mismo canal de guardado que tenía el avatar VRM.
 export function encode(r) { const s = 'MVAV1' + JSON.stringify(fix(r)); return new TextEncoder().encode(s).buffer; }
 export function decode(buf) {
+  const an = decodeAnime(buf); if (an) return an;
   try { const u = new Uint8Array(buf instanceof ArrayBuffer ? buf : buf.buffer || buf); if (u.length < 6) return null; const s = new TextDecoder().decode(u.slice(0, Math.min(u.length, 8192))); if (!s.startsWith('MVAV1')) return null; return fix(JSON.parse(s.slice(5))); } catch (e) { return null; }
 }
 
@@ -85,7 +88,7 @@ function part(g, outfit, p) {
   if (!parsed.has(url)) parsed.set(url, fetchBuf(url).then((b) => new Promise((res, rej) => loader.parse(b, '', res, rej))));
   return parsed.get(url);
 }
-export function preload(recipes) { recipes.forEach((r) => { r = fix(r); ['head', 'body', 'legs', 'feet'].forEach((k) => part(r.g, r[k], k)); }); }
+export function preload(recipes) { recipes.forEach((r) => { if (r && r.anime) return; r = fix(r); ['head', 'body', 'legs', 'feet'].forEach((k) => part(r.g, r[k], k)); }); }
 
 // ---------- Materiales compartidos por color ----------
 const matCache = new Map();
@@ -360,6 +363,7 @@ function chestPrint(r, lite, tops, bones, wrap) {
 export function setEyeStyle(st) { makeFace.style = st; }
 makeFace.style = 'pintada';   // elegido: ojos almendrados con delineado, cejas arqueadas y labios (cara pintada)
 export async function build(recipe, opts = {}) {
+  if (recipe && recipe.anime) return buildAnime(recipe, { lite: !!opts.lite, escala: 0.81 });
   const r = fix(recipe), lite = !!opts.lite;
   const parts = await Promise.all(['body', 'head', 'legs', 'feet'].map((k) => part(r.g, r[k], k)));
   const root = skClone(parts[0].scene);           // el torso trae el esqueleto principal

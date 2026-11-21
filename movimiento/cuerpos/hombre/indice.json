@@ -1,0 +1,175 @@
+[
+ {
+  "id": "pelo_coletas",
+  "tipo": "pelo",
+  "nombre": "Dos coletas",
+  "archivos": [
+   {
+    "f": "pelo_coletas.glb",
+    "hueso": "head"
+   }
+  ]
+ },
+ {
+  "id": "pelo_bob",
+  "tipo": "pelo",
+  "nombre": "Bob con flequillo",
+  "archivos": [
+   {
+    "f": "pelo_bob.glb",
+    "hueso": "head"
+   }
+  ]
+ },
+ {
+  "id": "pelo_desordenado",
+  "tipo": "pelo",
+  "nombre": "Desordenado",
+  "archivos": [
+   {
+    "f": "pelo_desordenado.glb",
+    "hueso": "head"
+   }
+  ]
+ },
+ {
+  "id": "pelo_afro",
+  "tipo": "pelo",
+  "nombre": "Afro",
+  "archivos": [
+   {
+    "f": "pelo_afro.glb",
+    "hueso": "head"
+   }
+  ]
+ },
+ {
+  "id": "pelo_undercut",
+  "tipo": "pelo",
+  "nombre": "Undercut",
+  "archivos": [
+   {
+    "f": "pelo_undercut.glb",
+    "hueso": "head"
+   }
+  ]
+ },
+ {
+  "id": "pelo_cola",
+  "tipo": "pelo",
+  "nombre": "Cola alta",
+  "archivos": [
+   {
+    "f": "pelo_cola.glb",
+    "hueso": "head"
+   }
+  ]
+ },
+ {
+  "id": "pelo_largo",
+  "tipo": "pelo",
+  "nombre": "Largo liso",
+  "archivos": [
+   {
+    "f": "pelo_largo.glb",
+    "hueso": "head"
+   }
+  ]
+ },
+ {
+  "id": "pelo_puntas",
+  "tipo": "pelo",
+  "nombre": "Puntas",
+  "archivos": [
+   {
+    "f": "pelo_puntas.glb",
+    "hueso": "head"
+   }
+  ]
+ },
+ {
+  "id": "audifonos",
+  "tipo": "audifonos",
+  "nombre": "Audífonos",
+  "archivos": [
+   {
+    "f": "audifonos.glb",
+    "hueso": "head"
+   }
+  ]
+ },
+ {
+  "id": "gafas",
+  "tipo": "gafas",
+  "nombre": "Gafas redondas",
+  "archivos": [
+   {
+    "f": "gafas.glb",
+    "hueso": "head"
+   }
+  ]
+ },
+ {
+  "id": "gafas_sol",
+  "tipo": "gafas",
+  "nombre": "Gafas deportivas",
+  "archivos": [
+   {
+    "f": "gafas_sol.glb",
+    "hueso": "head"
+   }
+  ]
+ },
+ {
+  "id": "tenis_basket",
+  "tipo": "tenis",
+  "nombre": "Tenis de básquet",
+  "archivos": [
+   {
+    "f": "tenis_basket_leftFoot.glb",
+    "hueso": "leftFoot"
+   },
+   {
+    "f": "tenis_basket_rightFoot.glb",
+    "hueso": "rightFoot"
+   }
+  ]
+ },
+ {
+  "id": "tenis_correr",
+  "tipo": "tenis",
+  "nombre": "Tenis para correr",
+  "archivos": [
+   {
+    "f": "tenis_correr_leftFoot.glb",
+    "hueso": "leftFoot"
+   },
+   {
+    "f": "tenis_correr_rightFoot.glb",
+    "hueso": "rightFoot"
+   }
+  ]
+ },
+ {
+  "id": "manilla",
+  "tipo": "manilla",
+  "nombre": "Manilla",
+  "archivos": [
+   {
+    "f": "manilla.glb",
+    "hueso": "leftLowerArm"
+   }
+  ]
+ },
+ {
+  "id": "morral",
+  "tipo": "morral",
+  "nombre": "Morral",
+  "archivos": [
+   {
+    "f": "morral.glb",
+    "hueso": "chest"
+   }
+  ]
+ }
+]

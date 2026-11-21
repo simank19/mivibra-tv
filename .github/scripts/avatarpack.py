@@ -50,8 +50,14 @@ def main():
     shutil.move(os.path.join(out, 'editor'), os.path.join(out, 'editor-vrm'))
     os.makedirs(os.path.join(out, 'editor'), exist_ok=True)
     shutil.copy(os.path.join(OVR, 'editor.html'), os.path.join(out, 'editor', 'index.html'))
-    for f in ('avatar.js', 'anim.js', 'animaciones.json', 'mano.js', 'espejo.js', 'sonido.js', 'playa.js'):
+    for f in ('avatar.js', 'anim.js', 'animaciones.json', 'mano.js', 'espejo.js', 'sonido.js', 'playa.js', 'cuerpo.js'):
         shutil.copy(os.path.join(OVR, f), os.path.join(out, f))
+    # Avatares anime (cuerpos de Tripo con esqueleto propio) y su editor nuevo
+    if os.path.exists(os.path.join(OVR, 'cuerpos')):
+        shutil.copytree(os.path.join(OVR, 'cuerpos'), os.path.join(out, 'cuerpos'))
+    if os.path.exists(os.path.join(OVR, 'anime.html')):
+        os.makedirs(os.path.join(out, 'anime'), exist_ok=True)
+        shutil.copy(os.path.join(OVR, 'anime.html'), os.path.join(out, 'anime', 'index.html'))
     for d in ('kit', 'sonidos'):
         shutil.copytree(os.path.join(OVR, d), os.path.join(out, d))
     shutil.copytree(os.path.join(OVR, 'avatars'), os.path.join(out, 'avatars'), ignore=shutil.ignore_patterns('*.vrm', 'tv'))
@@ -76,7 +82,7 @@ def main():
     shutil.copytree(os.path.join(OVR, 'addons3'), os.path.join(out, 'vendor', 'three-0.183.2', 'addons'), dirs_exist_ok=True)
     os.makedirs(os.path.join(out, 'camara'), exist_ok=True)
     shutil.copy(os.path.join(OVR, 'camara.html'), os.path.join(out, 'camara', 'index.html'))
-    open(os.path.join(out, 'index.html'), 'w').write('<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=editor/"><title>MiVibra Movimiento</title>')
+    open(os.path.join(out, 'index.html'), 'w').write('<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=anime/"><title>MiVibra Movimiento</title>')
 
 
 if __name__ == '__main__':
