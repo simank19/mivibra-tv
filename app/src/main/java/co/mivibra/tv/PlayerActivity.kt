@@ -697,6 +697,8 @@ class PlayerActivity : ComponentActivity() {
         m.close("Cerrar").show()
     }
     private var autoSubTries = 0
+    private val deadHosts = mutableSetOf<String>()
+    private fun hostOf(u: String) = try { Uri.parse(u).host ?: u } catch (_: Exception) { u }
     private var failedAll = false
     private var extSub: java.io.File? = null
     private var extSubName = ""
@@ -815,12 +817,19 @@ class PlayerActivity : ComponentActivity() {
             ui.postDelayed({ p.prepare(); p.play(); armWatchdog() }, 1500)
             return
         }
-        // En vivo no se insiste más de ~40 s: los canales de eventos solo transmiten a su hora
-        val tooLong = live && android.os.SystemClock.uptimeMillis() - zapStarted > 40_000
-        if (attemptIndex < attempts.size - 1 && !tooLong) {
-            attemptIndex++
+        // En vivo no se insiste más de ~40 s (los canales de eventos solo transmiten a su hora); películas y series, ~50 s
+        // (antes se probaban hasta 24 variantes de 12-20 s: varios minutos en negro en 00:00)
+        val tooLong = android.os.SystemClock.uptimeMillis() - zapStarted > (if (live) 40_000 else 50_000)
+        // Servidor que no responde o rechaza la cuenta: no se prueban sus otras variantes (formato, protocolo, identificación)
+        val code = (error.cause as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)?.responseCode ?: 0
+        if (transient || code == 401 || code == 403 || code == 404 || code == 456 || code in 500..599)
+            attempts.getOrNull(attemptIndex)?.let { deadHosts.add(hostOf(it.url)) }
+        var nextI = attemptIndex + 1
+        while (nextI < attempts.size && hostOf(attempts[nextI].url) in deadHosts) nextI++
+        if (nextI < attempts.size && !tooLong) {
+            attemptIndex = nextI
             retries = 0
-            if (live) showLoading(current(), attemptIndex)
+            showLoading(current(), attemptIndex)
             startAttempt()
             return
         }
@@ -981,6 +990,8 @@ class PlayerActivity : ComponentActivity() {
         extSub = null; extSubName = ""; extOffset = 0L
         loadAddonSubs(item)
         attempts = buildAttempts(item)
+        deadHosts.clear()
+        if (!live) zapStarted = android.os.SystemClock.uptimeMillis()
         attemptIndex = 0
         retries = 0
         startPosition = startMs
