@@ -2470,6 +2470,36 @@
   // Selección de varias listas para borrarlas juntas (null = modo normal)
   var LSEL = null;
   function listKind(l) { return l.type === 'books' ? 'Enlaces de libros' + (MV.acct.canEditList(l) && l.url ? ' · ' + l.url : '') : l.type === 'mvplugin' ? 'Plugin de MiVibra' : l.type === 'stremio' ? 'Addon de Stremio' : l.type === 'fb' ? 'Firebase' + (MV.acct.canEditList(l) ? ' · ' + ((l.fb || {}).projectId || '') : '') : l.type === 'web' ? 'Página web' + (MV.acct.canEditList(l) ? ' · ' + (l.url || '') : '') : l.type === 'jellyfin' ? 'Jellyfin' : l.type === 'plex' ? 'Plex' : l.type === 'xtream' ? 'Xtream Codes' : l.type === 'stalker' ? 'Portal MAC · ' + (l.mac || '') : l.type === 'file' ? 'Archivo' : 'Lista M3U'; }
+  // Listas agrupadas por tipo y con su estado (para que no sea una lista interminable)
+  var LGRP = null, LST = 'all';
+  var LGROUPS = [['m3u', 'M3U'], ['xtream', 'Xtream Codes'], ['stalker', 'Portal MAC'], ['stremio', 'Addons'], ['other', 'Otras']];
+  function listGroup(l) { return l.type === 'xtream' ? 'xtream' : l.type === 'stalker' ? 'stalker' : l.type === 'stremio' || l.type === 'mvplugin' ? 'stremio' : (!l.type || l.type === 'm3u' || l.type === 'file') ? 'm3u' : 'other'; }
+  /** ok = cargó con contenido · bad = falló o llegó vacía · off = apagada · wait = aún no ha cargado */
+  function listState(l) {
+    if (l.enabled === false) return 'off';
+    if (l.error) return /^Algunas secciones/.test(l.error) && l.count ? 'warn' : 'bad';
+    if (l.type === 'stremio' || l.type === 'mvplugin') return 'ok';   // los addons de solo enlaces no traen catálogo
+    if (l.count) return 'ok';
+    return l.count === 0 ? 'bad' : 'wait';
+  }
+  var LSTATE = { ok: ['✓ Funciona', '#3ecf8e'], bad: ['✕ No funciona', '#ff6b6b'], off: ['○ Apagada', '#9aa0a6'], warn: ['⚠ A medias', '#f5a524'], wait: ['… Cargando', '#f5c84c'] };
+  function stateTag(l) { var st = LSTATE[listState(l)]; return '<span style="display:inline-block;margin-right:6px;padding:1px 8px;border-radius:999px;font-weight:700;font-size:.85em;color:' + st[1] + ';border:1px solid ' + st[1] + '">' + st[0] + '</span>'; }
+  function listFilterBar(ED) {
+    if (ED.length < 4) return { html: '', list: ED };
+    var by = {}; ED.forEach(function (l) { var g = listGroup(l); (by[g] = by[g] || []).push(l); });
+    var groups = LGROUPS.filter(function (g) { return by[g[0]]; });
+    if (!LGRP || (LGRP !== 'all' && !by[LGRP])) LGRP = groups.length > 1 ? groups[0][0] : 'all';
+    var inG = LGRP === 'all' ? ED : by[LGRP] || [];
+    var cnt = function (arr, st) { return arr.filter(function (l) { return listState(l) === st; }).length; };
+    var html = '<div class="chips" style="margin:6px 0">' + groups.map(function (g) {
+      var a = by[g[0]], bad = cnt(a, 'bad');
+      return '<button class="chip f' + (LGRP === g[0] ? ' on' : '') + '" data-act="lgrp" data-arg="' + g[0] + '">' + g[1] + ' (' + a.length + ')' + (bad ? ' · ' + bad + ' ✕' : '') + '</button>';
+    }).join('') + '<button class="chip f' + (LGRP === 'all' ? ' on' : '') + '" data-act="lgrp" data-arg="all">Todas (' + ED.length + ')</button></div>';
+    var sts = [['all', 'Todas'], ['ok', 'Funcionan'], ['bad', 'No funcionan'], ['off', 'Apagadas']].filter(function (x) { return x[0] === 'all' || cnt(inG, x[0]); });
+    if (LST !== 'all' && !cnt(inG, LST)) LST = 'all';
+    html += '<div class="chips" style="margin:0 0 8px">' + sts.map(function (x) { return '<button class="chip f' + (LST === x[0] ? ' on' : '') + '" data-act="lst" data-arg="' + x[0] + '">' + x[1] + (x[0] === 'all' ? '' : ' (' + cnt(inG, x[0]) + ')') + '</button>'; }).join('') + '</div>';
+    return { html: html, list: LST === 'all' ? inG : inG.filter(function (l) { return listState(l) === LST; }) };
+  }
   function selBar() {
     if (edLists().length < 2) return '';
     if (!LSEL) return '<div class="btns" style="margin:4px 0 10px"><button class="btn ghost sm f" data-act="lselStart">' + IC.check + 'Seleccionar varias</button></div>';
@@ -2555,13 +2585,13 @@
     }
     if (MV.acct.isAdmin()) share += '<div class="panel glass"><h2>Modo de prueba</h2><div class="line"><div class="t"><b>Usar mis listas en este equipo</b><span>' + (MV.myOff() ? 'Apagadas solo aquí: ves las listas de tus usuarios que activaste y las de este equipo. Tus usuarios no notan nada.' : 'Apágalo para probar solo con las listas de tus usuarios. No cambia nada para tus usuarios.') + '</span></div><button class="toggle f' + (MV.myOff() ? '' : ' on') + '" data-act="myListsToggle" aria-label="Usar mis listas en este equipo"></button></div></div>' + userListsBlock();
     return provBlock + share + '<div class="panel glass"><h2>' + (provBlock ? 'Mis listas' : 'Tus listas') + '</h2><p>' + (provBlock ? 'Agrega también tus propias listas: se suman a las incluidas (o las reemplazan si apagas las incluidas) y las usas cuando quieras. El administrador del servicio puede verlas y decidir si las incluye para todos. ' : '') + 'Todo el contenido de tus listas se combina: los canales repetidos aparecen una sola vez y se queda la señal que funciona.' + (MV.acct.isAdmin() ? ' <b>Eres superadministrador:</b> lo que cambies aquí llega a todos los usuarios (las listas en archivo solo quedan en este equipo; usa enlaces para compartirlas).' : '') + '</p>' +
-      selBar() +
-      (ED.length ? ED.map(function (l) {
+      selBar() + (function () { var fb = listFilterBar(ED); ED.__shown = fb.list; return fb.html; })() +
+      (ED.length ? (ED.__shown || ED).map(function (l) {
         if (LSEL) {
           var on = !!LSEL[l.id];
-          return '<button class="line selrow f' + (on ? ' on' : '') + '" data-act="lselToggle" data-arg="' + l.id + '" data-fid="ls-' + l.id + '" aria-pressed="' + on + '"><i class="chk"></i><div class="t"><b>' + esc(l.name) + '</b><span>' + esc(listKind(l)) + ' · ' + (l.count || 0) + ' elementos' + (l.enabled === false ? ' · desactivada' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div></button>';
+          return '<button class="line selrow f' + (on ? ' on' : '') + '" data-act="lselToggle" data-arg="' + l.id + '" data-fid="ls-' + l.id + '" aria-pressed="' + on + '"><i class="chk"></i><div class="t"><b>' + esc(l.name) + '</b><span>' + stateTag(l) + esc(listKind(l)) + ' · ' + (l.count || 0) + ' elementos' + (l.enabled === false ? ' · desactivada' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div></button>';
         }
-        return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.type === 'xtream' ? 'Xtream Codes · ' + esc(l.host) : l.type === 'fb' ? 'Firebase' + (MV.acct.canEditList(l) ? ' · ' + esc((l.fb || {}).projectId || '') + (l.coll ? ' / ' + esc(l.coll) : '') : '') : l.type === 'web' ? 'Página web' + (MV.acct.canEditList(l) ? ' · ' + esc(l.url) : '') : l.type === 'mvplugin' ? 'Plugin de MiVibra · ' + esc(l.ref || '') : l.type === 'stremio' ? 'Addon de Stremio' : l.type === 'jellyfin' ? 'Jellyfin · ' + esc(l.server) : l.type === 'plex' ? 'Plex · ' + esc(l.server) : l.type === 'stalker' ? 'Portal MAC · ' + esc(l.mac) + ((l.macs || []).length > 1 ? ' (+' + (l.macs.length - 1) + ' de respaldo)' : '') : l.type === 'file' ? 'Archivo' : esc(l.url)) + ' · ' + (l.type === 'stremio' && !l.count ? 'solo da enlaces (sin catálogo)' : (l.count || 0) + ' elementos' + (l.counts ? ' (' + [['live', 'canales'], ['movie', 'películas'], ['series', 'series']].filter(function (t) { return l.counts[t[0]]; }).map(function (t) { return l.counts[t[0]].toLocaleString('es-CO') + ' ' + t[1]; }).join(', ') + ')' : '')) + ((S.hiddenDupes || {})[l.id] ? ' · ' + S.hiddenDupes[l.id] + ' repetidos ocultos' : '') + (l.epg ? ' · con guía' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div>' +
+        return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + stateTag(l) + (l.type === 'xtream' ? 'Xtream Codes · ' + esc(l.host) : l.type === 'fb' ? 'Firebase' + (MV.acct.canEditList(l) ? ' · ' + esc((l.fb || {}).projectId || '') + (l.coll ? ' / ' + esc(l.coll) : '') : '') : l.type === 'web' ? 'Página web' + (MV.acct.canEditList(l) ? ' · ' + esc(l.url) : '') : l.type === 'mvplugin' ? 'Plugin de MiVibra · ' + esc(l.ref || '') : l.type === 'stremio' ? 'Addon de Stremio' : l.type === 'jellyfin' ? 'Jellyfin · ' + esc(l.server) : l.type === 'plex' ? 'Plex · ' + esc(l.server) : l.type === 'stalker' ? 'Portal MAC · ' + esc(l.mac) + ((l.macs || []).length > 1 ? ' (+' + (l.macs.length - 1) + ' de respaldo)' : '') : l.type === 'file' ? 'Archivo' : esc(l.url)) + ' · ' + (l.type === 'stremio' && !l.count ? 'solo da enlaces (sin catálogo)' : (l.count || 0) + ' elementos' + (l.counts ? ' (' + [['live', 'canales'], ['movie', 'películas'], ['series', 'series']].filter(function (t) { return l.counts[t[0]]; }).map(function (t) { return l.counts[t[0]].toLocaleString('es-CO') + ' ' + t[1]; }).join(', ') + ')' : '')) + ((S.hiddenDupes || {})[l.id] ? ' · ' + S.hiddenDupes[l.id] + ' repetidos ocultos' : '') + (l.epg ? ' · con guía' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div>' +
           '<button class="toggle f' + (l.enabled !== false ? ' on' : '') + '" data-act="listToggle" data-arg="' + l.id + '" aria-label="Activar lista"></button>' +
           '<button class="iconbtn f" data-act="listEpg" data-arg="' + l.id + '" aria-label="Guía EPG">' + IC.guide + '</button>' +
           '<button class="iconbtn f" data-act="listDelete" data-arg="' + l.id + '" aria-label="Eliminar">' + IC.trash + '</button></div>';
@@ -3890,6 +3920,8 @@
       var l = S.lists.find(function (x) { return x.id === id; }); if (!MV.acct.canEditList(l)) return; l.enabled = l.enabled === false; if (l.enabled === false) l.error = ''; l.updatedAt = Date.now(); MV.saveLists(); MV.syncCatalog().then(MV.rerender); MV.rerender(); },
     lselStart: function () { LSEL = {}; MV.rerender(); var r = document.querySelector('.selrow'); if (r) r.focus(); },
     lselCancel: function () { LSEL = null; MV.rerender(); },
+    lgrp: function (g) { LGRP = g || 'all'; LST = 'all'; MV.rerender(); },
+    lst: function (x) { LST = x || 'all'; MV.rerender(); },
     lselToggle: function (id, el) {
       if (!LSEL) return;
       if (LSEL[id]) delete LSEL[id]; else LSEL[id] = 1;
