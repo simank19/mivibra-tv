@@ -1,6 +1,6 @@
 /* MiVibra TV — Intro de bienvenida en vidrio gris con logos (~11,3 s). Los tiempos van sincronizados con la banda sonora.
    El escenario mide 1280×720 (o 390×844 en vertical) y se escala a la pantalla. */
-#intro{position:fixed;inset:0;z-index:9999;overflow:hidden;color:#fff;font-family:var(--ui,"DM Sans",system-ui,sans-serif);
+#intro{position:fixed;top:0;right:0;bottom:0;left:0;z-index:9999;overflow:hidden;color:#fff;font-family:var(--ui,"DM Sans",system-ui,sans-serif);
   background:radial-gradient(120% 90% at 30% 0%,#6E7276 0%,#54585C 40%,#3E4144 100%);transition:opacity .5s,transform .5s}
 #intro *{box-sizing:border-box}
 #intro.out{opacity:0;pointer-events:none;transform:scale(1.04)}
@@ -14,7 +14,7 @@
 #intro .iv-stage{position:absolute;left:50%;top:50%;transform-origin:center;transform:translate(-50%,-50%)}
 #intro .iv-gl{background:linear-gradient(180deg,rgba(255,255,255,.20),rgba(255,255,255,.06));border:1px solid rgba(255,255,255,.28);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 24px 60px rgba(0,0,0,.28);-webkit-backdrop-filter:blur(22px) saturate(140%);backdrop-filter:blur(22px) saturate(140%)}
-#intro .iv-sc{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:0}
+#intro .iv-sc{position:absolute;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:0}
 #intro img{display:block}
 @keyframes iv-show{0%{opacity:0}8%{opacity:1}88%{opacity:1}100%{opacity:0}}
 @keyframes iv-up{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}

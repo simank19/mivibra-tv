@@ -1,5 +1,5 @@
 /* Modo consola de Juegos — diseño propio de MiVibra. 1em = 1/96 del ancho de la pantalla. */
-#console { image-rendering: auto; position: fixed; inset: 0; z-index: 40; font-size: calc(100vw / 96); color: #F3EFEA; font-family: var(--ui);
+#console { image-rendering: auto; position: fixed; top:0;right:0;bottom:0;left:0; z-index: 40; font-size: calc(100vw / 96); color: #F3EFEA; font-family: var(--ui);
   background: radial-gradient(120% 90% at 85% -10%, rgba(255,105,0,.22), transparent 55%), radial-gradient(90% 80% at -10% 110%, rgba(76,141,255,.14), transparent 55%), #0E0D0C;
   display: flex; flex-direction: column; animation: cin .35s var(--ease) both; overflow: hidden; }
 @keyframes cin { from { opacity: 0; transform: scale(1.02); } }
@@ -31,14 +31,14 @@ html.console-open #app { visibility: hidden; }
 @keyframes pulse2 { 50% { box-shadow: 0 0 0 .22em #0E0D0C, 0 0 0 .45em #FFB98A, 0 1.4em 3em rgba(0,0,0,.6); } }
 
 /* Portada: color del sistema + nombre; si hay carátula se pone encima */
-.cv { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; padding: 1em;
+.cv { position: absolute; top:0;right:0;bottom:0;left:0; border-radius: inherit; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; padding: 1em;
   background: linear-gradient(150deg, var(--c), color-mix(in srgb, var(--c) 35%, #0E0D0C) 70%); text-align: left; }
 .cv .mono { font-style: normal; font-family: var(--brand); font-weight: 800; font-size: 1.1em; opacity: .9; color: #fff; }
 .cv .mono svg { width: 2.4em; height: 2.4em; }
 .cv .nm { font-family: var(--brand); font-weight: 800; font-size: 1.05em; line-height: 1.15; color: #fff; text-shadow: 0 .1em .4em rgba(0,0,0,.4);
   display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .ctile.big .cv .nm { font-size: 1.6em; }
-.cv img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #151311; opacity: 0; transition: opacity .4s; }
+.cv img { position: absolute; top:0;right:0;bottom:0;left:0; width: 100%; height: 100%; object-fit: contain; background: #151311; opacity: 0; transition: opacity .4s; }
 .cv.art img { opacity: 1; }
 .cv.art .mono, .cv.art .nm { visibility: hidden; }
 .ctile.more .cv { background: rgba(255,255,255,.07); border: .12em dashed rgba(255,255,255,.25); }
@@ -98,7 +98,7 @@ html.console-open #app { visibility: hidden; }
 .cv:not(.art) .mono .sysimg { width: 4em; height: 4em; }
 
 /* Los íconos no son carátulas: siempre visibles (la regla .cv img las oculta hasta que cargan) */
-.cv img.sysimg { position: static; inset: auto; opacity: 1; background: none; }
+.cv img.sysimg { position: static; top:auto;right:auto;bottom:auto;left:auto; opacity: 1; background: none; }
 /* Tarjetas de consolas: ícono grande al centro y el nombre debajo */
 .ctile.csys { height: 10em; }
 .ctile.csys .cv { flex-direction: column; align-items: center; justify-content: center; gap: .3em; text-align: center; padding: .8em; }
@@ -204,7 +204,7 @@ html.tv #console, html.tv #console * { animation: none !important; transition: n
 #console .clabel { margin: 1em 3.6em 0; }
 /* ---------- Consolas ---------- */
 .gx-home { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; justify-content: center; overflow: hidden; }
-.gx-watermark { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.gx-watermark { position: absolute; top:0;right:0;bottom:0;left:0; pointer-events: none; overflow: hidden; }
 .gx-watermark b { position: absolute; left: 3.2em; top: 1.2em; font-family: var(--brand); font-weight: 900; font-size: 9em; line-height: .9; letter-spacing: -.03em; white-space: nowrap;
   color: transparent; -webkit-text-stroke: .02em color-mix(in srgb, var(--c, #FF6900) 70%, #fff); opacity: .22; animation: gxIn .5s var(--ease) both; }
 .gx-markic { position: absolute; right: 2em; top: -1em; width: 34em; height: 34em; opacity: .1; transform: rotate(-8deg); animation: gxIn .6s var(--ease) both; }
@@ -323,7 +323,7 @@ html.tv #console, html.tv #console * { animation: none !important; transition: n
 
 /* ---------- Ficha del juego v2: lista de acciones + panel de datos, vidrio claro con los colores de la app ---------- */
 #console.gxv-detail { background-size: cover; background-position: center; }
-#console.gxv-detail::before { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+#console.gxv-detail::before { content: ''; position: absolute; top:0;right:0;bottom:0;left:0; pointer-events: none; z-index: 0;
   background: linear-gradient(90deg, rgba(20,21,23,.72) 0%, rgba(20,21,23,.5) 40%, rgba(20,21,23,.2) 75%, rgba(20,21,23,.12) 100%), linear-gradient(0deg, rgba(20,21,23,.5), transparent 30%); }
 #console.gxv-detail > * { position: relative; z-index: 1; }
 .gx-d2 { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: stretch; gap: 1.6em; padding: .6em 3.6em .4em; }
@@ -384,7 +384,7 @@ html.tv #console, html.tv #console * { animation: none !important; transition: n
 .cv.gx-nat { background: linear-gradient(160deg, #2E7DD7, #12355E); }
 .cv.gx-nat img { object-fit: cover; }
 .cv.gx-nat.gx-ban img { object-fit: contain; background: #0E0D0C; }
-.cv.gx-nat.gx-ico img { inset: 18% 22% 30%; width: 56%; height: auto; aspect-ratio: 1; margin: auto; background: transparent; object-fit: contain; filter: drop-shadow(0 .4em .8em rgba(0,0,0,.4)); }
+.cv.gx-nat.gx-ico img { top:18%;right:22%;bottom:30%;left:22%; width: 56%; height: auto; aspect-ratio: 1; margin: auto; background: transparent; object-fit: contain; filter: drop-shadow(0 .4em .8em rgba(0,0,0,.4)); }
 .cv.gx-nat.gx-ico.art .nm { visibility: visible; position: absolute; left: .8em; right: .8em; bottom: .8em; text-align: center; font-size: .95em; }
 .cv.gx-nat .gx-src { position: absolute; top: .6em; right: .6em; font-style: normal; font-size: .7em; font-weight: 800; padding: .25em .6em; border-radius: 99em; background: rgba(14,13,12,.7); color: #F3EFEA; z-index: 1; }
 

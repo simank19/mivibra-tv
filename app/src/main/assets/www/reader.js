@@ -79,7 +79,7 @@
     mbItem = item;
     var fr = document.createElement('iframe');
     fr.id = 'mbr'; fr.src = 'mbreader/index.html'; fr.setAttribute('allow', 'autoplay; fullscreen');
-    fr.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:0;z-index:61;background:#0A0908';
+    fr.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;width:100%;height:100%;border:0;z-index:61;background:#0A0908';
     document.body.appendChild(fr); mb = fr;
     var book = { id: item.key, t: item.name, a: item.author || '', cover: item.poster || (MV.bookCover ? MV.bookCover(item.key) : '') || '', file: file, src: 'r' };
     MV._mbOpen = function () { try { fr.contentWindow.postMessage({ mbr: 1, type: 'open', book: book }, '*'); fr.focus(); fr.contentWindow.focus(); } catch (e) {} };
@@ -91,7 +91,7 @@
     closeMb(); close(true);
     var fr = document.createElement('iframe');
     fr.id = 'mbr'; fr.src = 'mibiblioteca/index.html'; fr.setAttribute('allow', 'autoplay; fullscreen; clipboard-write');
-    fr.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:0;z-index:61;background:#f6f4ef';
+    fr.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;width:100%;height:100%;border:0;z-index:61;background:#f6f4ef';
     fr.onload = function () { try { fr.focus(); fr.contentWindow.focus(); } catch (e) {} };
     document.body.appendChild(fr); mb = fr; mbItem = null;
     document.documentElement.classList.add('reader-open');

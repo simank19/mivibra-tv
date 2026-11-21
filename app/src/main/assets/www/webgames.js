@@ -180,9 +180,9 @@
     closeEmu(true);
     var f = document.createElement('iframe');
     f.setAttribute('allow', 'autoplay; fullscreen; gamepad');
-    f.style.cssText = 'position:fixed;inset:0;left:0;top:0;width:100%;height:100%;border:0;z-index:9998;background:#000';
+    f.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;left:0;top:0;width:100%;height:100%;border:0;z-index:9998;background:#000';
     f.srcdoc = '<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:system-ui,sans-serif}#game{width:100%;height:100%}.ejs_menu_bar,.ejs_virtualGamepad_parent{display:none!important}' +
-      '#mvm{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.72);z-index:99999}#mvm.on{display:flex}' +
+      '#mvm{position:fixed;top:0;right:0;bottom:0;left:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.72);z-index:99999}#mvm.on{display:flex}' +
       '#mvm div{background:rgba(24,22,20,.95);border:1px solid rgba(255,255,255,.15);border-radius:18px;padding:22px 26px;min-width:340px;color:#F3EFEA}' +
       '#mvm h3{margin:0 0 14px;font-size:22px}#mvm button{display:block;width:100%;margin:8px 0;padding:14px 18px;border-radius:12px;border:0;background:rgba(255,255,255,.1);color:#F3EFEA;font:600 18px system-ui;text-align:left}' +
       '#mvm button.on{background:#FF6900;color:#0D0C0B}#mvt{position:fixed;left:50%;bottom:6vh;transform:translateX(-50%);background:rgba(14,13,12,.9);color:#F3EFEA;padding:12px 22px;border-radius:12px;font:600 17px system-ui;z-index:99999;display:none}</style></head>' +
