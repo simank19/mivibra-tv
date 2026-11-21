@@ -450,6 +450,11 @@
     // Anime y doramas se ven subtitulados aunque esté activo "Solo español latino"
     return S.prefs.latOnly && c.lat !== undefined && it.olang !== 'es' && !it.anime && !it.kdrama ? c.lat : c.ok;
   };
+  /** Si después sí aparecieron capítulos, se quita la marca de "sin enlaces". */
+  MV.stMarkAlive = function (it) {
+    if (!it || !it.st) return; var k = it.st.type + ':' + it.st.id, c = lk()[k];
+    if (c && !c.ok) { delete lk()[k]; MV.save('stLinks', lk()); MV._stLinkV = (MV._stLinkV || 0) + 1; }
+  };
   MV.stHasStreamers = function () { return lists().some(function (l) { var m = l.man || {}; return !m.resources || res(m, 'stream'); }); };
   /** Lo que se abrió y no trajo nada queda marcado: con "Solo con enlaces" deja de aparecer. */
   MV.stMarkDead = function (it) {

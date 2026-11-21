@@ -1782,6 +1782,7 @@
       // Si en segundo plano llegan capítulos nuevos, la ficha se vuelve a dibujar sola
       MV.loadEpisodes(it, function () { if (view.name === 'detail' && view.arg === key) MV.rerender(); }).then(function (eps) {
         var box = document.getElementById('eps'); if (!box) return;
+        if (eps.length && it.st && MV.stMarkAlive) MV.stMarkAlive(it);
         if (!eps.length) { if (it.st && MV.stMarkDead) MV.stMarkDead(it); box.innerHTML = '<p class="muted">No se encontraron episodios.</p>'; var sp0 = document.getElementById('splay'); if (sp0) sp0.innerHTML = ''; return; }
         eps.sort(function (a, b) { return a.season - b.season || a.ep - b.ep; });
         it.episodes = eps;
