@@ -1984,7 +1984,7 @@
   // Con cientos de miles de títulos, recorrerlos en cada pantalla (y en cada tecla que redibuja) frenaba el TV
   var VIS = typeof WeakMap === 'function' ? new WeakMap() : null, MEMO = {};
   MV._catVer = 0;
-  MV.visSig = function () { var pr = MV.profile && MV.profile(); return [MV._catVer, MV.isKids(), pr ? pr.id : '', MV._showHidden ? 1 : 0, P.latOnly ? 1 : 0, P.stOnlyLinked ? 1 : 0, P.hideUnreleased, P.kidsLimit, Math.floor(Date.now() / 300e3)].join('|'); };
+  MV.visSig = function () { var pr = MV.profile && MV.profile(); return [MV._catVer, MV.isKids(), pr ? pr.id : '', MV._showHidden ? 1 : 0, P.latOnly ? 1 : 0, P.stOnlyLinked ? 'L' + (MV._stLinkV || 0) : 0, P.hideUnreleased, P.kidsLimit, Math.floor(Date.now() / 300e3)].join('|'); };
   /** Lista derivada del catálogo (anime, doramas…) calculada una sola vez por versión del catálogo. */
   MV.memoCat = function (k, fn) {
     var m = MEMO[k]; if (m && m.v === MV._catVer) return m.r;

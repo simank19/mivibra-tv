@@ -399,6 +399,7 @@
       }
       var admin = MV.acct && MV.acct.isAdmin && MV.acct.isAdmin();
       // A los usuarios no se les habla de addons ni torrents: solo que no está disponible (el detalle técnico, solo para el administrador)
+      if (!st.length && !st.failed && type === 'movie' && MV.stMarkDead) MV.stMarkDead({ st: { type: 'movie', id: id } });
       if (!st.length && !admin) throw new Error('Este título no está disponible por ahora. Prueba más tarde.');
       if (!st.length && MV._stTorrents) throw new Error('Tus addons solo encontraron torrents (' + MV._stTorrents + '). MiVibra reproduce enlaces directos: en la configuración de Torrentio agrega un servicio debrid (Real-Debrid, AllDebrid, Premiumize…) y vuelve a instalarlo con el enlace nuevo.');
       if (!st.length) {
@@ -443,6 +444,12 @@
   var LK = null;
   function lk() { if (!LK) { LK = MV.load('stLinks', {}) || {}; var now = Date.now(); Object.keys(LK).forEach(function (k) { if (now - LK[k].t > 2 * 86400e3) delete LK[k]; }); } return LK; }
   MV.stLinked = function (it) { var c = lk()[it.st.type + ':' + it.st.id]; if (!c || (!c.ok && c.v !== 2)) return undefined; return S.prefs.latOnly && c.lat !== undefined && it.olang !== 'es' ? c.lat : c.ok; };
+  /** Lo que se abrió y no trajo nada queda marcado: con "Solo con enlaces" deja de aparecer. */
+  MV.stMarkDead = function (it) {
+    if (!it || !it.st) return;
+    lk()[it.st.type + ':' + it.st.id] = { v: 2, ok: false, lat: false, t: Date.now() };
+    MV.save('stLinks', lk()); MV._stLinkV = (MV._stLinkV || 0) + 1;
+  };
   var running = false, saveT = 0;
   MV.stCheckLinks = function () {
     if (running || !MV.S.prefs.stOnlyLinked) return;
