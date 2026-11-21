@@ -2487,7 +2487,6 @@
   };
   // Al abrir la app: los que quedaron pendientes (la app se cerró mientras veías)
   var favBoot = false;
-  MV.on('catalog', function () { if (!favBoot && S.pid) { favBoot = true; setTimeout(function () { try { MV.applyPendingFavs(); } catch (e) {} }, 500); } });
   MV.favs = function () {
     var f = MV.pdata().favs;
     return Object.keys(f).map(function (k) { return f[k]; }).filter(function (x) { return !x.del; }).sort(function (a, b) { return b.ts - a.ts; });
@@ -2566,6 +2565,7 @@
   var listeners = {};
   MV.on = function (ev, fn) { (listeners[ev] = listeners[ev] || []).push(fn); };
   MV.on('catalog', function () { MV._catVer++; });
+  MV.on('catalog', function () { if (!favBoot && S.pid) { favBoot = true; setTimeout(function () { try { MV.applyPendingFavs(); } catch (e) {} }, 500); } });
   MV.emit = function (ev, data) { (listeners[ev] || []).forEach(function (fn) { try { fn(data); } catch (e) { console.error(e); } }); };
 
   // ---------- Sincronización entre dispositivos (Firebase, opcional) ----------
