@@ -742,6 +742,7 @@ class PlayerActivity : ComponentActivity() {
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_READY) {
                     cancelWatchdog()
+                    armProgressCheck()
                     hideLoading()
                     view.setKeepContentOnPlayerReset(true)
                     retries = 0
@@ -896,6 +897,7 @@ class PlayerActivity : ComponentActivity() {
         p.setMediaItem(b.build(), if (startPosition > 0) startPosition else C.TIME_UNSET)
         p.prepare()
         p.play()
+        progressWaits = 0
         armWatchdog()
     }
 
@@ -908,7 +910,21 @@ class PlayerActivity : ComponentActivity() {
     }
     // Los primeros intentos esperan menos (si no arranca rápido, mejor probar la versión de respaldo); los últimos, más
     private fun armWatchdog() { ui.removeCallbacks(watchdog); ui.postDelayed(watchdog, if (live) (if (attemptIndex < 3) 9000L else 12000L) else if (attemptIndex < 3) 12000L else 20000L) }
-    private fun cancelWatchdog() { ui.removeCallbacks(watchdog) }
+    private fun cancelWatchdog() { ui.removeCallbacks(watchdog); ui.removeCallbacks(progressCheck) }
+
+    // "Listo" pero en negro en 00:00: algunos servidores mandan el encabezado y no el video.
+    // Si a los pocos segundos no avanzó nada, se toma como fallo y se prueba el siguiente enlace.
+    private var progressWaits = 0
+    private var progressFrom = 0L
+    private val progressCheck = Runnable {
+        val p = player ?: return@Runnable
+        if (!p.playWhenReady || p.currentPosition - progressFrom > 800) return@Runnable
+        val more = attemptIndex < attempts.size - 1
+        if (more || progressWaits >= 2) {
+            onFail(PlaybackException("El video no avanzó", null, PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT))
+        } else { progressWaits++; armProgressCheck() }
+    }
+    private fun armProgressCheck() { progressFrom = player?.currentPosition ?: 0L; ui.removeCallbacks(progressCheck); ui.postDelayed(progressCheck, if (live) 9000L else 10000L) }
 
     /** announce: muestra el nombre arriba (solo al cambiar de canal con ▲▼, no al abrir). */
     private fun playIndex(i: Int, startMs: Long, announce: Boolean = false) {
