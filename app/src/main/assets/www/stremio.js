@@ -546,6 +546,13 @@
       if (isAnime) steps.push(function () {
         return search(KITSU, 'anime', 'kitsu-anime-list', raw).then(function (l) { var m = pick(l); return m ? fetchMeta(KITSU, 'anime', m.id) : null; });
       });
+      // También la API pública de Kitsu (si el catálogo de búsqueda del addon no responde)
+      if (isAnime) steps.push(function () {
+        return withTimeout(MV.getJSON('https://kitsu.io/api/edge/anime?page%5Blimit%5D=8&filter%5Btext%5D=' + encodeURIComponent(clean)), 12000).then(function (j) {
+          var l = ((j && j.data) || []).map(function (d) { var a = d.attributes || {}; return { id: 'kitsu:' + d.id, name: [a.canonicalTitle, (a.titles || {}).en].filter(Boolean).join(' / ') }; });
+          var m = pick(l); return m ? fetchMeta(KITSU, 'anime', m.id).then(function (x) { return x || fetchMeta(KITSU, 'series', m.id); }) : null;
+        }).catch(function () { return null; });
+      });
       steps.push(function () {
         var q = clean.split(':')[0].trim() === clean ? [clean] : [clean, clean.split(':')[0].trim()];
         return search(base(CINEMETA), 'series', 'top', q[0]).then(function (l) { return l.length || !q[1] ? l : search(base(CINEMETA), 'series', 'top', q[1]); }).then(function (l) {
@@ -567,7 +574,8 @@
       return next();
     }
     return Promise.all(jobs).then(function (metas) {
-      metas = metas.filter(Boolean);
+      // Algunos catálogos (p. ej. Crunchyroll) dan la ficha pero sin números de capítulo: esa no sirve
+      metas = metas.filter(function (m) { return m && eps(m).length; });
       if (!metas.length) return byName();
       var meta = metas[0];
       var imdb = metas.map(function (m) { return m.imdb_id || (/^tt\d+$/.test(m.id) ? m.id : ''); }).filter(Boolean)[0] || (item._meta && item._meta.imdb) || '';
