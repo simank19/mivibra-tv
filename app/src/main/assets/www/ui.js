@@ -1489,12 +1489,22 @@
       return base.length > 3 && !!idx[base];
     });
   }
+  // Anime y doramas: separar series de películas
+  var typeSel = {};
+  function typeBtns(vkey, items) {
+    var nS = 0, nM = 0; MV.visible(items).forEach(function (i) { if (i.type === 'series') nS++; else if (i.type === 'movie') nM++; });
+    var t = typeSel[vkey] || 'all';
+    return [['all', 'Todo'], ['series', 'Series ' + nS], ['movie', 'Películas ' + nM]].map(function (m) { return '<button class="fbtn f' + (t === m[0] ? ' on' : '') + '" data-act="typeSel" data-arg="' + m[0] + '" data-v="' + vkey + '">' + m[1] + '</button>'; }).join('');
+  }
+  function byType(vkey, items) { var t = typeSel[vkey]; return t && t !== 'all' ? items.filter(function (i) { return i.type === t; }) : items; }
+  setTimeout(function () { MV.ACT.typeSel = function (t, el) { var v = el && el.dataset.v; if (!v) return; typeSel[v] = t; catSel[v] = ''; MV.rerender(); }; }, 0);
   VIEWS.anime = function () {
-    var items = S.items.filter(function (i) { return i.anime && i.type !== 'live'; });
+    var all0 = S.items.filter(function (i) { return i.anime && i.type !== 'live'; });
+    var tb = typeBtns('anime', all0), items = byType('anime', all0);
     var modes = '<div class="chips filt" style="margin-bottom:10px"><span class="flabel">VER</span>' + [['all', 'Todo'], ['year', 'Por año']].map(function (m) {
       return '<button class="chip f' + (animeMode === m[0] ? ' on' : '') + '" data-act="animeMode" data-arg="' + m[0] + '">' + m[1] + '</button>'; }).join('') + '</div>';
     if (animeMode === 'all' || !S.lists.length) {
-      MV._fbarPre = [['all', 'Todo'], ['year', 'Por año']].map(function (m) { return '<button class="fbtn f' + (animeMode === m[0] ? ' on' : '') + '" data-act="animeMode" data-arg="' + m[0] + '">' + m[1] + '</button>'; }).join('');
+      MV._fbarPre = tb + [['all', 'Por categoría'], ['year', 'Por año']].map(function (m) { return '<button class="fbtn f' + (animeMode === m[0] ? ' on' : '') + '" data-act="animeMode" data-arg="' + m[0] + '">' + m[1] + '</button>'; }).join('');
       return catalogView('anime', 'Anime', items);
     }
     var vis = MV.visible(items);
@@ -1526,7 +1536,11 @@
   };
   VIEWS.novelas = function () { return catalogView('novelas', 'Novelas', S.novelas || []); };
   VIEWS.novelas.after = function () { setTimeout(function () { tmdbClassify(S.novelas || []); }, 1500); };
-  VIEWS.kdrama = function () { return catalogView('kdrama', 'K-Drama', S.items.filter(function (i) { return i.kdrama && i.type !== 'live'; })); };
+  VIEWS.kdrama = function () {
+    var all0 = S.items.filter(function (i) { return i.kdrama && i.type !== 'live'; });
+    MV._fbarPre = typeBtns('kdrama', all0);
+    return catalogView('kdrama', 'Doramas', byType('kdrama', all0));
+  };
   /** Infantil (perfiles de adultos): películas y series para niños, sin anime. */
   VIEWS.infantil = function () {
     return catalogView('infantil', 'Infantil', S.items.filter(function (i) {
