@@ -450,6 +450,7 @@
     // Anime y doramas se ven subtitulados aunque esté activo "Solo español latino"
     return S.prefs.latOnly && c.lat !== undefined && it.olang !== 'es' && !it.anime && !it.kdrama ? c.lat : c.ok;
   };
+  MV.stHasStreamers = function () { return lists().some(function (l) { var m = l.man || {}; return !m.resources || res(m, 'stream'); }); };
   /** Lo que se abrió y no trajo nada queda marcado: con "Solo con enlaces" deja de aparecer. */
   MV.stMarkDead = function (it) {
     if (!it || !it.st) return;

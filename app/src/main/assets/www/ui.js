@@ -2837,14 +2837,26 @@
         sourcePick(it, [url].concat(alts)).then(function (r) { launch({ queue: [q(it, { url: r.url, alts: r.alts })], index: 0, live: false, startMs: prog ? prog.pos : 0 }, { item: it }); }).catch(function () {});
         return;
       }
-      // Antes de abrir, se elige entre la versión principal y las de respaldo la que responde (así el video arranca de una)
-      pickWorking(it, url).then(function (r) { launch({ queue: [q(it, { url: r.url, alts: r.alts })], index: 0, live: false, startMs: prog ? prog.pos : 0 }, { item: it }); });
+      // Antes de abrir, se elige entre la versión principal y las de respaldo la que responde (así el video arranca de una).
+      // Primero desde donde viene (tu lista); si ningún enlace abre, se busca en tus addons.
+      var fb = it.type === 'movie' && MV.stremioPick && MV.stHasStreamers && MV.stHasStreamers();
+      pickWorking(it, url).then(function (r) { launch({ queue: [q(it, { url: r.url, alts: r.alts, fallback: !!fb })], index: 0, live: false, startMs: prog ? prog.pos : 0 }, { item: it, fallbackSearch: fb ? function () { searchElsewhere(it, prog); } : null }); });
     };
     if (it.ia) { MV.toast('Preparando película…'); MV.archiveUrl(it).then(go).catch(function (e) { MV.toast(e.message); }); }
     else if (it.url) go(it.url);
     else if (it.st && MV.stremioPick && (MV.stAlt(it.st.id, it._meta && it._meta.imdb), true)) MV.stremioPick(it.st.type, it.st.id, MV.cleanTitle(it.name) || it.name, false, false, { year: it.year || '', alt: it.orig || '', olang: it.olang || '' }).then(function (s) { it._stLid = s.lid; if (s.ua) it.ua = s.ua; if (s.ref) it.ref = s.ref; it.alts = s.rest || []; go(s.url); }).catch(function (e) { if (e.message !== 'cancelado') MV.toast(e.message, 6000); });
     else MV.toast('Este contenido ya no está disponible en tus listas');
   };
+  /** La película no abrió desde tu lista: se busca la misma en tus addons (por su número de IMDb). */
+  function searchElsewhere(it, prog) {
+    var name = MV.cleanTitle(it.name) || it.name;
+    MV.toast('Buscando «' + name + '» en otras fuentes…', 3000);
+    var im = (it._meta && it._meta.imdb) || it.imdb || '';
+    (/^tt\d+/.test(im) ? Promise.resolve(im) : MV.cinemetaImdb(name, it.year || '', 'movie')).then(function (id) {
+      if (!id) throw new Error('No encontré «' + name + '» en otras fuentes');
+      MV.stremioPick('movie', id, name, false, false, { year: it.year || '', alt: it.orig || '', olang: it.olang, startMs: prog ? prog.pos : 0 });
+    }).catch(function (e) { MV.toast(e.message || 'No se encontró en otras fuentes', 4000); });
+  }
   /** Siguiente capítulo de un addon: se busca en el mismo addon que funcionó, con la misma fuente si está (sin preguntar). */
   function sameAddonLink(series, e) {
     var lid = series._stLid; if (!lid || !e.stId || !MV.stremioStreams) return Promise.reject(new Error('sin addon'));
@@ -3027,6 +3039,7 @@
     if (MV.ach) try { MV.ach.onWatched(ctx, r || {}); } catch (e) {}
     MV.kidsSessionEnd();
     if (ctx.noRecord) { MV.rerender(); return; }
+    if (r && r.failed && ctx.fallbackSearch) { ctx.fallbackSearch(); return; }
     if (ctx.list && r.index != null && ctx.list[r.index]) { MV.recordPlay(ctx.list[r.index], r); }
     else if (ctx.episodes) {
       var e = ctx.episodes[ctx.start + (r.index || 0)];

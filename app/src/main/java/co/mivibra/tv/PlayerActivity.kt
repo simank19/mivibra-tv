@@ -697,6 +697,7 @@ class PlayerActivity : ComponentActivity() {
         m.close("Cerrar").show()
     }
     private var autoSubTries = 0
+    private var failedAll = false
     private var extSub: java.io.File? = null
     private var extSubName = ""
     private var extOffset = 0L
@@ -824,6 +825,14 @@ class PlayerActivity : ComponentActivity() {
             return
         }
         hideLoading()
+        failedAll = true
+        // Película o capítulo de tus listas que no abrió: se vuelve a MiVibra para buscarlo en tus addons
+        if (!live && current().optBoolean("fallback")) {
+            errorView.text = "No abrió desde tu lista.\n\nBuscando en otras fuentes…"
+            errorView.visibility = View.VISIBLE
+            ui.postDelayed({ finishWithResult() }, 1300)
+            return
+        }
         errorView.text = (if (live) "Este canal no está transmitiendo ahora.\n\nLos canales de eventos (los que empiezan con una hora) solo funcionan cuando el evento está en vivo.\n\n" + explain(error) else "No se pudo reproducir este contenido.\n\n" + explain(error)) +
             (if (live) "\n\nPrueba otro canal con ▲ ▼." else "\n\nVuelve atrás e intenta de nuevo.")
         errorView.visibility = View.VISIBLE
@@ -1361,6 +1370,7 @@ class PlayerActivity : ComponentActivity() {
             .put("tracks", trackLog)
             .put("worked", worked)
             .put("wantNext", wantNext)
+            .put("failed", failedAll && (p?.currentPosition ?: 0) < 5000)
         setResult(RESULT_OK, Intent().putExtra("result", result.toString()))
         finish()
     }
