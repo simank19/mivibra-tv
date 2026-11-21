@@ -2847,12 +2847,28 @@
     else if (it.st && MV.stremioPick && (MV.stAlt(it.st.id, it._meta && it._meta.imdb), true)) MV.stremioPick(it.st.type, it.st.id, MV.cleanTitle(it.name) || it.name, false, false, { year: it.year || '', alt: it.orig || '', olang: it.olang || '' }).then(function (s) { it._stLid = s.lid; if (s.ua) it.ua = s.ua; if (s.ref) it.ref = s.ref; it.alts = s.rest || []; go(s.url); }).catch(function (e) { if (e.message !== 'cancelado') MV.toast(e.message, 6000); });
     else MV.toast('Este contenido ya no está disponible en tus listas');
   };
+  /** Número de IMDb de un título por su nombre. Cinemeta conoce sobre todo los nombres en inglés; las novelas,
+   *  los doramas y lo que en tu lista viene con nombre en español se buscan además en TMDB (en español). */
+  function findImdb(name, year, type, orig) {
+    var tv = type === 'series';
+    return MV.cinemetaImdb(name, year, type).then(function (id) {
+      if (id || !MV.tmdb) return id;
+      var q = function (txt, lang) {
+        return MV.tmdb('/search/' + (tv ? 'tv' : 'movie'), '&language=' + lang + '&query=' + encodeURIComponent(txt) + (year ? (tv ? '&first_air_date_year=' : '&year=') + year : '')).then(function (r) {
+          var rs = (r && r.results) || [], n = MV.norm(txt);
+          var m = rs.filter(function (x) { return [x.name, x.title, x.original_name, x.original_title].some(function (t) { return t && MV.norm(t) === n; }); })[0] || rs[0];
+          return m ? MV.tmdb('/' + (tv ? 'tv' : 'movie') + '/' + m.id + '/external_ids', '').then(function (x) { return x && /^tt\d+/.test(x.imdb_id || '') ? x.imdb_id : null; }) : null;
+        });
+      };
+      return q(name, 'es-MX').then(function (id2) { return id2 || (orig && orig !== name ? q(orig, 'en-US') : null); });
+    }).catch(function () { return null; });
+  }
   /** La película no abrió desde tu lista: se busca la misma en tus addons (por su número de IMDb). */
   function searchElsewhere(it, prog) {
     var name = MV.cleanTitle(it.name) || it.name;
     MV.toast('Buscando «' + name + '» en otras fuentes…', 3000);
     var im = (it._meta && it._meta.imdb) || it.imdb || '';
-    (/^tt\d+/.test(im) ? Promise.resolve(im) : MV.cinemetaImdb(name, it.year || '', 'movie')).then(function (id) {
+    (/^tt\d+/.test(im) ? Promise.resolve(im) : findImdb(name, it.year || '', 'movie', it.orig)).then(function (id) {
       if (!id) throw new Error('No encontré «' + name + '» en otras fuentes');
       MV.stremioPick('movie', id, name, false, false, { year: it.year || '', alt: it.orig || '', olang: it.olang, startMs: prog ? prog.pos : 0 });
     }).catch(function (e) { MV.toast(e.message || 'No se encontró en otras fuentes', 4000); });
@@ -2877,7 +2893,7 @@
     var opts = { name: name, alt: series.orig || '', olang: series.olang || '', year: series.year || '' };
     var byImdb = function () {
       var im = (series._meta && series._meta.imdb) || series.imdb || '';
-      return (/^tt\d+/.test(im) ? Promise.resolve(im) : MV.cinemetaImdb(name, series.year || '', 'series')).then(function (id) {
+      return (/^tt\d+/.test(im) ? Promise.resolve(im) : findImdb(name, series.year || '', 'series', series.orig)).then(function (id) {
         if (!id) throw new Error('No encontré «' + name + '» en otras fuentes');
         MV.stremioPick('series', id + ':' + e.season + ':' + e.ep, label, false, false, opts);
       });
