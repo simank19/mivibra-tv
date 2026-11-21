@@ -2857,6 +2857,38 @@
       MV.stremioPick('movie', id, name, false, false, { year: it.year || '', alt: it.orig || '', olang: it.olang, startMs: prog ? prog.pos : 0 });
     }).catch(function (e) { MV.toast(e.message || 'No se encontró en otras fuentes', 4000); });
   }
+  /** Capítulo de tus listas que no abrió: se busca en tus addons. Anime: por Kitsu con número absoluto
+   *  (como lo cuentan los addons de anime); si no, por IMDb con temporada y capítulo. */
+  var KITSU = {};
+  function kitsuId(name) {
+    var k = MV.norm(name); if (KITSU[k] !== undefined) return Promise.resolve(KITSU[k]);
+    // API pública de Kitsu (sin clave): se busca por nombre y se prefiere el que coincide exacto
+    return MV.getJSON('https://kitsu.io/api/edge/anime?page%5Blimit%5D=5&filter%5Btext%5D=' + encodeURIComponent(name)).then(function (j) {
+      var ds = (j && j.data) || [], n = MV.norm(name);
+      var same = function (d) { var a = d.attributes || {}, t = a.titles || {}; return [a.canonicalTitle, t.en, t.en_jp, t.en_us].some(function (x) { return x && MV.norm(x) === n; }); };
+      var m = ds.filter(same)[0] || ds[0];
+      KITSU[k] = m && m.id ? 'kitsu:' + m.id : null; return KITSU[k];
+    }).catch(function () { return null; });
+  }
+  function searchEpisodeElsewhere(series, eps, e) {
+    var name = MV.cleanTitle(series.name) || series.name, label = name + ' T' + e.season + ' E' + e.ep;
+    MV.toast('Buscando «' + label + '» en otras fuentes…', 3000);
+    var anime = (MV.isAnimeIt && MV.isAnimeIt(series)) || series.anime;
+    var sorted = eps.slice().sort(function (a, b) { return a.season - b.season || a.ep - b.ep; });
+    var abs = sorted.indexOf(e) + 1;
+    var opts = { name: name, alt: series.orig || '', olang: series.olang || '', year: series.year || '' };
+    var byImdb = function () {
+      var im = (series._meta && series._meta.imdb) || series.imdb || '';
+      return (/^tt\d+/.test(im) ? Promise.resolve(im) : MV.cinemetaImdb(name, series.year || '', 'series')).then(function (id) {
+        if (!id) throw new Error('No encontré «' + name + '» en otras fuentes');
+        MV.stremioPick('series', id + ':' + e.season + ':' + e.ep, label, false, false, opts);
+      });
+    };
+    (anime ? kitsuId(name).then(function (kid) {
+      if (!kid) return byImdb();
+      MV.stremioPick('series', kid + ':' + (abs > 0 ? abs : e.ep), label, false, false, opts);
+    }) : byImdb()).catch(function (er) { MV.toast(er.message || 'No se encontró en otras fuentes', 4000); });
+  }
   /** Siguiente capítulo de un addon: se busca en el mismo addon que funcionó, con la misma fuente si está (sin preguntar). */
   function sameAddonLink(series, e) {
     var lid = series._stLid; if (!lid || !e.stId || !MV.stremioStreams) return Promise.reject(new Error('sin addon'));
@@ -2910,7 +2942,10 @@
     // Capítulos descargados: se ven desde el archivo
     var dls = {}; MV.dlList().forEach(function (d) { if (d.status === 'done') dls[d.key] = 'file://' + d.file; });
     queue.forEach(function (x) { if (dls[x.id]) x.url = dls[x.id]; });
-    launch({ queue: queue, index: 0, live: false, startMs: prog ? prog.pos : 0 }, { item: series, episodes: eps, start: i });
+    // Si el capítulo no abre desde tu lista, se busca el mismo capítulo en tus addons
+    var fb = !!(MV.stremioPick && MV.stHasStreamers && MV.stHasStreamers());
+    if (fb) queue.forEach(function (x) { if (!/^file:/.test(x.url || '')) x.fallback = true; });
+    launch({ queue: queue, index: 0, live: false, startMs: prog ? prog.pos : 0 }, { item: series, episodes: eps, start: i, fallbackSearch: fb ? function (r) { var ep = eps[i + ((r && r.index) || 0)]; if (ep) searchEpisodeElsewhere(series, eps, ep); } : null });
     if (series._stLid) setTimeout(function () { watchNextEp(series, eps, i); }, 3000);
   };
   /** Desde "Continuar viendo" del inicio de Android TV: sigue donde iba (espera a que cargue el catálogo). */
@@ -3039,7 +3074,7 @@
     if (MV.ach) try { MV.ach.onWatched(ctx, r || {}); } catch (e) {}
     MV.kidsSessionEnd();
     if (ctx.noRecord) { MV.rerender(); return; }
-    if (r && r.failed && ctx.fallbackSearch) { ctx.fallbackSearch(); return; }
+    if (r && r.failed && ctx.fallbackSearch) { ctx.fallbackSearch(r); return; }
     if (ctx.list && r.index != null && ctx.list[r.index]) { MV.recordPlay(ctx.list[r.index], r); }
     else if (ctx.episodes) {
       var e = ctx.episodes[ctx.start + (r.index || 0)];
