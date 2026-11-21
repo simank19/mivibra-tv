@@ -3131,7 +3131,9 @@
     if (r && r.worked) try { learnWorked(r.worked); } catch (e) {}
     if (r && r.tracks) try { saveTracks(r.tracks); } catch (e) {}
     // Favoritos marcados desde el reproductor
-    if (r && r.favToggles && r.favToggles.length) r.favToggles.forEach(function (id) {
+    // (Con el APK nuevo vienen como estado final y guardados en el equipo; si no, como cambios)
+    var favDone = false; try { favDone = MV.applyPendingFavs(); } catch (e) {}
+    if (!favDone && r && r.favToggles && r.favToggles.length) r.favToggles.forEach(function (id) {
       var it = S.byKey[id] || (MV.reg && MV.reg[id]) || (id.indexOf('#') > 0 ? S.byKey[id.split('#')[0]] : null);
       if (it) MV.toggleFav(it);
     });

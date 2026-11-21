@@ -247,6 +247,14 @@ class Bridge(private val a: MainActivity) {
     // ---------------- Descargas para ver sin internet ----------------
     @JavascriptInterface
     fun dlStartVideo(json: String): String = try { Downloads.start(a, JSONObject(json)) } catch (e: Exception) { "error:" + (e.message ?: "No se pudo descargar") }
+    /** Favoritos del reproductor pendientes de guardar en el perfil (se entregan una sola vez). */
+    @JavascriptInterface
+    fun takeFavs(): String = try {
+        val p = a.getSharedPreferences("favs", Context.MODE_PRIVATE)
+        val s = p.getString("pending", "{}") ?: "{}"
+        p.edit().remove("pending").commit(); s
+    } catch (_: Exception) { "{}" }
+
     @JavascriptInterface
     fun dlList(): String = try { Downloads.list(a).toString() } catch (_: Exception) { "[]" }
     @JavascriptInterface

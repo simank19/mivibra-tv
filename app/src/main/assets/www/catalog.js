@@ -2463,6 +2463,31 @@
     MV.savePdata(d);
     return MV.isFav(it.key);
   };
+  /** Deja el favorito en el estado indicado (no lo invierte): así aplicarlo dos veces no lo quita. */
+  MV.setFav = function (it, on, ts) {
+    var d = MV.pdata(), f = d.favs[it.key], now = ts || Date.now();
+    if (f && (f.ts || 0) > now) return;   // hay un cambio más nuevo (de otro equipo)
+    if (on) d.favs[it.key] = Object.assign(mini(it), { ts: now });
+    else if (f) d.favs[it.key] = { key: it.key, del: true, ts: now };
+    else return;
+    MV.savePdata(d);
+  };
+  /** Favoritos marcados en el reproductor que quedaron guardados en el equipo (aunque Android haya cerrado la app). */
+  MV.applyPendingFavs = function () {
+    var A = window.Android; if (!A || !A.takeFavs || !S.pid) return false;
+    var m = {}; try { m = JSON.parse(A.takeFavs() || '{}'); } catch (e) { return true; }
+    var n = 0;
+    Object.keys(m).forEach(function (id) {
+      var x = m[id], it = S.byKey[id] || (MV.reg && MV.reg[id]);
+      if (!it) it = { key: id, type: /^live:/.test(id) ? 'live' : /#/.test(id) ? 'episode' : (id.split(':')[0] || 'movie'), name: x.title || id, logo: x.logo || '', url: x.url || '' };
+      MV.setFav(it, !!x.on, x.t); n++;
+    });
+    if (n && MV.rerender) MV.rerender();
+    return true;
+  };
+  // Al abrir la app: los que quedaron pendientes (la app se cerró mientras veías)
+  var favBoot = false;
+  MV.on('catalog', function () { if (!favBoot && S.pid) { favBoot = true; setTimeout(function () { try { MV.applyPendingFavs(); } catch (e) {} }, 500); } });
   MV.favs = function () {
     var f = MV.pdata().favs;
     return Object.keys(f).map(function (k) { return f[k]; }).filter(function (x) { return !x.del; }).sort(function (a, b) { return b.ts - a.ts; });

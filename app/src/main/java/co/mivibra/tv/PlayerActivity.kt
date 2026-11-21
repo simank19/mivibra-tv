@@ -495,6 +495,7 @@ class PlayerActivity : ComponentActivity() {
         val on = !isFav(o)
         o.put("fav", on)
         if (!favToggles.remove(id)) favToggles.add(id)
+        saveFavPending(this, id, on, o)
         updateFavBtn()
         panel?.setCurrent(index)
         android.widget.Toast.makeText(this, if (on) "Agregado a favoritos" else "Quitado de favoritos", android.widget.Toast.LENGTH_SHORT).show()
@@ -1430,4 +1431,19 @@ class PlayerActivity : ComponentActivity() {
         player = null
         super.onDestroy()
     }
+}
+
+/**
+ * Favoritos marcados en el reproductor: se guardan al instante en el equipo (estado final, no "cambio"),
+ * así no se pierden si Android cierra la app mientras ves (pasaba en TV box con poca memoria) o si se sale con Inicio.
+ * La interfaz los toma con Android.takeFavs() y los aplica.
+ */
+fun saveFavPending(c: android.content.Context, id: String, on: Boolean, o: JSONObject) {
+    try {
+        val p = c.getSharedPreferences("favs", android.content.Context.MODE_PRIVATE)
+        val all = try { JSONObject(p.getString("pending", "{}") ?: "{}") } catch (_: Exception) { JSONObject() }
+        all.put(id, JSONObject().put("on", on).put("t", System.currentTimeMillis())
+            .put("title", o.optString("title")).put("logo", o.optString("logo")).put("url", o.optString("url")))
+        p.edit().putString("pending", all.toString()).commit()
+    } catch (_: Exception) {}
 }
