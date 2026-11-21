@@ -2921,13 +2921,14 @@
     MV.toast('Buscando «' + name + '» en otras fuentes…', 3000);
     var im = (it._meta && it._meta.imdb) || it.imdb || '';
     (/^tt\d+/.test(im) ? Promise.resolve(im) : findImdb(name, it.year || '', 'movie', it.orig)).then(function (id) {
-      if (!id) throw new Error('No encontré «' + name + '» en otras fuentes');
+      if (!id) { MV.markDeadKey(it.key, true); throw new Error('No encontré «' + name + '» en otras fuentes'); }
       return MV.stremioPick('movie', id, name, false, false, { year: it.year || '', alt: it.orig || '', olang: it.olang, startMs: prog ? prog.pos : 0 });
     }).then(function (s) {
       // Se reproduce lo encontrado (sin volver a buscar si tampoco abre, para no quedar en un ciclo)
       if (!s || !s.url) throw new Error('No se encontró en otras fuentes');
+      MV.markAliveKey(it.key);
       launch({ queue: [q(it, { url: s.url, ua: s.ua || '', ref: s.ref || '', alts: s.rest || [] })], index: 0, live: false, startMs: prog ? prog.pos : 0 }, { item: it });
-    }).catch(function (e) { if (e && e.message === 'cancelado') return; MV.toast((e && e.message) || 'No se encontró en otras fuentes', 4000); });
+    }).catch(function (e) { if (e && e.message === 'cancelado') return; if (!/^No encontré/.test((e && e.message) || '')) MV.markDeadKey(it.key, true); MV.toast((e && e.message) || 'No se encontró en otras fuentes', 4000); });
   }
   /** Capítulo de tus listas que no abrió: se busca en tus addons. Anime de 1.ª temporada: por Kitsu
    *  (como lo cuentan los addons de anime); lo demás, por IMDb con temporada y capítulo. */
@@ -3152,6 +3153,8 @@
     MV.kidsSessionEnd();
     if (ctx.noRecord) { MV.rerender(); return; }
     if (r && r.failed && ctx.fallbackSearch) { ctx.fallbackSearch(r); return; }
+    // Se vio de verdad: deja de contar como "sin enlaces"
+    if (r && !r.failed && r.position > 30000 && ctx.item && MV.markAliveKey) MV.markAliveKey(ctx.item.key);
     if (ctx.list && r.index != null && ctx.list[r.index]) { MV.recordPlay(ctx.list[r.index], r); }
     else if (ctx.episodes) {
       var e = ctx.episodes[ctx.start + (r.index || 0)];

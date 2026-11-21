@@ -458,7 +458,7 @@
   MV.stLinked = function (it) {
     var c = lk()[it.st.type + ':' + it.st.id]; if (!c || (!c.ok && c.v !== 2)) return undefined;
     // Un solo intento fallido no basta para esconderlo (a veces el addon tarda o falla ese día): se revisa otra vez
-    if (!c.ok && (c.miss || 1) < 2) return Date.now() - c.t > 6 * 3600e3 ? undefined : true;
+    if (!c.ok && (c.miss || 1) < 2) return true;
     // Anime y doramas se ven subtitulados aunque esté activo "Solo español latino"
     return S.prefs.latOnly && c.lat !== undefined && it.olang !== 'es' && !it.anime && !it.kdrama ? c.lat : c.ok;
   };
@@ -479,7 +479,9 @@
     if (running || !MV.S.prefs.stOnlyLinked) return;
     var streamers = lists().filter(function (l) { var m = l.man || {}; return !m.resources || res(m, 'stream'); });
     if (!streamers.length) return;
-    var todo = (MV.S.items || []).filter(function (i) { return i.st && !i.url && !i.xt && MV.stLinked(i) === undefined; });
+    // Pendientes: sin revisar, o con un solo fallo de hace más de 6 h (se confirma antes de esconderlo)
+    var need = function (i) { if (MV.stLinked(i) === undefined) return true; var c = lk()[i.st.type + ':' + i.st.id]; return !!(c && !c.ok && (c.miss || 1) < 2 && Date.now() - c.t > 6 * 3600e3); };
+    var todo = (MV.S.items || []).filter(function (i) { return i.st && !i.url && !i.xt && need(i); });
     if (!todo.length) return;
     running = true;
     var n = 0, found = 0;
@@ -488,7 +490,7 @@
       var pr = MV._stPrio, pi = -1;
       if (pr) for (var q = 0; q < todo.length; q++) if (pr[todo[q].key]) { pi = q; break; }
       var it = pi >= 0 ? todo.splice(pi, 1)[0] : todo.shift();
-      if (it && MV.stLinked(it) !== undefined) return next();
+      if (it && !need(it)) return next();
       if (!it) { if (--active > 0) return; running = false; MV.save('stLinks', lk()); MV._stLinkV = (MV._stLinkV || 0) + 1; if (found && MV.rerender) MV.rerender(); return; }
       MV._stTorrents = 0;
       // Series: se usa el id real del primer capítulo que da el addon (y así se aprende su equivalente en IMDb)

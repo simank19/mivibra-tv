@@ -1378,7 +1378,7 @@
     if (item._epsAt && Date.now() - item._epsAt < 30 * 60e3 && (item.episodes || []).length) return Promise.resolve(item.episodes);
     var k = 'eps:' + item.key;
     function fresh() {
-      return fetchEpisodes(item).then(function (e) { item._epsAt = Date.now(); if (e && e.length) MV.idbSet(k, { ts: Date.now(), eps: e }); return e || []; });
+      return fetchEpisodes(item).then(function (e) { item._epsAt = Date.now(); if (e && e.length) { MV.idbSet(k, { ts: Date.now(), eps: e }); MV.markAliveKey(item.key); } else if (item.type === 'series') MV.markDeadKey(item.key); return e || []; });
     }
     return MV.idbGet(k).catch(function () { return null; }).then(function (c) {
       if (c && c.eps && c.eps.length) {
@@ -1976,13 +1976,59 @@
     var y = +String(i.year || '').slice(0, 4);
     return y > now.getFullYear();
   };
+  // ---------- "Solo con enlaces": un título vale si se puede ver desde CUALQUIER fuente ----------
+  // 1) Lo de tus listas (M3U, Xtream, Portal MAC, Jellyfin…) cuenta como con enlace, salvo que ya se comprobó que no abre.
+  // 2) Un título de catálogo de addon también vale si la misma película o serie está en tus listas (aunque el addon no dé enlaces).
+  var DK = null;
+  function dk() { if (!DK) { DK = MV.load('deadKeys', {}) || {}; var now = Date.now(); Object.keys(DK).forEach(function (k) { if (now - DK[k].t > 3 * 86400e3) delete DK[k]; }); } return DK; }
+  /** El título no abrió por ningún lado (tu lista falló y los addons no lo tienen, o la serie no trae capítulos). */
+  MV.markDeadKey = function (key, strong) {
+    if (!key) return; var c = dk()[key] || { m: 0 };
+    c.m = strong ? 2 : c.m + 1; c.t = Date.now(); dk()[key] = c;
+    MV.save('deadKeys', dk()); MV._stLinkV = (MV._stLinkV || 0) + 1;
+  };
+  MV.markAliveKey = function (key) { if (key && dk()[key]) { delete dk()[key]; MV.save('deadKeys', dk()); MV._stLinkV = (MV._stLinkV || 0) + 1; } };
+  function isDead(i) { var c = dk()[i.key]; return !!(c && c.m >= 2); }
+  var LIX = null, LIXV = -1;
+  function lkName(n) { var t = String((MV.cleanTitle && MV.cleanTitle(n)) || n || '').replace(/[(\[]\s*(19|20)\d\d\s*[)\]]/g, ' ').replace(/[\s:-]+(19|20)\d\d\s*$/, ''); return MV.norm(t); }
+  function listIndex() {
+    if (LIX && LIXV === MV._catVer) return LIX;
+    LIX = {}; LIXV = MV._catVer;
+    (S.items || []).forEach(function (i) {
+      if (i.st || !(i.url || i.xt || i.stks || i.jf || i.px || (i.episodes || []).length) || (i.type !== 'movie' && i.type !== 'series')) return;
+      var k = i.type + '|' + lkName(i.name), y = String(i.year || '').slice(0, 4);
+      (LIX[k] = LIX[k] || []).push(y || '*');
+      if (i.orig) { var k2 = i.type + '|' + lkName(i.orig); (LIX[k2] = LIX[k2] || []).push(y || '*'); }
+    });
+    return LIX;
+  }
+  function inMyLists(i) {
+    var ix = listIndex();
+    if (i._inLv === LIXV) return i._inL;   // ya calculado para esta versión del catálogo (rápido en TV)
+    i._inLv = LIXV; return (i._inL = inMyLists0(i, ix));
+  }
+  function inMyLists0(i, ix) {
+    var y = String(i.year || '').slice(0, 4);
+    return [i.name, i.orig].some(function (n) {
+      var ys = n && ix[i.type + '|' + lkName(n)]; if (!ys) return false;
+      return !y || ys.some(function (x) { return x === '*' || Math.abs(+x - +y) <= 1; });
+    });
+  }
+  /** true = se esconde con "Solo títulos con enlaces" */
+  function linkHidden(i) {
+    if (isDead(i)) return true;
+    if (!(i.st && !i.url && !i.xt)) return false;
+    if (MV.stLinked && MV.stLinked(i) === true) return false;
+    return !inMyLists(i);
+  }
+  MV.linkHidden = linkHidden;
   function hideUnrel(i) { return P.hideUnreleased !== false && MV.unreleased(i); }
   MV.hiddenByFilters = function (arr) {
     if (MV._showHidden || (!P.latOnly && !P.stOnlyLinked && P.hideUnreleased === false)) return 0;
     var kids = MV.isKids(), n = 0;
     arr.forEach(function (i) {
       if (i.adult || (kids && !MV.kidsOk(i))) return;
-      if (hideUnrel(i) || (P.latOnly && !D.latOk(i)) || (P.stOnlyLinked && i.st && !i.url && !i.xt && MV.stLinked && MV.stLinked(i) !== true)) n++;
+      if (hideUnrel(i) || (P.latOnly && !D.latOk(i)) || (P.stOnlyLinked && linkHidden(i))) n++;
     });
     return n;
   };
@@ -2023,7 +2069,7 @@
       if (hideUnrel(i)) return false;
       if (P.latOnly && !D.latOk(i)) return false;
       // Títulos de catálogos de addons: con "Solo con enlaces" se muestran únicamente los que ya se comprobó que tienen enlaces
-      if (P.stOnlyLinked && i.st && !i.url && !i.xt && MV.stLinked && MV.stLinked(i) !== true && !mine[i.key]) return false;
+      if (P.stOnlyLinked && !mine[i.key] && linkHidden(i)) return false;
       return true;
     });
   }
