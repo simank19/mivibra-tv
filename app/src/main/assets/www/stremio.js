@@ -283,7 +283,7 @@
         var all = (j && j.streams) || [];
         var tn = all.filter(function (s) { return s.infoHash && !s.url; }).length;
         MV._stTorrents = (MV._stTorrents || 0) + tn;
-        if (tn) { MV._stTorSrc = MV._stTorSrc || []; if (MV._stTorSrc.indexOf(l.name) < 0) MV._stTorSrc.push(l.name); }
+        if (tn) { MV._stTorSrc = MV._stTorSrc || []; if (MV._stTorSrc.indexOf(l.name) < 0) MV._stTorSrc.push(l.name); MV._stTorLids = MV._stTorLids || []; if (MV._stTorLids.indexOf(l.id) < 0) MV._stTorLids.push(l.id); }
         var nd = all.filter(function (s) { return s.url && /^https?:/i.test(s.url); }).length, nt = all.length - nd;
         if (typeof D[l.name] !== 'number' || nd > D[l.name]) D[l.name] = nd || (nt ? nt + ' torrents (sin debrid no sirven)' : 0);
         return all.filter(function (s) { return s.url && /^https?:/i.test(s.url); }).map(function (s) {
@@ -371,6 +371,7 @@
     MV.toast('Abriendo…', 1500);
     MV._stTorrents = 0;
     MV._stTorSrc = [];
+    MV._stTorLids = [];
     MV._stDiag = {};
     var anime = /^(kitsu|mal|anilist|anidb)[:_]/i.test(id);
     if (pref) {
@@ -404,6 +405,14 @@
       // A los usuarios no se les habla de addons ni torrents: solo que no está disponible (el detalle técnico, solo para el administrador)
       if (!st.length && !st.failed && type === 'movie' && MV.stMarkDead) MV.stMarkDead({ st: { type: 'movie', id: id } });
       if (!st.length && !admin) throw new Error('Este título no está disponible por ahora. Prueba más tarde.');
+      // Administrador: se ofrece apagar ahí mismo el addon que solo da torrents (sin tener que buscarlo)
+      if (!st.length && MV._stTorrents && (MV._stTorLids || []).length) {
+        var tl = (S.lists || []).filter(function (l) { return MV._stTorLids.indexOf(l.id) >= 0; }), nm = tl.map(function (l) { return '«' + (l.name || 'Addon') + '»'; }).join(', ');
+        return MV.confirm('Solo hay torrents', '“' + title + '” no tiene enlaces directos. ' + nm + ' solo dio torrents, y esos no abren sin un servicio debrid (Real-Debrid, AllDebrid…). Si no lo usas, apágalo para que no vuelva a salir.', tl.length > 1 ? 'Apagar esos addons' : 'Apagar addon').then(function (y) {
+          if (y) { tl.forEach(function (l) { l.enabled = false; l.updatedAt = Date.now(); }); MV.saveLists(); if (MV.syncCatalog) MV.syncCatalog().then(function () { MV.rerender(); }); MV.toast(nm + ' apagado. Lo vuelves a activar en Ajustes › Listas › Addons.', 5000); }
+          throw new Error('cancelado');
+        });
+      }
       if (!st.length && MV._stTorrents) throw new Error('Este título no tiene enlaces directos en tus addons. Solo hay torrents (' + MV._stTorrents + ')' + ((MV._stTorSrc || []).length ? ', de: ' + MV._stTorSrc.join(', ') : '') + '. Esos no se pueden reproducir sin un servicio debrid; puedes quitar ese addon en Plugins si no lo usas.');
       if (!st.length) {
         var dg = MV._stDiag || {}, names = Object.keys(dg);
