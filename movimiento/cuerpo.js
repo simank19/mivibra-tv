@@ -121,3 +121,35 @@ export async function buildAnime(recipe, opts = {}) {
   if (opts.escala) av.scene.scale.multiplyScalar(opts.escala);
   return av;
 }
+
+// ---------- Muñeco MiVibra (cuerpo liso de una pieza, sin cara; solo se elige el color) ----------
+// Receta: { muneco: 1, color: '#hex', name }. Se guarda como "MVMU1" + JSON por el mismo canal de siempre.
+export const MUNECO_COLORS = ['#f4f4f2', '#f5c84c', '#ff6b6b', '#4dabf7', '#51cf66', '#cc5de8', '#ff922b', '#20c997', '#f06595', '#8d6e63', '#495057', '#1e1e24'];
+export const MUNECO_DEFAULT = { muneco: 1, color: '#f4f4f2', name: 'Tú' };
+export function fixMuneco(r) {
+  const o = { muneco: 1, color: MUNECO_DEFAULT.color, name: 'Tú' };
+  if (r) {
+    // recetas viejas (editor anterior): se toma el color de la camiseta como color del muñeco
+    const c = r.color || r.top || r.peloColor || '';
+    if (/^#[0-9a-f]{6}$/i.test(c)) o.color = c.toLowerCase();
+    o.name = String(r.name || 'Tú').slice(0, 24);
+  }
+  return o;
+}
+export function encodeMuneco(r) { return new TextEncoder().encode('MVMU1' + JSON.stringify(fixMuneco(r))).buffer; }
+export function decodeMuneco(buf) {
+  try { const u = new Uint8Array(buf instanceof ArrayBuffer ? buf : buf.buffer || buf); const s = new TextDecoder().decode(u.slice(0, 4096)); return s.startsWith('MVMU1') ? fixMuneco(JSON.parse(s.slice(5))) : null; } catch (e) { return null; }
+}
+const MUNECO_URL = BASE + 'muneco.glb';
+export function preloadMuneco() { return glb(MUNECO_URL).catch(() => null); }
+export async function buildMuneco(recipe, opts = {}) {
+  const r = fixMuneco(recipe);
+  const av = await loadCuerpo(MUNECO_URL, { lite: opts.lite, recipe: r });
+  const col = new THREE.Color(r.color);
+  // Mate y suave como la referencia; en equipos livianos, Lambert (más barato)
+  const m = opts.lite ? new THREE.MeshLambertMaterial({ color: col }) : new THREE.MeshPhongMaterial({ color: col, shininess: 18, specular: new THREE.Color('#222222') });
+  av.scene.traverse((o) => { if (o.isMesh) { o.material = m; o.castShadow = !opts.lite; } });
+  av.setColor = (hex) => m.color.set(hex);
+  if (opts.escala) av.scene.scale.setScalar(opts.escala);
+  return av;
+}

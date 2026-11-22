@@ -130,7 +130,7 @@
   };
   MV.VIEWS.movimiento.after = function () { if (meta === null && uid()) loadMeta().then(function (m) { if (m && MV.viewName() === 'movimiento') MV.rerender(); }); };
   Object.assign(MV.ACT, {
-    mvEditor: function () { openFrame('anime/'); },
+    mvEditor: function () { openFrame('muneco/'); },
     mvPlay: function (p) { openFrame(p || 'vallas/'); },
     mvSoon: function () { MV.toast('Este deporte llega pronto', 3000); },
     mvClose: function () { MV.mvFrame.close(); }
