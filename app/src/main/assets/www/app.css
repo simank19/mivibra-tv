@@ -1540,3 +1540,20 @@ html.nogap .who-screen .qr { margin: 0 24px 12px 0; }
 .ytp .ytprog span { flex: none; min-width: 36px; text-align: center; }
 
 .ytp .bar { overflow: visible; border-radius: 0; margin: 0; height: auto; }
+
+/* Mini reproductor de YouTube: sigue sonando en una ventanita mientras navegas (mín. 200 px de alto, como pide YouTube) */
+.ytp .ytvid { position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
+.ytp .xm { position: absolute; top: 14px; left: 14px; z-index: 2; background: rgba(0,0,0,.55); color: #fff; }
+.ytp.tv .xm { display: none; }
+.ytp .ytmc { display: none; }
+.ytp.ytmini { top: auto; left: auto; right: 16px; bottom: 16px; width: min(380px, calc(100vw - 24px)); border-radius: 18px; overflow: hidden; box-shadow: 0 18px 50px rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.14); background: #0e1014; }
+.ytp.ytmini .ytvid { position: relative; height: 214px; }
+.ytp.ytmini .bar, .ytp.ytmini .x, .ytp.ytmini .xm, .ytp.ytmini .ytside { display: none !important; }
+.ytp.ytmini .ytmc { display: flex; align-items: center; gap: 4px; padding: 8px 8px 8px 12px; }
+.ytp.ytmini .ytmc .t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ytp.ytmini .ytmc .t b { font: 700 13px var(--ui); color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ytp.ytmini .ytmc .t span { font: 500 11px var(--ui); color: rgba(255,255,255,.65); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ytp.ytmini .ytmc .iconbtn { width: 38px; height: 38px; color: #fff; }
+.ytp.ytmini .ytmc .iconbtn.on { background: var(--accent); color: var(--on-accent); }
+@media (max-width: 760px) { .ytp.ytmini { right: 12px; bottom: 96px; } }
+body.yt-mini .mini { display: none; }

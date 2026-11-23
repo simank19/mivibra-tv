@@ -99,7 +99,7 @@
     if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) ae.blur();
     if (Date.now() - (MV._typedAt || 0) < 900) return true;
     if (MV.tourOpen && MV.tourOpen()) { MV.tourClose(); return true; }
-    if (MV.ytPlayer && MV.ytPlayer.isOpen()) { MV.ytPlayer.close(); return true; }
+    if (MV.ytPlayer && MV.ytPlayer.isOpen() && !MV.ytPlayer.isMini()) { MV.ytPlayer.mini(); return true; }   // sigue sonando en el mini reproductor
     if (MV.mvFrame && MV.mvFrame.open()) { MV.mvFrame.close(); return true; }
     if (MV.streamOpen && MV.streamOpen()) { MV.streamClose(); return true; }
     if (MV.modalOpen()) { MV.closeModal(); return true; }
@@ -5133,16 +5133,17 @@
     }
     function box() { return document.getElementById('ytp'); }
     function showBar() {
-      var b = box(); if (!b) return; b.classList.add('ui');
+      var b = box(); if (!b || mini) return; b.classList.add('ui');
       clearTimeout(hideT); hideT = setTimeout(function () { b.classList.remove('ui'); }, 4000);
     }
     function frame() {
       var v = list[idx] || {};
       var b = box();
       var nx = list[idx + 1];
-      b.innerHTML = '<div id="ytFrame"></div><div class="yttap" data-yt="tap"></div><button class="iconbtn x" data-yt="close" aria-label="Cerrar video">' + IC.close + '</button><div class="ytside" id="ytSide" hidden></div>' +
+      b.innerHTML = '<div class="ytvid"><div id="ytFrame"></div><div class="yttap" data-yt="tap"></div></div><button class="iconbtn x" data-yt="close" aria-label="Cerrar video">' + IC.close + '</button><button class="iconbtn xm" data-yt="mini" aria-label="Minimizar"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>' +
+        '<div class="ytmc"><div class="t"><b>' + esc(v.title || '') + '</b><span>' + esc(v.channel || '') + '</span></div><button class="iconbtn f" data-yt="prev" aria-label="Anterior">' + IC.prev + '</button><button class="iconbtn on f" data-yt="toggle" aria-label="Pausa">' + IC.pause + '</button><button class="iconbtn f" data-yt="next" aria-label="Siguiente">' + IC.next + '</button><button class="iconbtn f" data-yt="max" aria-label="Pantalla completa"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14v6h6M20 10V4h-6M4 20l7-7M20 4l-7 7"/></svg></button><button class="iconbtn f" data-yt="close" aria-label="Cerrar">' + IC.close + '</button></div>' + '<div class="ytside" id="ytSide" hidden></div>' +
         '<div class="bar"><div class="ytprog"><span id="ytCur">0:00</span><div class="trk" data-yt="seek"><i id="ytFill"></i></div><span id="ytDur">0:00</span></div><div class="t"><b>' + esc(v.title || '') + '</b><span>' + esc(v.channel || '') + (list.length > 1 ? ' · ' + (idx + 1) + ' de ' + list.length : '') + (nx ? ' · Sigue: ' + esc(nx.title.slice(0, 50)) : '') + '</span></div>' +
-        '<div class="ctl"><button class="iconbtn" data-yt="prev" aria-label="Anterior">' + IC.prev + '</button><button class="iconbtn" data-yt="back10" aria-label="Atrás 10 s">−10</button><button class="iconbtn on" data-yt="toggle" aria-label="Pausa">' + IC.pause + '</button><button class="iconbtn" data-yt="fwd10" aria-label="Adelante 10 s">+10</button><button class="iconbtn" data-yt="next" aria-label="Siguiente">' + IC.next + '</button>' + (MV.isKids() ? '' : '<button class="iconbtn" data-yt="info" aria-label="Detalles y comentarios" style="font-size:12px;width:auto;padding:0 12px">💬<span class="ytlbl"> Comentarios</span></button><button class="iconbtn" data-yt="lyrics" aria-label="Letra">' + IC.lyrics + '</button><button class="iconbtn" data-yt="addpl" aria-label="Añadir a una lista">' + IC.plAdd + '</button>') + '<button class="iconbtn" data-yt="close" aria-label="Cerrar">' + IC.close + '</button></div></div>';
+        '<div class="ctl"><button class="iconbtn" data-yt="mini" aria-label="Minimizar (sigue sonando mientras navegas)"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button><button class="iconbtn" data-yt="prev" aria-label="Anterior">' + IC.prev + '</button><button class="iconbtn" data-yt="back10" aria-label="Atrás 10 s">−10</button><button class="iconbtn on" data-yt="toggle" aria-label="Pausa">' + IC.pause + '</button><button class="iconbtn" data-yt="fwd10" aria-label="Adelante 10 s">+10</button><button class="iconbtn" data-yt="next" aria-label="Siguiente">' + IC.next + '</button>' + (MV.isKids() ? '' : '<button class="iconbtn" data-yt="info" aria-label="Detalles y comentarios" style="font-size:12px;width:auto;padding:0 12px">💬<span class="ytlbl"> Comentarios</span></button><button class="iconbtn" data-yt="lyrics" aria-label="Letra">' + IC.lyrics + '</button><button class="iconbtn" data-yt="addpl" aria-label="Añadir a una lista">' + IC.plAdd + '</button>') + '<button class="iconbtn" data-yt="close" aria-label="Cerrar">' + IC.close + '</button></div></div>';
       b.querySelectorAll('[data-yt]').forEach(function (btn) { btn.onclick = function (e) { e.stopPropagation(); act(btn.dataset.yt, e); }; });
     }
     // Barra de avance: tiempo actual / duración (se toca para saltar a ese punto)
@@ -5200,8 +5201,7 @@
           events: {
             onReady: function (e) { try { e.target.playVideo(); } catch (x) {} },
             onStateChange: function (e) {
-              var t = box().querySelector('[data-yt="toggle"]');
-              if (t) t.innerHTML = e.data === 1 ? IC.pause : IC.play;
+              box().querySelectorAll('[data-yt="toggle"]').forEach(function (t) { t.innerHTML = e.data === 1 ? IC.pause : IC.play; });
               if (e.data === 1) skips = 0;
               if (e.data === 0) act('next');
             },
@@ -5218,7 +5218,18 @@
         var f = box().querySelector('iframe'); if (f) { f.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture'); f.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin'); }
       }).catch(function (e) { MV.toast(e.message); close(); });
     }
+    // Mini reproductor: el video sigue sonando en una ventanita mientras navegas por la app
+    var mini = false;
+    function setMini(on) {
+      mini = !!on; var b = box(); if (!b) return;
+      b.classList.toggle('ytmini', mini); document.body.classList.toggle('yt-open', !mini); document.body.classList.toggle('yt-mini', mini);
+      var sd = document.getElementById('ytSide'); if (sd && mini) { sd.hidden = true; b.classList.remove('ytsideon'); }
+      if (mini) { b.classList.remove('ui'); clearTimeout(hideT); setTimeout(function () { MV.focusFirst && MV.focusFirst(); }, 30); }
+      else { showBar(); setTimeout(function () { var t = b.querySelector('.ctl [data-yt="toggle"]'); if (t) t.focus(); }, 30); }
+    }
     function act(a, ev) {
+      if (a === 'mini') { setMini(true); return; }
+      if (a === 'max' || (a === 'tap' && mini)) { setMini(false); return; }
       if (a === 'tap') { var bx = box(); if (bx.classList.contains('ui')) { bx.classList.remove('ui'); clearTimeout(hideT); } else showBar(); return; }
       showBar();
       if (a === 'close') return close();
@@ -5239,13 +5250,15 @@
       if (kidIv) { clearInterval(kidIv); kidIv = null; } MV.kidsSessionEnd();
       if (player && player.destroy) { try { player.destroy(); } catch (e) {} }
       player = null;
-      var b = box(); b.hidden = true; b.innerHTML = ''; b.classList.remove('ui');
-      document.body.classList.remove('yt-open');
+      var b = box(); b.hidden = true; b.innerHTML = ''; b.classList.remove('ui', 'ytmini');
+      document.body.classList.remove('yt-open', 'yt-mini'); var wasMini = mini; mini = false;
+      if (wasMini) return;
       setTimeout(function () { var el = document.querySelector('[data-fid="y-' + ((list[idx] || {}).id || '') + '"]'); if (el) el.focus(); else MV.focusFirst(); }, 50);
     }
     // Control remoto mientras el video está abierto: OK pausa, ◀ ▶ adelanta/atrasa, ▲ ▼ anterior/siguiente
     document.addEventListener('keydown', function (e) {
       if (!open || (MV.modalOpen && MV.modalOpen())) return;
+      if (mini) { var mk = { MediaPlayPause: 'toggle', MediaTrackNext: 'next', MediaTrackPrevious: 'prev' }[e.key]; if (mk) { e.preventDefault(); act(mk); } return; }
       var sd = document.getElementById('ytSide');
       if (sd && !sd.hidden) {
         var sc = document.getElementById('ytSc');
@@ -5253,19 +5266,21 @@
         if (e.key === 'Escape' || e.key === 'GoBack' || e.key === 'BrowserBack' || e.key === 'ArrowLeft') { e.preventDefault(); e.stopImmediatePropagation(); side(false); return; }
       }
       if (e.key === 'ContextMenu' || e.key === 'Info' || e.key === 'i') { e.preventDefault(); e.stopImmediatePropagation(); act('info'); return; }
-      var k = e.key, map = { Enter: 'toggle', ' ': 'toggle', MediaPlayPause: 'toggle', ArrowLeft: 'back10', ArrowRight: 'fwd10', ArrowUp: 'prev', ArrowDown: 'next', MediaTrackNext: 'next', MediaTrackPrevious: 'prev', Escape: 'close' };
+      var k = e.key, map = { Enter: 'toggle', ' ': 'toggle', MediaPlayPause: 'toggle', ArrowLeft: 'back10', ArrowRight: 'fwd10', ArrowUp: 'prev', ArrowDown: 'next', MediaTrackNext: 'next', MediaTrackPrevious: 'prev', Escape: 'mini' };
       if (map[k]) { e.preventDefault(); e.stopImmediatePropagation(); act(map[k]); }
     }, true);
     window.addEventListener('blur', function () { if (open) setTimeout(function () { if (document.activeElement && document.activeElement.tagName === 'IFRAME') window.focus(); }, 0); });
     return {
       isOpen: function () { return open; },
+      isMini: function () { return open && mini; },
+      mini: function () { setMini(true); },
       play: function (l, i) {
         if (AU.current()) AU.stop();
         // Perfil infantil: el tiempo de YouTube cuenta para el límite diario; si se acaba, se cierra
         if (MV.isKids()) { MV.kidsSessionStart(); clearInterval(kidIv); kidIv = setInterval(function () { if (!open) return; if (+P.kidsLimit > 0 && MV.kidsLeft() <= 0) { close(); kidsTimeUp(); } }, 30000); }
         list = l.slice(); idx = i || 0; open = true;
         clearInterval(progIv); progIv = setInterval(prog, 500);
-        var b = box(); b.hidden = false; b.classList.toggle('tv', !!MV.device.tv); document.body.classList.add('yt-open');
+        var b = box(); b.hidden = false; b.classList.toggle('tv', !!MV.device.tv); b.classList.remove('ytmini'); mini = false; document.body.classList.remove('yt-mini'); document.body.classList.add('yt-open');
         load(); pipSet();
       },
       pause: function () { try { if (player && player.pauseVideo) player.pauseVideo(); } catch (e) {} },
