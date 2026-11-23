@@ -5083,7 +5083,7 @@
     if (!list.length) return html + '<div class="empty glass"><p class="muted">No encontré videos.</p></div>';
     MV._ytList = list;
     return html + '<div class="vgrid">' + list.map(function (v, i) {
-      return '<button class="vcard f" data-act="ytPlay" data-arg="' + i + '" data-fid="y-' + v.id + '" style="animation-delay:' + Math.min(i, 12) * 0.03 + 's"><div class="th"><img loading="lazy" src="' + esc(v.thumb) + '" alt="" onerror="this.remove()">' + (v.live ? '<span class="tag">EN VIVO</span>' : '') + (v.pl ? '<span class="tag">LISTA</span>' : '<span class="vmore" data-act="ytMenu" data-arg="' + yt + ':' + i + '" role="button" aria-label="Más opciones">⋮</span>') + '</div><b>' + esc(v.title) + '</b><span>' + esc(v.channel) + '</span></button>';
+      return '<button class="vcard f" data-act="ytPlay" data-arg="' + i + '" data-fid="y-' + v.id + '" style="animation-delay:' + Math.min(i, 12) * 0.03 + 's"><div class="th"><img loading="lazy" src="' + esc(v.thumb) + '" alt="" onerror="this.remove()">' + (v.live ? '<span class="tag">EN VIVO</span>' : '') + (v.pl ? '<span class="tag">LISTA</span>' : '<span class="vmore" data-act="ytMenu" data-arg="yt:' + i + '" role="button" aria-label="Más opciones">⋮</span>') + '</div><b>' + esc(v.title) + '</b><span>' + esc(v.channel) + '</span></button>';
     }).join('') + '</div>';
   };
   VIEWS.youtube.after = function () { var i = document.getElementById('ytIn'); if (i) i.addEventListener('keydown', function (e) { if (e.key === 'Enter') ACT.ytSearch(); }); var k = document.getElementById('kytIn'); if (k) k.addEventListener('keydown', function (e) { if (e.key === 'Enter') ACT.kytSearch(); }); };
@@ -6112,7 +6112,7 @@
     MV._ytmList = list;
     return html + '<div class="btns" style="margin:0 0 12px"><button class="btn f" data-act="ytmPlay" data-arg="0">' + IC.play + 'Reproducir todo</button><button class="btn ghost f" data-act="ytmShuffle">' + IC.shuffle + 'Aleatorio</button></div>' +
       '<div class="vgrid">' + list.map(function (v, i) {
-        return '<button class="vcard f" data-act="ytmPlay" data-arg="' + i + '" data-fid="ym-' + v.id + '"><div class="th"><img loading="lazy" src="' + esc(v.thumb) + '" alt="" onerror="this.remove()">' + (v.pl ? '<span class="tag">LISTA</span>' : '<span class="vmore" data-act="ytMenu" data-arg="' + ytm + ':' + i + '" role="button" aria-label="Más opciones">⋮</span>') + '</div><b>' + esc(v.title) + '</b><span>' + esc(v.channel) + '</span></button>';
+        return '<button class="vcard f" data-act="ytmPlay" data-arg="' + i + '" data-fid="ym-' + v.id + '"><div class="th"><img loading="lazy" src="' + esc(v.thumb) + '" alt="" onerror="this.remove()">' + (v.pl ? '<span class="tag">LISTA</span>' : '<span class="vmore" data-act="ytMenu" data-arg="ytm:' + i + '" role="button" aria-label="Más opciones">⋮</span>') + '</div><b>' + esc(v.title) + '</b><span>' + esc(v.channel) + '</span></button>';
       }).join('') + '</div>' +
       '<p class="muted" style="font-size:12px;margin-top:14px">Se reproduce en el reproductor de YouTube dentro de MiVibra, una canción tras otra.</p>';
   }
