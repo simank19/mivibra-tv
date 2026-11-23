@@ -1584,3 +1584,8 @@ body.yt-mini .mini { display: none; }
 .vcont .cpo { width: 46px; height: 66px; border-radius: 10px; object-fit: cover; flex: none; box-shadow: 0 6px 16px rgba(0,0,0,.45); }
 .vcont.wcov .hd span, .vcont.wcov .left { color: rgba(255,255,255,.82); }
 .vcont.wcov .hd b { color: #fff; }
+
+/* Ventana flotante de Android (al salir con Inicio): solo el video de YouTube, a pantalla completa dentro de la ventanita */
+html.pip .ytp:not([hidden]) { top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; width: auto !important; height: auto !important; clip-path: none !important; visibility: visible !important; border-radius: 0 !important; border: 0 !important; box-shadow: none !important; z-index: 200 !important; }
+html.pip .ytp .ytvid { position: absolute !important; top: 0; left: 0; right: 0; bottom: 0; height: auto !important; }
+html.pip .ytp .ytmc, html.pip .ytp .xm, html.pip .ytp .ytside { display: none !important; }
