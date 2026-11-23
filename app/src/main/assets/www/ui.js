@@ -2607,7 +2607,29 @@
         (TT ? '<button class="btn sm f" data-act="testEnd">Terminar prueba</button>' : '<button class="btn sm f" data-act="testStart">Apagar todas</button>') + '</div></div>';
     }
     if (MV.acct.isAdmin()) share += '<div class="panel glass"><h2>Modo de prueba</h2><div class="line"><div class="t"><b>Usar mis listas en este equipo</b><span>' + (MV.myOff() ? 'Apagadas solo aquí: ves las listas de tus usuarios que activaste y las de este equipo. Tus usuarios no notan nada.' : 'Apágalo para probar solo con las listas de tus usuarios. No cambia nada para tus usuarios.') + '</span></div><button class="toggle f' + (MV.myOff() ? '' : ' on') + '" data-act="myListsToggle" aria-label="Usar mis listas en este equipo"></button></div></div>' + userListsBlock();
-    return provBlock + share + '<div class="panel glass"><h2>' + (provBlock ? 'Mis listas' : 'Tus listas') + '</h2><p>' + (provBlock ? 'Agrega también tus propias listas: se suman a las incluidas (o las reemplazan si apagas las incluidas) y las usas cuando quieras. El administrador del servicio puede verlas y decidir si las incluye para todos. ' : '') + 'Todo el contenido de tus listas se combina: los canales repetidos aparecen una sola vez y se queda la señal que funciona.' + (MV.acct.isAdmin() ? ' <b>Eres superadministrador:</b> lo que cambies aquí llega a todos los usuarios (las listas en archivo solo quedan en este equipo; usa enlaces para compartirlas).' : '') + '</p>' +
+    // Resumen de este equipo: para comparar con otro equipo cuando "no se ve lo mismo"
+    var sumB = (function () {
+      var on = S.lists.filter(function (l) { return MV.listOn(l); }), all = S.items || [];
+      var cnt = { movie: 0, series: 0, live: 0 }; all.forEach(function (i) { if (cnt[i.type] !== undefined) cnt[i.type]++; });
+      var hid = MV.hiddenByFilters ? MV.hiddenByFilters(all) : 0;
+      var why = [];
+      if (P.stOnlyLinked) why.push('Solo títulos con enlaces');
+      if (P.latOnly) why.push('Solo latino');
+      if (P.hideUnreleased !== false) why.push('Ocultar lo que no se ha estrenado');
+      if (MV.isKids()) why.push('Perfil infantil');
+      if (MV.testOn && MV.testOn()) why.push('Prueba con algunas listas');
+      if (MV.myOff && MV.myOff()) why.push('Modo de prueba (tus listas apagadas aquí)');
+      if (P.provOff) why.push('Listas incluidas apagadas');
+      var loading = on.filter(function (l) { return !l.count && !l.error && l.type !== 'stremio' && l.type !== 'mvplugin'; }).length;
+      var notShared = MV.acct.isAdmin() ? S.lists.filter(function (l) { return MV.listOn(l) && (l.own || l.type === 'file'); }) : [];
+      return '<div class="panel glass"><h2>Resumen de este equipo</h2><p>Si otro equipo muestra menos contenido, compara este resumen en los dos.</p>' +
+        '<div class="line"><div class="t"><b>' + on.length + ' de ' + S.lists.length + ' listas encendidas · versión ' + esc(String((MV.device && MV.device.versionCode) || '—')) + '</b><span>' +
+        cnt.movie.toLocaleString('es') + ' películas · ' + cnt.series.toLocaleString('es') + ' series · ' + cnt.live.toLocaleString('es') + ' canales' + (loading ? ' · aún cargando' : '') + '</span></div></div>' +
+        '<div class="line"><div class="t"><b>Filtros que esconden contenido' + (hid ? ' (' + hid.toLocaleString('es') + ' títulos ocultos)' : '') + '</b><span>' + (why.length ? esc(why.join(' · ')) : 'Ninguno') + '</span></div></div>' +
+        (notShared.length ? '<div class="line"><div class="t"><b>Solo en este equipo (no les llega a tus usuarios)</b><span>' + notShared.map(function (l) { return esc(l.name) + (l.type === 'file' ? ' (archivo)' : ' (solo para ti)'); }).join(' · ') + '. Usa "Compartir con todos" o agrégalas con enlace.</span></div></div>' : '') +
+        '</div>';
+    })();
+    return provBlock + share + sumB + '<div class="panel glass"><h2>' + (provBlock ? 'Mis listas' : 'Tus listas') + '</h2><p>' + (provBlock ? 'Agrega también tus propias listas: se suman a las incluidas (o las reemplazan si apagas las incluidas) y las usas cuando quieras. El administrador del servicio puede verlas y decidir si las incluye para todos. ' : '') + 'Todo el contenido de tus listas se combina: los canales repetidos aparecen una sola vez y se queda la señal que funciona.' + (MV.acct.isAdmin() ? ' <b>Eres superadministrador:</b> lo que cambies aquí llega a todos los usuarios (las listas en archivo solo quedan en este equipo; usa enlaces para compartirlas).' : '') + '</p>' +
       selBar() +
       (ED.length ? listAccordion('my', ED, function (l) {
         if (LSEL) {
