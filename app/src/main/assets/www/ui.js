@@ -3963,7 +3963,15 @@
     streamBrowse: function () { openBrowser(STREAM.tab === 'kick' ? 'https://kick.com/browse' : 'https://www.twitch.tv/directory'); },
     ytmCat: function (c) { YTM.cat = c; YTM.q = ''; YTM.list = null; MV.rerender(); },
     ytmSearch: function () { MV._typedAt = Date.now(); YTM.q = ((document.getElementById('ytmIn') || {}).value || '').trim(); YTM.list = null; MV.rerender(); },
-    ytmPlay: function (i) { if (AU.current()) AU.stop(); YTP.play(MV._ytmList || [], +i); },
+    ytmPlay: function (i) {
+      var l = MV._ytmList || [], v = l[+i];
+      if (v && v.pl) { YTM.cat = 'pli:' + v.pl; YTM.q = ''; YTM.list = null; MV.rerender(); return; }
+      if (AU.current()) AU.stop(); var vids = l.filter(function (x) { return !x.pl; }); YTP.play(vids, Math.max(0, vids.indexOf(v)));
+    },
+    ytmLogin: function () {
+      ytLogin().then(function () { MV.toast('¡Listo! Ya ves tus Me gusta y tus listas', 4000); YTM.cat = 'me:mlikes'; YTM.q = ''; YTM.list = null; YTM.key = ''; MV.rerender(); })
+        .catch(function (e) { if (e.message !== 'cancelado') MV.toast('No se pudo iniciar sesión: ' + e.message, 7000); });
+    },
     musicScan: function () { scanMusic(); },
     musicShuffle: function () { var l = (MUSIC.local || []).slice(); for (var i = l.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = l[i]; l[i] = l[j]; l[j] = t; } AU.play(l, 0); setTimeout(MV.rerender, 50); },
     localPlay: function (i) { AU.play(MUSIC.local || [], +i); setTimeout(MV.rerender, 50); },
@@ -4982,12 +4990,18 @@
     var th = sn.thumbnails || {};
     return { id: id, title: (sn.title || '').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&'), channel: sn.videoOwnerChannelTitle || sn.channelTitle || '', thumb: (th.high || th.medium || th.default || {}).url || '', at: sn.publishedAt || '' };
   }
+  /** Listas de reproducción públicas que coinciden con la búsqueda (se abren con todos sus videos). */
+  function ytPlSearch(q, music) {
+    return ytApi('search?part=snippet&type=playlist&maxResults=12&regionCode=CO&relevanceLanguage=es&safeSearch=' + (MV.isKids() ? 'strict' : 'moderate') + '&q=' + encodeURIComponent(q + (music ? ' playlist música' : ''))).then(function (j) {
+      return (j.items || []).map(function (x) { var id = x.id && x.id.playlistId, sn = x.snippet || {}, th = sn.thumbnails || {}; return id ? { pl: id, id: 'pl-' + id, title: sn.title || 'Lista', channel: 'Lista de reproducción · ' + (sn.channelTitle || ''), thumb: (th.high || th.medium || th.default || {}).url || '' } : null; }).filter(Boolean);
+    }).catch(function () { return []; });
+  }
   function ytMine(cat) {
-    if (cat === 'me:likes') return ytMe('videos?part=snippet&myRating=like&maxResults=50').then(function (j) { return (j.items || []).map(ytItem).filter(Boolean); });
+    if (cat === 'me:likes' || cat === 'me:mlikes') return ytMe('videos?part=snippet&myRating=like&maxResults=50').then(function (j) { return (j.items || []).filter(function (v) { return cat !== 'me:mlikes' || (v.snippet && v.snippet.categoryId === '10'); }).map(ytItem).filter(Boolean); });
     if (cat === 'me:pl') return ytMe('playlists?part=snippet,contentDetails&mine=true&maxResults=50').then(function (j) {
       return (j.items || []).map(function (p) { var sn = p.snippet || {}, th = sn.thumbnails || {}; return { pl: p.id, id: 'pl-' + p.id, title: sn.title || 'Lista', channel: ((p.contentDetails || {}).itemCount || 0) + ' videos', thumb: (th.high || th.medium || th.default || {}).url || '' }; });
     });
-    if (cat.indexOf('pli:') === 0) return ytMe('playlistItems?part=snippet&maxResults=50&playlistId=' + encodeURIComponent(cat.slice(4))).then(function (j) { return (j.items || []).map(ytPlItem).filter(Boolean); });
+    if (cat.indexOf('pli:') === 0) { var pq = 'playlistItems?part=snippet&maxResults=50&playlistId=' + encodeURIComponent(cat.slice(4)); return (ytHasAcct() ? ytMe(pq).catch(function () { return ytApi(pq + ''); }) : ytApi(pq + '')).then(function (j) { return (j.items || []).map(ytPlItem).filter(Boolean); }); }
     // Suscripciones: lo último que subieron tus canales (los 20 primeros), del más nuevo al más viejo
     return ytMe('subscriptions?part=snippet&mine=true&maxResults=50&order=relevance').then(function (j) {
       var ch = (j.items || []).map(function (x) { return x.snippet && x.snippet.resourceId && x.snippet.resourceId.channelId; }).filter(Boolean).slice(0, 20);
@@ -5006,6 +5020,7 @@
     } else {
       job = ytApi('videos?part=snippet&chart=mostPopular&maxResults=40&regionCode=CO&hl=es' + (YT.cat !== 'trend' ? '&videoCategoryId=' + YT.cat : ''));
     }
+    if (YT.q) job = Promise.all([job, ytPlSearch(YT.q)]).then(function (r) { return { list: r[1].slice(0, 6).concat((r[0].items || []).map(ytItem).filter(Boolean)) }; });
     job.then(function (j) { YT.list = j.list || (j.items || []).map(ytItem).filter(Boolean); })
       .catch(function (e) { YT.list = []; YT.error = e.message; })
       .then(function () { YT.loading = false; YT.key = key; if (view.name === 'youtube') MV.rerender(); });
@@ -5111,7 +5126,7 @@
       var nx = list[idx + 1];
       b.innerHTML = '<div id="ytFrame"></div><div class="yttap" data-yt="tap"></div><button class="iconbtn x" data-yt="close" aria-label="Cerrar video">' + IC.close + '</button><div class="ytside" id="ytSide" hidden></div>' +
         '<div class="bar"><div class="ytprog"><span id="ytCur">0:00</span><div class="trk" data-yt="seek"><i id="ytFill"></i></div><span id="ytDur">0:00</span></div><div class="t"><b>' + esc(v.title || '') + '</b><span>' + esc(v.channel || '') + (list.length > 1 ? ' · ' + (idx + 1) + ' de ' + list.length : '') + (nx ? ' · Sigue: ' + esc(nx.title.slice(0, 50)) : '') + '</span></div>' +
-        '<div class="ctl"><button class="iconbtn" data-yt="prev" aria-label="Anterior">' + IC.prev + '</button><button class="iconbtn" data-yt="back10" aria-label="Atrás 10 s">−10</button><button class="iconbtn on" data-yt="toggle" aria-label="Pausa">' + IC.pause + '</button><button class="iconbtn" data-yt="fwd10" aria-label="Adelante 10 s">+10</button><button class="iconbtn" data-yt="next" aria-label="Siguiente">' + IC.next + '</button>' + (MV.isKids() ? '' : '<button class="iconbtn" data-yt="info" aria-label="Detalles y comentarios" style="font-size:12px;width:auto;padding:0 12px">💬 Comentarios</button><button class="iconbtn" data-yt="lyrics" aria-label="Letra">' + IC.lyrics + '</button><button class="iconbtn" data-yt="addpl" aria-label="Añadir a una lista">' + IC.plAdd + '</button>') + '<button class="iconbtn" data-yt="close" aria-label="Cerrar">' + IC.close + '</button></div></div>';
+        '<div class="ctl"><button class="iconbtn" data-yt="prev" aria-label="Anterior">' + IC.prev + '</button><button class="iconbtn" data-yt="back10" aria-label="Atrás 10 s">−10</button><button class="iconbtn on" data-yt="toggle" aria-label="Pausa">' + IC.pause + '</button><button class="iconbtn" data-yt="fwd10" aria-label="Adelante 10 s">+10</button><button class="iconbtn" data-yt="next" aria-label="Siguiente">' + IC.next + '</button>' + (MV.isKids() ? '' : '<button class="iconbtn" data-yt="info" aria-label="Detalles y comentarios" style="font-size:12px;width:auto;padding:0 12px">💬<span class="ytlbl"> Comentarios</span></button><button class="iconbtn" data-yt="lyrics" aria-label="Letra">' + IC.lyrics + '</button><button class="iconbtn" data-yt="addpl" aria-label="Añadir a una lista">' + IC.plAdd + '</button>') + '<button class="iconbtn" data-yt="close" aria-label="Cerrar">' + IC.close + '</button></div></div>';
       b.querySelectorAll('[data-yt]').forEach(function (btn) { btn.onclick = function (e) { e.stopPropagation(); act(btn.dataset.yt, e); }; });
     }
     // Barra de avance: tiempo actual / duración (se toca para saltar a ese punto)
@@ -5973,17 +5988,24 @@
     var key = YTM.cat + '|' + YTM.q;
     if (YTM.key === key || YTM.loading || !P.ytKey) return;
     YTM.loading = true; YTM.error = '';
+    if (!YTM.q && /^(me:|pli:)/.test(YTM.cat)) {
+      ytMine(YTM.cat).then(function (l) { YTM.list = l; }).catch(function (e) { YTM.list = []; YTM.error = e.message; })
+        .then(function () { YTM.loading = false; YTM.key = key; if (view.name === 'music') MV.rerender(); });
+      return;
+    }
     var job = (!YTM.q && YTM.cat === 'top')
       ? ytApi('videos?part=snippet&chart=mostPopular&maxResults=50&regionCode=CO&hl=es&videoCategoryId=10')
       : ytApi('search?part=snippet&type=video&videoCategoryId=10&maxResults=40&regionCode=CO&relevanceLanguage=es&safeSearch=' + (MV.isKids() ? 'strict' : 'moderate') + '&q=' + encodeURIComponent((YTM.q || YTM.cat) + (YTM.q ? '' : ' 2026')));
-    job.then(function (j) { YTM.list = (j.items || []).map(ytItem).filter(Boolean); })
+    if (YTM.q || YTM.cat !== 'top') job = Promise.all([job, ytPlSearch(YTM.q || YTM.cat, true)]).then(function (r) { return { list: r[1].slice(0, YTM.q ? 6 : 4).concat((r[0].items || []).map(ytItem).filter(Boolean)) }; });
+    job.then(function (j) { YTM.list = j.list || (j.items || []).map(ytItem).filter(Boolean); })
       .catch(function (e) { YTM.list = []; YTM.error = e.message; })
       .then(function () { YTM.loading = false; YTM.key = key; if (view.name === 'music') MV.rerender(); });
   }
   function ytMusic() {
     if (!P.ytKey) return '<div class="empty glass"><h2>YouTube Music aquí mismo</h2><p class="muted">Hace falta la clave gratuita de la API de YouTube (la misma de YouTube). ' + (MV.acct.canEdit() ? 'Ponla en Ajustes › Sinopsis y carátulas.' : 'El administrador aún no la ha configurado.') + '</p></div>';
     loadYTM();
-    var html = '<div class="chips">' + YTM_CATS.map(function (c) { return '<button class="chip f' + (!YTM.q && YTM.cat === c[0] ? ' on' : '') + '" data-act="ytmCat" data-arg="' + esc(c[0]) + '">' + esc(c[1]) + '</button>'; }).join('') + '</div>' +
+    var html = '<div class="chips">' + (ytHasAcct() ? [['me:mlikes', 'Mis Me gusta'], ['me:pl', 'Mis listas'], ['me:subs', 'Suscripciones']].map(function (c) { return '<button class="chip f' + (!YTM.q && (YTM.cat === c[0] || (c[0] === 'me:pl' && YTM.cat.indexOf('pli:') === 0)) ? ' on' : '') + '" data-act="ytmCat" data-arg="' + c[0] + '">' + c[1] + '</button>'; }).join('') : '<button class="chip f" data-act="ytmLogin" style="border-color:#ff4e45">Iniciar sesión con mi cuenta</button>') +
+      YTM_CATS.map(function (c) { return '<button class="chip f' + (!YTM.q && YTM.cat === c[0] ? ' on' : '') + '" data-act="ytmCat" data-arg="' + esc(c[0]) + '">' + esc(c[1]) + '</button>'; }).join('') + '</div>' +
       '<div style="display:flex;gap:10px;margin:4px 0 16px;flex-wrap:wrap"><input class="in f" id="ytmIn" value="' + esc(YTM.q) + '" placeholder="Buscar canción, artista o álbum" style="flex:1;min-width:220px" autocomplete="off" enterkeyhint="search"' + (MV.device.tv ? ' inputmode="none"' : '') + '><button class="btn f" data-act="ytmSearch">' + IC.search + 'Buscar</button></div>';
     if (YTM.loading && !YTM.list) return html + '<div class="panel glass" style="display:flex;gap:14px;align-items:center"><div class="spinner"></div><b>Cargando música…</b></div>';
     if (YTM.error) return html + '<div class="panel glass"><p>YouTube respondió: ' + esc(YTM.error) + '</p></div>';
