@@ -5016,9 +5016,9 @@
     if (!YT.q && /^(me:|pli:)/.test(YT.cat)) job = ytMine(YT.cat).then(function (l) { return { items: null, list: l }; });
     else if (YT.q || YT.cat.indexOf('s:') === 0 || ['25', '27'].indexOf(YT.cat) >= 0) {
       var q = YT.q || (YT.cat.indexOf('s:') === 0 ? YT.cat.slice(2) : YT.cat === '25' ? 'noticias en vivo' : 'clase explicada');
-      job = ytApi('search?part=snippet&type=video&maxResults=40&regionCode=CO&relevanceLanguage=es&safeSearch=' + safe + '&q=' + encodeURIComponent(q));
+      job = ytApi('search?part=snippet&type=video&videoEmbeddable=true&maxResults=40&regionCode=CO&relevanceLanguage=es&safeSearch=' + safe + '&q=' + encodeURIComponent(q));
     } else {
-      job = ytApi('videos?part=snippet&chart=mostPopular&maxResults=40&regionCode=CO&hl=es' + (YT.cat !== 'trend' ? '&videoCategoryId=' + YT.cat : ''));
+      job = ytApi('videos?part=snippet,status&chart=mostPopular&maxResults=40&regionCode=CO&hl=es' + (YT.cat !== 'trend' ? '&videoCategoryId=' + YT.cat : '')).then(function (j) { j.items = (j.items || []).filter(function (x) { return !x.status || x.status.embeddable !== false; }); return j; });
     }
     if (YT.q) job = Promise.all([job, ytPlSearch(YT.q)]).then(function (r) { return { list: r[1].slice(0, 6).concat((r[0].items || []).map(ytItem).filter(Boolean)) }; });
     job.then(function (j) { YT.list = j.list || (j.items || []).map(ytItem).filter(Boolean); })
@@ -5104,7 +5104,7 @@
   // La app dejó de verse (pantalla apagada, ventana flotante cerrada): YouTube se pausa
   MV.onHidden = function () { if (MV.ytPlayer && MV.ytPlayer.isOpen()) MV.ytPlayer.pause(); };
   var YTP = MV.ytPlayer = (function () {
-    var player = null, list = [], idx = 0, apiReady = null, hideT = null, open = false, kidIv = null, kidT0 = 0;
+    var player = null, list = [], idx = 0, apiReady = null, hideT = null, open = false, kidIv = null, kidT0 = 0, skips = 0;
     function api() {
       if (apiReady) return apiReady;
       apiReady = new Promise(function (res, rej) {
@@ -5186,12 +5186,16 @@
             onStateChange: function (e) {
               var t = box().querySelector('[data-yt="toggle"]');
               if (t) t.innerHTML = e.data === 1 ? IC.pause : IC.play;
+              if (e.data === 1) skips = 0;
               if (e.data === 0) act('next');
             },
             onError: function (e) {
               var m = { 2: 'Video no válido', 5: 'No se puede reproducir aquí', 100: 'El video ya no existe', 101: 'El dueño no permite verlo fuera de YouTube', 150: 'El dueño no permite verlo fuera de YouTube', 152: 'YouTube bloqueó la reproducción aquí', 153: 'YouTube bloqueó la reproducción aquí' }[e.data] || 'Error ' + e.data;
-              MV.toast(m + '. Abriéndolo en la app de YouTube…', 4000);
-              openApp('youtube', 'https://www.youtube.com/watch?v=' + v.id); close();
+              // No se sale a la app de YouTube: se salta al siguiente que sí se pueda ver aquí (hasta 8 seguidos)
+              v.blocked = true; skips++;
+              if (skips <= 8 && (idx < list.length - 1)) { MV.toast(m + ': pasando al siguiente…', 2500); idx++; load(); return; }
+              if (skips <= 8) { more().then(function (ok) { if (ok && open) { MV.toast(m + ': pasando al siguiente…', 2500); idx++; load(); } else { MV.toast(m + '. Puedes verlo en la app de YouTube.', 5000); close(); } }); return; }
+              MV.toast(m + '. Puedes verlo en la app de YouTube.', 5000); close();
             }
           }
         });
@@ -5204,7 +5208,7 @@
       if (a === 'close') return close();
       if (a === 'info') { side(); return; }
       if (a === 'seek' && ev && player && player.getDuration) { var r = ev.currentTarget.getBoundingClientRect(); player.seekTo(Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)) * player.getDuration(), true); setTimeout(prog, 200); return; }
-      if (a === 'next') { if (idx < list.length - 1) { idx++; load(); } else more().then(function (ok) { if (ok && open) { idx++; load(); } else close(); }); return; }
+      if (a === 'next') { while (idx < list.length - 1 && list[idx + 1].blocked) idx++; if (idx < list.length - 1) { idx++; load(); } else more().then(function (ok) { if (ok && open) { idx++; load(); } else close(); }); return; }
       if (a === 'prev') { if (idx > 0) { idx--; load(); } return; }
       var cv = list[idx] || {};
       if (a === 'lyrics') { MV.lyricsOpen({ title: cv.title, artist: cv.channel, src: 'yt' }); return; }
@@ -5994,8 +5998,8 @@
       return;
     }
     var job = (!YTM.q && YTM.cat === 'top')
-      ? ytApi('videos?part=snippet&chart=mostPopular&maxResults=50&regionCode=CO&hl=es&videoCategoryId=10')
-      : ytApi('search?part=snippet&type=video&videoCategoryId=10&maxResults=40&regionCode=CO&relevanceLanguage=es&safeSearch=' + (MV.isKids() ? 'strict' : 'moderate') + '&q=' + encodeURIComponent((YTM.q || YTM.cat) + (YTM.q ? '' : ' 2026')));
+      ? ytApi('videos?part=snippet,status&chart=mostPopular&maxResults=50&regionCode=CO&hl=es&videoCategoryId=10').then(function (j) { j.items = (j.items || []).filter(function (x) { return !x.status || x.status.embeddable !== false; }); return j; })
+      : ytApi('search?part=snippet&type=video&videoEmbeddable=true&videoCategoryId=10&maxResults=40&regionCode=CO&relevanceLanguage=es&safeSearch=' + (MV.isKids() ? 'strict' : 'moderate') + '&q=' + encodeURIComponent((YTM.q || YTM.cat) + (YTM.q ? '' : ' 2026')));
     if (YTM.q || YTM.cat !== 'top') job = Promise.all([job, ytPlSearch(YTM.q || YTM.cat, true)]).then(function (r) { return { list: r[1].slice(0, YTM.q ? 6 : 4).concat((r[0].items || []).map(ytItem).filter(Boolean)) }; });
     job.then(function (j) { YTM.list = j.list || (j.items || []).map(ytItem).filter(Boolean); })
       .catch(function (e) { YTM.list = []; YTM.error = e.message; })
