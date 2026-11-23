@@ -2553,6 +2553,8 @@
       c = Object.assign(JSON.parse(JSON.stringify(src)), { id: 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), own: true, fromUser: who.email, srcKey: k, enabled: true, added: Date.now(), updatedAt: Date.now() });
       S.lists.push(c);
     }
+    // En la prueba, la lista del usuario también entra (o sale) de las encendidas en este equipo
+    var T = MV.testOn(); if (T) { var i = T.indexOf(c.id); if (c.enabled !== false && i < 0) T.push(c.id); else if (c.enabled === false && i >= 0) T.splice(i, 1); MV.setTestOn(T); }
     MV.saveLists(); MV.syncCatalog().then(MV.rerender); MV.rerender();
     MV.toast(c.enabled !== false ? 'Lista activada' + (c.own ? ' (solo para ti)' : '') : 'Lista apagada');
   };
@@ -2562,6 +2564,14 @@
       if (!ok) return;
       c.own = false; c.enabled = true; c.updatedAt = Date.now(); MV.saveLists(); MV.rerender(); MV.toast('Compartida con todos');
     });
+  };
+  UL_ACTS.testStart = function () {
+    MV.setTestOn([]); MV.toast('Todas las listas apagadas en este equipo. Enciende las que quieras probar.', 4500);
+    MV.syncCatalog().then(MV.rerender); MV.rerender();
+  };
+  UL_ACTS.testEnd = function () {
+    MV.setTestOn(null); MV.toast('Prueba terminada: vuelves a ver todas tus listas', 3500);
+    MV.syncCatalog().then(MV.rerender); MV.rerender();
   };
   UL_ACTS.myListsToggle = function () {
     var off = !MV.myOff(); try { localStorage.setItem('mv:myOff', off ? '1' : '0'); } catch (e) {}
@@ -2590,6 +2600,12 @@
         '<div class="line"><div class="t"><b>' + (MV.acct.pushing ? 'Enviando…' : MV.acct.pushError ? 'No se pudo enviar' : cl === mineN ? '✓ ' + cl + (cl === 1 ? ' lista en la nube' : ' listas en la nube') : 'En la nube hay ' + cl + ' de ' + mineN + ' listas') + '</b><span>' + esc(MV.acct.pushError || (MV.acct.pushedAt ? 'Último envío: ' + MV.fmtTime(MV.acct.pushedAt) : 'Tus usuarios reciben estas listas, las claves y el orden del menú')) + '</span></div>' +
         '<button class="btn sm f" data-act="pushNow">' + IC.refresh + 'Enviar a todos ahora</button></div></div>';
     }
+    if (MV.acct.isAdmin()) {
+      var TT = MV.testOn();
+      share += '<div class="panel glass"><h2>Probar con algunas listas</h2><div class="line"><div class="t"><b>' + (TT ? 'Prueba activa · ' + TT.length + (TT.length === 1 ? ' lista encendida' : ' listas encendidas') : 'Apagar todas las listas para mí') + '</b><span>' +
+        (TT ? 'Solo ves lo que traen las listas que enciendas abajo con su interruptor. Es solo en este equipo: tus usuarios siguen viendo todo igual.' : 'Apaga todas las listas solo en este equipo; luego enciendes con su interruptor las que quieras probar y ves solo su contenido. Tus usuarios no notan nada.') + '</span></div>' +
+        (TT ? '<button class="btn sm f" data-act="testEnd">Terminar prueba</button>' : '<button class="btn sm f" data-act="testStart">Apagar todas</button>') + '</div></div>';
+    }
     if (MV.acct.isAdmin()) share += '<div class="panel glass"><h2>Modo de prueba</h2><div class="line"><div class="t"><b>Usar mis listas en este equipo</b><span>' + (MV.myOff() ? 'Apagadas solo aquí: ves las listas de tus usuarios que activaste y las de este equipo. Tus usuarios no notan nada.' : 'Apágalo para probar solo con las listas de tus usuarios. No cambia nada para tus usuarios.') + '</span></div><button class="toggle f' + (MV.myOff() ? '' : ' on') + '" data-act="myListsToggle" aria-label="Usar mis listas en este equipo"></button></div></div>' + userListsBlock();
     return provBlock + share + '<div class="panel glass"><h2>' + (provBlock ? 'Mis listas' : 'Tus listas') + '</h2><p>' + (provBlock ? 'Agrega también tus propias listas: se suman a las incluidas (o las reemplazan si apagas las incluidas) y las usas cuando quieras. El administrador del servicio puede verlas y decidir si las incluye para todos. ' : '') + 'Todo el contenido de tus listas se combina: los canales repetidos aparecen una sola vez y se queda la señal que funciona.' + (MV.acct.isAdmin() ? ' <b>Eres superadministrador:</b> lo que cambies aquí llega a todos los usuarios (las listas en archivo solo quedan en este equipo; usa enlaces para compartirlas).' : '') + '</p>' +
       selBar() +
@@ -2599,7 +2615,7 @@
           return '<button class="line selrow f' + (on ? ' on' : '') + '" data-act="lselToggle" data-arg="' + l.id + '" data-fid="ls-' + l.id + '" aria-pressed="' + on + '"><i class="chk"></i><div class="t"><b>' + esc(l.name) + '</b><span>' + stateTag(l) + esc(listKind(l)) + ' · ' + (l.count || 0) + ' elementos' + (l.enabled === false ? ' · desactivada' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div></button>';
         }
         return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + stateTag(l) + (l.type === 'xtream' ? 'Xtream Codes · ' + esc(l.host) : l.type === 'fb' ? 'Firebase' + (MV.acct.canEditList(l) ? ' · ' + esc((l.fb || {}).projectId || '') + (l.coll ? ' / ' + esc(l.coll) : '') : '') : l.type === 'web' ? 'Página web' + (MV.acct.canEditList(l) ? ' · ' + esc(l.url) : '') : l.type === 'mvplugin' ? 'Plugin de MiVibra · ' + esc(l.ref || '') : l.type === 'stremio' ? 'Addon de Stremio' : l.type === 'jellyfin' ? 'Jellyfin · ' + esc(l.server) : l.type === 'plex' ? 'Plex · ' + esc(l.server) : l.type === 'stalker' ? 'Portal MAC · ' + esc(l.mac) + ((l.macs || []).length > 1 ? ' (+' + (l.macs.length - 1) + ' de respaldo)' : '') : l.type === 'file' ? 'Archivo' : esc(l.url)) + ' · ' + (l.type === 'stremio' && !l.count ? 'solo da enlaces (sin catálogo)' : (l.count || 0) + ' elementos' + (l.counts ? ' (' + [['live', 'canales'], ['movie', 'películas'], ['series', 'series']].filter(function (t) { return l.counts[t[0]]; }).map(function (t) { return l.counts[t[0]].toLocaleString('es-CO') + ' ' + t[1]; }).join(', ') + ')' : '')) + ((S.hiddenDupes || {})[l.id] ? ' · ' + S.hiddenDupes[l.id] + ' repetidos ocultos' : '') + (l.epg ? ' · con guía' : '') + (l.error ? ' · ' + esc(l.error) : '') + '</span></div>' +
-          '<button class="toggle f' + (l.enabled !== false ? ' on' : '') + '" data-act="listToggle" data-arg="' + l.id + '" aria-label="Activar lista"></button>' +
+          '<button class="toggle f' + ((MV.testOn() ? MV.listOn(l) : l.enabled !== false) ? ' on' : '') + '" data-act="listToggle" data-arg="' + l.id + '" aria-label="Activar lista"></button>' +
           '<button class="iconbtn f" data-act="listEpg" data-arg="' + l.id + '" aria-label="Guía EPG">' + IC.guide + '</button>' +
           '<button class="iconbtn f" data-act="listDelete" data-arg="' + l.id + '" aria-label="Eliminar">' + IC.trash + '</button></div>';
       }) : '<p class="muted">' + (provBlock ? 'Aún no has agregado listas propias.' : 'No has agregado listas.') + '</p>') +
@@ -3929,7 +3945,13 @@
       MV.addList({ type: 'url', name: p.name, url: p.url, preset: true }).then(function () { MV.rerender(); MV.toast('Lista agregada'); }).catch(function (e) { MV.toast(e.message); });
     },
     listToggle: function (id) {
-      var l = S.lists.find(function (x) { return x.id === id; }); if (!MV.acct.canEditList(l)) return; l.enabled = l.enabled === false; if (l.enabled === false) l.error = ''; l.updatedAt = Date.now(); MV.saveLists(); MV.syncCatalog().then(MV.rerender); MV.rerender(); },
+      var l = S.lists.find(function (x) { return x.id === id; });
+      var T = MV.testOn();
+      if (T && l) {   // modo de prueba: solo cambia en este equipo, no se guarda ni se envía a nadie
+        var i = T.indexOf(id); if (i >= 0) T.splice(i, 1); else T.push(id);
+        MV.setTestOn(T); MV.syncCatalog().then(MV.rerender); MV.rerender(); return;
+      }
+      if (!MV.acct.canEditList(l)) return; l.enabled = l.enabled === false; if (l.enabled === false) l.error = ''; l.updatedAt = Date.now(); MV.saveLists(); MV.syncCatalog().then(MV.rerender); MV.rerender(); },
     lselStart: function () { LSEL = {}; MV.rerender(); var r = document.querySelector('.selrow'); if (r) r.focus(); },
     lselCancel: function () { LSEL = null; MV.rerender(); },
     accTog: function (a) { var k = a.split(':')[0], g = a.split(':')[1], c = ACC[k] || {}; ACC[k] = c.g === g ? {} : { g: g, st: 'all' }; MV.rerender(); },

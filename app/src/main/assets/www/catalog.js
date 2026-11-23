@@ -31,7 +31,13 @@
   /** Superadministrador: sus listas compartidas se pueden apagar solo en este equipo (para probar con las de los usuarios). */
   MV.myOff = function () { try { return localStorage.getItem('mv:myOff') === '1'; } catch (e) { return false; } };
   MV.adminShared = function (l) { return !!(l && l.type !== 'file' && !l.own && MV.acct && MV.acct.isAdmin()); };
-  MV.listOn = function (l) { return l.enabled !== false && !(S.prefs.provOff && MV.provList(l)) && !(MV.myOff() && MV.adminShared(l)); };
+  /** Prueba del súper administrador: solo las listas que él activa en ESTE equipo (null = sin prueba). Tus usuarios no notan nada. */
+  MV.testOn = function () { try { var v = localStorage.getItem('mv:testOn'); return v ? JSON.parse(v) : null; } catch (e) { return null; } };
+  MV.setTestOn = function (arr) { try { if (arr) localStorage.setItem('mv:testOn', JSON.stringify(arr)); else localStorage.removeItem('mv:testOn'); } catch (e) {} };
+  MV.listOn = function (l) {
+    var T = MV.testOn(); if (T) return T.indexOf(l.id) >= 0;
+    return l.enabled !== false && !(S.prefs.provOff && MV.provList(l)) && !(MV.myOff() && MV.adminShared(l));
+  };
   MV.saveLists = function () { MV.save('lists', S.lists); MV.sync.later(); if (MV.acct) MV.acct.changed(); };
   /** Listas borradas: se recuerdan (id → fecha) para que se borren también en los otros equipos y no vuelvan a aparecer. */
   MV.listTombs = function () { return MV.load('listsDel', {}) || {}; };
