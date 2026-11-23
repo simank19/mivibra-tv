@@ -5268,15 +5268,25 @@
     var dockIv = null;
     function dock() {
       var b = box(); if (!b || !mini) return;
+      // En el Inicio se queda en su recuadro aunque bajes (sigue sonando y se mueve con la página); en otra pantalla, ventanita flotante
       var hb = view.name === 'home' && !MV.modalOpen() ? document.querySelector('.vlive .scr') : null, r = hb && hb.getBoundingClientRect();
-      var ok = r && r.width > 120 && r.bottom > 60 && r.top < window.innerHeight - 60;
+      var ok = r && r.width > 120;
       b.classList.toggle('ythero', !!ok);
-      b.style.cssText = ok ? 'left:' + r.left + 'px;top:' + r.top + 'px;width:' + r.width + 'px;height:' + r.height + 'px;right:auto;bottom:auto' : '';
+      if (!ok) { b.style.cssText = ''; return; }
+      // Se recorta lo que quedaría encima de la barra de arriba o del menú de abajo
+      var qb = document.querySelector('.qbar'), topLim = qb ? Math.max(0, qb.getBoundingClientRect().bottom) : 0;
+      var sd = document.querySelector('.side'), sr = sd && sd.getBoundingClientRect(), botLim = sr && sr.top > window.innerHeight / 2 ? sr.top : window.innerHeight;
+      var cT = Math.max(0, topLim - r.top), cB = Math.max(0, r.bottom - botLim), gone = cT + cB >= r.height - 2;
+      b.style.cssText = 'left:' + r.left + 'px;top:' + r.top + 'px;width:' + r.width + 'px;height:' + r.height + 'px;right:auto;bottom:auto;' +
+        'clip-path:inset(' + Math.round(cT) + 'px 0 ' + Math.round(cB) + 'px 0 round 18px);' + (gone ? 'visibility:hidden;' : '');
     }
+    var dockRaf = 0;
+    document.addEventListener('scroll', function () { if (mini && !dockRaf) dockRaf = requestAnimationFrame(function () { dockRaf = 0; dock(); }); }, true);
+    window.addEventListener('resize', function () { if (mini) dock(); });
     function setMini(on) {
       mini = !!on; var b = box(); if (!b) return;
       clearInterval(dockIv); dockIv = null;
-      if (mini) { try { pvStop(); } catch (e) {} dockIv = setInterval(dock, 150); setTimeout(dock, 0); }
+      if (mini) { try { pvStop(); } catch (e) {} dockIv = setInterval(dock, 100); setTimeout(dock, 0); }
       else { b.classList.remove('ythero'); b.style.cssText = ''; }
       b.classList.toggle('ytmini', mini); document.body.classList.toggle('yt-open', !mini); document.body.classList.toggle('yt-mini', mini);
       var sd = document.getElementById('ytSide'); if (sd && mini) { sd.hidden = true; b.classList.remove('ytsideon'); }
