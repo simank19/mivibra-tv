@@ -2905,7 +2905,7 @@
         var srcs = it.srcs || {}, nm0 = MV.cleanTitle(it.name) || it.name;
         var lst = [url].concat(alts).filter(function (u, k, a) { return u && a.indexOf(u) === k; }).map(function (u, k) {
           var ln = listName(srcs[u] || (k === 0 ? it.list : ''));
-          return { url: u, name: ln || (k === 0 ? 'Tu lista' : 'Otra fuente · ' + (hostOf(u) || '')) };
+          return { url: u, kind: 'tu lista', name: ln || (k === 0 ? 'Tu lista' : 'Otra fuente · ' + (hostOf(u) || '')) };
         });
         var hasAd = it.type === 'movie' && MV.stHasStreamers && MV.stHasStreamers();
         smartPick({ title: nm0, it: it, list: lst, opts: { name: nm0, alt: it.orig || '', year: it.year || '', olang: it.olang || '' },
@@ -3037,7 +3037,7 @@
     // Elegir de dónde reproducir el capítulo (tu lista y tus addons, probados en segundo plano)
     if (P.askSource !== false && !picked && !e._fbDone && !(series._stAuto && series._stLid) && !(e.url && /^(file:|stalker:)/.test(e.url)) && !e.stk && !MV.dlLocal(series.key + '#' + e.season + 'x' + e.ep)) {
       var nmS = MV.cleanTitle(series.name) || series.name, lstE = [];
-      if (e.url) lstE.push({ url: e.url, ua: e.ua, ref: e.ref, name: listName(series.list) || 'Tu lista' });
+      if (e.url) lstE.push({ url: e.url, ua: e.ua, ref: e.ref, kind: 'tu lista', name: listName(series.list) || 'Tu lista' });
       (e.alts || []).forEach(function (u) { lstE.push({ url: u, name: 'Otra fuente · ' + (hostOf(u) || '') }); });
       smartPick({ title: nmS + ' · T' + e.season + ' E' + e.ep, it: null, list: lstE, opts: { name: nmS, alt: series.orig || '', olang: series.olang || '', year: series.year || '' }, addon: function () { return epAddonId(series, e); } })
         .then(function (r) {
@@ -3189,16 +3189,22 @@
       var el = document.getElementById('spS' + i); if (el) { el.innerHTML = html; el.style.color = color; }
       var r = document.getElementById('spR' + i); if (r && dim) r.style.opacity = '.55';
     }
+    var adMsg = o.addon ? 'Buscando en tus addons…' : '';
     function banner() {
       var b = document.getElementById('spBest'); if (!b) return;
+      var ad = adMsg ? '<p class="muted" style="margin:2px 0 8px;font-size:.88em">' + esc(adMsg) + '</p>' : '';
       if (best >= 0) {
-        var x = SRC[best];
-        b.innerHTML = '<button class="btn f" data-act="spPick" data-arg="' + best + '" id="spGo" style="width:100%;background:#3ecf8e;color:#0b1a12;border-color:#3ecf8e">▶ Funciona en: ' + esc(x.name) + '</button>';
-        if (!touched) { var g = document.getElementById('spGo'); if (g) g.focus(); }
+        // Todas las que funcionan, la más rápida primero (de tu lista y de cada addon)
+        var okL = SRC.map(function (x, i) { return { x: x, i: i }; }).filter(function (o2) { return o2.x.ok; }).sort(function (a2, b2) { return (a2.x.ms || 0) - (b2.x.ms || 0); }).slice(0, 5);
+        var first = !document.getElementById('spGo');
+        b.innerHTML = okL.map(function (o2, k) {
+          return '<button class="btn f" data-act="spPick" data-arg="' + o2.i + '"' + (k ? '' : ' id="spGo"') + ' style="width:100%;margin-bottom:6px;justify-content:flex-start;background:' + (k ? 'rgba(62,207,142,.18)' : '#3ecf8e') + ';color:' + (k ? '#c9f5e2' : '#0b1a12') + ';border-color:#3ecf8e">▶ Funciona en: ' + esc(o2.x.name) + (o2.x.kind ? ' <small style="opacity:.75;margin-left:6px">' + esc(o2.x.kind) + '</small>' : '') + '</button>';
+        }).join('') + ad;
+        if (!touched && first) { var g = document.getElementById('spGo'); if (g) g.focus(); }
       } else if (addonsDone && qi >= SRC.length && !probing && canProbe) {
-        b.innerHTML = '<p class="muted" style="margin:4px 0">' + (SRC.length ? 'Ninguna fuente respondió a la prueba. Puedes intentar igual con cualquiera.' : 'No encontré fuentes para este título.') + '</p>';
+        b.innerHTML = '<p class="muted" style="margin:4px 0">' + (SRC.length ? 'Ninguna fuente respondió a la prueba. Puedes intentar igual con cualquiera.' : 'No encontré fuentes para este título.') + '</p>' + ad;
       } else {
-        b.innerHTML = '<p class="muted" style="margin:4px 0">Buscando la que funciona' + (addonsDone ? '' : ' (también en tus addons)') + '…</p>';
+        b.innerHTML = '<p class="muted" style="margin:4px 0">Buscando la que funciona…</p>' + ad;
       }
     }
     // Se prueban de a 3 a la vez; cada resultado se muestra apenas llega
@@ -3210,7 +3216,7 @@
           var x = SRC[i];
           MV.call('probe', [JSON.stringify([{ url: x.url, ua: x.ua || (o.it && o.it.ua) || '', ref: x.ref || (o.it && o.it.ref) || '' }])]).then(function (res) {
             var r = res && res[0];
-            if (r && r.ok) { x.ok = true; status(i, '✓ Funciona · ' + (r.ms / 1000).toFixed(1) + ' s', '#3ecf8e'); if (best < 0) best = i; }
+            if (r && r.ok) { x.ok = true; x.ms = r.ms; status(i, '✓ Funciona · ' + (r.ms / 1000).toFixed(1) + ' s', '#3ecf8e'); if (best < 0) best = i; }
             else status(i, '✕ No responde' + (r && r.code ? ' (' + r.code + ')' : ''), '#ff6b6b', true);
           }).catch(function () { status(i, 'Sin probar', '#9aa0a6'); }).then(function () { probing--; banner(); pump(); });
         })(qi++);
@@ -3234,16 +3240,24 @@
       if (!SRC.length) { var f = document.querySelector('[data-act="confirmNo"]'); if (f) f.focus(); } else { var r0 = document.getElementById('spR0'); if (r0) r0.focus(); }
       if (o.addon) {
         o.addon().then(function (ad) {
-          if (!ad || !ad.id || done) return [];
+          if (!ad || !ad.id || done) { adMsg = 'No pude identificar este título para buscarlo en tus addons.'; return []; }
+          MV._stTorrents = 0; MV._stTorSrc = []; MV._stDiag = {};
           return MV.stremioStreams(ad.type, ad.id).then(function (st) {
             st = (st || []).filter(function (x) { return x.url; });
             if (MV.stAutoSort) st = MV.stAutoSort(st.slice(), o.opts || { name: o.title }, ad.anime);
+            // Qué dijo cada addon (para que sepas por qué alguno no aparece)
+            var D = MV._stDiag || {}, names = Object.keys(D);
+            var withL = names.filter(function (n) { return typeof D[n] === 'number' && D[n] > 0; });
+            if (!names.length) st.forEach(function (x) { var n = listName(x.lid); if (n && withL.indexOf(n) < 0) withL.push(n); });   // (ya estaban pedidos)
+            var without = names.filter(function (n) { return withL.indexOf(n) < 0; }).map(function (n) { return n + (typeof D[n] === 'string' && D[n] ? ' (' + D[n] + ')' : ' (sin enlaces)'); });
+            adMsg = (withL.length ? 'Addons con enlaces: ' + withL.join(', ') + '. ' : 'Tus addons no tienen enlaces directos para este título. ') + (without.length ? 'Sin enlaces: ' + without.join(', ') + '.' : '');
             return st.slice(0, 14).map(function (x) {
-              var lang = MV.stLang ? MV.stLang(x) : '';
-              return { url: x.url, ua: x.ua, ref: x.ref, lid: x.lid, src: x.src, name: (x.src || 'Addon').replace(/\s+/g, ' ').slice(0, 40), tags: [lang === 'lat' ? 'Latino' : lang === 'cast' ? 'Castellano' : lang === 'sub' ? 'Subtitulado' : '', String(x.title || '').split(/\n/)[0].slice(0, 60)] };
+              var lang = MV.stLang ? MV.stLang(x) : '', ln = listName(x.lid) || 'Addon';
+              var label = String(x.src || '').replace(/\s+/g, ' ').trim();
+              return { url: x.url, ua: x.ua, ref: x.ref, lid: x.lid, src: x.src, kind: 'addon', name: ln + (label && label.toLowerCase() !== ln.toLowerCase() ? ' · ' + label.slice(0, 30) : ''), tags: [lang === 'lat' ? 'Latino' : lang === 'cast' ? 'Castellano' : lang === 'sub' ? 'Subtitulado' : '', String(x.title || '').split(/\n/)[0].slice(0, 60)] };
             });
           });
-        }).catch(function () { return []; }).then(function (list) { addonsDone = true; if (!done) add(list); });
+        }).catch(function () { adMsg = 'Tus addons no respondieron.'; return []; }).then(function (list) { addonsDone = true; if (!done) { add(list); banner(); } });
       }
     });
   }
