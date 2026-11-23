@@ -2524,6 +2524,19 @@
   /** Superadministrador: listas que agregaron tus usuarios (apagadas hasta que decidas usarlas). */
   function ulKey(d, l) { return d.uid + ':' + l.id; }
   function ulCopy(k) { return S.lists.find(function (x) { return x.srcKey === k; }); }
+  /** Compartir con todos: la lista deja de ser "solo para ti" (también sus copias repetidas, que se quitan). */
+  function sameSrc(a, b) { return a !== b && ((a.srcKey && a.srcKey === b.srcKey) || (a.url && a.url === b.url) || (a.type === 'xtream' && b.type === 'xtream' && a.host === b.host && a.user === b.user) || (a.type === 'stalker' && b.type === 'stalker' && a.url === b.url && a.mac === b.mac)); }
+  function shareList(c) {
+    var dup = S.lists.filter(function (x) { return x.own && sameSrc(c, x); });
+    if (dup.length) { S.lists = S.lists.filter(function (x) { return dup.indexOf(x) < 0; }); }
+    c.own = false; c.enabled = true; c.updatedAt = Date.now();
+    MV.saveLists(); if (MV.acct.push) MV.acct.push({ forced: Date.now() }).catch(function () {}); MV.rerender();
+  }
+  UL_ACTS.lsShare = function (id) {
+    var c = S.lists.find(function (x) { return x.id === id; }); if (!c) return;
+    if (c.type === 'file') { MV.toast('Las listas en archivo no se pueden compartir: agrégala con su enlace (URL) para que les llegue a todos.', 6000); return; }
+    MV.confirm('¿Compartir «' + c.name + '» con todos?', 'Todos tus usuarios la recibirán.', 'Compartir').then(function (ok) { if (ok) { shareList(c); MV.toast('Compartida con todos'); } });
+  };
   function userListsBlock() {
     var A2 = MV.acct;
     if (A2.userLists == null && !A2.userListsLoading) setTimeout(function () { A2.loadUserLists(); }, 0);
@@ -2562,7 +2575,7 @@
     var c = ulCopy(k); if (!c) return;
     MV.confirm('¿Compartir «' + c.name + '» con todos?', 'Todos tus usuarios la recibirán con sus listas incluidas.', 'Compartir').then(function (ok) {
       if (!ok) return;
-      c.own = false; c.enabled = true; c.updatedAt = Date.now(); MV.saveLists(); MV.rerender(); MV.toast('Compartida con todos');
+      shareList(c); MV.toast('Compartida con todos');
     });
   };
   UL_ACTS.testStart = function () {
@@ -2626,7 +2639,10 @@
         '<div class="line"><div class="t"><b>' + on.length + ' de ' + S.lists.length + ' listas encendidas · versión ' + esc(String((MV.device && MV.device.versionCode) || '—')) + '</b><span>' +
         cnt.movie.toLocaleString('es') + ' películas · ' + cnt.series.toLocaleString('es') + ' series · ' + cnt.live.toLocaleString('es') + ' canales' + (loading ? ' · aún cargando' : '') + '</span></div></div>' +
         '<div class="line"><div class="t"><b>Filtros que esconden contenido' + (hid ? ' (' + hid.toLocaleString('es') + ' títulos ocultos)' : '') + '</b><span>' + (why.length ? esc(why.join(' · ')) : 'Ninguno') + '</span></div></div>' +
-        (notShared.length ? '<div class="line"><div class="t"><b>Solo en este equipo (no les llega a tus usuarios)</b><span>' + notShared.map(function (l) { return esc(l.name) + (l.type === 'file' ? ' (archivo)' : ' (solo para ti)'); }).join(' · ') + '. Usa "Compartir con todos" o agrégalas con enlace.</span></div></div>' : '') +
+        (notShared.length ? '<h3 style="margin:14px 0 6px">Solo tuyas (no les llegan a tus usuarios)</h3>' + notShared.map(function (l) {
+          return '<div class="line"><div class="t"><b>' + esc(l.name) + '</b><span>' + (l.type === 'file' ? 'Lista en archivo: solo existe en este equipo. Para compartirla, agrégala con su enlace.' : 'Solo para ti' + (l.fromUser ? ' · la activaste de ' + esc(l.fromUser) : '')) + '</span></div>' +
+            (l.type === 'file' ? '' : '<button class="btn sm f" data-act="lsShare" data-arg="' + l.id + '">Compartir con todos</button>') + '</div>';
+        }).join('') : '') +
         '</div>';
     })();
     return provBlock + share + sumB + '<div class="panel glass"><h2>' + (provBlock ? 'Mis listas' : 'Tus listas') + '</h2><p>' + (provBlock ? 'Agrega también tus propias listas: se suman a las incluidas (o las reemplazan si apagas las incluidas) y las usas cuando quieras. El administrador del servicio puede verlas y decidir si las incluye para todos. ' : '') + 'Todo el contenido de tus listas se combina: los canales repetidos aparecen una sola vez y se queda la señal que funciona.' + (MV.acct.isAdmin() ? ' <b>Eres superadministrador:</b> lo que cambies aquí llega a todos los usuarios (las listas en archivo solo quedan en este equipo; usa enlaces para compartirlas).' : '') + '</p>' +
