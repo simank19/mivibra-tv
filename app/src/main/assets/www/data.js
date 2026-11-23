@@ -191,7 +191,8 @@
     music: /\b(m[uú]sica|music|radio)\b/i,
     sports: /\b(deportes?|sports?|f[uú]tbol|soccer|futbol)\b/i,
     news: /\b(noticias|news)\b/i,
-    episode: /\b[sS](\d{1,2})\s*[eE](\d{1,3})\b|\b(\d{1,2})x(\d{1,3})\b/
+    // Capítulo en el nombre: S01E02 · S01 E02 · 1x02 · T1 E2 · Temporada 1 Capítulo 2 · Cap 2 · Capítulo 02 · Episodio 2 · Ep 2
+    episode: /\b[sS](\d{1,2})\s*[-._]?\s*[eE](\d{1,3})\b|\b(\d{1,2})x(\d{1,3})\b|\b(?:t|temp|temporada|season)\.?\s*(\d{1,2})\s*[-._,:]*\s*(?:e|ep|cap|cap[ií]tulo|episodio|episode)\.?\s*(\d{1,4})(?!\d)|\b(?:cap|cap[ií]tulo|episodio|episode|ep)\.?\s*#?\s*(\d{1,4})(?!\d)/i
   };
 
   // Separadores por plataforma: según el nombre de la categoría en la lista (solo texto, sin logos)

@@ -339,7 +339,10 @@
     return o;
   }
   function showName(name) {
-    return String(name).replace(RX.episode, '').replace(/[-–|:]\s*$/, '').replace(/\s{2,}/g, ' ').trim() || name;
+    var str = String(name), m = str.match(RX.episode);
+    // Se corta en la marca del capítulo ("Serie S01E02 - Título del capítulo" → "Serie")
+    if (m && m.index > 2) str = str.slice(0, m.index); else str = str.replace(RX.episode, '');
+    return str.replace(/\[[^\]]*\]/g, ' ').replace(/[-–|:.,]\s*$/, '').replace(/\s{2,}/g, ' ').trim() || name;
   }
 
   /** Convierte las entradas de una lista en canales, películas y series. */
@@ -350,11 +353,14 @@
     entries.forEach(function (e) {
       var t = classify(e, liveList);
       if (t === 'episode') {
-        var sn = showName(e.name), sk = 'series:' + MV.norm(sn);
+        var m = e.name.match(RX.episode) || [], sn, tn = null;
+        // Sin marca de capítulo pero en una categoría de series: "Serie 03" / "Serie - 3" → capítulo 3 de "Serie"
+        if (!m.length) tn = String(e.name).match(/^(.*?\D)[\s\-–_#.]+(\d{1,3})\s*$/);
+        sn = tn ? tn[1].replace(/[-–|:.,\s]+$/, '').trim() : showName(e.name);
+        var sk = 'series:' + MV.norm(sn);
         var s = seriesMap[sk];
         if (!s) { s = seriesMap[sk] = tags({ key: sk, type: 'series', name: sn, poster: e.logo, group: e.group, list: list.id, episodes: [] }); res.push(s); }
-        var m = e.name.match(RX.episode) || [];
-        s.episodes.push({ season: +(m[1] || m[3] || 1), ep: +(m[2] || m[4] || s.episodes.length + 1), title: MV.noEmoji(e.name), url: e.url, ua: e.ua, ref: e.ref });
+        s.episodes.push({ season: +(m[1] || m[3] || m[5] || 1), ep: +(m[2] || m[4] || m[6] || m[7] || (tn && tn[2]) || s.episodes.length + 1), title: MV.noEmoji(e.name), url: e.url, ua: e.ua, ref: e.ref });
       } else if (t === 'book') {
         var fx = (String(e.url).split(/[?#]/)[0].match(/\.(\w{2,4})$/) || ['', ''])[1].toLowerCase();
         res.push({ key: 'book:' + MV.norm(e.name) + ':' + MV.hash(e.url), type: 'book', name: MV.noEmoji(e.name) || e.name, poster: e.logo, group: MV.noEmoji(e.group || ''), url: e.url, ua: e.ua, ref: e.ref, list: list.id, fmt: fx, kind: bookKind(e) });
@@ -1436,6 +1442,9 @@
     return MV.idbGet(ck).then(function (cached) {
       // Las páginas web se actualizan cada hora (tus series nuevas aparecen solas); lo demás cada 12 horas
       var fresh = cached && cached.ts > Date.now() - (list.type === 'web' || list.type === 'fb' || list.type === 'books' ? 3600e3 : 12 * 3600e3) && cached.v === 8;
+      // Listas M3U guardadas antes de juntar los capítulos en una sola serie: se vuelven a leer una vez
+      var m3u = !list.type || list.type === 'm3u' || list.type === 'file';
+      if (m3u && cached && cached.gv !== 2) { fresh = false; stale = false; }
       // Addons: si quedaron vacíos o se guardaron con una versión anterior de la app, se vuelven a pedir
       if (fresh && (list.type === 'stremio' || list.type === 'mvplugin') && (!cached.items.length || cached.sv !== ST_V)) fresh = false;
       // "Actualizar addons al abrir la app": la primera carga de cada sesión se pide de nuevo
@@ -1493,7 +1502,7 @@
         // Para borrar listas vacías sin equivocarse: se recuerda si alguna vez trajo contenido y cuántas veces seguidas llegó vacía
         if (items.length) { list.hadItems = true; list.zeroLoads = 0; } else list.zeroLoads = (list.zeroLoads || 0) + 1;
         // Incompleta: se guarda como "vieja" para que se vuelva a pedir en la próxima actualización (no en 12 horas)
-        MV.idbSet(ck, { ts: partial ? Date.now() - 12 * 3600e3 : Date.now(), v: 8, sv: ST_V, items: items, deep: deep }); listStamp(list.id);
+        MV.idbSet(ck, { ts: partial ? Date.now() - 12 * 3600e3 : Date.now(), v: 8, gv: 2, sv: ST_V, items: items, deep: deep }); listStamp(list.id);
         if (list.type === 'stremio') { var dm = MV.load('listDeep', {}) || {}; dm[list.id] = deep ? 1 : 0; MV.save('listDeep', dm); }
         return items;
       }).catch(function (e) {
