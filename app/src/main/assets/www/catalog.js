@@ -1390,7 +1390,7 @@
    */
   MV.loadEpisodes = function (item, onFresh) {
     if (item._epsAt && Date.now() - item._epsAt < 30 * 60e3 && (item.episodes || []).length) return Promise.resolve(item.episodes);
-    var k = 'eps:' + item.key;
+    var k = 'eps:' + item.key + (item.xtMore && item.xtMore.length ? ':' + (item.xtMore.length + 1) : '');
     function fresh() {
       return fetchEpisodes(item).then(function (e) { item._epsAt = Date.now(); if (e && e.length) { MV.idbSet(k, { ts: Date.now(), eps: e }); MV.markAliveKey(item.key); } else if (item.type === 'series') MV.markDeadKey(item.key); return e || []; });
     }
@@ -1417,21 +1417,40 @@
       return MV.stremioEpisodes(item).then(function (e2) { if (e2.length) item.episodes = e2; return e2; }).catch(function () { return eps || []; });
     };
     if (!item.xt) return byAddons(item.episodes || []);
-    var list = S.lists.find(function (l) { return l.id === item.xt.list; });
+    // Proveedores que ponen cada capítulo como una "serie" aparte: se piden todas y se juntan
+    if (item.xtMore && item.xtMore.length) {
+      var all = [item.xt].concat(item.xtMore);
+      return Promise.all(all.map(function (x) { return xtSeriesEps(x, item).catch(function () { return []; }); })).then(function (arr) {
+        var have = {}, eps = [];
+        arr.forEach(function (a) { a.forEach(function (e) { var k2 = e.season + 'x' + e.ep; if (!have[k2]) { have[k2] = 1; eps.push(e); } }); });
+        eps.sort(function (a, b) { return a.season - b.season || a.ep - b.ep; });
+        item.episodes = eps; return eps;
+      }).then(byAddons);
+    }
+    return xtSeriesEps(item.xt, item).then(function (eps) { item.episodes = eps; return eps; }).then(byAddons);
+  }
+  /** Título del capítulo sin el nombre de la serie ni la marca de temporada ("Serie (2026) S01 Serie - - Título" → "Título"). */
+  function epTitle(t, series) {
+    var x = MV.noEmoji(t || ''), nm = String(series || '').trim();
+    if (nm) x = x.split(nm).join(' ');
+    x = x.replace(/\((19|20)\d{2}\)/g, ' ').replace(RX.episode, ' ').replace(/\b[sS]\d{1,2}\b/g, ' ').replace(/^[\s\-–|:.,]+|[\s\-–|:.,]+$/g, '').replace(/\s*[-–]\s*[-–]\s*/g, ' - ').replace(/\s{2,}/g, ' ').trim();
+    return x;
+  }
+  function xtSeriesEps(xt, item) {
+    var list = S.lists.find(function (l) { return l.id === xt.list; });
     if (!list) return Promise.resolve([]);
     var base = xtBase(list), u = encodeURIComponent(list.user), p = encodeURIComponent(list.pass);
-    return xtGet(list, 'get_series_info', '&series_id=' + item.xt.id).then(function (j) {
+    return xtGet(list, 'get_series_info', '&series_id=' + xt.id).then(function (j) {
       var eps = [];
       var src = j.episodes || {};
       Object.keys(src).forEach(function (season) {
         (src[season] || []).forEach(function (e) {
-          eps.push({ season: +season, ep: +e.episode_num, title: MV.noEmoji(e.title) || ('Episodio ' + e.episode_num), url: base + '/series/' + u + '/' + p + '/' + e.id + '.' + (e.container_extension || 'mp4'), ua: list.ua || '', plot: e.info && e.info.plot, img: e.info && e.info.movie_image });
+          eps.push({ season: +season, ep: +e.episode_num, title: epTitle(e.title, item.name) || ('Episodio ' + e.episode_num), url: base + '/series/' + u + '/' + p + '/' + e.id + '.' + (e.container_extension || 'mp4'), ua: list.ua || '', plot: e.info && e.info.plot, img: e.info && e.info.movie_image });
         });
       });
       if (j.info) { item.plot = item.plot || j.info.plot; item.backdrop = item.backdrop || (j.info.backdrop_path && j.info.backdrop_path[0]); }
-      item.episodes = eps;
       return eps;
-    }).then(byAddons);
+    });
   }
 
   // ---------- Carga y combinación de todas las listas ----------
@@ -1906,9 +1925,11 @@
     }
     function each(it) {
         // Una entrada por temporada: sus capítulos pasan a esa temporada para juntarse con las demás
-        if (dedupe && it.type === 'series' && it.episodes && it.episodes.length) {
-          var sn = seasonOf(it.name);
-          if (sn > 1 && it.episodes.every(function (e) { return (e.season || 1) <= 1; })) it.episodes.forEach(function (e) { e.season = sn; });
+        if (dedupe && it.type === 'series') {
+          var sn = seasonOf(it.name), nm0 = String(it.name || ''), mk = nm0.match(SEASON_RX) || nm0.match(RX.episode);
+          // "El cuerpo (2026) S01 El cuerpo (2026) - - Jesús, literalmente" → serie "El cuerpo (2026)"
+          if (mk && mk.index > 2) { var base0 = nm0.slice(0, mk.index).replace(/[-–|:.,\s]+$/, '').trim(); if (base0.length > 1) { it.fullName = it.fullName || nm0; it.name = base0; } }
+          if (sn > 1 && it.episodes && it.episodes.length && it.episodes.every(function (e) { return (e.season || 1) <= 1; })) it.episodes.forEach(function (e) { e.season = sn; });
         }
         var ln = it.type === 'live' ? liveName(it.name) : '', nk = ln ? 'n:' + (it.country || '') + ':' + ln : '';
         var ids = idents(it), q = qScore(it);
@@ -1928,6 +1949,9 @@
             else if (it.url && it.url !== ex.url) { ex.alts = ex.alts || []; if (ex.alts.length < 6 && ex.alts.indexOf(it.url) < 0) ex.alts.push(it.url); }
             if (!it.stk && !ex.stk) { ex.qs = ex.qs || {}; ex.qs[ex.url] = ex.qs[ex.url] || ex.q || 15; if (it.url) ex.qs[it.url] = q; ex.cands = [ex.url].concat(ex.alts || []); }
           } else if (it.type === 'series') {
+            // Cada "serie" del servidor Xtream que en realidad es un capítulo: se guardan todas para pedir sus capítulos
+            var xts = [ex.xt].concat(ex.xtMore || [], [it.xt], it.xtMore || []).filter(Boolean), seenX = {};
+            xts = xts.filter(function (x) { var kx = x.list + ':' + x.id; if (seenX[kx]) return false; seenX[kx] = 1; return true; });
             var better = q > (ex.q || 15) || (q === (ex.q || 15) && (it.episodes || []).length > (ex.episodes || []).length + 2);
             var other = better ? (ex.episodes || []) : (it.episodes || []);
             if (better) swapIn(ex, it);
@@ -1936,6 +1960,7 @@
               var have = {}; ex.episodes.forEach(function (e) { have[e.season + 'x' + e.ep] = 1; });
               other.forEach(function (e) { if (!have[e.season + 'x' + e.ep]) { ex.episodes.push(e); have[e.season + 'x' + e.ep] = 1; } });
             }
+            if (xts.length > 1) { ex.xt = ex.xt || xts[0]; ex.xtMore = xts.filter(function (x) { return !(x.list === ex.xt.list && x.id === ex.xt.id); }).slice(0, 400); }
           } else {
             if (q > (ex.q || 15)) swapIn(ex, it);
             else if (it.url && it.url !== ex.url && !it.stk) { ex.alts = ex.alts || []; if (ex.alts.length < 6 && ex.alts.indexOf(it.url) < 0) ex.alts.push(it.url); }
