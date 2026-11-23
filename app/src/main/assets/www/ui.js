@@ -2619,7 +2619,7 @@
           '<button class="iconbtn f" data-act="listEpg" data-arg="' + l.id + '" aria-label="Guía EPG">' + IC.guide + '</button>' +
           '<button class="iconbtn f" data-act="listDelete" data-arg="' + l.id + '" aria-label="Eliminar">' + IC.trash + '</button></div>';
       }) : '<p class="muted">' + (provBlock ? 'Aún no has agregado listas propias.' : 'No has agregado listas.') + '</p>') +
-      '<div class="line"><div class="t"><b>Elegir de dónde reproducir</b><span>Apagado (recomendado): la película arranca sola con el mejor enlace de todas tus fuentes (listas, Xtream y addons) y las demás quedan de respaldo. Encendido: antes muestra la lista para escoger.</span></div><button class="toggle f' + (P.askSource === true ? ' on' : '') + '" data-act="askSrcToggle" aria-label="Elegir de dónde reproducir"></button></div>' +
+      '<div class="line"><div class="t"><b>Elegir de dónde reproducir</b><span>Encendido: antes de ver una película o capítulo te muestra tus fuentes (listas, Xtream y addons); mientras eliges, la app las prueba y te marca cuál funciona. Apagado: arranca sola con el mejor enlace.</span></div><button class="toggle f' + (P.askSource !== false ? ' on' : '') + '" data-act="askSrcToggle" aria-label="Elegir de dónde reproducir"></button></div>' +
       '<div class="line"><div class="t"><b>Cargar el catálogo completo de los addons</b><span>Después de abrir, sigue pidiendo en segundo plano todas las páginas de cada catálogo (anime, películas, series…) hasta traerlo todo. Apágalo si tu equipo va lento.</span></div><button class="toggle f' + (P.stDeep !== false ? ' on' : '') + '" data-act="stDeepToggle"></button></div>' +
       '<div class="line"><div class="t"><b>Actualizar addons al abrir la app</b><span>Vuelve a pedir los catálogos de tus addons cada vez que abres MiVibra (si está apagado, se guardan 12 horas).</span></div><button class="toggle f' + (P.stAutoRefresh ? ' on' : '') + '" data-act="stAutoToggle" aria-label="Actualizar addons al abrir la app"></button></div>' +
       '<div class="line"><div class="t"><b>Actualizar addons ahora</b><span>Vuelve a cargar todos los addons y plugins (catálogos nuevos, cambios de configuración).</span></div><button class="btn ghost f" data-act="stRefreshNow">Actualizar</button></div>' +
@@ -2901,8 +2901,19 @@
         it.alts = (it.alts || []).concat(extra.filter(function (u) { return (it.alts || []).indexOf(u) < 0 && u !== url; }));
         alts = alts.concat(extra.filter(function (u) { return alts.indexOf(u) < 0 && u !== url; }));
       }
-      if (P.askSource === true && alts.length && !/^stalker:/.test(url)) {
-        sourcePick(it, [url].concat(alts)).then(function (r) { launch({ queue: [q(it, { url: r.url, alts: r.alts })], index: 0, live: false, startMs: prog ? prog.pos : 0 }, { item: it }); }).catch(function () {});
+      if (P.askSource !== false && !/^stalker:|^file:/.test(url)) {
+        var srcs = it.srcs || {}, nm0 = MV.cleanTitle(it.name) || it.name;
+        var lst = [url].concat(alts).filter(function (u, k, a) { return u && a.indexOf(u) === k; }).map(function (u, k) {
+          var ln = listName(srcs[u] || (k === 0 ? it.list : ''));
+          return { url: u, name: ln || (k === 0 ? 'Tu lista' : 'Otra fuente · ' + (hostOf(u) || '')) };
+        });
+        var hasAd = it.type === 'movie' && MV.stHasStreamers && MV.stHasStreamers();
+        smartPick({ title: nm0, it: it, list: lst, opts: { name: nm0, alt: it.orig || '', year: it.year || '', olang: it.olang || '' },
+          addon: hasAd ? function () { var im = imdb || ''; return (/^tt\d+/.test(im) ? Promise.resolve(im) : findImdb(nm0, it.year || '', 'movie', it.orig)).then(function (id) { return id ? { type: 'movie', id: id } : null; }); } : null
+        }).then(function (r) {
+          if (r.lid) it._stLid = r.lid;
+          launch({ queue: [q(it, { url: r.url, ua: r.ua || it.ua || '', ref: r.ref || it.ref || '', alts: r.alts })], index: 0, live: false, startMs: prog ? prog.pos : 0 }, { item: it });
+        }).catch(function () {});
         return;
       }
       // Antes de abrir, se elige entre la versión principal y las de respaldo la que responde (así el video arranca de una).
@@ -2912,6 +2923,11 @@
     };
     if (it.ia) { MV.toast('Preparando película…'); MV.archiveUrl(it).then(go).catch(function (e) { MV.toast(e.message); }); }
     else if (it.url) go(it.url);
+    else if (it.st && P.askSource !== false && MV.stremioStreams && (MV.stAlt(it.st.id, it._meta && it._meta.imdb), true)) {
+      var nmA = MV.cleanTitle(it.name) || it.name;
+      smartPick({ title: nmA, it: it, list: [], opts: { name: nmA, alt: it.orig || '', year: it.year || '', olang: it.olang || '' }, addon: function () { return Promise.resolve({ type: it.st.type, id: it.st.id }); } })
+        .then(function (r) { it._stLid = r.lid; launch({ queue: [q(it, { url: r.url, ua: r.ua || '', ref: r.ref || '', alts: r.alts })], index: 0, live: false, startMs: prog ? prog.pos : 0 }, { item: it }); }).catch(function () {});
+    }
     else if (it.st && MV.stremioPick && (MV.stAlt(it.st.id, it._meta && it._meta.imdb), true)) MV.stremioPick(it.st.type, it.st.id, MV.cleanTitle(it.name) || it.name, false, false, { year: it.year || '', alt: it.orig || '', olang: it.olang || '' }).then(function (s) { it._stLid = s.lid; if (s.ua) it.ua = s.ua; if (s.ref) it.ref = s.ref; it.alts = s.rest || []; go(s.url); }).catch(function (e) { if (e.message !== 'cancelado') MV.toast(e.message, 6000); });
     else MV.toast('Este contenido ya no está disponible en tus listas');
   };
@@ -3016,8 +3032,21 @@
       }).catch(function () { busy[ni] = 0; busy[ni] = 'fail'; });
     }, 4000);
   }
-  MV.playEpisode = function (series, i, resume) {
+  MV.playEpisode = function (series, i, resume, picked) {
     var eps = series.episodes || []; var e = eps[i]; if (!e) return;
+    // Elegir de dónde reproducir el capítulo (tu lista y tus addons, probados en segundo plano)
+    if (P.askSource !== false && !picked && !e._fbDone && !(series._stAuto && series._stLid) && !(e.url && /^(file:|stalker:)/.test(e.url)) && !e.stk && !MV.dlLocal(series.key + '#' + e.season + 'x' + e.ep)) {
+      var nmS = MV.cleanTitle(series.name) || series.name, lstE = [];
+      if (e.url) lstE.push({ url: e.url, ua: e.ua, ref: e.ref, name: listName(series.list) || 'Tu lista' });
+      (e.alts || []).forEach(function (u) { lstE.push({ url: u, name: 'Otra fuente · ' + (hostOf(u) || '') }); });
+      smartPick({ title: nmS + ' · T' + e.season + ' E' + e.ep, it: null, list: lstE, opts: { name: nmS, alt: series.orig || '', olang: series.olang || '', year: series.year || '' }, addon: function () { return epAddonId(series, e); } })
+        .then(function (r) {
+          if (r.url !== e.url) { e.url = r.url; e.ua = r.ua || ''; e.ref = r.ref || ''; }
+          e.alts = r.alts; if (r.lid) { series._stLid = r.lid; series._stSrc = r.src || ''; }
+          MV.playEpisode(series, i, resume, true);
+        }).catch(function () {});
+      return;
+    }
     // Capítulo de un addon de Stremio: primero se pide el enlace (y se elige si hay varios)
     if (!e.url && e.stId && MV.stremioPick && !MV.dlLocal(series.key + '#' + e.season + 'x' + e.ep)) {
       if (series._meta && series._meta.imdb && !/^tt/.test(e.stId)) MV.stAlt(e.stId, series._meta.imdb + ':' + e.season + ':' + e.ep);
@@ -3025,7 +3054,7 @@
       if (series._stLid && series._stAuto) {
         series._stAuto = false;
         MV.toast('Siguiente capítulo: T' + e.season + ' E' + e.ep + '…', 3000);
-        return sameAddonLink(series, e).then(function () { MV.playEpisode(series, i, resume); }).catch(function () { series._stLid = ''; MV.playEpisode(series, i, resume); });
+        return sameAddonLink(series, e).then(function () { MV.playEpisode(series, i, resume, true); }).catch(function () { series._stLid = ''; MV.playEpisode(series, i, resume, true); });
       }
       MV.stremioPick('series', e.stId, (MV.cleanTitle(series.name) || series.name) + ' T' + e.season + ' E' + e.ep, false, false, { name: MV.cleanTitle(series.name) || series.name, alt: series.orig || '', olang: series.olang || '' }).then(function (s) { e.url = s.url; e.ua = s.ua; e.ref = s.ref; series._stLid = s.lid || ''; series._stSrc = s.src || ''; MV.playEpisode(series, i, resume); }).catch(function (er) { if (er.message !== 'cancelado') MV.toast(er.message, 6000); });
       return;
@@ -3038,7 +3067,7 @@
     queue.forEach(function (x) { if (dls[x.id]) x.url = dls[x.id]; });
     // Si el capítulo no abre desde tu lista, se busca el mismo capítulo en tus addons
     var fb = !!(MV.stremioPick && MV.stHasStreamers && MV.stHasStreamers());
-    if (fb) queue.forEach(function (x, k) { var ek = eps[i + k]; if (!/^file:/.test(x.url || '') && !(ek && ek._fbDone)) x.fallback = true; });
+    if (fb) queue.forEach(function (x, k) { var ek = eps[i + k]; if (!/^file:/.test(x.url || '') && !(ek && ek._fbDone) && !(picked && k === 0)) x.fallback = true; });
     launch({ queue: queue, index: 0, live: false, startMs: prog ? prog.pos : 0 }, { item: series, episodes: eps, start: i, fallbackSearch: fb ? function (r) { var ep = eps[i + ((r && r.index) || 0)]; if (ep) searchEpisodeElsewhere(series, eps, ep); } : null });
     if (series._stLid) setTimeout(function () { watchNextEp(series, eps, i); }, 3000);
   };
@@ -3128,6 +3157,109 @@
         }).join('') + '</div><div class="btns"><button class="btn ghost f" data-act="confirmNo">Cancelar</button></div>', { onClose: function () { reject(new Error('cancelado')); } });
     });
   }
+  /**
+   * Elegir de dónde reproducir, con prueba en segundo plano: se muestran tus fuentes al instante, se van probando
+   * (y se suman las de tus addons cuando llegan); la que responde se marca "✓ Funciona" y queda arriba para tocarla.
+   * o = { title, it, list: [{url, name, ua, ref}], addon: () => Promise<{type,id}|null>, opts }
+   */
+  function smartPick(o) {
+    var SRC = [], done = false, best = -1, touched = false, addonsDone = !o.addon, probing = 0, qi = 0;
+    var canProbe = !!(A && A.probe);
+    function tagsOf(u) {
+      var t = [], low = String(u).toLowerCase();
+      [['2160|4k|uhd', '4K'], ['1080', '1080p'], ['720', '720p'], ['latino|lat\\b', 'Latino'], ['castellano', 'Castellano'], ['\\bsub', 'Subtitulado']].forEach(function (r) { if (new RegExp(r[0]).test(low)) t.push(r[1]); });
+      var ext = (low.split('?')[0].match(/\.(mp4|mkv|m3u8|avi|ts)$/) || [])[1]; if (ext) t.push(ext.toUpperCase());
+      if (o.it && LINKS[o.it.key] === u) t.unshift('Funcionó la última vez');
+      return t;
+    }
+    function row(x, i) {
+      var tg = (x.tags || []).concat(tagsOf(x.url)).filter(function (v, k, a) { return v && a.indexOf(v) === k; });
+      return '<button class="stopt f" data-act="spPick" data-arg="' + i + '" id="spR' + i + '"><b>' + esc(x.name) + '</b>' +
+        '<span id="spS' + i + '" style="font-weight:700">' + (canProbe ? '… Probando' : '') + '</span>' + (tg.length ? '<span>' + tg.map(esc).join(' · ') + '</span>' : '') + '</button>';
+    }
+    function add(list) {
+      var box = document.getElementById('spList'); if (!box) return;
+      list.forEach(function (x) {
+        if (!x.url || SRC.some(function (y) { return y.url === x.url; })) return;
+        SRC.push(x); box.insertAdjacentHTML('beforeend', row(x, SRC.length - 1));
+      });
+      pump();
+    }
+    function status(i, html, color, dim) {
+      var el = document.getElementById('spS' + i); if (el) { el.innerHTML = html; el.style.color = color; }
+      var r = document.getElementById('spR' + i); if (r && dim) r.style.opacity = '.55';
+    }
+    function banner() {
+      var b = document.getElementById('spBest'); if (!b) return;
+      if (best >= 0) {
+        var x = SRC[best];
+        b.innerHTML = '<button class="btn f" data-act="spPick" data-arg="' + best + '" id="spGo" style="width:100%;background:#3ecf8e;color:#0b1a12;border-color:#3ecf8e">▶ Funciona en: ' + esc(x.name) + '</button>';
+        if (!touched) { var g = document.getElementById('spGo'); if (g) g.focus(); }
+      } else if (addonsDone && qi >= SRC.length && !probing && canProbe) {
+        b.innerHTML = '<p class="muted" style="margin:4px 0">' + (SRC.length ? 'Ninguna fuente respondió a la prueba. Puedes intentar igual con cualquiera.' : 'No encontré fuentes para este título.') + '</p>';
+      } else {
+        b.innerHTML = '<p class="muted" style="margin:4px 0">Buscando la que funciona' + (addonsDone ? '' : ' (también en tus addons)') + '…</p>';
+      }
+    }
+    // Se prueban de a 3 a la vez; cada resultado se muestra apenas llega
+    function pump() {
+      if (!canProbe) { banner(); return; }
+      while (probing < 3 && qi < SRC.length && !done) {
+        (function (i) {
+          probing++;
+          var x = SRC[i];
+          MV.call('probe', [JSON.stringify([{ url: x.url, ua: x.ua || (o.it && o.it.ua) || '', ref: x.ref || (o.it && o.it.ref) || '' }])]).then(function (res) {
+            var r = res && res[0];
+            if (r && r.ok) { x.ok = true; status(i, '✓ Funciona · ' + (r.ms / 1000).toFixed(1) + ' s', '#3ecf8e'); if (best < 0) best = i; }
+            else status(i, '✕ No responde' + (r && r.code ? ' (' + r.code + ')' : ''), '#ff6b6b', true);
+          }).catch(function () { status(i, 'Sin probar', '#9aa0a6'); }).then(function () { probing--; banner(); pump(); });
+        })(qi++);
+      }
+      banner();
+    }
+    return new Promise(function (resolve, reject) {
+      MV._spPick = function (i) {
+        var x = SRC[+i]; if (!x) return; done = true; MV.closeModal(true);
+        // Las demás quedan de respaldo: primero las que respondieron
+        var rest = SRC.filter(function (y) { return y !== x; }).sort(function (a, b) { return (b.ok ? 1 : 0) - (a.ok ? 1 : 0); }).map(function (y) { return y.url; });
+        resolve({ url: x.url, ua: x.ua || '', ref: x.ref || '', lid: x.lid || '', src: x.src || '', alts: rest.slice(0, 8) });
+      };
+      MV.modal('<h2>¿De dónde quieres verla?</h2><p class="muted">“' + esc(o.title) + '”. ' + (canProbe ? 'Mientras eliges, la app prueba cada fuente y te muestra cuál funciona.' : 'Elige una fuente.') + '</p>' +
+        '<div id="spBest"></div><div class="stpick" id="spList"></div><div class="btns"><button class="btn ghost f" data-act="confirmNo">Cancelar</button></div>',
+        { onClose: function () { done = true; reject(new Error('cancelado')); } });
+      var md = document.querySelector('.modal') || document.body;
+      md.addEventListener('keydown', function () { touched = true; }, { once: true });
+      md.addEventListener('pointerdown', function () { touched = true; }, { once: true });
+      add(o.list || []);
+      if (!SRC.length) { var f = document.querySelector('[data-act="confirmNo"]'); if (f) f.focus(); } else { var r0 = document.getElementById('spR0'); if (r0) r0.focus(); }
+      if (o.addon) {
+        o.addon().then(function (ad) {
+          if (!ad || !ad.id || done) return [];
+          return MV.stremioStreams(ad.type, ad.id).then(function (st) {
+            st = (st || []).filter(function (x) { return x.url; });
+            if (MV.stAutoSort) st = MV.stAutoSort(st.slice(), o.opts || { name: o.title }, ad.anime);
+            return st.slice(0, 14).map(function (x) {
+              var lang = MV.stLang ? MV.stLang(x) : '';
+              return { url: x.url, ua: x.ua, ref: x.ref, lid: x.lid, src: x.src, name: (x.src || 'Addon').replace(/\s+/g, ' ').slice(0, 40), tags: [lang === 'lat' ? 'Latino' : lang === 'cast' ? 'Castellano' : lang === 'sub' ? 'Subtitulado' : '', String(x.title || '').split(/\n/)[0].slice(0, 60)] };
+            });
+          });
+        }).catch(function () { return []; }).then(function (list) { addonsDone = true; if (!done) add(list); });
+      }
+    });
+  }
+  MV.smartPick = smartPick;
+  /** Para un capítulo: el id con el que lo buscan tus addons (Kitsu para anime de 1.ª temporada; si no, IMDb:temporada:capítulo). */
+  function epAddonId(series, e) {
+    if (e.stId) return Promise.resolve({ type: 'series', id: e.stId });
+    if (!(MV.stHasStreamers && MV.stHasStreamers())) return Promise.resolve(null);
+    var name = MV.cleanTitle(series.name) || series.name, anime = (MV.isAnimeIt && MV.isAnimeIt(series)) || series.anime;
+    var byImdb = function () {
+      var im = (series._meta && series._meta.imdb) || series.imdb || '';
+      return (/^tt\d+/.test(im) ? Promise.resolve(im) : findImdb(name, series.year || '', 'series', series.orig)).then(function (id) { return id ? { type: 'series', id: id + ':' + e.season + ':' + e.ep } : null; });
+    };
+    return anime && +e.season <= 1 ? kitsuId(name).then(function (kid) { return kid ? { type: 'series', id: kid + ':' + e.ep, anime: true } : byImdb(); }) : byImdb();
+  }
+  function listName(id) { var l = S.lists.find(function (x) { return x.id === id; }); return l ? l.name : ''; }
   /** Elige el enlace que responde: primero el que ya funcionó antes, luego la mejor calidad que conteste (máx. 3 s de espera). */
   function pickWorking(it, url) {
     var alts = (it.alts || []).filter(function (u) { return u && !/^stalker:|^yt:/.test(u); });
@@ -3494,7 +3626,8 @@
     stPrefSet: function (id) { P.stPref = id || ''; MV.savePrefs(); var l = MV.stPrefList && MV.stPrefList(); MV.toast(l ? 'Se reproducirá primero desde ' + l.name : 'Se mostrará la lista de enlaces para elegir'); MV.rerender(); },
     showHidden: function () { MV._showHidden = !MV._showHidden; MV.rerender(); },
     srcPick: function (i) { if (MV._srcPick) MV._srcPick(i); },
-    askSrcToggle: function (_, el) { P.askSource = P.askSource !== true; MV.savePrefs(); if (el) el.classList.toggle('on', P.askSource === true); MV.toast(P.askSource === true ? 'Antes de reproducir podrás elegir la fuente' : 'Se reproducirá solo con el mejor enlace'); },
+    spPick: function (i) { if (MV._spPick) MV._spPick(i); },
+    askSrcToggle: function (_, el) { P.askSource = P.askSource === false; MV.savePrefs(); if (el) el.classList.toggle('on', P.askSource !== false); MV.toast(P.askSource !== false ? 'Antes de reproducir podrás elegir la fuente (la app te muestra cuál funciona)' : 'Se reproducirá solo con el mejor enlace'); },
     stDeepToggle: function (_, el) {
       P.stDeep = P.stDeep === false; MV.savePrefs(); if (el) el.classList.toggle('on', P.stDeep !== false);
       MV.toast(P.stDeep !== false ? 'Los addons se completarán en segundo plano (puede tardar unos minutos)' : 'Los addons cargarán solo lo principal');
