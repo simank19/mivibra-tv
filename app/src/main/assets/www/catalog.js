@@ -279,6 +279,8 @@
     // Canal: tiene id de guía, país o pistas de TV; o la lista es casi toda de canales (ej. iptv-org: "Movies" = canales de cine)
     if (!titled && (e.tvg || e.country || e.num || LIVE_HINT.test(g) || liveList)) return 'live';
     if (RX.series.test(e.group) && !RX.movie.test(e.group)) return 'episode';
+    // Anime, doramas, docuseries, realities…: capítulos numerados al final ("Naruto 045", "Serie - 3")
+    if (/\b(animes?|doramas?|k-?dramas?|c-?dramas?|docu-?series|realities|reality|caricaturas|dibujos animados|telenovelas?|novelas?)\b/i.test(e.group || '') && /\D[\s\-–_#.]+\d{1,4}\s*$/.test(e.name) && !/\b(19|20)\d{2}\s*$/.test(e.name)) return 'episode';
     return 'movie';
   }
   // Sin emojis en nombres, categorías y tipos que traen las listas ("⭐Acción ⭐", "🔴 EN VIVO"…)
@@ -355,7 +357,7 @@
       if (t === 'episode') {
         var m = e.name.match(RX.episode) || [], sn, tn = null;
         // Sin marca de capítulo pero en una categoría de series: "Serie 03" / "Serie - 3" → capítulo 3 de "Serie"
-        if (!m.length) tn = String(e.name).match(/^(.*?\D)[\s\-–_#.]+(\d{1,3})\s*$/);
+        if (!m.length && !/\b(19|20)\d{2}\s*$/.test(e.name)) tn = String(e.name).match(/^(.*?\D)[\s\-–_#.]+(\d{1,4})\s*$/);
         sn = tn ? tn[1].replace(/[-–|:.,\s]+$/, '').trim() : showName(e.name);
         var sk = 'series:' + MV.norm(sn);
         var s = seriesMap[sk];
@@ -1444,7 +1446,7 @@
       var fresh = cached && cached.ts > Date.now() - (list.type === 'web' || list.type === 'fb' || list.type === 'books' ? 3600e3 : 12 * 3600e3) && cached.v === 8;
       // Listas M3U guardadas antes de juntar los capítulos en una sola serie: se vuelven a leer una vez
       var m3u = !list.type || list.type === 'm3u' || list.type === 'file';
-      if (m3u && cached && cached.gv !== 2) { fresh = false; stale = false; }
+      if (m3u && cached && cached.gv !== 3) { fresh = false; stale = false; }
       // Addons: si quedaron vacíos o se guardaron con una versión anterior de la app, se vuelven a pedir
       if (fresh && (list.type === 'stremio' || list.type === 'mvplugin') && (!cached.items.length || cached.sv !== ST_V)) fresh = false;
       // "Actualizar addons al abrir la app": la primera carga de cada sesión se pide de nuevo
@@ -1502,7 +1504,7 @@
         // Para borrar listas vacías sin equivocarse: se recuerda si alguna vez trajo contenido y cuántas veces seguidas llegó vacía
         if (items.length) { list.hadItems = true; list.zeroLoads = 0; } else list.zeroLoads = (list.zeroLoads || 0) + 1;
         // Incompleta: se guarda como "vieja" para que se vuelva a pedir en la próxima actualización (no en 12 horas)
-        MV.idbSet(ck, { ts: partial ? Date.now() - 12 * 3600e3 : Date.now(), v: 8, gv: 2, sv: ST_V, items: items, deep: deep }); listStamp(list.id);
+        MV.idbSet(ck, { ts: partial ? Date.now() - 12 * 3600e3 : Date.now(), v: 8, gv: 3, sv: ST_V, items: items, deep: deep }); listStamp(list.id);
         if (list.type === 'stremio') { var dm = MV.load('listDeep', {}) || {}; dm[list.id] = deep ? 1 : 0; MV.save('listDeep', dm); }
         return items;
       }).catch(function (e) {
