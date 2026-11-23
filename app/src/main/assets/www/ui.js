@@ -784,7 +784,10 @@
     if (it0) {
       reg(it0);
       var pct = Math.max(0, Math.min(1, c0.pos / c0.dur)), left = Math.max(0, Math.round((c0.dur - c0.pos) / 60));
-      out += '<section class="vcont" aria-label="Continuar viendo"><div class="hd"><div><b>Continuar viendo</b><span>' + esc(it0.name || c0.name || '') + '</span></div>' +
+      // Portada del contenido: de fondo (difuminada) y en miniatura junto al título
+      var cov = (MV.poster && MV.poster(it0)) || it0.poster || it0.logo || '', bk = it0.backdrop || (it0._meta && it0._meta.backdrop) || cov;
+      out += '<section class="vcont' + (cov ? ' wcov' : '') + '" aria-label="Continuar viendo">' + (bk ? '<div class="cbg" style="background-image:url(&quot;' + esc(bk) + '&quot;)"></div>' : '') +
+        '<div class="hd">' + (cov ? '<img class="cpo" src="' + esc(cov) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + '<div><b>Continuar viendo</b><span>' + esc(it0.name || c0.name || '') + '</span></div>' +
         '<button class="vrb f" data-act="open" data-key="' + esc(it0.key) + '" aria-label="Abrir la ficha">' + IC.info + '</button></div>' +
         '<div class="bd"><button class="vrb f" data-act="nav" data-arg="history" aria-label="Historial">' + IC.history + '</button>' + ring(pct) +
         '<button class="vrb solid f" data-act="resume" data-key="' + esc(it0.key) + '" aria-label="Seguir viendo">' + IC.play + '</button></div>' +
