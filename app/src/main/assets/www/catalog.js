@@ -1879,9 +1879,13 @@
     var posterUse = {};
     function countPoster(it) { if (it.type !== 'live' && it.poster) posterUse[it.poster] = (posterUse[it.poster] || 0) + 1; }
     function yearOf(it) { return String(it.year || (String(it.name || '').match(/\((19|20)\d{2}\)/) || [''])[0].replace(/[()]/g, '') || ''); }
+    // "Serie Temporada 2", "Serie S2", "Serie 2nd Season", "Serie (Latino)": la misma serie
+    var SEASON_RX = /\b(?:temporada|season|temp\.?)\s*(\d{1,2})\b|\bS(\d{1,2})\b(?!\s*[eE]\d)|\b(\d{1,2})(?:st|nd|rd|th|ª|a)?\s+(?:temporada|season)\b/i;
+    function seasonOf(name) { var m = String(name || '').match(SEASON_RX); return m ? +(m[1] || m[2] || m[3]) : 0; }
     function idents(it) {
       if (!dedupe || it.type === 'live' || it.type === 'video') return [];
-      var y = yearOf(it), t = MV.norm(MV.cleanTitle(it.name || '').replace(/\((19|20)\d{2}\)/, '')), out = [];
+      var nm = it.type === 'series' ? String(it.name || '').replace(SEASON_RX, ' ') : it.name || '';
+      var y = it.type === 'series' ? '' : yearOf(it), t = MV.norm(MV.cleanTitle(nm).replace(/\((19|20)\d{2}\)/, '')), out = [];
       if (it.tid) out.push('t:' + it.tid);
       // Listas Xtream que traen el número de TMDB: misma ficha = mismo título aunque el nombre esté en otro idioma
       if (it.ltid && (!it.tid || it.tid.split(':')[1] !== String(it.ltid))) out.push('t:' + (it.type === 'series' ? 'tv' : 'movie') + ':' + it.ltid);
@@ -1901,13 +1905,19 @@
       ex.q = qScore(it);
     }
     function each(it) {
+        // Una entrada por temporada: sus capítulos pasan a esa temporada para juntarse con las demás
+        if (dedupe && it.type === 'series' && it.episodes && it.episodes.length) {
+          var sn = seasonOf(it.name);
+          if (sn > 1 && it.episodes.every(function (e) { return (e.season || 1) <= 1; })) it.episodes.forEach(function (e) { e.season = sn; });
+        }
         var ln = it.type === 'live' ? liveName(it.name) : '', nk = ln ? 'n:' + (it.country || '') + ':' + ln : '';
         var ids = idents(it), q = qScore(it);
         var ex = byKey[it.key] || (nk ? byName[nk] : null);
         for (var k = 0; !ex && k < ids.length; k++) {
           var c = byId[ids[k]];
           // Mismo título y año, misma ficha o misma carátula; si los dos tienen año distinto no se juntan (remakes)
-          if (c && c.type === it.type && (!yearOf(c) || !yearOf(it) || Math.abs(+yearOf(c) - +yearOf(it)) <= 1)) ex = c;
+          // (series: cada temporada puede traer otro año; por nombre se juntan igual)
+          if (c && c.type === it.type && ((it.type === 'series' && ids[k][0] === 'n') || !yearOf(c) || !yearOf(it) || Math.abs(+yearOf(c) - +yearOf(it)) <= 1)) ex = c;
         }
         if (ex) {
           pairs.push([it, ex]);
