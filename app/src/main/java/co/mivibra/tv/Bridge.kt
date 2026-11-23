@@ -204,6 +204,10 @@ class Bridge(private val a: MainActivity) {
         }.start()
     }
 
+    /** YouTube con tu cuenta (solo lectura): token de acceso de Google para suscripciones, Me gusta y tus listas. */
+    @JavascriptInterface
+    fun ytAuth(id: String) { YtAuth.token(a) { ok, t -> reply(id, ok, t) } }
+
     /** Inicio de sesión con Google (selector de cuentas del equipo). */
     @JavascriptInterface
     fun googleSignIn(id: String, webClientId: String) {
