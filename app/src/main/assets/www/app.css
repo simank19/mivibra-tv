@@ -1557,3 +1557,21 @@ html.nogap .who-screen .qr { margin: 0 24px 12px 0; }
 .ytp.ytmini .ytmc .iconbtn.on { background: var(--accent); color: var(--on-accent); }
 @media (max-width: 760px) { .ytp.ytmini { right: 12px; bottom: 96px; } }
 body.yt-mini .mini { display: none; }
+
+/* ⋮ en cada video de YouTube / YouTube Music y la cola del reproductor */
+.vcard .vmore { position: absolute; top: 6px; right: 6px; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.6); color: #fff; font: 800 20px/1 var(--ui); z-index: 2; }
+.vcard .vmore:hover { background: rgba(0,0,0,.85); }
+.vcard .th .tag + .vmore, .vcard .th .tag { z-index: 2; }
+.ytp .ytqrow { display: flex; align-items: center; gap: 6px; border-bottom: 1px solid rgba(255,255,255,.08); }
+.ytp .ytqrow > button.f:first-child { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 8px 4px; background: none; border: 0; color: #fff; text-align: left; cursor: pointer; border-radius: 10px; }
+.ytp .ytqrow > button.f:first-child:focus { outline: 2px solid var(--accent); }
+.ytp .ytqrow img { width: 88px; height: 50px; object-fit: cover; border-radius: 8px; flex: none; }
+.ytp .ytqrow span { min-width: 0; display: flex; flex-direction: column; }
+.ytp .ytqrow b { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ytp .ytqrow small { font-size: 11px; color: #9aa4b2; }
+.ytp .ytqrow.now b { color: #ff4e45; }
+
+/* Mini reproductor dentro del recuadro grande del Inicio */
+.ytp.ytmini.ythero { border-radius: 18px; box-shadow: none; border: 0; z-index: 40; }
+.ytp.ytmini.ythero .ytvid { position: absolute; top: 0; left: 0; right: 0; bottom: 0; height: auto; }
+.ytp.ytmini.ythero .ytmc { position: absolute; left: 0; right: 0; bottom: 0; background: linear-gradient(transparent, rgba(0,0,0,.8)); padding-top: 22px; z-index: 2; }
