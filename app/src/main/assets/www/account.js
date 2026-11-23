@@ -45,7 +45,7 @@
   }
   function payload() {
     // "allowed" y "open" no van aquí: solo se escriben al cambiarlos (así un envío automático nunca los revierte)
-    return { lists: sharedLists(), listsDel: MV.listTombs ? MV.listTombs() : {}, tmdbKey: P.tmdbKey || '', ytKey: P.ytKey || '', sgdbKey: P.sgdbKey || '', saKey: P.saKey || '', saCountry: P.saCountry || '', subKey: P.subKey || '', streamKeys: P.streamKeys || {}, navOrder: P.navOrder || [], navHidden: P.navHidden || [] };
+    return { lists: sharedLists(), listsDel: MV.listTombs ? MV.listTombs() : {}, tmdbKey: P.tmdbKey || '', ytKey: P.ytKey || '', sgdbKey: P.sgdbKey || '', saKey: P.saKey || '', saCountry: P.saCountry || '', subKey: P.subKey || '', streamKeys: P.streamKeys || {}, navOrder: P.navOrder || [], navHidden: P.navHidden || [], kidsGroups: P.kidsGroups || [] };
   }
 
   /** Guarda en la nube los cambios del superadministrador. */
@@ -112,6 +112,8 @@
       if ((cfg.subKey || '') !== (P.subKey || '')) { P.subKey = cfg.subKey || ''; MV.save('prefs', P); }
       if (JSON.stringify(cfg.streamKeys || {}) !== JSON.stringify(P.streamKeys || {})) { P.streamKeys = cfg.streamKeys || {}; MV.save('prefs', P); MV.streamReset && MV.streamReset(); }
       // Orden del menú elegido por el superadministrador
+      // Categorías infantiles que eligió el administrador: les llegan a todos
+      if (cfg.kidsGroups && cfg.kidsGroups.length && JSON.stringify(cfg.kidsGroups) !== JSON.stringify(P.kidsGroups || [])) { P.kidsGroups = cfg.kidsGroups; MV.save('prefs', P); MV._catVer = (MV._catVer || 0) + 1; }
       var navSig = JSON.stringify([cfg.navOrder || [], cfg.navHidden || []]);
       if (navSig !== JSON.stringify([P.navOrder || [], P.navHidden || []])) { P.navOrder = cfg.navOrder || []; P.navHidden = cfg.navHidden || []; MV.save('prefs', P); if (MV.rerender) setTimeout(MV.rerender, 0); }
       var admin = acct.isAdmin();

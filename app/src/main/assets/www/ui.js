@@ -2758,7 +2758,11 @@
   };
   SETTINGS.parental = function () {
     var a = P.adult;
-    return '<div class="panel glass"><h2>PIN de control parental</h2><p>Se pide para salir de un perfil infantil o darle más tiempo.</p><div class="btns"><button class="btn f" data-act="setParentPin">' + (P.parentPin ? 'Cambiar PIN' : 'Crear PIN') + '</button></div>' +
+    // Categorías de tus listas: cuántos títulos ve hoy un perfil infantil y cuáles categorías se marcaron como infantiles
+    var kn = (S.items || []).filter(function (i) { return MV.kidsOk(i); }).length, kg = P.kidsGroups || [];
+    var kidsCats = '<div class="panel glass"><h2>Contenido de los perfiles infantiles</h2><p>Hoy un perfil infantil ve <b>' + kn.toLocaleString('es') + ' títulos y canales</b>: los que tus listas ponen en categorías infantiles (Infantil, Kids, Animación, Familia…) y los que la ficha dice que son para niños. Si tus listas usan otros nombres, elige aquí qué categorías son para niños.</p>' +
+      '<div class="line"><div class="t"><b>Categorías infantiles elegidas</b><span>' + (kg.length ? esc(kg.slice(0, 8).join(' · ')) + (kg.length > 8 ? ' y ' + (kg.length - 8) + ' más' : '') : 'Ninguna (se detectan solas)') + '</span></div><button class="btn sm f" data-act="kidsGroups">Elegir categorías</button></div></div>';
+    return kidsCats + '<div class="panel glass"><h2>PIN de control parental</h2><p>Se pide para salir de un perfil infantil o darle más tiempo.</p><div class="btns"><button class="btn f" data-act="setParentPin">' + (P.parentPin ? 'Cambiar PIN' : 'Crear PIN') + '</button></div>' +
       '<div class="line"><div class="t"><b>Tiempo diario para perfiles infantiles</b></div><div class="seg">' + [30, 60, 90, 120, 0].map(function (m) { return '<button class="chip f' + (+P.kidsLimit === m ? ' on' : '') + '" data-act="pref" data-arg="kidsLimit:' + m + '">' + (m ? m + ' min' : 'Sin límite') + '</button>'; }).join('') + '</div></div></div>' +
       '<div class="panel glass"><h2>Contenido +18</h2><p>Las categorías para adultos de tus listas nunca aparecen en las secciones normales. Están solo en Utilidades › +18, se abren con el PIN, nunca en perfiles infantiles, y se bloquean solas a los 30 minutos.</p>' +
       (a ? '<div class="line"><div class="t"><b>Usuario: ' + esc(a.user) + '</b><span>' + (MV.adultOk() ? 'Desbloqueado' : 'Bloqueado') + '</span></div><button class="btn f sm" data-act="adultToggle">' + (MV.adultOk() ? 'Bloquear ahora' : 'Desbloquear') + '</button><button class="btn danger sm f" data-act="adultDelete">Eliminar</button></div>'
@@ -4249,6 +4253,20 @@
       MV.applyLook();
       if (k === 'autoTheme') MV.rerender();
     },
+    // Elegir qué categorías de tus listas son para niños (se agrupan por tipo, con cuántos títulos trae cada una)
+    kidsGroups: function () {
+      var by = {}; (S.items || []).forEach(function (i) { if (i.adult || !i.group || i.type === 'book') return; var g = MV.noEmoji(i.group); var k = (i.type === 'live' ? 'Canales' : i.type === 'series' ? 'Series' : 'Películas'); by[g] = by[g] || { n: 0, t: k }; by[g].n++; });
+      var names = Object.keys(by).sort(function (a, b) { return by[a].t.localeCompare(by[b].t) || a.localeCompare(b); });
+      MV._kgSel = (P.kidsGroups || []).slice();
+      var sug = /infan|kid|niñ|anima|famil|dibuj|caricatur|cartoon|disney|nick|pixar|dreamworks|junior/i;
+      MV.modal('<h2>Categorías para niños</h2><p class="muted">Marca las categorías de tus listas que pueden ver los perfiles infantiles. Las que parecen infantiles salen primero.</p><div class="menulist" style="max-height:52vh;overflow:auto">' +
+        names.sort(function (a, b) { return (sug.test(b) ? 1 : 0) - (sug.test(a) ? 1 : 0); }).map(function (g) {
+          var on = MV._kgSel.indexOf(g) >= 0;
+          return '<button class="line selrow f' + (on ? ' on' : '') + '" data-act="kgTog" data-arg="' + esc(g) + '" aria-pressed="' + on + '"><i class="chk"></i><div class="t"><b>' + esc(g) + '</b><span>' + by[g].t + ' · ' + by[g].n + '</span></div></button>';
+        }).join('') + '</div><div class="btns"><button class="btn f" data-act="kgSave">Guardar</button><button class="btn ghost f" data-act="closeModal">Cancelar</button></div>');
+    },
+    kgTog: function (g, el) { var i = MV._kgSel.indexOf(g); if (i >= 0) MV._kgSel.splice(i, 1); else MV._kgSel.push(g); if (el) { el.classList.toggle('on', i < 0); el.setAttribute('aria-pressed', i < 0); } },
+    kgSave: function () { P.kidsGroups = MV._kgSel.slice(); MV.savePrefs(); MV._catVer++; if (MV.acct.isAdmin() && MV.acct.push) MV.acct.push({ forced: Date.now() }).catch(function () {}); MV.closeModal(true); MV.rerender(); MV.toast('Listo: los perfiles infantiles ya ven esas categorías'); },
     pref: function (kv) { var i = kv.indexOf(':'), k = kv.slice(0, i), v = kv.slice(i + 1); P[k] = k === 'kidsLimit' ? +v : v; MV.savePrefs(); MV.rerender(); if (k === 'xtFormat') MV.reloadCatalog(true); },
     deviceName: function () { MV.prompt('Nombre de este dispositivo', 'Ej: TV de la sala', P.deviceName).then(function (v) { if (v) { P.deviceName = v.trim().slice(0, 30); MV.savePrefs(); MV.rerender(); } }); },
     setParentPin: function () { pinPad('Nuevo PIN parental', function (h) { P.parentPin = h; MV.savePrefs(); MV.closeModal(true); MV.toast('PIN guardado'); MV.rerender(); return true; }); },

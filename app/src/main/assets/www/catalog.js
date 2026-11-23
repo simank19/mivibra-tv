@@ -79,15 +79,23 @@
   var NOT_FOR_KIDS = ['terror', 'suspenso', 'crimen', 'belico'];
   /** ¿Lo puede ver un perfil infantil? Canales: categoría infantil. Películas y series: solo con edad de TMDB de 0 a 7 años
       (y que sean infantiles o familiares). Sin anime. */
+  /** Categorías de tus listas que el adulto marcó como infantiles (Ajustes › Control parental). */
+  function kidsGroup(i) { var kg = P.kidsGroups || []; return kg.length && i.group && kg.indexOf(MV.noEmoji(i.group)) >= 0; }
+  MV.kidsGroupOf = kidsGroup;
   MV.kidsOk = function (i) {
     if (i.adult) return false;
-    if (i.type === 'live') return !!i.kids;
-    if (i.anime || i.doc) return false;
-    if (i.age == null) return !!(i.kids || i.learnedKids || i.platform === 'disney') && !(i.genres || []).some(function (g) { return NOT_FOR_KIDS.indexOf(g) >= 0; });
-    // Animación (no anime) se permite hasta 13 años; lo demás, solo de 0 a 7 años y que sea infantil o familiar
+    if (kidsGroup(i)) return !(i.age != null && i.age > 13);   // lo eligió el adulto: solo se excluye lo que la ficha dice que es para mayores
+    if (i.type === 'live') return !!(i.kids || (RX.kidsName && RX.kidsName.test(i.name || '')));
+    if (i.doc) return false;
+    var bad = (i.genres || []).some(function (g) { return NOT_FOR_KIDS.indexOf(g) >= 0; });
+    if (bad) return false;
+    // Anime: solo el que tu lista pone en una categoría infantil y es apto (Pokémon, Doraemon…)
+    if (i.anime) return !!i.kids && (i.age == null || i.age <= 10);
+    if (i.age == null) return !!(i.kids || i.learnedKids || i.platform === 'disney' || i.animated);
+    // Animación (no anime) hasta 13 años; lo que tu lista marca como infantil, hasta 10; lo demás infantil/familiar, hasta 7
     if (i.animated && i.age <= 13) return true;
-    // "Infantil/Familia" tiene que venir de la ficha de TMDB (no del título: "… American Kids" no es infantil)
-    return i.age <= 7 && !!(i.kids || i.platform === 'disney' || i.learnedKids);
+    if (i.kids && i.age <= 10) return true;
+    return i.age <= 7 && !!(i.platform === 'disney' || i.learnedKids);
   };
   var ANIM = MV.load('animated', {});
   MV.hasLearned = function (key) { return !!GCACHE[key]; };
