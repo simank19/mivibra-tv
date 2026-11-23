@@ -229,6 +229,16 @@
     if (el) { el.focus({ preventScroll: true }); try { el.scrollIntoView({ block: 'nearest', behavior: 'instant' }); } catch (e) {} }
   }
   /** Vuelve a dibujar la pantalla actual sin animación de entrada y en el mismo lugar (sin saltar arriba ni parpadear). */
+  /** Redibujar por algo que llegó en segundo plano: espera a que no estés usando el control y junta varios en uno
+      (redibujar el Inicio mientras navegas en un TV box se sentía como un congelón). */
+  var quietT = null;
+  MV.rerenderQuiet = function () {
+    if (quietT) return;
+    quietT = setTimeout(function again() {
+      if (Date.now() - (MV._lastKey || 0) < 5000 || MV.playing || (MV.modalOpen && MV.modalOpen())) { quietT = setTimeout(again, 3000); return; }
+      quietT = null; MV.rerender();
+    }, 1500);
+  };
   MV.rerender = function () {
     var f = document.activeElement, fid = f && f.dataset && f.dataset.fid, act = f && f.dataset && f.dataset.act, arg = f && f.dataset && f.dataset.arg;
     // Posición del foco entre los botones de la pantalla: si ese botón desaparece (lista eliminada), se queda en el vecino y no salta arriba
@@ -2890,7 +2900,7 @@
     if (MV.audio && MV.audio.current() && !ctx.noRecord) MV.audio.stop();
     // Si había otro video abierto (por ejemplo en la ventana flotante), se cierra y su avance se guarda aparte
     if (playing) replaced = playing;
-    playing = Object.assign({ started: Date.now() }, ctx); MV.kidsSessionStart();
+    playing = Object.assign({ started: Date.now() }, ctx); MV.kidsSessionStart(); MV.playing = true;
     req.audioLang = P.audioLang; req.subLang = P.subLang; req.subKey = P.subKey || '';
     req.subAddons = MV.stremioSubBases ? MV.stremioSubBases() : [];
     // Los addons de subtítulos buscan por el ID de IMDb: si aún no se conoce (no se abrió la ficha), se pide antes de abrir el reproductor
@@ -3346,6 +3356,7 @@
       var it = S.byKey[id] || (MV.reg && MV.reg[id]) || (id.indexOf('#') > 0 ? S.byKey[id.split('#')[0]] : null);
       if (it) MV.toggleFav(it);
     });
+    MV.playing = false;
     if (r && r.replaced) { ctx = replaced; replaced = null; if (!ctx) return; }
     else if (playing) { ctx = playing; playing = null; }
     else {

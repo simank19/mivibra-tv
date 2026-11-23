@@ -1810,14 +1810,21 @@
   }
   var lastAll = null, redupeT = null;
   /** Vuelve a combinar cuando TMDB descubre que dos títulos son la misma película (espera a que no se esté usando el control). */
+  var redupeBusy = false, redupeAt = 0;
   MV.redupeLater = function () {
     clearTimeout(redupeT);
+    // Volver a combinar todo el catálogo es pesado: en un TV box, hacerlo de un tirón cada pocos minutos lo dejaba congelado.
+    // Ahora va en pedazos (el control sigue respondiendo), nunca mientras ves algo, y como mucho cada 3 min (10 en equipos lentos).
+    var gap = (MV.lite || (MV.device && MV.device.tv)) ? 10 * 60e3 : 3 * 60e3;
     redupeT = setTimeout(function again() {
       if (!lastAll || S.loading) return;
-      if (Date.now() - (MV._lastKey || 0) < 4000 || (MV.modalOpen && MV.modalOpen())) { redupeT = setTimeout(again, 3000); return; }
+      if (redupeBusy || MV.playing || Date.now() - (MV._lastKey || 0) < 4000 || (MV.modalOpen && MV.modalOpen())) { redupeT = setTimeout(again, 5000); return; }
+      var wait = redupeAt + gap - Date.now(); if (wait > 0) { redupeT = setTimeout(again, wait); return; }
+      redupeBusy = true; redupeAt = Date.now();
       // Lo aprendido de TMDB en esta sesión (géneros, año, ficha) se aplica también a las copias originales
-      lastAll.forEach(function (arr) { arr.forEach(function (o) { if (o.type !== 'live') retag(o); }); });
-      combine(lastAll); MV.emit('catalog');
+      chunked(lastAll, function (o) { if (o.type !== 'live') retag(o); })
+        .then(function () { return combine(lastAll, true); })
+        .then(function (r) { redupeBusy = false; if (r !== false) MV.emit('catalog'); }, function () { redupeBusy = false; });
     }, 8000);
   };
   /** Recorre listas grandes en pedazos de ~24 ms y cede el control entre uno y otro: la app sigue respondiendo al control
@@ -1862,12 +1869,16 @@
     var ls = S.lists.filter(function (l) { return MV.listOn(l); }).map(function (l) { return [l.id, l.url || '', l.host || '', l.user || '']; });
     return JSON.stringify([SNAP_V, ls, MV.CONTENT_PREFS.map(function (k) { return P[k]; }), P.dedupe !== false, P.adultOn || false]);
   }
-  var snapT = null;
+  var snapT = null, snapAt = 0;
   function snapLater() {
     clearTimeout(snapT);
     snapT = setTimeout(function again() {
       // Se guarda cuando no se está usando el control ni viendo algo (guardar mucho de una vez frena un momento)
       if (Date.now() - (MV._lastKey || 0) < 5000 || S.loading || MV.playing) { snapT = setTimeout(again, 5000); return; }
+      // Guardar el catálogo entero frena unos segundos el TV box: allí se guarda como mucho cada 30 min (la primera vez, siempre)
+      var slow = MV.lite || (MV.device && MV.device.tv), w = snapAt && slow ? snapAt + 30 * 60e3 - Date.now() : 0;
+      if (w > 0) { snapT = setTimeout(again, w); return; }
+      snapAt = Date.now();
       try {
         var items = S.items, idx = new Map(), alias = {};
         items.forEach(function (it, i) { idx.set(it, i); });

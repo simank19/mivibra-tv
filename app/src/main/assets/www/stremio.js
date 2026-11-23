@@ -90,7 +90,7 @@
   var trRunning = false;
   /** Traduce en segundo plano (con tu clave de TMDB) los títulos de addons que vienen en inglés. */
   MV.stTranslate = function () {
-    if (trRunning || !(S.prefs.tmdbKey || '').trim()) return;
+    if (trRunning || MV.playing || !(S.prefs.tmdbKey || '').trim()) return;
     var es = ES(), seen = {};
     // Las series se revisan otra vez si se guardaron antes de reconocer novelas (v 2)
     var todo = (S.items || []).filter(function (i) { if (!i.st || (es[i.st.id] && es[i.st.id].v === 3 && ('t' in es[i.st.id] || !es[i.st.id].n)) || seen[i.st.id]) return false; seen[i.st.id] = 1; return true; });
@@ -109,7 +109,7 @@
     }
     function next() {
       var it = todo.shift();
-      if (!it) { if (--active === 0) { trRunning = false; MV.save('stEs', es); if (tids && MV.redupeLater) MV.redupeLater(); if (changed && MV.rerender) MV.rerender(); } return; }
+      if (!it) { if (--active === 0) { trRunning = false; MV.save('stEs', es); if (tids && MV.redupeLater) MV.redupeLater(); if (changed && MV.rerenderQuiet) MV.rerenderQuiet(); } return; }
       var id = it.st.id;
       // Con id de IMDb se busca exacto; anime (Kitsu, MAL…) y otros se buscan por nombre y año
       var q = /^tt\d+$/.test(id) ? MV.tmdb('/find/' + id, '&external_source=imdb_id&language=es-MX').then(function (r) { return r && ((r.movie_results || [])[0] || (r.tv_results || [])[0]); })
@@ -476,7 +476,7 @@
   };
   var running = false, saveT = 0;
   MV.stCheckLinks = function () {
-    if (running || !MV.S.prefs.stOnlyLinked) return;
+    if (running || MV.playing || !MV.S.prefs.stOnlyLinked) return;
     var streamers = lists().filter(function (l) { var m = l.man || {}; return !m.resources || res(m, 'stream'); });
     if (!streamers.length) return;
     // Pendientes: sin revisar, o con un solo fallo de hace más de 6 h (se confirma antes de esconderlo)
@@ -491,7 +491,7 @@
       if (pr) for (var q = 0; q < todo.length; q++) if (pr[todo[q].key]) { pi = q; break; }
       var it = pi >= 0 ? todo.splice(pi, 1)[0] : todo.shift();
       if (it && !need(it)) return next();
-      if (!it) { if (--active > 0) return; running = false; MV.save('stLinks', lk()); MV._stLinkV = (MV._stLinkV || 0) + 1; if (found && MV.rerender) MV.rerender(); return; }
+      if (!it) { if (--active > 0) return; running = false; MV.save('stLinks', lk()); MV._stLinkV = (MV._stLinkV || 0) + 1; if (found && MV.rerenderQuiet) MV.rerenderQuiet(); return; }
       MV._stTorrents = 0;
       // Series: se usa el id real del primer capítulo que da el addon (y así se aprende su equivalente en IMDb)
       var idP = it.st.type !== 'series' ? Promise.resolve(it.st.id)
