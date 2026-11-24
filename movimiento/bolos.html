@@ -67,6 +67,7 @@ small{display:block;font-size:11px;letter-spacing:.2em;font-weight:800;color:#D6
 <script src="../mano.js"></script>
 <script type="importmap">{"imports":{"three":"../vendor/three-0.183.2/three.module.min.js","three/addons/":"../vendor/three-0.183.2/addons/"}}</script>
 <script type="module">
+import * as E from '../estilo.js';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { loadAnims, Animator } from '../anim.js';
@@ -86,7 +87,7 @@ const R = new THREE.WebGLRenderer({ antialias: Q === 2, powerPreference: 'high-p
 R.setPixelRatio(Math.min(devicePixelRatio, Q === 2 ? 1.75 : 1, (Q === 0 ? 960 : 2000) / innerWidth)); R.setSize(innerWidth, innerHeight);
 R.toneMapping = THREE.NeutralToneMapping; R.toneMappingExposure = 1.08; R.shadowMap.enabled = Q > 0; R.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.prepend(R.domElement);
-const S = new THREE.Scene(); S.background = new THREE.Color('#d9d2f0'); S.fog = new THREE.Fog('#d9d2f0', 34, 80);
+const S = new THREE.Scene(); S.background = new THREE.Color('#1d1440'); S.fog = new THREE.Fog('#1d1440', 34, 80);
 const cam = new THREE.PerspectiveCamera(48, innerWidth / innerHeight, 0.05, 120);
 addEventListener('resize', () => { R.setSize(innerWidth, innerHeight); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
 function tex(w, h, draw, rep) { const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d'); draw(g, w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = Q === 0 ? 2 : 8; if (rep) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep[0], rep[1]); } t.userData = { c, g }; return t; }
@@ -118,17 +119,24 @@ for (let k = -NEIGH; k <= NEIGH; k++) {
   if (k < NEIGH) { const bx = x0 + 0.975; box(0.36, 0.55, 1.3, M('#5b4f86'), bx, 0.275, 4.6); ['#2F7DF6', '#F43F5E', '#FFB13D'].forEach((c, i) => { const b = new THREE.Mesh(new THREE.SphereGeometry(0.108, 18, 12), M(c, { roughness: 0.15 })); b.position.set(bx, 0.66, 4.15 + i * 0.3); S.add(b); }); }
 }
 // Paredes de colores, techo con luces y zona del jugador
-const wallTex = tex(1024, 256, (g, w, h) => { const gr = g.createLinearGradient(0, 0, w, 0); gr.addColorStop(0, '#8E5CF7'); gr.addColorStop(0.5, '#FF6A3D'); gr.addColorStop(1, '#FFB13D'); g.fillStyle = gr; g.fillRect(0, 0, w, h); g.fillStyle = 'rgba(255,255,255,.18)'; for (let i = 0; i < 18; i++) { g.beginPath(); g.arc(Math.random() * w, Math.random() * h, 20 + Math.random() * 60, 0, 7); g.fill(); } });
-box(14, 5, 0.2, M('#ffffff', { map: wallTex }), 0, 2.5, -21.0);
-[-1, 1].forEach((s) => box(0.2, 5, 30, M('#b7a8f0'), s * 6.5, 2.5, -6));
-box(14, 0.2, 30, M('#f1ecff'), 0, 4.2, -6);
+const wallTex = tex(1024, 256, (g, w, h) => { const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#120a2e'); gr.addColorStop(1, '#2d1b69'); g.fillStyle = gr; g.fillRect(0, 0, w, h);
+  const cols = ['#ff4dd2', '#00e5ff', '#ffd166', '#7cff6b', '#ff7b00']; for (let i = 0; i < 5; i++) { g.strokeStyle = cols[i]; g.lineWidth = 8; g.shadowColor = cols[i]; g.shadowBlur = 18; g.beginPath(); g.arc(100 + i * 205, h * 0.95, 70 + (i % 2) * 20, Math.PI, 0); g.stroke(); }
+  g.shadowBlur = 0; g.fillStyle = '#ff4dd2'; g.font = '900 56px sans-serif'; g.textAlign = 'center'; g.fillText('MiVibra Bolos', w / 2, 70); });
+box(14, 5, 0.2, new THREE.MeshBasicMaterial({ map: wallTex }), 0, 2.5, -21.0);
+[-1, 1].forEach((s) => box(0.2, 5, 30, M('#2d1b69'), s * 6.5, 2.5, -6));
+box(14, 0.2, 30, M('#120a2e'), 0, 4.2, -6);
 for (let z = -18; z <= 4; z += 4.4) box(9, 0.06, 0.3, new THREE.MeshBasicMaterial({ color: '#fff3e0' }), 0, 4.08, z);
-box(14, 0.05, 7, M('#6d5cc4'), 0, -0.02, 7.5);
+box(14, 0.05, 7, M('#4b2f8f'), 0, -0.02, 7.5);
+// público de las maquetas: sentado en un sofá rosado detrás de la zona de tiro
+const SOFA = (() => { const r = E.seeded(17), spots = []; for (let i = 0; i < 24; i++) spots.push([-6 + i * 0.52 + (r() - 0.5) * 0.2, 0.25, 9.2 + (i % 2) * 0.8, Math.PI]);
+  const sofa = new THREE.Mesh(new THREE.BoxGeometry(14, 0.5, 2.2), E.mat('#ff4dd2')); sofa.position.set(0, 0.25, 9.6); S.add(sofa);
+  const back = new THREE.Mesh(new THREE.BoxGeometry(14, 1, 0.4), E.mat('#d63ab0')); back.position.set(0, 0.75, 10.7); S.add(back);
+  return E.crowd(S, spots, { rnd: r }); })();
 // Marcador grande sobre la zona de lanzamiento
 const boardTex = tex(1024, 256, () => {});
 const board = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 0.7), new THREE.MeshBasicMaterial({ map: boardTex, toneMapped: false })); board.position.set(0, 2.75, -1.6); S.add(board);
 box(2.9, 0.8, 0.06, M('#15121f'), 0, 2.75, -1.64);
-S.add(new THREE.HemisphereLight('#fffaf2', '#8a7ab0', 1.55));
+S.add(new THREE.HemisphereLight('#ffe9ff', '#3b2a6b', 1.8));
 const key = new THREE.DirectionalLight('#fff4e6', 1.8); key.position.set(2, 9, 6); key.target.position.set(0, 0, -6); key.castShadow = Q > 0; key.shadow.mapSize.set(Q === 2 ? 2048 : 1024, Q === 2 ? 2048 : 1024);
 Object.assign(key.shadow.camera, { left: -4, right: 4, top: 16, bottom: -16, near: 1, far: 40 }); key.shadow.bias = -0.0004; S.add(key, key.target);
 if (Q > 0) { const p = new THREE.PointLight('#fff4e6', 6, 6, 1.4); p.position.set(0, 1.0, -17.4); S.add(p); }
@@ -623,7 +631,7 @@ function loop(now) {
   if (aim.visible) { const pos = aimGeo.attributes.position, hk = -(G.spin || 0); for (let j = 0; j <= NSEG; j++) { const d = 0.4 + j / NSEG * 17.6, x = G.aimX + 0.18 + hk * 0.45 * Math.pow(Math.max(0, d - 7) / 11, 2) * 0.5, z = 0.15 - d, w = 0.08 + j / NSEG * 0.05; pos.setXYZ(j * 2, x - w, 0.005, z); pos.setXYZ(j * 2 + 1, x + w, 0.005, z); } pos.needsUpdate = true; aimGeo.computeBoundingSphere(); }
   if ((now | 0) % 3 === 0) stickDraw();
   camera(rdt || 0.016);
-  neonTick(now);
+  neonTick(now); SOFA.tick(now / 1000);
   FXC.render(R, S, cam, rdt);
 }
 

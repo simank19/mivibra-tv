@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Fútbol playa · MiVibra Movimiento</title>
+<title>Fútbol · MiVibra Movimiento</title>
 <style>
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;overflow:hidden;background:#1d1f24;color:#fff;font-family:Manrope,Inter,system-ui,sans-serif}
@@ -40,7 +40,7 @@ small{display:block;font-size:11px;letter-spacing:.2em;font-weight:800;color:#D6
 </style>
 </head>
 <body>
-<div id="hud" class="ui glass"><small>MIVIBRA MOVIMIENTO · PLAYA</small><b>Fútbol playa · penales</b></div>
+<div id="hud" class="ui glass"><small>MIVIBRA MOVIMIENTO · ESTADIO</small><b>Fútbol · penales</b></div>
 <div id="score" class="ui glass"><span class="nm"><i id="c0"></i><span id="n0">Tú</span></span><span class="shots" id="s0"></span><span class="tot" id="t0">0</span><span class="nm"><i id="c1"></i><span id="n1">MiVibra</span></span><span class="shots" id="s1"></span><span class="tot" id="t1">0</span></div>
 <div id="cue" class="ui glass"></div>
 <div id="big" class="ui"><b id="bigT"></b><span id="bigS"></span></div>
@@ -61,7 +61,8 @@ import { build as buildAvatar, decode as decodeAvatar, DEFAULT, PRESETS } from '
 import { Espejo, celebrate, facesCam, portraitSnap, reachArm } from '../espejo.js';
 import { createFX } from '../fx.js';
 import { makeSound } from '../sonido.js';
-import { buildBeach, BEACH_FX, readSaved, fromApp, bodyReader, tex } from '../playa.js';
+import * as E from '../estilo.js';
+import { BEACH_FX, readSaved, fromApp, bodyReader, tex } from '../playa.js';
 
 const $ = (id) => document.getElementById(id);
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x)), lerp = (a, b, k) => a + (b - a) * k, rnd = (a, b) => a + Math.random() * (b - a);
@@ -77,9 +78,10 @@ const cam = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.05, 400)
 const FXC = createFX(THREE, S, cam, Q);   // efectos divertidos (fx.js)
 addEventListener('resize', () => { R.setSize(innerWidth, innerHeight); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
 
-// ---------- Playa, arco y balón (medidas de fútbol playa: arco de 5,5 × 2,2 m, penal a 9 m) ----------
-const GZ = -9, GW = 5.5, GH = 2.2;
-const BEACH = buildBeach(S, Q, { ads: [[0, -14, 26, 0], [-13, -4, 18, Math.PI / 2], [13, -4, 18, -Math.PI / 2]], crowd: [[-12, -18, 12, -15.5, 70], [-18, -12, -14.5, 6, 40], [14.5, -12, 18, 6, 40]], seaZ: 40 });
+// ---------- Estadio, arco y balón (medidas reales: arco de 7,32 × 2,44 m, penal a 11 m) ----------
+const GZ = -11, GW = 7.32, GH = 2.44;
+const BEACH = { M: (c, o) => E.mat(c, o), update: () => {} };   // escenario de las maquetas: estadio lleno
+{ const fans = E.stadium(S, { goalZ: GZ, Q, sponsors: await E.loadSponsors() }); BEACH.update = (t) => fans.tick(t); }
 const M = BEACH.M;
 const postM = M('#ffffff');
 [-1, 1].forEach((s) => { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, GH, 10), postM); p.position.set(s * GW / 2, GH / 2, GZ); p.castShadow = Q > 0; S.add(p); });
@@ -93,7 +95,6 @@ const netTop = new THREE.Mesh(new THREE.PlaneGeometry(GW, 1.2), netM); netTop.ro
 // líneas en la arena (cinta azul) y punto penal
 const lineM = new THREE.MeshBasicMaterial({ color: '#2F7DF6' });
 const line = (w, d, x, z) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), lineM); m.rotation.x = -Math.PI / 2; m.position.set(x, 0.015, z); S.add(m); };
-line(26, 0.1, 0, GZ); line(0.1, 9, -13, GZ + 4.5); line(0.1, 9, 13, GZ + 4.5); line(26, 0.1, 0, 0.5);
 const spot = new THREE.Mesh(new THREE.CircleGeometry(0.15, 16), new THREE.MeshBasicMaterial({ color: '#ffffff' })); spot.rotation.x = -Math.PI / 2; spot.position.set(0, 0.016, 0); S.add(spot);
 const ballTex = tex(256, 128, (g, w, h) => { g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); const cols = ['#FF6A3D', '#2F7DF6', '#FFB13D', '#8E5CF7']; for (let i = 0; i < 12; i++) { g.fillStyle = cols[i % 4]; g.beginPath(); const x = (i % 6) * w / 6 + 20, y = i < 6 ? h * 0.3 : h * 0.72; for (let k = 0; k < 5; k++) { const a = k / 5 * Math.PI * 2; g.lineTo(x + Math.cos(a) * 14, y + Math.sin(a) * 14); } g.fill(); } });
 const BR = 0.11, ball = new THREE.Mesh(new THREE.SphereGeometry(BR, 20, 14), M('#ffffff', { map: ballTex })); ball.castShadow = Q > 0; S.add(ball);
@@ -183,7 +184,7 @@ function endGame() {
   big(title, '¡Celebra! Tu avatar baila contigo', 2400); SND.play('ovacion'); SND.play('aplausos', 0.7, 1, 1);
   { const a = P[w].av ? P[w].av.scene.position : { x: 0, y: 0, z: 0 }; FXC.party([a.x, 0.3, a.z], '¡CAMPEÓN!', '#FFE600'); setTimeout(() => FXC.fireworks([a.x, 0, a.z - 6], 6, 5, 6), 900); }
   const slots = [0, 1].filter((k) => !P[k].cpu && MVLink.players[P[k].slot]).map((k) => P[k].slot);
-  setTimeout(() => MVPhoto.take({ title, sub: 'Fútbol playa · penales ' + goals(0) + ' – ' + goals(1), slots: !P[w].cpu && MVLink.players[P[w].slot] ? [P[w].slot] : slots.slice(0, 1), snap: () => portraitSnap(R, S, P[w].av), done: endMenu }), 1800);
+  setTimeout(() => MVPhoto.take({ title, sub: 'Fútbol · penales ' + goals(0) + ' – ' + goals(1), slots: !P[w].cpu && MVLink.players[P[w].slot] ? [P[w].slot] : slots.slice(0, 1), snap: () => portraitSnap(R, S, P[w].av), done: endMenu }), 1800);
 }
 function endMenu() {
   MVHand.menu({ kicker: 'FIN DE LA TANDA', title: goals(0) + ' – ' + goals(1), sub: P[G.win].name + ' gana', dim: 0.25, items: [{ id: 'again', label: 'Revancha', icon: '↻' }, { id: 'menu', label: 'Menú principal', icon: '☰' }, { id: 'edit', label: 'Cambiar mi avatar', icon: '☺' }, { id: 'exit', label: 'Salir', icon: '✕' }], back: 'menu', onPick: menuPick });
@@ -282,7 +283,7 @@ function logic(dt) {
 function plsDraw() {}
 function startMenu() {
   G.state = 'menu'; MVHand.pauseEnabled = false; $('connect').classList.add('on'); keys(''); const n = MVLink.count();
-  MVHand.menu({ kicker: 'MIVIBRA MOVIMIENTO · PLAYA', title: 'Fútbol playa', sub: 'Tanda de penales: pateas y atajas por turnos. ' + (n ? 'Celular conectado.' : 'Conecta el celular o usa el control.'),
+  MVHand.menu({ kicker: 'MIVIBRA MOVIMIENTO · ESTADIO', title: 'Fútbol', sub: 'Tanda de penales: pateas y atajas por turnos. ' + (n ? 'Celular conectado.' : 'Conecta el celular o usa el control.'),
     items: [{ id: 'cpu', label: 'Penales contra MiVibra', icon: '▶' }, { id: 'two', label: '2 jugadores', icon: '⚔' }, { id: 'lvl', label: 'Dificultad: ' + LVL[G.lvl].name, icon: '★' }, { id: 'exit', label: 'Salir', icon: '✕' }], back: 'exit', onPick: menuPick });
 }
 function pause() { if (G.state === 'menu' || G.state === 'end' || MVHand.open) return; G.paused = true;

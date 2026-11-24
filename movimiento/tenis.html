@@ -60,6 +60,7 @@ small{display:block;font-size:11px;letter-spacing:.2em;font-weight:800;color:#D6
 <script src="../mano.js"></script>
 <script type="importmap">{"imports":{"three":"../vendor/three-0.183.2/three.module.min.js","three/addons/":"../vendor/three-0.183.2/addons/"}}</script>
 <script type="module">
+import * as E from '../estilo.js';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { loadAnims, Animator } from '../anim.js';
@@ -78,7 +79,7 @@ const R = new THREE.WebGLRenderer({ antialias: Q === 2, powerPreference: 'high-p
 R.setPixelRatio(Math.min(devicePixelRatio, Q === 2 ? 1.75 : 1, (Q === 0 ? 960 : 2000) / innerWidth)); R.setSize(innerWidth, innerHeight);
 R.toneMapping = THREE.NeutralToneMapping; R.toneMappingExposure = 1.08; R.shadowMap.enabled = Q > 0; R.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.prepend(R.domElement);
-const S = new THREE.Scene(); S.background = new THREE.Color('#2a2350');
+const S = new THREE.Scene(); S.background = new THREE.Color('#bfe3ff');
 const cam = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.05, 80);
 const FXC = createFX(THREE, S, cam, Q);   // efectos divertidos (fx.js)
 addEventListener('resize', () => { R.setSize(innerWidth, innerHeight); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
@@ -88,19 +89,18 @@ function box(w, h, d, m, x, y, z) { const b = new THREE.Mesh(new THREE.BoxGeomet
 
 // ---------- Sala y mesa (medidas reales: 2,74 × 1,525 m, a 76 cm, red de 15,25 cm) ----------
 const TW = 1.525, TL = 2.74, TH = 0.76, NH = 0.1525, HALF = TL / 2, BR = 0.02, BRV = 0.032;
-const floorTex = tex(512, 512, (g, w, h) => { g.fillStyle = '#3b2f74'; g.fillRect(0, 0, w, h); for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) { g.fillStyle = (i + j) % 2 ? 'rgba(255,255,255,.035)' : 'rgba(0,0,0,.05)'; g.fillRect(i * 64, j * 64, 64, 64); } });
-floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping; floorTex.repeat.set(4, 4);
-const floor = new THREE.Mesh(new THREE.PlaneGeometry(16, 16), M('#ffffff', { map: floorTex, roughness: 0.8 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; S.add(floor);
-// cancha naranja bajo la mesa
-const court = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 7.2), M('#FF6A3D', { roughness: 0.7 })); court.rotation.x = -Math.PI / 2; court.position.y = 0.004; court.receiveShadow = true; S.add(court);
-const wallTex = tex(1024, 256, (g, w, h) => { const gr = g.createLinearGradient(0, 0, w, 0); gr.addColorStop(0, '#8E5CF7'); gr.addColorStop(0.5, '#FF6A3D'); gr.addColorStop(1, '#FFB13D'); g.fillStyle = gr; g.fillRect(0, 0, w, h); g.fillStyle = 'rgba(255,255,255,.9)'; g.font = '900 92px Manrope,Inter,sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('MiVibra · Tenis de mesa', w / 2, h / 2); });
-box(16, 4, 0.2, M('#ffffff', { map: wallTex }), 0, 2, -6);
-[-1, 1].forEach((s) => box(0.2, 4, 16, M('#5b4f9a'), s * 6, 2, 0));
-// vallas bajas alrededor con colores MiVibra
-['#2F7DF6', '#34D399', '#F43F5E', '#FFB13D'].forEach((c, i) => { const s = i < 2 ? -1 : 1; box(0.06, 0.55, 2.2, M(c), s * 2.6, 0.275, (i % 2 ? 1.4 : -1.4)); });
+// gimnasio de las maquetas: piso de madera, paredes de colores, gradita con público y marcador
+const GYM = (() => { const r = E.seeded(13);
+  const fl = E.canvasTex(512, 512, (c, w, h) => { for (let i = 0; i < 16; i++) { c.fillStyle = i % 2 ? '#e9b872' : '#dfa95f'; c.fillRect(0, i * h / 16, w, h / 16); } c.strokeStyle = '#ff4d6d'; c.lineWidth = 6; c.strokeRect(60, 60, w - 120, h - 120); }, [2, 2]);
+  E.plane(S, 30, 30, new THREE.MeshToonMaterial({ map: fl }));
+  const wall = E.canvasTex(1024, 256, (c, w, h) => { c.fillStyle = '#7cc6ff'; c.fillRect(0, 0, w, h); c.fillStyle = '#ffd166'; c.fillRect(0, h * 0.62, w, h * 0.38); c.fillStyle = '#FF2EA8'; c.font = '900 64px sans-serif'; c.textAlign = 'center'; c.fillText('MiVibra', w / 2, h * 0.42); });
+  const wm = new THREE.Mesh(new THREE.PlaneGeometry(30, 7), new THREE.MeshBasicMaterial({ map: wall })); wm.position.set(0, 3.5, -9); S.add(wm);
+  const ws = wm.clone(); ws.rotation.y = Math.PI / 2; ws.position.set(-11, 3.5, 0); S.add(ws); const ws2 = wm.clone(); ws2.rotation.y = -Math.PI / 2; ws2.position.set(11, 3.5, 0); S.add(ws2);
+  const spots = E.stands(S, { x: 0, z: -6.5, ry: 0, w: 14, rows: Q === 0 ? 3 : 4, color: '#ff4d6d', rnd: r, fill: 0.8 }).concat(E.stands(S, { x: -6.5, z: 0, ry: Math.PI / 2, w: 10, rows: 3, color: '#3a86ff', rnd: r, fill: 0.7 }));
+  return E.crowd(S, spots, { rnd: r }); })();
 // mesa
-const topTex = tex(256, 512, (g, w, h) => { g.fillStyle = '#1f5fd6'; g.fillRect(0, 0, w, h); g.fillStyle = '#fff'; g.fillRect(0, 0, w, 6); g.fillRect(0, h - 6, w, 6); g.fillRect(0, 0, 6, h); g.fillRect(w - 6, 0, 6, h); g.fillRect(w / 2 - 2, 0, 4, h); });
-const top = new THREE.Mesh(new THREE.BoxGeometry(TW, 0.03, TL), [M('#17469f'), M('#17469f'), M('#ffffff', { map: topTex, roughness: 0.35 }), M('#17469f'), M('#17469f'), M('#17469f')]);
+const topTex = tex(256, 512, (g, w, h) => { g.fillStyle = '#1f7a4d'; g.fillRect(0, 0, w, h); g.fillStyle = '#fff'; g.fillRect(0, 0, w, 6); g.fillRect(0, h - 6, w, 6); g.fillRect(0, 0, 6, h); g.fillRect(w - 6, 0, 6, h); g.fillRect(w / 2 - 2, 0, 4, h); });
+const top = new THREE.Mesh(new THREE.BoxGeometry(TW, 0.03, TL), [M('#145c39'), M('#145c39'), M('#ffffff', { map: topTex, roughness: 0.35 }), M('#145c39'), M('#145c39'), M('#145c39')]);
 top.position.set(0, TH - 0.015, 0); top.receiveShadow = true; top.castShadow = Q > 0; S.add(top);
 const legM = M('#2A2C2E');
 [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([a, b]) => box(0.05, TH - 0.03, 0.05, legM, a * (TW / 2 - 0.15), (TH - 0.03) / 2, b * (HALF - 0.3)));
@@ -466,7 +466,7 @@ function loop(now) {
   requestAnimationFrame(loop);
   let dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (G.paused) dt = 0;
-const rdt = dt; dt = FXC.time(dt);
+  const rdt = dt; dt = FXC.time(dt); GYM.tick(now / 1000);
   if (B.live && dt && B.v.lengthSq() > 40) FXC.trail(B.p, '#FFD166', 0.05);
   G.t += dt;
   if (G.state === 'play') {

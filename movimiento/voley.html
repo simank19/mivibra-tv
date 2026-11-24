@@ -57,7 +57,8 @@ import { build as buildAvatar, decode as decodeAvatar, DEFAULT, PRESETS } from '
 import { Espejo, celebrate, facesCam, portraitSnap, reachArm } from '../espejo.js';
 import { createFX } from '../fx.js';
 import { makeSound } from '../sonido.js';
-import { buildBeach, BEACH_FX, readSaved, fromApp, bodyReader, tex } from '../playa.js';
+import * as E from '../estilo.js';
+import { BEACH_FX, readSaved, fromApp, bodyReader, tex } from '../playa.js';
 
 const $ = (id) => document.getElementById(id);
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x)), lerp = (a, b, k) => a + (b - a) * k, rnd = (a, b) => a + Math.random() * (b - a);
@@ -75,7 +76,8 @@ addEventListener('resize', () => { R.setSize(innerWidth, innerHeight); cam.aspec
 
 // ---------- Cancha (16 × 8 m, red a 2,24 m) ----------
 const CL = 8, CW = 4, NETH = 2.24, GRAV = -6.5;   // gravedad algo menor: la bola "flota" y da tiempo de reaccionar
-const BEACH = buildBeach(S, Q, { ads: [[0, -12, 22, 0], [-8, 0, 20, Math.PI / 2], [8, 0, 20, -Math.PI / 2]], crowd: [[-11, -16, 11, -13, 70], [-14, -10, -10.5, 10, 50], [10.5, -10, 14, 10, 50]], seaZ: 40 });
+const BEACH = { M: (c, o) => E.mat(c, o), update: () => {} };   // playa de las maquetas
+{ const fans = E.beach(S, { Q, sponsors: await E.loadSponsors() }); BEACH.update = (t) => fans.tick(t); }
 const M = BEACH.M;
 const tapeM = new THREE.MeshBasicMaterial({ color: '#2F7DF6' });
 const tape = (w, d, x, z) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), tapeM); m.rotation.x = -Math.PI / 2; m.position.set(x, 0.015, z); S.add(m); };

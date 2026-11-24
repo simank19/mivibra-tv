@@ -281,3 +281,41 @@ export async function loadSponsors() {
   try { if (window.MV_SPONSORS) return window.MV_SPONSORS; const r = await fetch(new URL('./patrocinadores.json', import.meta.url)); if (!r.ok) return SPONSORS;
     const list = await r.json(); await Promise.all(list.map((s) => s.logo ? new Promise((ok) => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => { s.img = i; ok(); }; i.onerror = ok; i.src = s.logo; }) : 0)); return list.length ? list : SPONSORS; } catch (e) { return SPONSORS; }
 }
+
+// Estadio de fútbol de las maquetas: pasto a franjas, líneas, gradas llenas y vallas de patrocinadores.
+// La portería norte queda en z = goalZ (los juegos ponen su propio arco). Devuelve { tick(t) } para animar el público.
+export function stadium(scene, { W = 50, D = 72, goalZ = -11, rnd = seeded(3), sponsors = SPONSORS, Q = 2 } = {}) {
+  sky(scene, '#2f8fff', '#bfe8ff'); lights(scene, { ground: '#5aa04a' }); clouds(scene, 8, 200, 70, rnd);
+  const cz = goalZ + D / 2;
+  const grass = canvasTex(256, 256, (c, w, h) => { for (let i = 0; i < 8; i++) { c.fillStyle = i % 2 ? '#5fcf4a' : '#52bf3f'; c.fillRect(0, i * h / 8, w, h / 8); } }, [1, 4]);
+  plane(scene, 140, 160, '#46a83a', -0.02).position.z = cz;
+  plane(scene, W, D, new THREE.MeshToonMaterial({ map: grass })).position.z = cz;
+  const L = canvasTex(1024, 1474, (c, w, h) => { const s = w / W; c.strokeStyle = '#fff'; c.lineWidth = 5;
+    c.strokeRect(10, 10, w - 20, h - 20); c.beginPath(); c.moveTo(10, h / 2); c.lineTo(w - 10, h / 2); c.stroke(); c.beginPath(); c.arc(w / 2, h / 2, 9.15 * s, 0, 7); c.stroke();
+    c.strokeRect(w / 2 - 20 * s, 10, 40 * s, 16.5 * s); c.strokeRect(w / 2 - 9 * s, 10, 18 * s, 5.5 * s); c.strokeRect(w / 2 - 20 * s, h - 10 - 16.5 * s, 40 * s, 16.5 * s);
+    c.fillStyle = '#fff'; c.beginPath(); c.arc(w / 2, 10 + 11 * s, 6, 0, 7); c.fill(); c.beginPath(); c.arc(w / 2, 10 + 16.5 * s, 9.15 * s, 0.65, Math.PI - 0.65); c.stroke(); });
+  const lm = new THREE.Mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshBasicMaterial({ map: L, transparent: true, depthWrite: false }));
+  lm.rotation.x = -Math.PI / 2; lm.position.set(0, 0.01, cz); scene.add(lm);
+  const g = new THREE.Group(); scene.add(g);
+  const fans = bowl(g, { w: W + 6, d: D + 6, gap: 2, rows: Q === 0 ? 6 : 9, rnd, color: '#3d4f7a' });
+  boards(g, W, D, rnd, sponsors); g.position.z = cz;
+  return fans;
+}
+
+// Playa de las maquetas: arena con dunas, mar, palmeras, sombrillas y gradas bajas con público. Devuelve { tick }.
+export function beach(scene, { rnd = seeded(9), Q = 2, sponsors = SPONSORS } = {}) {
+  sky(scene, '#1f9bff', '#fff3d6', '#bfe9ff'); lights(scene, { ground: '#f2d39b', sun: '#fff0cc' }); clouds(scene, 7, 220, 55, rnd);
+  const g = new THREE.PlaneGeometry(120, 80, 40, 30); g.rotateX(-Math.PI / 2);
+  const P = g.attributes.position; for (let i = 0; i < P.count; i++) { const x = P.getX(i), z = P.getZ(i); P.setY(i, (Math.abs(x) > 10 || z > 8 ? 0.35 : 0) * (Math.sin(x * 0.3) + Math.cos(z * 0.25))); }
+  g.computeVertexNormals(); const sand = new THREE.Mesh(g, mat('#f6d58e')); sand.position.z = 10; scene.add(sand);
+  plane(scene, 400, 200, new THREE.MeshToonMaterial({ color: '#16b6d9', emissive: '#0b5f9a', emissiveIntensity: 0.25 }), -0.05).position.z = -120;
+  plane(scene, 400, 1.2, new THREE.MeshBasicMaterial({ color: '#ffffff' }), -0.03).position.z = -20.5;
+  plane(scene, 400, 4, '#e6c27c', -0.04).position.z = -18.5;
+  trees(scene, [[-12, 0, -6, 1.2], [-15, 0, 3, 1], [13, 0, -4, 1.3], [16, 0, 5, 1.1], [-9, 0, -14, 0.9], [10, 0, -13, 1], [-14, 0, 12, 1.1], [15, 0, 13, 1.2]], 'palm', rnd);
+  const umb = (x, z, col) => { const u = new THREE.Mesh(new THREE.ConeGeometry(1.4, 0.6, 10), mat(col)); u.position.set(x, 2.3, z); scene.add(u); const s = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.2, 6), mat('#ffffff')); s.position.set(x, 1.1, z); scene.add(s); };
+  umb(-9, 8, '#ff4d6d'); umb(9.5, 9, '#06d6a0'); umb(-11, -6, '#ffd166'); umb(11, -5, '#8338ec');
+  const spots = stands(scene, { x: -8.5, z: 0, ry: Math.PI / 2, w: 16, rows: Q === 0 ? 2 : 3, color: '#ffffff', rnd, fill: 0.85 }).concat(stands(scene, { x: 8.5, z: 0, ry: -Math.PI / 2, w: 16, rows: Q === 0 ? 2 : 3, color: '#ffffff', rnd, fill: 0.85 }));
+  const fans = crowdFlat(scene, spots, { rnd });
+  boards(scene, 15, 24, rnd, sponsors, [1, 0, 0, 0]);
+  return fans;
+}
