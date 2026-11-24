@@ -290,7 +290,7 @@
           var h = (s.behaviorHints && s.behaviorHints.proxyHeaders && s.behaviorHints.proxyHeaders.request) || {};
           return { url: s.url, title: String(s.title || s.description || s.name || '').replace(/\s+/g, ' ').trim(), src: s.name || l.name || '', lid: l.id, ua: h['User-Agent'] || h['user-agent'] || '', ref: h.Referer || h.referer || '' };
         });
-      }).catch(function (e) { failed++; if (typeof D[l.name] !== 'number') D[l.name] = 'no respondió' + (e && /40[13]/.test(e.message || '') ? ' (acceso denegado: revisa su configuración)' : ''); return []; });
+      }).catch(function (e) { failed++; var m = (e && e.message) || ''; if (typeof D[l.name] !== 'number') D[l.name] = 'no respondió' + (/40[13]/.test(m) ? ' (acceso denegado: revisa su configuración)' : /cert|ssl|handshake|trust/i.test(m) ? ' (el equipo no acepta su certificado https: revisa la fecha y hora del TV)' : /timeout|tiempo|timed out|tard/i.test(m) ? ' (tardó más de 12 s)' : /unknownhost|resolve|dns/i.test(m) ? ' (no se encontró el servidor: revisa el internet o el DNS del TV)' : m ? ' (' + m.slice(0, 80) + ')' : ''); return []; });
     });
     // Primero los que se ven como video (mp4, mkv, m3u8…); al final los que pueden ser páginas web
     function score(x) { var u = x.url.toLowerCase().split('?')[0]; return /\.(mp4|mkv|m3u8|webm|avi|mov|ts|mpd)$/.test(u) ? 0 : /\/(hls|stream|video|playlist|manifest)/.test(u) ? 1 : 2; }

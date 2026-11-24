@@ -5,6 +5,8 @@
         <trust-anchors>
             <certificates src="system" />
             <certificates src="user" />
+            <!-- Raíces de Let's Encrypt: los televisores con Android viejo no las traen y no abren muchos addons ni servidores https -->
+            <certificates src="@raw/isrg_roots" />
         </trust-anchors>
     </base-config>
 </network-security-config>
