@@ -65,6 +65,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { loadAnims, Animator } from '../anim.js';
 import { build as buildAvatar, decode as decodeAvatar, DEFAULT, PRESETS } from '../avatar.js';
 import { Espejo, celebrate, facesCam, snapCanvas, portraitSnap, reachArm } from '../espejo.js';
+import { createFX } from '../fx.js';
 
 const $ = (id) => document.getElementById(id);
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x)), lerp = (a, b, k) => a + (b - a) * k, rnd = (a, b) => a + Math.random() * (b - a);
@@ -79,6 +80,7 @@ R.toneMapping = THREE.NeutralToneMapping; R.toneMappingExposure = 1.08; R.shadow
 document.body.prepend(R.domElement);
 const S = new THREE.Scene(); S.background = new THREE.Color('#2a2350');
 const cam = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.05, 80);
+const FXC = createFX(THREE, S, cam, Q);   // efectos divertidos (fx.js)
 addEventListener('resize', () => { R.setSize(innerWidth, innerHeight); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
 function tex(w, h, draw) { const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d'); draw(g, w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = Q === 2 ? 4 : 1; return t; }
 const M = (c, o = {}) => Q === 0 ? (() => { const k = Object.assign({}, o); delete k.roughness; delete k.metalness; return new THREE.MeshLambertMaterial(Object.assign({ color: c }, k)); })() : new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.6 }, o));
@@ -207,6 +209,7 @@ function hit(side, aimX, power, smash) {
   shot(side, tx, tz, speed);
   if (cpu && Math.random() < lv.err * 0.5) B.v.y *= 0.72;   // a veces la deja en la red
   SND.play(smash ? 'smash' : 'pad', 1, rnd(0.95, 1.05)); swingAnim(SIDES[side].av, smash);
+  { const b = B.p; FXC.sparks(b, smash ? 0.9 : 0.25, smash ? '#FFE9A8' : '#ffffff'); if (smash) { FXC.ring(b.x, b.y, b.z, '#FF2EA8', 0.8, false); FXC.shake(0.4); FXC.pop(b.x, b.y + 0.45, b.z, '¡ZAS!', '#FF2EA8', 0.8); FXC.punch(4); } }
   if (smash) { cue('¡REMATE!', true); MVLink.say('¡Remate!', true, slotOf(side)); }
 }
 function serve() {
@@ -231,6 +234,7 @@ function point(winner, why) {
   big(G.sc[0] + ' – ' + G.sc[1], (winner === 0 && G.mode === 'cpu' ? '¡Punto para ti! ' : 'Punto de ' + SIDES[winner].name + '. ') + (why || ''), 1500);
   MVLink.say('Punto ' + G.sc[slotOf(winner)] + '–' + G.sc[1 - slotOf(winner)], true, slotOf(winner)); if (G.mode === 'two') MVLink.say('Punto para ' + SIDES[winner].name, false, slotOf(loser));
   G.pw = winner; CELS[winner].t = 0; CELS[winner].style = null;
+  { const b = B.p; if (human) { FXC.stars([b.x, TH + 0.3, b.z], 7); FXC.pop(0, TH + 0.7, 0, G.rally >= 6 ? '¡QUÉ PELOTEO!' : '¡PUNTO!', '#FFE600', 0.8); if (G.rally >= 6) FXC.confetti([0, TH + 1.4, 0], false, 1); } else FXC.pop(b.x, TH + 0.5, b.z, '¡AY!', '#B9B1A8', 0.6); }
   const [a0, a1] = G.sc, done = (a0 >= G.winTo || a1 >= G.winTo) && Math.abs(a0 - a1) >= 2;
   G.serveN++; const deuce = a0 >= G.winTo - 1 && a1 >= G.winTo - 1;
   if (deuce || G.serveN >= 2) { G.serveN = 0; G.server = 1 - G.server; }
@@ -295,7 +299,7 @@ function physics(dt) {
   if ((oz > 0) !== (p.z > 0) && p.y < TH + NH + BR && Math.abs(p.x) < TW / 2 + 0.15) { p.z = oz > 0 ? 0.03 : -0.03; v.z *= -0.15; v.x *= 0.3; v.y = Math.min(v.y, 0.3); SND.play('net'); }
   // mesa
   if (p.y < TH + BR && v.y < 0 && Math.abs(p.x) < TW / 2 && Math.abs(p.z) < HALF && p.y > TH - 0.05) {
-    p.y = TH + BR; v.y = -v.y * 0.86; v.x *= 0.97; v.z *= 0.97; SND.play('tab', 0.9, rnd(0.95, 1.08));
+    p.y = TH + BR; v.y = -v.y * 0.86; v.x *= 0.97; v.z *= 0.97; SND.play('tab', 0.9, rnd(0.95, 1.08)); FXC.ring(p.x, TH + 0.005, p.z, '#ffffff', 0.18);
     const side = p.z > 0 ? 0 : 1; G.bounces[side]++;
     if (side === G.last) return point(1 - side, 'Rebotó en su propio lado');
     if (G.bounces[side] >= 2) return point(1 - side, 'Dos botes');
@@ -403,6 +407,7 @@ function endGame() {
   [0, 1].forEach((k) => { if (MVLink.players[k]) MVLink.say(k === w ? '¡Ganaste el partido! Celebra para la foto' : 'Buen partido. ¡La revancha!', k === w, k); });
   const title = G.mode === 'cpu' ? (w === 0 ? '¡Ganaste!' : 'Gana MiVibra') : '¡Gana ' + SIDES[w].name + '!';
   big(title, '¡Celebra! Tu avatar baila contigo', 2400);
+  { const a = SIDES[w].av ? SIDES[w].av.scene.position : { x: 0, y: 0, z: 0 }; FXC.party([a.x, 0.3, a.z], '¡CAMPEÓN!', '#FFE600'); setTimeout(() => FXC.fireworks([0, 0.5, 0], 5, 3, 3.5), 900); }
   const ps = ctl(w) === 'cam' && MVLink.players[slotOf(w)] ? [slotOf(w)] : (G.mode === 'cpu' && MVLink.players[0] ? [0] : []);
   setTimeout(() => MVPhoto.take({ title, sub: 'Tenis de mesa · ' + G.sc[0] + ' – ' + G.sc[1], slots: ps, snap: () => portraitSnap(R, S, SIDES[w].av), done: endMenu }), 1800);
 }
@@ -461,6 +466,8 @@ function loop(now) {
   requestAnimationFrame(loop);
   let dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (G.paused) dt = 0;
+const rdt = dt; dt = FXC.time(dt);
+  if (B.live && dt && B.v.lengthSq() > 40) FXC.trail(B.p, '#FFD166', 0.05);
   G.t += dt;
   if (G.state === 'play') {
     drivePads(dt);
@@ -475,7 +482,7 @@ function loop(now) {
   placeScene(dt, now);
   if ((stickN++ % (Q === 0 ? 4 : 2)) === 0) stickDraw();
   camera(dt || 0.016);
-  R.render(S, cam);
+  FXC.render(R, S, cam, rdt);
 }
 
 // ---------- Inicio ----------

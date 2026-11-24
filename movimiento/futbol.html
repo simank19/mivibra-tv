@@ -59,6 +59,7 @@ import * as THREE from 'three';
 import { loadAnims, Animator } from '../anim.js';
 import { build as buildAvatar, decode as decodeAvatar, DEFAULT, PRESETS } from '../avatar.js';
 import { Espejo, celebrate, facesCam, portraitSnap, reachArm } from '../espejo.js';
+import { createFX } from '../fx.js';
 import { makeSound } from '../sonido.js';
 import { buildBeach, BEACH_FX, readSaved, fromApp, bodyReader, tex } from '../playa.js';
 
@@ -73,6 +74,7 @@ R.toneMapping = THREE.NeutralToneMapping; R.toneMappingExposure = 1.05; R.shadow
 document.body.prepend(R.domElement);
 const S = new THREE.Scene();
 const cam = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.05, 400);
+const FXC = createFX(THREE, S, cam, Q);   // efectos divertidos (fx.js)
 addEventListener('resize', () => { R.setSize(innerWidth, innerHeight); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
 
 // ---------- Playa, arco y balón (medidas de fútbol playa: arco de 5,5 × 2,2 m, penal a 9 m) ----------
@@ -160,6 +162,7 @@ function shoot(tx, ty, pow) {
   const from = new THREE.Vector3(0, BR, 0), T = lerp(0.95, 0.55, pow), to = new THREE.Vector3(tx, ty, GZ);
   G.flight = { from, to, T, t: 0, saved: false, out: Math.abs(tx) > GW / 2 - 0.05 || ty > GH - 0.05 };
   G.state = 'flight'; G.t = 0; SND.play('patada', 1, rnd(0.95, 1.05)); keys('');
+  FXC.dust([0, 0, 0], '#f4dfb0', 12, 0.22); FXC.ring(0, 0.03, 0, '#ffffff', 1); FXC.shake(0.25 + pow * 0.4); if (pow > 0.8) { FXC.pop(0, 1.1, -0.6, '¡ZAS!', '#FFE600', 0.7); FXC.punch(5); }
   // la máquina de arquero adivina (más fácil de engañar en las esquinas)
   if (P[keeperOf()].cpu) { const lv = LVL[G.lvl]; const right = Math.random() < lv.save + 0.25 ? Math.sign(tx || 1) : Math.sign(rnd(-1, 1)); G.keeper.guess = right * (Math.abs(tx) > 1.6 ? rnd(1.2, 2.2) : rnd(0.2, 1.4)); G.keeper.cpuReach = Math.random() < lv.save ? 1.05 : 0.7; }
 }
@@ -167,6 +170,9 @@ function result(goal, why) {
   G.state = 'result'; G.t = 0; G.shots[G.kicker].push(goal); drawScore();
   const k = G.kicker, kp = keeperOf(); G.res = { goal, by: goal ? k : kp };
   CELS[G.res.by].t = 0; CELS[G.res.by].style = null;
+  { const b = ball.position; if (goal) { FXC.slow(0.7, 0.35); FXC.shake(0.7); FXC.flash('#FFE600', 0.3); FXC.sparks(b, 0.9, '#ffffff'); FXC.ring(b.x, b.y, b.z, '#FFE600', 2.4, false); FXC.pop(b.x, b.y + 1.1, b.z + 0.8, '¡GOOOL!', '#FFE600', 1.1); FXC.confetti([b.x, 2.6, b.z + 1.5], true, 3); FXC.fireworks([0, 0, GZ - 6], 4, 6, 6); }
+    else if (why === 'Afuera') { FXC.dust(b, '#f4dfb0', 10); FXC.pop(b.x, b.y + 0.8, b.z + 0.8, '¡UYY!', '#B9B1A8', 0.8); }
+    else { FXC.shake(0.5); FXC.stars(b, 8, '#00E5FF'); FXC.ring(b.x, b.y, b.z, '#00E5FF', 1.8, false); FXC.pop(b.x, b.y + 1, b.z + 0.8, '¡PARADÓN!', '#00E5FF', 0.9); } }
   if (goal) { big('¡GOOOL!', P[k].name + (why ? ' · ' + why : ''), 2200); SND.play('ovacion', 0.9); MVLink.say('¡Gol!', true, P[k].slot); if (!P[kp].cpu) MVLink.say('Te hicieron gol', false, P[kp].slot); }
   else { big(why === 'Afuera' ? '¡AFUERA!' : '¡ATAJADA!', why === 'Afuera' ? P[k].name + ' la mandó afuera' : P[kp].name + ' la sacó', 2200); SND.play(why === 'Afuera' ? 'arena' : 'aplausos', 0.8); if (!P[kp].cpu && why !== 'Afuera') MVLink.say('¡Atajada!', true, P[kp].slot); }
   setTimeout(nextShot, 3200);
@@ -175,6 +181,7 @@ function endGame() {
   G.state = 'end'; MVHand.pauseEnabled = false; keys(''); const w = goals(0) > goals(1) ? 0 : 1; G.win = w; CELS[w].t = 0; CELS[w].style = null;
   const title = P[w].cpu ? 'Gana MiVibra' : (G.mode === 'cpu' ? '¡Ganaste la tanda!' : '¡Gana ' + P[w].name + '!');
   big(title, '¡Celebra! Tu avatar baila contigo', 2400); SND.play('ovacion'); SND.play('aplausos', 0.7, 1, 1);
+  { const a = P[w].av ? P[w].av.scene.position : { x: 0, y: 0, z: 0 }; FXC.party([a.x, 0.3, a.z], '¡CAMPEÓN!', '#FFE600'); setTimeout(() => FXC.fireworks([a.x, 0, a.z - 6], 6, 5, 6), 900); }
   const slots = [0, 1].filter((k) => !P[k].cpu && MVLink.players[P[k].slot]).map((k) => P[k].slot);
   setTimeout(() => MVPhoto.take({ title, sub: 'Fútbol playa · penales ' + goals(0) + ' – ' + goals(1), slots: !P[w].cpu && MVLink.players[P[w].slot] ? [P[w].slot] : slots.slice(0, 1), snap: () => portraitSnap(R, S, P[w].av), done: endMenu }), 1800);
 }
@@ -322,11 +329,13 @@ let last = performance.now(), sN = 0;
 function loop(now) {
   requestAnimationFrame(loop);
   let dt = Math.min(0.05, (now - last) / 1000); last = now; if (G.paused) dt = 0;
+const rdt = dt; dt = FXC.time(dt);
+  if (G.state === 'flight' && dt) FXC.trail(ball.position, '#FFD166', 0.16, G.flight && G.flight.T < 0.65);
   if (G.state !== 'menu' && G.state !== 'load' && G.state !== 'end') logic(dt);
   if (G.state === 'end') G.t += dt;
   frameScene(dt, now);
   if ((sN++ % (Q === 0 ? 4 : 2)) === 0) stickDraw();
-  camera(dt || 0.016); R.render(S, cam);
+  camera(dt || 0.016); FXC.render(R, S, cam, rdt);
 }
 MVLink.open((txt, ok) => { $('cst').textContent = txt; $('cst').classList.toggle('ok', !!ok); if (MVLink.code) { $('code').textContent = MVLink.code; if (!$('qr').src) $('qr').src = MVLink.qr(5); } });
 MVLink.onChange = () => { if (G.state === 'menu' && MVHand.open) startMenu(); };

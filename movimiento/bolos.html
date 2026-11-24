@@ -72,6 +72,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { loadAnims, Animator } from '../anim.js';
 import { build as buildAvatar, decode as decodeAvatar, DEFAULT, PRESETS } from '../avatar.js';
 import { Espejo, celebrate, facesCam, snapCanvas, portraitSnap } from '../espejo.js';
+import { createFX } from '../fx.js';
 
 const $ = (id) => document.getElementById(id);
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x)), lerp = (a, b, k) => a + (b - a) * k;
@@ -153,46 +154,16 @@ if (Q === 0) {
     const mg = mergeGeometries(gs); if (!mg) return; const m = new THREE.Mesh(mg, list[0].material); S.add(m); list.forEach((o) => (o.visible = false)); });
 }
 
-// ---------- Efectos ----------
-// Dos sistemas de partículas instanciados (1 draw call cada uno): brillos que suman luz (chispas, estela) y confeti/polvo normal.
-const dotTex = tex(64, 64, (g, w, h) => { const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.35, 'rgba(255,255,255,.65)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); });
-function Particles(n, additive, map) {
-  const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false, toneMapped: false, side: THREE.DoubleSide, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending }), n);
-  im.frustumCulled = false; im.renderOrder = 3; im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3); S.add(im);
-  const P = [], m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), pos = new THREE.Vector3(), c = new THREE.Color(), zero = new THREE.Matrix4().makeScale(0, 0, 0);
-  for (let i = 0; i < n; i++) { P.push({ life: 0 }); im.setMatrixAt(i, zero); }
-  let next = 0;
-  return {
-    spawn(o) { const p = P[next]; next = (next + 1) % n; Object.assign(p, { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, grav: 0, drag: 0, size: 0.05, grow: 0, spin: 0, rot: Math.random() * 6, flat: false }, o, { life: o.life, max: o.life }); c.set(o.color || '#fff'); im.setColorAt(P.indexOf(p), c); im.instanceColor.needsUpdate = true; },
-    update(dt) {
-      for (let i = 0; i < n; i++) { const p = P[i]; if (p.life <= 0) continue;
-        p.life -= dt; if (p.life <= 0) { im.setMatrixAt(i, zero); continue; }
-        p.vy -= p.grav * dt; const k = Math.exp(-p.drag * dt); p.vx *= k; p.vy *= k; p.vz *= k; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; if (p.y < 0.01 && p.grav) { p.y = 0.01; p.vy *= -0.3; p.vx *= 0.6; p.vz *= 0.6; }
-        p.rot += p.spin * dt; const a = p.life / p.max, s2 = p.size * (p.grow ? 1 + (1 - a) * p.grow : (additive ? a : 1));
-        if (p.flat) q.setFromEuler(new THREE.Euler(p.rot, p.rot * 0.7, p.rot * 0.3)); else q.copy(cam.quaternion);
-        im.setMatrixAt(i, m4.compose(pos.set(p.x, p.y, p.z), q, sc.set(s2, s2 * (p.flat ? 0.6 : 1), s2))); }
-      im.instanceMatrix.needsUpdate = true;
-    },
-  };
-}
-const GLOW = Particles(Q === 0 ? 140 : 320, true, dotTex), BITS = Particles(Q === 0 ? 120 : 260, false, null);
-const CONF = ['#FF2EA8', '#00E5FF', '#FFE600', '#7CFF4D', '#B04DFF', '#FF6A3D', '#ffffff'];
-const R1 = (a, b) => a + Math.random() * (b - a);
+// ---------- Efectos (módulo común de todos los juegos) ----------
+const FXC = createFX(THREE, S, cam, Q);
 const FX = {
-  shake: 0, flash: 0, slow: 0,
-  trail(x, y, z, fire) { GLOW.spawn({ x: x + R1(-0.02, 0.02), y: y + R1(-0.02, 0.02), z, life: fire ? 0.42 : 0.3, size: fire ? 0.2 : 0.14, color: fire ? (Math.random() < 0.5 ? '#FF7B00' : '#FFD166') : (Math.random() < 0.5 ? '#B04DFF' : '#7FB3FF'), vy: fire ? R1(0.2, 0.6) : 0 }); },
-  hit(x, z, power) {
-    const n = Q === 0 ? 18 : 36;
-    for (let i = 0; i < n; i++) { const a = Math.random() * 6.28, sp = R1(1.2, 3.4) * (0.6 + power); GLOW.spawn({ x, y: 0.18, z, vx: Math.cos(a) * sp, vy: R1(0.8, 2.6), vz: Math.sin(a) * sp * 0.6, grav: 6, drag: 1.5, life: R1(0.35, 0.7), size: R1(0.05, 0.1), color: Math.random() < 0.6 ? '#FFE9A8' : '#FF9A4D' }); }
-    for (let i = 0; i < (Q === 0 ? 6 : 12); i++) BITS.spawn({ x: x + R1(-0.2, 0.2), y: 0.05, z: z + R1(-0.15, 0.15), vx: R1(-0.4, 0.4), vy: R1(0.1, 0.4), vz: R1(-0.3, 0.1), drag: 2, life: R1(0.6, 1.1), size: R1(0.12, 0.22), grow: 2, color: '#e8dcff' });
-    this.shake = Math.min(1, 0.35 + power * 0.5); this.flash = 0.6;
-  },
-  confetti(big) {
-    const n = big ? (Q === 0 ? 90 : 200) : (Q === 0 ? 40 : 80);
-    for (let i = 0; i < n; i++) BITS.spawn({ x: R1(-0.8, 0.8), y: R1(1.6, 2.4), z: HEAD - R1(0, 1.2), vx: R1(-1.2, 1.2), vy: R1(-0.2, 1.4), vz: R1(-0.6, 1.4), grav: 2.2, drag: 1.2, life: R1(1.8, 3), size: R1(0.05, 0.08), spin: R1(-9, 9), flat: true, color: CONF[i % CONF.length] });
-    for (let i = 0; i < (big ? 40 : 16); i++) GLOW.spawn({ x: R1(-0.9, 0.9), y: R1(0.4, 1.8), z: HEAD - R1(-0.5, 1.2), life: R1(0.4, 1), size: R1(0.12, 0.3), color: CONF[i % CONF.length] });
-  },
-  gutter(x, z) { for (let i = 0; i < 10; i++) BITS.spawn({ x, y: 0.05, z: z + R1(-0.2, 0.2), vx: R1(-0.2, 0.2), vy: R1(0.1, 0.3), drag: 2, life: R1(0.6, 1), size: R1(0.1, 0.2), grow: 1.5, color: '#9a93b5' }); },
+  trail(x, y, z, fire) { FXC.trail([x, y, z], Math.random() < 0.5 ? '#B04DFF' : '#7FB3FF', 0.14, fire); },
+  hit(x, z, power) { FXC.sparks([x, 0.18, z], power); FXC.dust([x, 0, z], '#e8dcff', 12); FXC.ring(x, 0.02, z, '#FFE9A8', 1.3); FXC.shake(0.35 + power * 0.5);
+    if (power > 0.75) FXC.pop(x, 0.9, z + 0.4, '¡POW!', '#FFE600', 0.55); },
+  confetti(strike) { FXC.confetti([0, 1.6, HEAD - 0.5], strike, 0.9); FXC.stars([0, 0.6, HEAD], strike ? 10 : 6); FXC.pop(0, 1.25, HEAD + 0.8, strike ? '¡CHUZA!' : '¡SPARE!', strike ? '#FFE600' : '#00E5FF', 0.8);
+    if (strike) { FXC.fireworks([0, 0.5, HEAD - 2], 4, 3, 3.2); FXC.flash('#FFE600', 0.25); } },
+  gutter(x, z) { FXC.dust([x, 0, z], '#9a93b5', 10, 0.16); FXC.pop(x, 0.7, z + 0.3, '¡UPS!', '#B9B1A8', 0.45); },
+  set slow(v) { if (v > 0) { FXC.slow(v, 0.3); FXC.punch(7); } },
 };
 // Tiras de neón junto a cada canal: laten con la chuza
 const NEON = [];
@@ -206,8 +177,16 @@ deck.add(new THREE.Mesh(new THREE.BoxGeometry(LW + 0.1, 0.06, 1.25), deckMat)); 
 for (let r = 0; r < 4; r++) for (let i = 0; i <= r; i++) { const h = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.03, 10), M('#FFB13D')); h.position.set((i - r / 2) * 0.3048, -0.04, HEAD - r * 0.264 - (HEAD - 0.4)); deck.add(h); }
 deck.position.set(0, 2.6, -18.69); S.add(deck);
 const bar = new THREE.Mesh(new THREE.BoxGeometry(LW + 0.12, 0.22, 0.05), M('#FF6A3D')); bar.position.set(0, 2.6, -17.6); S.add(bar);
+// luces de aviso que parpadean mientras la máquina trabaja
+const warn = [-1, 1].map((sd) => { const l = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), new THREE.MeshBasicMaterial({ color: '#FFB13D', toneMapped: false })); l.position.set(sd * (LW / 2 + 0.02), 0.14, 0.03); bar.add(l); return l; });
+const stripes = new THREE.Mesh(new THREE.PlaneGeometry(LW + 0.1, 0.2), new THREE.MeshBasicMaterial({ toneMapped: false, map: tex(256, 48, (g, w, h) => { g.fillStyle = '#FFD166'; g.fillRect(0, 0, w, h); g.fillStyle = '#1b1b2a'; for (let x = -h; x < w; x += 36) { g.beginPath(); g.moveTo(x, h); g.lineTo(x + 18, h); g.lineTo(x + 18 + h, 0); g.lineTo(x + h, 0); g.fill(); } }) })); stripes.position.z = 0.03; bar.add(stripes);
 // Animación según el tiempo desde que empezó (u en segundos). full: 10 pinos nuevos; si no, vuelven los que quedaron de pie.
 function pinsetter(u, full) {
+  warn.forEach((l, i) => { l.visible = u < 2.6 && Math.floor(u * 6 + i) % 2 === 0; });
+  if (u > 0.02 && !pinsetter.hum) { pinsetter.hum = true; SND.motor && SND.motor(2.6); }
+  if (u >= 2.6) pinsetter.hum = false;
+  if (u >= 2.2 && !pinsetter.clunk) { pinsetter.clunk = true; SND.thud && SND.thud(); FXC.dust([0, 0, HEAD - 0.35], '#f3eaff', 8, 0.14); }
+  if (u < 2.2) pinsetter.clunk = false;
   const k = (a, b) => clamp((u - a) / (b - a), 0, 1), e = (x) => x * x * (3 - 2 * x);
   const down1 = e(k(0, 0.45)), lift = e(k(0.55, 0.9)), sweep = e(k(0.95, 1.65)), place = e(k(1.7, 2.2)), up = e(k(2.25, 2.6));
   // barra: baja, barre hacia el foso y vuelve a subir
@@ -238,6 +217,7 @@ const SND = { ac: null, buf: {}, roll: null, rollG: null,
   rollStart() { this.rollStop(); const p = this.play('bola-roll', 0.0); if (!p) return; p.s.loop = true; this.roll = p; },
   rollSet(v) { if (this.roll) this.roll.v.gain.value = v; },
   rollStop() { if (this.roll) { try { this.roll.s.stop(); } catch (e) {} this.roll = null; } },
+  motor(sec) { if (!this.ac) return; const t = this.ac.currentTime, o = this.ac.createOscillator(), o2 = this.ac.createOscillator(), v = this.ac.createGain(), f = this.ac.createBiquadFilter(); o.type = 'sawtooth'; o.frequency.setValueAtTime(70, t); o.frequency.linearRampToValueAtTime(95, t + sec * 0.4); o.frequency.linearRampToValueAtTime(65, t + sec); o2.type = 'square'; o2.frequency.value = 8; const g2 = this.ac.createGain(); g2.gain.value = 0.03; o2.connect(g2).connect(v.gain); f.type = 'lowpass'; f.frequency.value = 420; v.gain.setValueAtTime(0, t); v.gain.linearRampToValueAtTime(0.09, t + 0.15); v.gain.setValueAtTime(0.09, t + sec - 0.3); v.gain.linearRampToValueAtTime(0, t + sec); o.connect(f).connect(v).connect(this.out); o.start(t); o2.start(t); o.stop(t + sec + 0.05); o2.stop(t + sec + 0.05); },
   thud() { if (!this.ac) return; const t = this.ac.currentTime, o = this.ac.createOscillator(), v = this.ac.createGain(); o.frequency.setValueAtTime(80, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.2); v.gain.setValueAtTime(0.6, t); v.gain.exponentialRampToValueAtTime(0.001, t + 0.25); o.connect(v); v.connect(this.out); o.start(t); o.stop(t + 0.3); },
   ding(f = 880) { if (!this.ac) return; const t = this.ac.currentTime; [f, f * 1.25, f * 1.5].forEach((ff, i) => { const o = this.ac.createOscillator(), v = this.ac.createGain(); o.frequency.value = ff; v.gain.setValueAtTime(0, t + i * 0.09); v.gain.linearRampToValueAtTime(0.12, t + i * 0.09 + 0.01); v.gain.exponentialRampToValueAtTime(0.001, t + i * 0.09 + 0.5); o.connect(v); v.connect(this.out); o.start(t + i * 0.09); o.stop(t + i * 0.09 + 0.6); }); },
 };
@@ -509,7 +489,7 @@ function settle() {
   let nextFrame = false, resetAll = false;
   if (f < 9) { if (first && down === 10) { nextFrame = true; } else if (!first) nextFrame = true; }
   else { const t = r.reduce((a, b) => a + b, 0); if (r.length === 3 || (r.length === 2 && r[0] + r[1] < 10)) { if (G.cur < G.np - 1) nextFrame = true; else { G.state = 'end'; drawScore(); setTimeout(endGame, 2400); return; } } else resetAll = (r.length === 1 && down === 10) || (r.length === 2 && (r[1] === 10 || r[0] + r[1] === 10)) || (r.length === 2 && r[0] === 10 && down === before && before === 10); }
-  G.state = 'sweep'; G.t = 0; G.sw0 = G.cel > 0 ? 1.5 : 0.35; G.swFull = nextFrame || resetAll; pinsetter.rack = false;
+  G.state = 'sweep'; G.t = 0; G.sw0 = G.cel > 0 ? 1.5 : 0.35; setTimeout(() => { if (G.state === 'sweep') cue(G.swFull ? 'La máquina pone pinos nuevos…' : 'La máquina recoge los pinos caídos…'); }, Math.max(G.sw0, 1.7) * 1000); G.swFull = nextFrame || resetAll; pinsetter.rack = false;
   setTimeout(() => {
     if (nextFrame) { const nx = (G.cur + 1) % G.np; if (nx === 0) G.frame++; resetPins(true); G.standing = 10; if (G.np > 1) { setCur(nx); big(turnName(PL[nx]), 'Turno ' + (G.frame + 1) + ' de 10', 1800); const s1 = turnSlot(); if (s1 >= 0) MVLink.say('¡Es tu turno! Lanza la bola', true, s1); } }
     else if (resetAll) { resetPins(true); G.standing = 10; }
@@ -525,6 +505,7 @@ function endGame(after) {
     if (G.np > 1) { const t = PL.slice(0, G.np).map((p) => scores(p.rolls)[9] || 0); wi = t.indexOf(Math.max(...t)); setCur(wi); title = '¡Gana ' + PL[wi].name + '!'; sub = 'Bolos · ' + t[wi] + ' puntos'; }
     else { const tot = scores()[9] || 0; title = tot >= 120 ? '¡Juegazo!' : '¡Buen juego!'; sub = 'Bolos · ' + tot + ' puntos'; }
     big(title, '¡Celebra! Tu avatar baila contigo', 2600); drawScore();
+    { const p = av ? av.scene.position : { x: 0, y: 0, z: 2 }; FXC.party([p.x, 0.3, p.z - 1.5], '¡GENIAL!', '#FFE600'); setTimeout(() => FXC.fireworks([p.x, 0.5, p.z - 6], 6, 3, 3), 900); }
     const slot = MVLink.players[PL[wi].slot] ? PL[wi].slot : MVLink.players.findIndex(Boolean);
     setTimeout(() => MVPhoto.take({ title, sub, slots: slot >= 0 ? [slot] : [], snap: () => portraitSnap(R, S, av), done: () => endGame(true) }), 1800);
     return;
@@ -581,14 +562,13 @@ const cp = new THREE.Vector3(), cl = new THREE.Vector3(), tP = new THREE.Vector3
 function camera(dt) {
   if ((G.cel > 0 && G.state === 'sweep' && G.t < G.sw0) || G.state === 'end' || G.state === 'menu') { const x = av ? av.scene.position.x : 0, z = av ? av.scene.position.z : 0.4; tP.set(x - 0.35, 1.25, z - 2.5); tL.set(x, 0.85, z); }
   else if (G.state === 'roll' && ball2.z > -14) { tP.set(ball2.x * 0.4 + 0.3, 0.7, Math.min(ball2.z + 2.6, 3)); tL.set(ball2.x * 0.2, 0.2, ball2.z - 6); }
-  else if (G.state === 'roll' || G.state === 'sweep' || G.state === 'end') { tP.set(0.55, 0.8, -15.9); tL.set(0, 0.35, -18.9); }
+  else if (G.state === 'sweep') { tP.set(1.25, 1.3, -15.4); tL.set(-0.1, 0.75, -18.8); }   // de lado: se ve la máquina bajar, barrer y poner los pinos
+  else if (G.state === 'roll' || G.state === 'end') { tP.set(0.55, 0.8, -15.9); tL.set(0, 0.35, -18.9); }
   else if (G.state === 'menu' || G.state === 'load') { tP.set(1.4, 2.2, 6.6); tL.set(0, 0.5, -12); }
   // su turno: la cámara va justo detrás y mira por su misma línea, así el personaje queda siempre en el centro
   else { const x = av ? av.scene.position.x : 0, z = av ? av.scene.position.z : 3; tP.set(x, 1.65, z + 3.1); tL.set(x, 0.55, z - 12); }
   const aiming = G.state === 'aim' || G.state === 'swing';
   const k = 1 - Math.exp(-dt * (G.state === 'roll' ? 6 : aiming ? 7 : 3)); cp.lerp(tP, k); cl.lerp(tL, k); cam.position.copy(cp);
-  // sacudida al chocar con los pinos
-  if (FX.shake > 0.01) { FX.shake *= Math.exp(-dt * 7); cam.position.x += (Math.random() - 0.5) * FX.shake * 0.08; cam.position.y += (Math.random() - 0.5) * FX.shake * 0.06; }
   cam.lookAt(cl);
 }
 cp.set(1.4, 2.2, 6.6); cl.set(0, 0.5, -12);
@@ -600,7 +580,7 @@ function loop(now) {
   requestAnimationFrame(loop);
   let dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (G.paused) dt = 0;
-  const rdt = dt; if (FX.slow > 0) { FX.slow -= rdt; dt *= 0.3; }
+  const rdt = dt; dt = FXC.time(dt);
   G.t += dt;
   if (av) {
     const ax = G.state === 'aim' || G.state === 'swing' || G.state === 'menu' ? G.aimX : (av.scene.position.x);
@@ -643,8 +623,8 @@ function loop(now) {
   if (aim.visible) { const pos = aimGeo.attributes.position, hk = -(G.spin || 0); for (let j = 0; j <= NSEG; j++) { const d = 0.4 + j / NSEG * 17.6, x = G.aimX + 0.18 + hk * 0.45 * Math.pow(Math.max(0, d - 7) / 11, 2) * 0.5, z = 0.15 - d, w = 0.08 + j / NSEG * 0.05; pos.setXYZ(j * 2, x - w, 0.005, z); pos.setXYZ(j * 2 + 1, x + w, 0.005, z); } pos.needsUpdate = true; aimGeo.computeBoundingSphere(); }
   if ((now | 0) % 3 === 0) stickDraw();
   camera(rdt || 0.016);
-  GLOW.update(dt); BITS.update(dt); neonTick(now);
-  R.render(S, cam);
+  neonTick(now);
+  FXC.render(R, S, cam, rdt);
 }
 
 // ---------- Inicio ----------

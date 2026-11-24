@@ -55,6 +55,7 @@ import * as THREE from 'three';
 import { loadAnims, Animator } from '../anim.js';
 import { build as buildAvatar, decode as decodeAvatar, DEFAULT, PRESETS } from '../avatar.js';
 import { Espejo, celebrate, facesCam, portraitSnap, reachArm } from '../espejo.js';
+import { createFX } from '../fx.js';
 import { makeSound } from '../sonido.js';
 import { buildBeach, BEACH_FX, readSaved, fromApp, bodyReader, tex } from '../playa.js';
 
@@ -69,6 +70,7 @@ R.toneMapping = THREE.NeutralToneMapping; R.toneMappingExposure = 1.05; R.shadow
 document.body.prepend(R.domElement);
 const S = new THREE.Scene();
 const cam = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.05, 400);
+const FXC = createFX(THREE, S, cam, Q);   // efectos divertidos (fx.js)
 addEventListener('resize', () => { R.setSize(innerWidth, innerHeight); cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); });
 
 // ---------- Cancha (16 × 8 m, red a 2,24 m) ----------
@@ -186,6 +188,7 @@ function arrive() {
     let tx = rnd(-3.4, 3.4), tz = d * (spike ? rnd(2.5, 7.4) : rnd(3, 6.5));
     if (!isHuman(at) && Math.random() < LVL[G.lvl].err) { if (Math.random() < 0.5) tz = d * rnd(8.4, 9.5); else tx = Math.sign(tx) * rnd(4.3, 5); }
     fly('over', team, ball.position.clone(), new THREE.Vector3(tx, 0.85, tz), spike ? 0.75 : 1.6, { hard: spike, touch: 3 });
+    if (spike) { const b = ball.position; FXC.sparks(b, 0.8, '#FFE9A8'); FXC.ring(b.x, b.y, b.z, '#FF6A3D', 1.6, false); FXC.shake(0.45); if (isHuman(at)) { FXC.pop(b.x, b.y + 0.9, b.z, '¡PUM!', '#FF6A3D', 0.9); FXC.punch(5); } }
     if (spike && isHuman(at)) big('¡REMATE!', '', 900);
     plan(1 - team);
   }
@@ -196,7 +199,9 @@ function landed() {
   const F = G.F, x = ball.position.x, z = ball.position.z;
   // cae en la cancha de un equipo → punto del otro; afuera → punto de quien no la tocó al final
   let winner; if (inCourt(x, z, 0)) winner = 1; else if (inCourt(x, z, 1)) winner = 0; else winner = 1 - F.by;
-  SND.play('arena'); point(winner);
+  SND.play('arena'); FXC.dust([x, 0, z], '#f4dfb0', 16, 0.3); FXC.splash([x, 0.02, z], '#f2d49a'); FXC.ring(x, 0.03, z, '#ffffff', 1.6); FXC.shake(0.3);
+  if (winner === 0) { FXC.pop(x, 1.3, z, '¡PUNTO!', '#FFE600', 0.9); FXC.confetti([x, 2.4, z], false, 1.5); } else FXC.pop(x, 1.2, z, '¡PLAF!', '#B9B1A8', 0.7);
+  point(winner);
 }
 function point(w) {
   if (G.state !== 'rally') return; G.state = 'point'; G.t = 0; G.F = null; mark.visible = false;
@@ -215,6 +220,7 @@ function endGame() {
   teamOf(w).forEach((p) => { CELS[PL.indexOf(p)].t = 0; });
   const title = w === 0 ? '¡Ganó tu equipo!' : 'Gana MiVibra';
   big(title, '¡Celebra! Tu avatar baila contigo', 2400); SND.play('ovacion'); SND.play('aplausos', 0.7, 1, 1);
+  { const a = teamOf(w)[0].av ? teamOf(w)[0].av.scene.position : { x: 0, y: 0, z: 0 }; FXC.party([a.x, 0.3, a.z], w === 0 ? '¡GANAMOS!' : '¡BIEN!', '#FFE600'); setTimeout(() => FXC.fireworks([0, 0, -10], 6, 8, 7), 900); }
   const hs = PL.filter((p) => isHuman(p) && MVLink.players[p.slot]).map((p) => p.slot);
   setTimeout(() => MVPhoto.take({ title, sub: 'Voleibol de playa · ' + G.sc[0] + ' – ' + G.sc[1], slots: hs.slice(0, 1), snap: () => portraitSnap(R, S, PL[0].av), done: endMenu }), 1800);
 }
@@ -332,10 +338,12 @@ let last = performance.now(), sN = 0;
 function loop(now) {
   requestAnimationFrame(loop);
   let dt = Math.min(0.05, (now - last) / 1000); last = now; if (G.paused) dt = 0;
+const rdt = dt; dt = FXC.time(dt);
+  if (G.state === 'rally' && G.F && G.F.hard && dt) FXC.trail(ball.position, '#FF9A4D', 0.18, true);
   if (G.state === 'rally' || G.state === 'point') logic(dt); else G.t += dt;
   frameScene(dt, now);
   if ((sN++ % (Q === 0 ? 4 : 2)) === 0) stickDraw();
-  camera(dt || 0.016); R.render(S, cam);
+  camera(dt || 0.016); FXC.render(R, S, cam, rdt);
 }
 MVLink.open((txt, ok) => { $('cst').textContent = txt; $('cst').classList.toggle('ok', !!ok); if (MVLink.code) { $('code').textContent = MVLink.code; if (!$('qr').src) $('qr').src = MVLink.qr(5); } });
 MVLink.onChange = () => { if (G.state === 'menu' && MVHand.open) startMenu(); };

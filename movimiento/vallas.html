@@ -116,6 +116,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { loadAnims, Animator } from '../anim.js';
 import { Espejo, celebrate, facesCam, snapCanvas, portraitSnap } from '../espejo.js';
+import { createFX } from '../fx.js';
 import { makeSound } from '../sonido.js';
 // Un mismo estadio para tres pruebas: 100 m con vallas, 100 m planos y salto largo
 const MODE = window.MV_MODE || new URLSearchParams(location.search).get('modo') || 'vallas';
@@ -145,6 +146,7 @@ R.toneMapping = THREE.NeutralToneMapping; R.toneMappingExposure = 1.08;
 document.body.prepend(R.domElement);
 const S = new THREE.Scene();
 const cam = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 900);
+const FXC = createFX(THREE, S, cam, Q);   // efectos divertidos (fx.js)
 const composer = new EffectComposer(R);
 composer.addPass(new RenderPass(S, cam));
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.18, 0.4, 0.95);
@@ -679,9 +681,9 @@ function go(ph) {
   if (ph === 'intro') { excite = 0.9; waveOn = false; SND.beatStart(); SND.whoosh(); SND.cheer(); title('MIVIBRA MOVIMIENTO', EVT, 'Estadio MiVibra · Final'); setTimeout(() => phase === 'intro' && show('note', 1), 2500); }
   if (ph === 'present') { excite = 0.6; }
   if (ph === 'marks') { SND.beatStop(); excite = 0.12; big('En sus marcas…'); }
-  if (ph === 'race') { excite = 0.85; waveOn = true; SND.gun(); SND.cheer(); flashScreen(0.5); show('hud', 1); show('clock', 1); show('pace', 1); show('phone', 1); raceT = 0; RUNNERS.forEach((r) => { r.d = -0.55; r.v = 0; r.ph = 0; r.done = false; r.t = 0; r.react = hum(r) >= 0 ? 0.08 : rnd(0.12, 0.22); r.nextH = 0; r.vmax = r.me ? 9.05 : rnd(8.55, 9.0); r.lastStep = 0; }); if (INST.length) setTimeout(syncInst, 0); hurdleObjs.forEach((h) => { h.hit = 0; h.g.rotation.x = 0; }); }
+  if (ph === 'race') { excite = 0.85; waveOn = true; SND.gun(); SND.cheer(); flashScreen(0.5); { const a = ME.A.position; FXC.ring(a.x, 0.03, a.z, '#ffffff', 2); FXC.dust(a, '#f0b49a', 10, 0.25); FXC.pop(a.x, 2.2, a.z - 1.5, '¡YA!', '#FFE600', 1); FXC.shake(0.3); } show('hud', 1); show('clock', 1); show('pace', 1); show('phone', 1); raceT = 0; RUNNERS.forEach((r) => { r.d = -0.55; r.v = 0; r.ph = 0; r.done = false; r.t = 0; r.react = hum(r) >= 0 ? 0.08 : rnd(0.12, 0.22); r.nextH = 0; r.vmax = r.me ? 9.05 : rnd(8.55, 9.0); r.lastStep = 0; }); if (INST.length) setTimeout(syncInst, 0); hurdleObjs.forEach((h) => { h.hit = 0; h.g.rotation.x = 0; }); }
   if (ph === 'lj') { excite = 0.5; waveOn = false; SND.beatStop(); show('hud', 1); show('pace', 1); show('phone', 1); RUNNERS.forEach((r) => { r.vmax = r.vmax || 9.2 + (r.lvl || 8) * 0.04; }); ljStart(); }
-  if (ph === 'finish') { excite = 1.3; waveOn = false; SND.cheer(); SND.ding(); }
+  if (ph === 'finish') { excite = 1.3; waveOn = false; SND.cheer(); SND.ding(); { FXC.confetti([0, 3, FIN], true, 5); FXC.fireworks([0, 2, FIN - 12], 6, 10, 9); FXC.pop(ME.A.position.x, 2.4, FIN - 1.5, '¡META!', '#FFE600', 1.1); } }
   if (ph === 'podium') { excite = 1.2; podiumDone = false; }
 }
 // ---------- Salto largo: 3 intentos cada uno, gana el mejor salto ----------
@@ -730,10 +732,11 @@ function ljUpdate(dt, t) {
     setCam(new THREE.Vector3(LJX + 5.2, 1.5, LJ.zt - LJ.D * 0.5 + 1.0), new THREE.Vector3(LJX, 0.7, LJ.zt - LJ.D * 0.6), 0.1);
     if (u >= 1) {
       LJ.st = 'land'; LJ.t = 0; const lz = LJ.zt - LJ.D, meas = +(BOARD - lz).toFixed(2);
-      SND.boom(); sandPuff.forEach((p) => { p.m.visible = true; p.m.position.set(LJX + rnd(-0.3, 0.3), 0.08, lz + rnd(-0.2, 0.3)); p.v.set(rnd(-1.2, 1.2), rnd(1, 2.4), rnd(-0.6, 1.2)); });
+      SND.boom(); FXC.dust([LJX, 0, lz], '#f2d49a', 16, 0.35); FXC.ring(LJX, 0.05, lz, '#ffffff', 1.8); FXC.shake(0.4); sandPuff.forEach((p) => { p.m.visible = true; p.m.position.set(LJX + rnd(-0.3, 0.3), 0.08, lz + rnd(-0.2, 0.3)); p.v.set(rnd(-1.2, 1.2), rnd(1, 2.4), rnd(-0.6, 1.2)); });
       const ok = !LJ.foul && lz < BOARD - 1.2 + 0.2;
       r.tries.push(ok ? meas : 0); if (ok && meas > (r.best || 0)) r.best = meas;
       ljMarks.clear(); if (ok) { const f = new THREE.Group(); f.add(box(0.03, 0.6, 0.03, new THREE.MeshStandardMaterial({ color: '#fff' }), 0, 0.3, 0)); f.add(box(0.25, 0.16, 0.01, new THREE.MeshStandardMaterial({ color: r.shirt }), 0.13, 0.52, 0)); f.position.set(LJX - 1.6, 0, lz); ljMarks.add(f); }
+      if (ok) FXC.pop(LJX, 2.2, lz, meas > 7 ? '¡VOLÓ!' : '¡BIEN!', meas > 7 ? '#FFE600' : '#00E5FF', meas > 7 ? 1 : 0.8); if (ok && meas > 7) FXC.confetti([LJX, 3, lz], false, 2);
       if (ok) { big(meas.toFixed(2) + ' m', (meas >= (r.best || 0) && r.tries.filter(Boolean).length > 1 ? '¡Su mejor marca! · ' : '') + r.name); SND.cheer(); if (hs >= 0) camSay('¡' + meas.toFixed(2) + ' metros!', true, hs); }
       else { big('NULO', LJ.zt < BOARD - 0.02 ? 'Pisó después de la tabla' : 'No saltó a tiempo'); SND.boom(); if (hs >= 0) camSay('Nulo: salta antes de la línea verde', false, hs); }
       excite = ok && meas > 7 ? 1.2 : 0.6;
@@ -801,8 +804,8 @@ function update(dt, t) {
         const C = CS[hsj], hz = HURDLES[r.nextH];
         if (hz !== undefined && z <= hz) {
           r.nextH++;
-          if (C.clock - C.jumpAt < 1100) { if (r.me) SND.whoosh(); camSay('¡Bien saltado!', true, hsj); }
-          else { r.v *= 0.45; C.stumbleT = 1.4; SND.boom(); camSay('¡Salta en cada valla!', false, hsj); const h = hurdleObjs.find((o) => o.lane === r.lane + 1 && o.z === hz); if (h) h.hit = 1; }
+          if (C.clock - C.jumpAt < 1100) { if (r.me) { SND.whoosh(); const a = r.A.position; FXC.trail([a.x, 1.1, a.z], '#7FB3FF', 0.4); FXC.stars([a.x, 1.3, a.z], 5); if (r.nextH % 3 === 0) FXC.pop(a.x, 2.3, a.z - 1, ['¡HOP!', '¡VUELA!', '¡BIEN!'][(r.nextH / 3 | 0) % 3], '#00E5FF', 0.7); } camSay('¡Bien saltado!', true, hsj); }
+          else { r.v *= 0.45; C.stumbleT = 1.4; SND.boom(); { const a = r.A.position; FXC.dust([a.x, 0, hz], '#f0b49a', 14, 0.3); FXC.stars([a.x, 1.5, a.z], 6, '#FFB13D'); if (r.me) { FXC.shake(0.6); FXC.pop(a.x, 2.2, a.z - 1, '¡CRASH!', '#FF6A3D', 0.9); } } camSay('¡Salta en cada valla!', false, hsj); const h = hurdleObjs.find((o) => o.lane === r.lane + 1 && o.z === hz); if (h) h.hit = 1; }
         }
       }
       if (!r.done && z <= FIN && hum(r) >= 0) { const pl = RUNNERS.filter((q) => q.done).length + 1; camSay('¡Llegaste de ' + pl + '.°!', pl === 1, hum(r)); }
@@ -859,7 +862,7 @@ function update(dt, t) {
       const top = results.slice(0, 3), hs = MVLink.players.map((p, k) => (p ? k : -1)).filter((k) => k >= 0 && top.some((r) => hum(r) === k));
       const mine = results.indexOf(ME) + 1, w = top[0];
       const title = hum(w) >= 0 || w === ME ? '¡' + w.name + ' gana el oro!' : mine <= 3 ? '¡Al podio! ' + mine + '.° lugar' : '¡' + w.name + ' gana el oro!';
-      big('¡Celebra!', 'Foto del podio en 3 segundos', 1600);
+      big('¡Celebra!', 'Foto del podio en 3 segundos', 1600); FXC.party([POD.x, POD.y || 0, POD.z], '¡PODIO!', '#FFE600'); setTimeout(() => FXC.fireworks([POD.x, 0, POD.z - 8], 6, 6, 7), 900);
       MVPhoto.take({ title, sub: EVT + ' · ' + (MODE === 'salto' ? (ME.best ? ME.best.toFixed(2) + ' m' : '') : ME.t ? ME.t.toFixed(2) + ' s' : ''), slots: hs.length ? hs : (MVLink.players[0] ? [0] : []), snap: () => { const who = top.find((r) => hum(r) >= 0 && r.vrm) || (top.includes(ME) ? ME : top[0]); return portraitSnap(R, S, who.vrm); }, done: () => { podDone = true; } }); }
     if ((podDone || pt > 20) && !menuOn && !MVHand.open) endMenu();
     if (!podiumDone) { podiumDone = true; if (!results.length) results = standings(); show('res', 0); const top = results.slice(0, 3); $('banner').innerHTML = '¡' + top[0].name + ' gana el oro!'; show('banner', 1); SND.fanfare(); setTimeout(SND.cheer, 400); confettiStart(); }
@@ -1015,7 +1018,7 @@ function frame() {
   if (phase !== 'wait' && !PAUSED) { update(dt, T); driveVRM(dt); } else { const a = T * 0.05; setCam(new THREE.Vector3(Math.cos(a) * 110, 55, -50 + Math.sin(a) * 110), new THREE.Vector3(0, 0, -50), 1); crowdTick(T); }
   // Pantalla gigante en vivo: primer plano del jugador (cada 2 cuadros)
   if ((liveTick++ % [60, 3, 2][Q]) === 0) { const f = phase === 'podium' ? new THREE.Vector3(POD.x, 1.8, POD.z) : ME.A.position.clone().add(new THREE.Vector3(0, 1.3, 0)); liveCam.position.set(f.x + 2.2, f.y + 0.4, f.z - 4.2); liveCam.lookAt(f); R.setRenderTarget(liveRT); R.render(S, liveCam); R.setRenderTarget(null); }
-  if (Q === 0) R.render(S, cam); else composer.render();
+  FXC.pre(cam, real); if (Q === 0) R.render(S, cam); else composer.render(); FXC.post(cam);
 }
 R.setAnimationLoop(frame);
 
