@@ -99,6 +99,8 @@
     if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) ae.blur();
     if (Date.now() - (MV._typedAt || 0) < 900) return true;
     if (MV.tourOpen && MV.tourOpen()) { MV.tourClose(); return true; }
+    // Visor de fotos: Atrás del control lo cierra (en el TV el Atrás llega por aquí, no como tecla)
+    if (MV.photoViewerOpen && MV.photoViewerOpen()) { MV.photoViewerClose(); return true; }
     if (MV.ytPlayer && MV.ytPlayer.isOpen() && !MV.ytPlayer.isMini()) { MV.ytPlayer.mini(); return true; }   // sigue sonando en el mini reproductor
     if (MV.mvFrame && MV.mvFrame.open()) { MV.mvFrame.close(); return true; }
     if (MV.streamOpen && MV.streamOpen()) { MV.streamClose(); return true; }
@@ -750,6 +752,9 @@
     // Si lo último que viste fue un canal de Twitch o Kick, ese va en el recuadro
     var sl = MV.load('streamLast', null), tvTs = Math.max(lastLive ? lastTs : 0, picked && hp ? hp.ts : 0);
     if (sl && sl.ch && sl.ts > tvTs) heroIt = { stream: true, tab: sl.tab, ch: sl.ch, key: 'st:' + sl.tab + ':' + sl.ch, name: sl.ch, type: 'stream' };
+    // Si lo último que usaste fue YouTube (o YouTube Music), ese video va en el recuadro
+    var yl = MV.isKids() ? null : MV.load('ytLast', null), ylv = yl && yl.list && yl.list[yl.idx || 0];
+    if (ylv && yl.ts > Math.max(tvTs, sl && sl.ts || 0, (hist[0] && hist[0].ts) || 0)) heroIt = { yt: true, v: ylv, t: yl.t || 0, key: 'yt:' + ylv.id, name: ylv.title, type: 'yt' };
     MV._heroIt = heroIt;
     var out = '<div class="vhead"><div class="t"><span class="kick">' + esc(cap(new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' }))) + '</span>' +
       '<h1>' + greet() + (p ? ', ' + esc(p.name) : '') + '</h1>' +
@@ -760,7 +765,14 @@
       return '<button class="vmode f" data-act="homeMode" data-arg="' + m[0] + '"><span class="ic">' + m[1] + '</span><span class="tx"><b>' + m[2] + '</b><small>' + m[3] + '</small></span></button>';
     }).join('') + '</div>';
     out += '<div class="vmain">';
-    if (heroIt && heroIt.stream) {
+    if (heroIt && heroIt.yt) {
+      var yv = heroIt.v, ym = Math.floor(heroIt.t / 60), ys = heroIt.t % 60;
+      out += '<section class="vlive" aria-label="Último video de YouTube"><button class="scr livebg f" data-act="ytResume" data-autofocus aria-label="Seguir viendo ' + esc(yv.title || '') + '" style="background:#000">' +
+        (yv.thumb ? '<img src="' + esc(yv.thumb) + '" alt="" style="width:100%;height:100%;object-fit:cover">' : '') + '</button>' +
+        '<div class="vinfo"><span class="vbadge yt">YOUTUBE</span><div class="t"><b>' + esc(yv.title || '') + '</b><span>' + esc([yv.channel || '', heroIt.t > 5 ? 'Ibas en ' + ym + ':' + (ys < 10 ? '0' : '') + ys : ''].filter(Boolean).join(' · ')) + '</span></div>' +
+        '<button class="vsound f" data-act="ytResume" aria-label="Seguir viendo">' + IC.play + '</button></div>' +
+        '<div class="thumbs"><button class="vth all f" data-act="nav" data-arg="youtube" aria-label="Abrir YouTube">' + IC.grid + '<span>YouTube</span></button><button class="vth all f" data-act="nav" data-arg="live" aria-label="Ver canales en vivo">' + IC.grid + '<span>Canales</span></button></div></section>';
+    } else if (heroIt && heroIt.stream) {
       var sname = heroIt.tab === 'kick' ? 'Kick' : 'Twitch';
       var othersS = coFirst(live).slice(0, 4); othersS.forEach(reg);
       out += '<section class="vlive" aria-label="Último canal de ' + sname + '"><div class="scr stream ' + heroIt.tab + '">' +
@@ -984,6 +996,8 @@
   function heroPreview() {
     var it = MV._heroIt, box = heroBox();
     if (!box || !it || document.hidden) return;
+    // Lo último fue YouTube: al abrir la app se carga en el recuadro, en pausa donde ibas (una sola vez; luego, con el botón)
+    if (it.yt) { pvStop(); if (!MV._ytAutoDone && MV.ytPlayer && !MV.ytPlayer.isOpen()) { MV._ytAutoDone = true; MV.ytPlayer.resume(true); } return; }
     // Hay un video de YouTube minimizado: se ve en este recuadro en lugar del canal
     if (MV.ytPlayer && MV.ytPlayer.isMini()) { pvStop(); return; }
     // TV liviano: el canal de Inicio no se reproduce solo (un video detrás del menú gastaba memoria y frenaba el control)
@@ -3964,7 +3978,13 @@
     auStop: function () { AU.stop(); if (view.name === 'radio' || view.name === 'music') MV.rerender(); },
     openApp: function (k) { openApp(k); },
     openDiag: function () { if (AU.current()) AU.stop(); if (A && A.openDiag) A.openDiag(); else MV.toast('Disponible en la app instalada'); },
-    ytSearch: function () { MV._typedAt = Date.now(); var v = ((document.getElementById('ytIn') || {}).value || '').trim(); if (!P.ytKey) { if (v) ytOpen(v); else openApp('youtube'); return; } YT.q = v; YT.list = null; MV.rerender(); },
+    ytResume: function () {
+      if (MV.ytPlayer.isOpen()) { if (MV.ytPlayer.isMini()) MV.ytPlayer.act('max'); MV.ytPlayer.act('toggle'); return; }
+      MV.ytPlayer.resume(false);
+    },
+    ytRecent: function (a) { var q = a.slice(2); if (a[0] === 'm') { YTM.q = q; YTM.list = null; } else { YT.q = q; YT.list = null; } ytRecentAdd(a[0], q); MV.rerender(); },
+    ytRecentDel: function (a) { var k = a[0] === 'm' ? 'ytmRecent' : 'ytRecent', l = (MV.load(k, []) || []).filter(function (x) { return x !== a.slice(2); }); MV.save(k, l); MV.rerender(); },
+    ytSearch: function () { MV._typedAt = Date.now(); var v = ((document.getElementById('ytIn') || {}).value || '').trim(); if (!P.ytKey) { if (v) ytOpen(v); else openApp('youtube'); return; } YT.q = v; YT.list = null; ytRecentAdd('y', v); MV.rerender(); },
     ytCat: function (c) { YT.cat = c; YT.q = ''; YT.list = null; MV.rerender(); },
     ytPlay: function (i) {
       var l = MV._ytList || [], v = l[+i];
@@ -4017,7 +4037,7 @@
     streamUnfav: function (a) { var i = a.indexOf(':'), t = a.slice(0, i), c = a.slice(i + 1), f = streamFavs(); f[t] = (f[t] || []).filter(function (x) { return x !== c; }); MV.save('streamFavs', f); MV.rerender(); },
     streamBrowse: function () { openBrowser(STREAM.tab === 'kick' ? 'https://kick.com/browse' : 'https://www.twitch.tv/directory'); },
     ytmCat: function (c) { YTM.cat = c; YTM.q = ''; YTM.list = null; MV.rerender(); },
-    ytmSearch: function () { MV._typedAt = Date.now(); YTM.q = ((document.getElementById('ytmIn') || {}).value || '').trim(); YTM.list = null; MV.rerender(); },
+    ytmSearch: function () { MV._typedAt = Date.now(); YTM.q = ((document.getElementById('ytmIn') || {}).value || '').trim(); YTM.list = null; ytRecentAdd('m', YTM.q); MV.rerender(); },
     ytmPlay: function (i) {
       var l = MV._ytmList || [], v = l[+i];
       if (v && v.pl) { YTM.cat = 'pli:' + v.pl; YTM.q = ''; YTM.list = null; MV.rerender(); return; }
@@ -5017,6 +5037,18 @@
   }
 
   // ---------- YouTube dentro de la app (reproductor oficial incrustado + YouTube Data API) ----------
+  // Búsquedas recientes de YouTube y YouTube Music (quedan guardadas aunque cierres la app)
+  function ytRecentAdd(w, q) {
+    q = String(q || '').trim(); if (!q || MV.isKids()) return;
+    var k = w === 'm' ? 'ytmRecent' : 'ytRecent', l = (MV.load(k, []) || []).filter(function (x) { return x.toLowerCase() !== q.toLowerCase(); });
+    l.unshift(q); MV.save(k, l.slice(0, 12));
+  }
+  function ytRecentRow(w, cur) {
+    var l = MV.isKids() ? [] : (MV.load(w === 'm' ? 'ytmRecent' : 'ytRecent', []) || []); if (!l.length) return '';
+    return '<div class="chips scrollx" aria-label="Búsquedas recientes"><span class="muted" style="align-self:center;font-size:13px">Recientes:</span>' + l.map(function (q) {
+      return '<button class="chip f' + (cur === q ? ' on' : '') + '" data-act="ytRecent" data-arg="' + esc(w + ':' + q) + '">' + IC.search.replace('<svg', '<svg width="14" height="14"') + esc(q) + '</button>';
+    }).join('') + (cur && l.indexOf(cur) >= 0 ? '<button class="chip f" data-act="ytRecentDel" data-arg="' + esc(w + ':' + cur) + '" aria-label="Quitar «' + esc(cur) + '» de recientes">✕ Quitar</button>' : '') + '</div>';
+  }
   var YT = { cat: 'trend', q: '', list: null, loading: false, key: '', error: '', cache: {} };
   var YT_CATS = [['trend', 'Tendencias', ''], ['10', 'Música', ''], ['17', 'Deportes', ''], ['24', 'Entretenimiento', ''], ['23', 'Comedia', ''], ['20', 'Videojuegos', ''], ['25', 'Noticias', 's'], ['27', 'Educación', 's'], ['s:recetas fáciles', 'Recetas', 's'], ['s:documental completo', 'Documentales', 's'], ['s:podcast en español', 'Podcasts', 's']];
   function ytApi(path) {
@@ -5106,7 +5138,7 @@
         '<h3 style="margin:18px 0 10px">Más apps de YouTube</h3><div class="apps">' + appTile('ytkids', 'Para niños') + '</div>';
     }
     loadYT();
-    html += '<div style="display:flex;gap:10px;margin:0 0 12px;flex-wrap:wrap"><input class="in f" id="ytIn" value="' + esc(YT.q) + '" placeholder="Buscar en YouTube" style="flex:1;min-width:220px" autocomplete="off" enterkeyhint="search"><button class="btn f" data-act="ytSearch">' + IC.search + 'Buscar</button></div>' +
+    html += '<div style="display:flex;gap:10px;margin:0 0 12px;flex-wrap:wrap"><input class="in f" id="ytIn" value="' + esc(YT.q) + '" placeholder="Buscar en YouTube" style="flex:1;min-width:220px" autocomplete="off" enterkeyhint="search"><button class="btn f" data-act="ytSearch">' + IC.search + 'Buscar</button></div>' + ytRecentRow('y', YT.q) +
       '<div class="chips">' + (ytHasAcct() ? [['me:subs', 'Suscripciones'], ['me:likes', 'Me gusta'], ['me:pl', 'Mis listas']].map(function (c) { return '<button class="chip f' + (!YT.q && (YT.cat === c[0] || (c[0] === 'me:pl' && YT.cat.indexOf('pli:') === 0)) ? ' on' : '') + '" data-act="ytCat" data-arg="' + c[0] + '">' + c[1] + '</button>'; }).join('') + '<button class="chip f" data-act="ytLogout">Salir de mi cuenta</button>' : '<button class="chip f" data-act="ytLogin" style="border-color:#ff4e45">Iniciar sesión con mi cuenta</button>') +
       '<button class="chip f" data-act="ytMyLists">♫ Listas de MiVibra</button>' + YT_CATS.map(function (c) { return '<button class="chip f' + (!YT.q && YT.cat === c[0] ? ' on' : '') + '" data-act="ytCat" data-arg="' + esc(c[0]) + '">' + esc(c[1]) + '</button>'; }).join('') + '</div>';
     if (YT.loading && !YT.list) return html + '<div class="panel glass" style="display:flex;gap:14px;align-items:center"><div class="spinner"></div><b>Cargando videos…</b></div>';
@@ -5207,6 +5239,14 @@
       var d = player.getDuration() || 0, c = player.getCurrentTime() || 0;
       var f = document.getElementById('ytFill'), a1 = document.getElementById('ytCur'), a2 = document.getElementById('ytDur');
       if (f) f.style.width = (d ? Math.min(100, c / d * 100) : 0) + '%'; if (a1) a1.textContent = fmt(c); if (a2) a2.textContent = fmt(d);
+      if (c > 0 && Date.now() - lastSave > 10000) saveLast(c);
+    }
+    // Lo último que viste en YouTube: al volver a abrir la app aparece en el recuadro del Inicio, listo para seguir
+    var lastSave = 0, cue = null;
+    function saveLast(t) {
+      lastSave = Date.now(); var v = list[idx]; if (!v || MV.isKids()) return;
+      var from = Math.max(0, idx - 5);
+      MV.save('ytLast', { list: list.slice(from, from + 30), idx: idx - from, t: Math.floor(t || 0), ts: Date.now() });
     }
     // Detalles y comentarios (solo lectura, con tu clave de YouTube)
     function num(n) { n = +n || 0; return n >= 1e6 ? (n / 1e6).toFixed(1).replace('.0', '') + ' M' : n >= 1e3 ? (n / 1e3).toFixed(1).replace('.0', '') + ' mil' : String(n); }
@@ -5265,14 +5305,14 @@
     }
     function load() {
       var v = list[idx]; if (!v) return;
-      frame(); showBar();
+      frame(); showBar(); if (!cue) saveLast(0);
       api().then(function () {
         if (player && player.destroy) { try { player.destroy(); } catch (e) {} }
         player = new window.YT.Player('ytFrame', {
           width: '100%', height: '100%', videoId: v.id,
-          playerVars: { autoplay: 1, playsinline: 1, rel: 0, modestbranding: 1, fs: 0, hl: 'es', cc_lang_pref: 'es', origin: location.origin },
+          playerVars: { autoplay: cue && cue.paused ? 0 : 1, start: cue && cue.start ? cue.start : 0, playsinline: 1, rel: 0, modestbranding: 1, fs: 0, hl: 'es', cc_lang_pref: 'es', origin: location.origin },
           events: {
-            onReady: function (e) { try { e.target.playVideo(); } catch (x) {} },
+            onReady: function (e) { var c = cue; cue = null; try { if (!(c && c.paused)) e.target.playVideo(); } catch (x) {} },
             onStateChange: function (e) {
               box().querySelectorAll('[data-yt="toggle"]').forEach(function (t) { t.innerHTML = e.data === 1 ? IC.pause : IC.play; });
               if (e.data === 1) skips = 0;
@@ -5379,6 +5419,13 @@
         var sd = document.getElementById('ytSide'); if (sd && !sd.hidden && sd.dataset.mode === 'q') queuePanel();
       },
       mini: function () { setMini(true); },
+      /** Abre lo último visto en el mini reproductor (en el recuadro del Inicio), en pausa en el punto donde ibas. */
+      resume: function (paused) {
+        var L = MV.load('ytLast', null); if (!L || !L.list || !L.list.length) return false;
+        cue = { start: L.t > 5 ? L.t - 3 : 0, paused: !!paused };
+        YTP.play(L.list, L.idx || 0); if (paused) setMini(true);
+        return true;
+      },
       play: function (l, i) {
         if (AU.current()) AU.stop();
         // Perfil infantil: el tiempo de YouTube cuenta para el límite diario; si se acaba, se cierra
@@ -6146,7 +6193,7 @@
     loadYTM();
     var html = '<div class="chips">' + (ytHasAcct() ? [['me:mlikes', 'Mis Me gusta'], ['me:pl', 'Mis listas'], ['me:subs', 'Suscripciones']].map(function (c) { return '<button class="chip f' + (!YTM.q && (YTM.cat === c[0] || (c[0] === 'me:pl' && YTM.cat.indexOf('pli:') === 0)) ? ' on' : '') + '" data-act="ytmCat" data-arg="' + c[0] + '">' + c[1] + '</button>'; }).join('') : '<button class="chip f" data-act="ytmLogin" style="border-color:#ff4e45">Iniciar sesión con mi cuenta</button>') +
       YTM_CATS.map(function (c) { return '<button class="chip f' + (!YTM.q && YTM.cat === c[0] ? ' on' : '') + '" data-act="ytmCat" data-arg="' + esc(c[0]) + '">' + esc(c[1]) + '</button>'; }).join('') + '</div>' +
-      '<div style="display:flex;gap:10px;margin:4px 0 16px;flex-wrap:wrap"><input class="in f" id="ytmIn" value="' + esc(YTM.q) + '" placeholder="Buscar canción, artista o álbum" style="flex:1;min-width:220px" autocomplete="off" enterkeyhint="search"' + (MV.device.tv ? ' inputmode="none"' : '') + '><button class="btn f" data-act="ytmSearch">' + IC.search + 'Buscar</button></div>';
+      '<div style="display:flex;gap:10px;margin:4px 0 16px;flex-wrap:wrap"><input class="in f" id="ytmIn" value="' + esc(YTM.q) + '" placeholder="Buscar canción, artista o álbum" style="flex:1;min-width:220px" autocomplete="off" enterkeyhint="search"' + (MV.device.tv ? ' inputmode="none"' : '') + '><button class="btn f" data-act="ytmSearch">' + IC.search + 'Buscar</button></div>' + ytRecentRow('m', YTM.q);
     if (YTM.loading && !YTM.list) return html + '<div class="panel glass" style="display:flex;gap:14px;align-items:center"><div class="spinner"></div><b>Cargando música…</b></div>';
     if (YTM.error) return html + '<div class="panel glass"><p>YouTube respondió: ' + esc(YTM.error) + '</p></div>';
     var list = YTM.list || [];

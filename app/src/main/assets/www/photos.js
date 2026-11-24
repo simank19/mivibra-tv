@@ -210,6 +210,7 @@
   }
   function closeViewer() { if (!VW) return; clearInterval(VW.t); clearTimeout(VW.hide); VW.box.remove(); VW = null; }
   MV.photoViewerOpen = function () { return !!VW; };
+  MV.photoViewerClose = closeViewer;
   // Teclas del control en el visor (antes que la navegación de la app)
   window.addEventListener('keydown', function (e) {
     if (!VW) return;
