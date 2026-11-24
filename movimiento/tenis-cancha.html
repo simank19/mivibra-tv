@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Tenis · MiVibra Movimiento</title>
+</head>
+<body>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@2.0.4/dist/qrcode.js"></script>
+<script src="../mano.js"></script>
+<script type="importmap">{"imports":{"three":"../vendor/three-0.183.2/three.module.min.js","three/addons/":"../vendor/three-0.183.2/addons/"}}</script>
+<script type="module">
+import { startGame, THREE, E, clamp, lerp, rnd } from '../juego.js';
+
+// Tenis en cancha: muerte súbita a 7 puntos (con 2 de ventaja). Tu avatar corre solo hacia la pelota; tú das el golpe y eliges el lado.
+const HW = 4.11, HL = 11.89, NET = 0.95, GR = 9.8, ZP = [11.6, -11.6];
+const G = { sc: [0, 0], server: 0, phase: 'wait', ball: null, last: -1, bounces: 0, aim: 0, pl: [{}, {}] };
+let ballM, shadow, rk = [];
+
+const ctx = await startGame({
+  id: 'tenis-cancha', title: 'Tenis', kicker: 'MIVIBRA MOVIMIENTO · CANCHA', loading: 'Pintando las líneas…', fov: 50,
+  sub: 'Muerte súbita a 7 puntos. Tu avatar corre solo: tú pegas y eliges el lado.', startSound: 'silbato',
+  how: 'Haz el movimiento de raqueta cuando llegue la pelota: hacia la izquierda o la derecha para elegir el lado.',
+  modes: [{ id: 'cpu', label: 'Contra MiVibra', icon: '▶' }, { id: 'two', label: '2 jugadores (2 celulares)', icon: '⚔', two: true }],
+  orbit: { c: [0, 1, 0], r: 18, y: 8 },
+  onSound(c) { c.amb('estadio-ambiente', 0.12); },
+  async scene(c0) {
+    const S = c0.S, r = E.seeded(71);
+    E.sky(S, '#3d9bff', '#d6f1ff'); E.lights(S); E.clouds(S, 7, 200, 70, r);
+    E.plane(S, 120, 120, '#3fae6b', -0.02); E.plane(S, 22, 38, '#2f9e5b', -0.01);
+    const L = E.canvasTex(512, 1024, (c, w, h) => { c.fillStyle = '#2d6fd6'; c.fillRect(0, 0, w, h); c.strokeStyle = '#fff'; c.lineWidth = 6; const sx = w / 11, sy = h / 23.8;
+      c.strokeRect(3, 3, w - 6, h - 6); c.beginPath(); c.moveTo(1.37 * sx, 0); c.lineTo(1.37 * sx, h); c.moveTo(w - 1.37 * sx, 0); c.lineTo(w - 1.37 * sx, h);
+      c.moveTo(1.37 * sx, h / 2 - 6.4 * sy); c.lineTo(w - 1.37 * sx, h / 2 - 6.4 * sy); c.moveTo(1.37 * sx, h / 2 + 6.4 * sy); c.lineTo(w - 1.37 * sx, h / 2 + 6.4 * sy); c.moveTo(w / 2, h / 2 - 6.4 * sy); c.lineTo(w / 2, h / 2 + 6.4 * sy); c.stroke(); });
+    E.plane(S, 11, 23.8, new THREE.MeshToonMaterial({ map: L }));
+    const net = E.canvasTex(256, 32, (c, w, h) => { c.strokeStyle = 'rgba(20,20,30,.9)'; c.lineWidth = 1.5; for (let x = 0; x < w; x += 6) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke(); } for (let y = 0; y < h; y += 6) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); } c.fillStyle = '#fff'; c.fillRect(0, 0, w, 4); });
+    const nm = new THREE.Mesh(new THREE.PlaneGeometry(12.8, 1), new THREE.MeshBasicMaterial({ map: net, transparent: true, side: THREE.DoubleSide })); nm.position.set(0, 0.5, 0); S.add(nm);
+    [-6.4, 6.4].forEach((x) => { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.07, 8), E.mat('#1b1b2a')); p.position.set(x, 0.53, 0); S.add(p); });
+    const fans = E.bowl(S, { w: 24, d: 40, gap: 1, rows: 8, rnd: r, color: '#24446e' });
+    const um = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.2, 6), E.mat('#1b1b2a')); um.position.set(7.4, 1.1, 0); S.add(um);
+    const chair = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.5, 0.6), E.mat('#2d6fd6')); chair.position.set(7.4, 2.2, 0); S.add(chair);
+    E.boards(S, 13, 30, r, c0.sponsors);
+    ballM = new THREE.Mesh(new THREE.IcosahedronGeometry(0.07, 2), E.mat('#d8ff3a')); S.add(ballM);
+    shadow = new THREE.Mesh(new THREE.CircleGeometry(0.08, 12), new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.3 })); shadow.rotation.x = -Math.PI / 2; S.add(shadow);
+    return { tick: (t) => fans.tick(t) };
+  },
+  setup(c) {
+    c.P.forEach((p, k) => { const g = new THREE.Group(); const head = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.022, 6, 16), E.mat(k ? '#3a86ff' : '#ff4d6d')); head.scale.set(1, 1.25, 1); head.position.y = 0.38;
+      const str = new THREE.Mesh(new THREE.CircleGeometry(0.14, 16), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.35, side: THREE.DoubleSide })); str.scale.set(1, 1.25, 1); str.position.y = 0.38;
+      const hd = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.26, 6), E.mat('#1b1b2a')); hd.position.y = 0.12; g.add(head, str, hd); c.hold(k, 'right', g); rk[k] = g; });
+  },
+  start(c) { G.sc = [0, 0]; G.server = 0; hud(); serve(); },
+  update(c, dt) {
+    const B = G.ball;
+    // movimiento automático hacia donde va la pelota
+    [0, 1].forEach((k) => { const pl = G.pl[k], s = c.P[k].av.scene; let tx = 0, tz = ZP[k];
+      if (B && B.v.z * (k ? -1 : 1) > 0 && G.phase === 'rally') { const tt = B.hitT(k); tx = clamp(B.p.x + B.v.x * tt, -HW - 1.5, HW + 1.5) + (k ? -0.45 : 0.45); tz = ZP[k] + (k ? 0.6 : -0.6) * 0; }
+      else if (G.phase === 'serve' && G.server === k) tx = k ? -1 : 1;
+      const sp = (c.P[k].cpu ? 4.2 + c.lvlK() * 2.2 : 6.5) * dt; pl.vx = clamp(tx - s.position.x, -sp, sp); s.position.x += pl.vx; s.position.z = lerp(s.position.z, tz, 0.1); s.rotation.y = k ? 0 : Math.PI;
+      c.clip(k, Math.abs(pl.vx) > 0.01 ? 'Run' : 'Idle', { speed: 1.2 }); });
+    if (!B) return;
+    if (G.phase === 'serve') { const sv = c.P[G.server].av.scene.position; B.p.set(sv.x + (G.server ? -0.3 : 0.3), 1.6 + Math.abs(Math.sin(c.t * 2.5)) * 0.8, sv.z); ballM.position.copy(B.p); shadow.position.set(B.p.x, 0.01, B.p.z); return; }
+    if (G.phase === 'point') { B.p.addScaledVector(B.v, dt); B.v.y -= GR * dt; if (B.p.y < 0.035) { B.p.y = 0.035; B.v.multiplyScalar(0.6); B.v.y = Math.abs(B.v.y); } ballM.position.copy(B.p); return; }
+    B.p.addScaledVector(B.v, dt); B.v.y -= GR * dt; B.spin = (B.spin || 0) + dt * 20; ballM.position.copy(B.p); ballM.rotation.x = B.spin; shadow.position.set(B.p.x, 0.01, B.p.z);
+    if (B.v.length() > 14) c.FX.trail(B.p, '#eaff7a', 0.08);
+    // red
+    if ((B.prevZ > 0) !== (B.p.z > 0) && B.p.y < NET && G.phase === 'rally') { B.v.z *= -0.2; B.v.x *= 0.3; c.sfx.play('golpe', 0.4); c.FX.pop(B.p.x, 1.6, 0, '¡RED!', '#B9B1A8', 0.6); return point(1 - G.last); }
+    B.prevZ = B.p.z;
+    if (B.p.y <= 0.035 && B.v.y < 0) { B.p.y = 0.035; B.v.y = -B.v.y * 0.72; B.v.x *= 0.92; B.v.z *= 0.92; B.bounce++; c.sfx.play('pingpong', 0.5); c.FX.ring(B.p.x, 0.02, B.p.z, '#ffffff', 0.4);
+      const side = B.p.z > 0 ? 0 : 1, inside = Math.abs(B.p.x) <= HW + 0.05 && Math.abs(B.p.z) <= HL + 0.05;
+      if (B.bounce === 1) { if (side === G.last || !inside) { c.FX.pop(B.p.x, 1.4, B.p.z, '¡AFUERA!', '#FF2EA8', 0.7); return point(1 - G.last); } if (B.serve && !(Math.abs(B.p.z) < 6.4 + 0.05)) { c.FX.pop(B.p.x, 1.4, B.p.z, '¡FALTA!', '#FF2EA8', 0.7); return point(1 - G.last); } }
+      if (B.bounce >= 2) return point(G.last); }
+    if (Math.abs(B.p.z) > HL + 6) return point(B.bounce >= 1 ? G.last : 1 - G.last);
+    // ¿puede pegarle el jugador que la espera?
+    const k = 1 - G.last, s = c.P[k].av.scene.position, reach = Math.hypot(B.p.x - s.x, B.p.z - s.z), canHit = G.phase === 'rally' && B.bounce <= 1 && reach < 1.5 && B.p.y < 2.4 && B.v.z * (k ? -1 : 1) > 0;
+    B.can = canHit;
+    if (canHit) { if (c.P[k].cpu) { if (!B.cpuDecided) { B.cpuDecided = true; B.cpuMiss = Math.random() > 0.55 + c.lvlK() * 0.4; } if (!B.cpuMiss && reach < 0.8) hit(c, k, rnd(-0.8, 0.8), rnd(0.5, 0.9)); }
+      else if (G.pl[k].want && performance.now() - G.pl[k].want.t < 450) { const w = G.pl[k].want; G.pl[k].want = null; hit(c, k, w.aim, w.pow); }
+      else if (c.camOf(k)) { const Bd = c.body(k); if (performance.now() - Bd.swingAt < 110) hit(c, k, Bd.swing.dir * (k ? -1 : 1) * 0.8, Bd.swing.pow); } }
+  },
+  pose(c, k) {
+    if (c.camOf(k) && G.phase !== 'serve') { c.mirror(k, { arms: 1, spine: 0.4, head: 0.6 }); return; }
+    const sw = G.pl[k].swing || 0, sh = c.sh(k, 'right'), f = k ? 1 : -1;
+    // golpe de derecha: la raqueta va de atrás hacia adelante
+    const back = sh.clone().add(new THREE.Vector3(-0.35 * f * -1, -0.1, 0.25 * -f)), fr = sh.clone().add(new THREE.Vector3(0.25 * f * -1, 0.05, 0.4 * f));
+    c.reach(k, 'right', sw > 0 ? back.lerp(fr, 1 - sw) : back, 1);
+  },
+  frame(c, dt) { G.pl.forEach((p) => { if (p.swing > 0) p.swing = Math.max(0, p.swing - dt * 4); }); },
+  camera(c) { const me = !c.P[0].cpu || c.P[1].cpu ? 0 : 1, s = c.P[me].av.scene.position, f = me ? -1 : 1, b = G.ball ? G.ball.p : new THREE.Vector3();
+    return [new THREE.Vector3(s.x * 0.6 + 1.1 * f, 2.9, s.z + 4.3 * f), new THREE.Vector3(b.x * 0.3, 0.6, -2 * f), 3]; },
+  key(c, key, ok, slot) { const k = slot === 1 && !c.P[1].cpu ? 1 : 0; if (key === 'ArrowLeft') G.aim = -0.8; if (key === 'ArrowRight') G.aim = 0.8; if (ok || key === 'ArrowUp') swingKey(c, k); },
+  keyUp(c, key) { if (key === 'ArrowLeft' || key === 'ArrowRight') G.aim = 0; },
+  touch(c, t, k) { if (t.s === 'tap') swingKey(c, k, 0); if (t.s === 'swipe') swingKey(c, k, clamp(t.dx * 4, -1, 1), clamp(t.sp / 3, 0.4, 1)); },
+  photoSub: () => G.sc[0] + ' – ' + G.sc[1],
+});
+ctx.ui.touch([{ label: '◀', key: 'ArrowLeft' }, { label: 'Golpe', key: 'Enter', ok: 1 }, { label: '▶', key: 'ArrowRight' }]);
+
+function swingKey(c, k, aim, pow = 0.8) {
+  if (c.P[k].cpu) return; G.pl[k].swing = 1; c.sfx.play('swing', 0.6);
+  if (G.phase === 'serve' && G.server === k) return doServe(c, k, aim ?? G.aim);
+  const B = G.ball; if (B && B.can && 1 - G.last === k) hit(c, k, aim ?? G.aim, pow); else G.pl[k].want = { t: performance.now(), aim: aim ?? G.aim, pow };   // golpe adelantado: se guarda un instante
+}
+function hit(c, k, aim, pow) {
+  const B = G.ball; G.last = k; B.bounce = 0; B.serve = false; B.cpuDecided = false; G.pl[k].swing = 1; G.rally = (G.rally || 0) + 1;
+  // destino en la cancha rival; más fuerte = más profundo y rápido
+  const f = k ? 1 : -1, tx = clamp(aim * HW * 0.9 + rnd(-0.6, 0.6), -HW + 0.3, HW - 0.3), tz = f * lerp(5.5, 10.8, clamp(pow, 0, 1)), T = lerp(1.25, 0.75, clamp(pow, 0, 1));
+  const v = new THREE.Vector3((tx - B.p.x) / T, (0.035 - B.p.y + 0.5 * GR * T * T) / T, (tz - B.p.z) / T);
+  // que pase la red
+  const tn = -B.p.z / v.z; if (tn > 0) { const yn = B.p.y + v.y * tn - 0.5 * GR * tn * tn; if (yn < NET + 0.25) v.y += (NET + 0.35 - yn) / tn; }
+  B.v.copy(v); c.sfx.play('raqueta'); c.FX.sparks(B.p, pow * 0.6, '#eaff7a');
+  if (pow > 0.85 && !c.P[k].cpu) { c.FX.pop(B.p.x, B.p.y + 0.9, B.p.z, '¡ZAS!', '#FF2EA8', 0.6); c.FX.shake(0.25); c.FX.punch(4); }
+  if (G.rally === 8) { c.FX.pop(0, 2.4, 0, '¡QUÉ PELOTEO!', '#FFE600', 0.9); c.crowd('aplausos'); }
+}
+function serve() {
+  const k = G.server; G.phase = 'serve'; G.rally = 0; G.last = -1;
+  const s = ctx.P[k].av.scene.position; G.ball = { p: new THREE.Vector3(s.x + (k ? -0.3 : 0.3), 2.2, ZP[k]), v: new THREE.Vector3(), bounce: 0, serve: true, prevZ: ZP[k], hitT(kk) { return Math.max(0, (ZP[kk] - this.p.z) / (this.v.z || 1)); } };
+  G.ball.v.set(0, 0, 0); ballM.position.copy(G.ball.p);
+  if (ctx.P[k].cpu) setTimeout(() => { if (G.phase === 'serve') doServe(ctx, k, rnd(-0.6, 0.6)); }, 1300);
+  else ctx.ui.cue('Saca: ' + (ctx.camOf(k) ? 'haz el golpe' : ctx.TOUCH ? 'toca o desliza' : 'OK (← → elige el lado)'), true);
+  ctx.ui.keys('OK: golpe · ← → elegir lado');
+}
+function doServe(c, k, aim) {
+  const B = G.ball; if (!B) return; G.phase = 'rally'; G.last = k; B.serve = true; B.bounce = 0; G.pl[k].swing = 1;
+  const f = k ? 1 : -1, tx = clamp(aim * 3, -HW + 0.4, HW - 0.4), tz = f * 5, T = 0.95;
+  B.p.set(B.p.x, 2.3, ZP[k]); B.v.set((tx - B.p.x) / T, (0.035 - B.p.y + 0.5 * GR * T * T) / T, (tz - B.p.z) / T);
+  const tn = -B.p.z / B.v.z, yn = B.p.y + B.v.y * tn - 0.5 * GR * tn * tn; if (yn < NET + 0.2) B.v.y += (NET + 0.3 - yn) / tn;
+  c.sfx.play('raqueta');
+}
+function point(w) {
+  if (G.phase === 'point') return; G.phase = 'point'; G.sc[w]++; hud(); const B = G.ball;
+  ctx.crowd(w === 0 || !ctx.P[w].cpu ? 'aplausos' : 'ole');
+  if (B) ctx.FX.stars(B.p, 5, w ? '#3a86ff' : '#ff4d6d');
+  ctx.ui.big(ctx.P[w].cpu ? 'Punto MiVibra' : '¡Punto ' + ctx.P[w].name + '!', G.sc[0] + ' – ' + G.sc[1], 1300);
+  setTimeout(() => {
+    const a = G.sc[0], b = G.sc[1]; if ((a >= 7 || b >= 7) && Math.abs(a - b) >= 2) { const win = a > b ? 0 : 1; G.ball = null; return ctx.end(win, ctx.P[win].cpu ? 'Gana MiVibra' : '¡Gana ' + ctx.P[win].name + '!', a + ' – ' + b); }
+    if ((a + b) % 2 === 1) G.server = 1 - G.server; serve();
+  }, 1500);
+}
+function hud() { ctx.ui.score(ctx.ui.pl(0, G.sc[0]) + '<span class="tag">Muerte súbita a 7</span>' + ctx.ui.pl(1, G.sc[1])); }
+</script>
+</body>
+</html>
