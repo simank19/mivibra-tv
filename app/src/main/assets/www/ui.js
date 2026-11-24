@@ -5219,7 +5219,11 @@
     function box() { return document.getElementById('ytp'); }
     function showBar() {
       var b = box(); if (!b || mini) return; b.classList.add('ui');
-      clearTimeout(hideT); hideT = setTimeout(function () { b.classList.remove('ui'); }, 4000);
+      clearTimeout(hideT); hideT = setTimeout(function hide() {
+        // En pausa los controles se quedan a la vista
+        try { if (player && player.getPlayerState && player.getPlayerState() === 2) { hideT = setTimeout(hide, 3000); return; } } catch (e) {}
+        b.classList.remove('ui'); var ae = document.activeElement; if (ae && b.contains(ae)) ae.blur();
+      }, MV.device.tv ? 6000 : 4000);
     }
     function frame() {
       var v = list[idx] || {};
@@ -5227,9 +5231,11 @@
       var nx = list[idx + 1];
       b.innerHTML = '<div class="ytvid"><div id="ytFrame"></div><div class="yttap" data-yt="tap"></div></div><button class="iconbtn x" data-yt="close" aria-label="Cerrar video">' + IC.close + '</button><button class="iconbtn xm" data-yt="mini" aria-label="Minimizar"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>' +
         '<div class="ytmc"><div class="t"><b>' + esc(v.title || '') + '</b><span>' + esc(v.channel || '') + '</span></div><button class="iconbtn f" data-yt="prev" aria-label="Anterior">' + IC.prev + '</button><button class="iconbtn on f" data-yt="toggle" aria-label="Pausa">' + IC.pause + '</button><button class="iconbtn f" data-yt="next" aria-label="Siguiente">' + IC.next + '</button><button class="iconbtn f" data-yt="max" aria-label="Pantalla completa"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14v6h6M20 10V4h-6M4 20l7-7M20 4l-7 7"/></svg></button><button class="iconbtn f" data-yt="close" aria-label="Cerrar">' + IC.close + '</button></div>' + '<div class="ytside" id="ytSide" hidden></div>' +
-        '<div class="bar"><div class="ytprog"><span id="ytCur">0:00</span><div class="trk" data-yt="seek"><i id="ytFill"></i></div><span id="ytDur">0:00</span></div><div class="t"><b>' + esc(v.title || '') + '</b><span>' + esc(v.channel || '') + (list.length > 1 ? ' · ' + (idx + 1) + ' de ' + list.length : '') + (nx ? ' · Sigue: ' + esc(nx.title.slice(0, 50)) : '') + '</span></div>' +
+        '<div class="bar"><div class="ythint" id="ytHint"></div><div class="ytprog"><span id="ytCur">0:00</span><div class="trk" data-yt="seek" tabindex="0" role="slider" aria-label="Avance (← → para moverte 10 s)"><i id="ytFill"><b></b></i></div><span id="ytDur">0:00</span></div><div class="t"><b>' + esc(v.title || '') + '</b><span>' + esc(v.channel || '') + (list.length > 1 ? ' · ' + (idx + 1) + ' de ' + list.length : '') + (nx ? ' · Sigue: ' + esc(nx.title.slice(0, 50)) : '') + '</span></div>' +
         '<div class="ctl"><button class="iconbtn" data-yt="mini" aria-label="Minimizar (sigue sonando mientras navegas)"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button><button class="iconbtn" data-yt="prev" aria-label="Anterior">' + IC.prev + '</button><button class="iconbtn" data-yt="back10" aria-label="Atrás 10 s">−10</button><button class="iconbtn on" data-yt="toggle" aria-label="Pausa">' + IC.pause + '</button><button class="iconbtn" data-yt="fwd10" aria-label="Adelante 10 s">+10</button><button class="iconbtn" data-yt="next" aria-label="Siguiente">' + IC.next + '</button>' + (MV.isKids() ? '' : '<button class="iconbtn" data-yt="queue" aria-label="Cola (lo que sigue)"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h12M4 12h12M4 18h8M18 15v6M15 18h6"/></svg></button><button class="iconbtn" data-yt="info" aria-label="Detalles y comentarios" style="font-size:12px;width:auto;padding:0 12px">💬<span class="ytlbl"> Comentarios</span></button><button class="iconbtn" data-yt="lyrics" aria-label="Letra">' + IC.lyrics + '</button><button class="iconbtn" data-yt="addpl" aria-label="Añadir a una lista">' + IC.plAdd + '</button>') + '<button class="iconbtn" data-yt="close" aria-label="Cerrar">' + IC.close + '</button></div></div>';
       b.querySelectorAll('[data-yt]').forEach(function (btn) { btn.onclick = function (e) { e.stopPropagation(); act(btn.dataset.yt, e); }; });
+      // Al abrir, el foco va a Pausa (si se queda en la caja de búsqueda de atrás, la cruceta no llega a los botones)
+      if (!mini) setTimeout(function () { var t = b.querySelector('.bar .ctl [data-yt="toggle"]'); if (t && open && !mini) { var ae = document.activeElement; if (ae && ae.blur && !b.contains(ae)) ae.blur(); t.focus(); hint(t); } }, 60);
     }
     // Barra de avance: tiempo actual / duración (se toca para saltar a ese punto)
     var progIv = null;
@@ -5404,9 +5410,45 @@
         if (e.key === 'Escape' || e.key === 'GoBack' || e.key === 'BrowserBack' || e.key === 'ArrowLeft') { e.preventDefault(); e.stopImmediatePropagation(); side(false); return; }
       }
       if (e.key === 'ContextMenu' || e.key === 'Info' || e.key === 'i') { e.preventDefault(); e.stopImmediatePropagation(); act('info'); return; }
-      var k = e.key, map = { Enter: 'toggle', ' ': 'toggle', MediaPlayPause: 'toggle', ArrowLeft: 'back10', ArrowRight: 'fwd10', ArrowUp: 'prev', ArrowDown: 'next', MediaTrackNext: 'next', MediaTrackPrevious: 'prev', Escape: 'mini' };
-      if (map[k]) { e.preventDefault(); e.stopImmediatePropagation(); act(map[k]); }
+      var k = e.key, b = box();
+      var media = { MediaPlayPause: 'toggle', MediaTrackNext: 'next', MediaTrackPrevious: 'prev', MediaFastForward: 'fwd10', MediaRewind: 'back10', Escape: 'mini' }[k];
+      if (media) { e.preventDefault(); e.stopImmediatePropagation(); act(media); return; }
+      var nav = { ArrowLeft: 1, ArrowRight: 1, ArrowUp: 1, ArrowDown: 1, Enter: 1, ' ': 1 };
+      if (!nav[k]) return;
+      e.preventDefault(); e.stopImmediatePropagation();
+      var ae = document.activeElement, trk = b.querySelector('.ytprog .trk');
+      var btns = Array.prototype.filter.call(b.querySelectorAll('.bar .ctl [data-yt]'), function (x) { return x.offsetWidth > 0; });
+      var shown = b.classList.contains('ui'), inBar = shown && ae && b.contains(ae) && (ae === trk || btns.indexOf(ae) >= 0);
+      var focusBtn = function (el) { if (!el) return; el.focus(); hint(el); };
+      if (!inBar) {
+        // Controles escondidos: ← → adelantan/atrasan 10 s; OK pausa; ↑ ↓ muestran los controles con el foco en Pausa
+        if (k === 'ArrowLeft' || k === 'ArrowRight') { act(k === 'ArrowLeft' ? 'back10' : 'fwd10'); focusBtn(trk); return; }
+        if (k === 'Enter' || k === ' ') { if (shown) act('toggle'); showBar(); focusBtn(b.querySelector('.bar .ctl [data-yt="toggle"]')); return; }
+        showBar(); focusBtn(b.querySelector('.bar .ctl [data-yt="toggle"]')); return;
+      }
+      showBar();
+      if (ae === trk) {
+        if (k === 'ArrowLeft' || k === 'ArrowRight') { act(k === 'ArrowLeft' ? 'back10' : 'fwd10'); hint(trk); return; }
+        if (k === 'Enter' || k === ' ') { act('toggle'); return; }
+        if (k === 'ArrowDown') { focusBtn(b.querySelector('.bar .ctl [data-yt="toggle"]')); return; }
+        return;   // ↑ no hace nada
+      }
+      var p = btns.indexOf(ae);
+      if (k === 'ArrowLeft' || k === 'ArrowRight') { focusBtn(btns[Math.max(0, Math.min(btns.length - 1, p + (k === 'ArrowLeft' ? -1 : 1)))]); return; }
+      if (k === 'ArrowUp') { focusBtn(trk); return; }
+      if (k === 'ArrowDown') { b.classList.remove('ui'); clearTimeout(hideT); ae.blur(); hint(null); return; }
+      if (k === 'Enter' || k === ' ') { var a = ae.dataset.yt; act(a); if (a === 'toggle' || a === 'back10' || a === 'fwd10') ae.focus(); return; }
     }, true);
+    // Nombre del botón enfocado (en el TV los íconos solos no se entienden)
+    function hint(el) {
+      var h = document.getElementById('ytHint'); if (!h) return;
+      if (!el) { h.classList.remove('on'); return; }
+      var r = el.getBoundingClientRect(), br = h.parentNode.getBoundingClientRect();
+      h.textContent = (el.getAttribute('aria-label') || '').replace(/\s*\(.*\)$/, '');
+      h.style.left = Math.max(8, Math.min(br.width - 8, r.left - br.left + r.width / 2)) + 'px';
+      h.style.top = (r.top - br.top - 40) + 'px';
+      h.classList.add('on');
+    }
     window.addEventListener('blur', function () { if (open) setTimeout(function () { if (document.activeElement && document.activeElement.tagName === 'IFRAME') window.focus(); }, 0); });
     return {
       isOpen: function () { return open; },

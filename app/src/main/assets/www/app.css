@@ -1589,3 +1589,25 @@ body.yt-mini .mini { display: none; }
 html.pip .ytp:not([hidden]) { top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; width: auto !important; height: auto !important; clip-path: none !important; visibility: visible !important; border-radius: 0 !important; border: 0 !important; box-shadow: none !important; z-index: 200 !important; }
 html.pip .ytp .ytvid { position: absolute !important; top: 0; left: 0; right: 0; bottom: 0; height: auto !important; }
 html.pip .ytp .ytmc, html.pip .ytp .xm, html.pip .ytp .ytside { display: none !important; }
+
+/* Controles de YouTube con el control remoto: foco claro, nombre del botón y barra de avance que se mueve con ← → */
+.ytp .ctl { background: rgba(20,22,28,.55); border: 1px solid rgba(255,255,255,.14); border-radius: 999px; padding: 6px; gap: 4px; -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+.ytp .ctl .iconbtn { background: transparent; border: 0; color: #fff; transition: transform .15s, background .15s, color .15s; }
+.ytp .ctl .iconbtn.on { background: rgba(255,255,255,.18); color: #fff; }
+.ytp .ctl .iconbtn:focus, .ytp .ctl .iconbtn:hover { outline: none; background: #fff; color: #111; transform: scale(1.14); box-shadow: 0 6px 18px rgba(0,0,0,.45); }
+.ytp .ytprog .trk { outline: none; }
+.ytp .ytprog .trk i b { position: absolute; right: -8px; top: -5px; width: 16px; height: 16px; border-radius: 50%; background: #fff; opacity: 0; transform: scale(.6); transition: opacity .15s, transform .15s; }
+.ytp .ytprog .trk:focus i b, .ytp .ytprog .trk:hover i b { opacity: 1; transform: scale(1.15); }
+.ytp .ytprog .trk:focus::before, .ytp .ytprog .trk:focus i { top: 6px; height: 10px; border-radius: 5px; }
+.ytp .ytprog .trk:focus::before { box-shadow: 0 0 0 2px rgba(255,255,255,.35); }
+.ytp .ythint { position: absolute; left: 0; top: 0; transform: translateX(-50%); padding: 6px 12px; border-radius: 10px; background: rgba(0,0,0,.82); color: #fff; font: 600 14px var(--ui); white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .15s; z-index: 3; }
+.ytp .ythint.on { opacity: 1; }
+.ytp:not(.ui) .ythint { opacity: 0; }
+.ytp.tv .bar { grid-template-columns: minmax(0,1fr); padding: 90px 64px 40px; background: linear-gradient(transparent, rgba(0,0,0,.6) 40%, rgba(0,0,0,.92)); row-gap: 16px; }
+.ytp.tv .bar .t b { font-size: 26px; }
+.ytp.tv .bar .t span { font-size: 15px; }
+.ytp.tv .ytprog { font-size: 15px; }
+.ytp.tv .ctl { justify-self: center; padding: 8px; gap: 6px; }
+.ytp.tv .ctl .iconbtn { width: 58px; height: 58px; font-size: 15px; }
+.ytp.tv .ctl .iconbtn svg { width: 24px; height: 24px; }
+.ytp.tv .ctl [data-yt="info"] { width: auto; padding: 0 18px; border-radius: 29px; }
