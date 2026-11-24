@@ -59,3 +59,4 @@ body.single #bPrev, body.single #bNext { display: none; }
 #segSkip:hover, #segSkip:focus, #nextBtn:hover, #nextBtn:focus { background: #F4F5F6; color: #2A2C2E; outline: none; }
 #segSkip[hidden], #nextBtn[hidden] { display: none; }
 #nextBtn { bottom: 186px; }
+#bExt.pulse { animation: extPulse 1.2s ease-in-out 4; } @keyframes extPulse { 50% { box-shadow: 0 0 0 6px rgba(255,105,0,.45); background: #FF6900; } }

@@ -11,6 +11,11 @@
   var STK_UA = 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3';
 
   function cur() { return queue[index] || {}; }
+  // Arreglo de audio: el video pasa por ffmpeg (audio → AAC) y llega como transmisión que empieza en fix.off
+  var fix = null;
+  function T() { return (fix ? fix.off : 0) + (v.currentTime || 0); }
+  function D() { return fix ? fix.dur : v.duration; }
+  function setT(t) { if (fix) { if (fix.dur > 0) startFix(Math.max(0, Math.min(fix.dur - 2, t))); return; } v.currentTime = t; }
   function fmt(s) { s = Math.max(0, Math.floor(s || 0)); var h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); }
   function osd(t) { var o = $('osd'); o.textContent = t; o.hidden = false; clearTimeout(osd.t); osd.t = setTimeout(function () { o.hidden = true; }, 2200); }
   function spin(on) { $('spin').classList.toggle('off', !on); }
@@ -56,6 +61,7 @@
     // En vivo no se insiste más de ~40 s (los canales de eventos solo transmiten a su hora)
     var tooLong = live && Date.now() - zapAt > 40000;
     if (att < attempts.length && !tooLong) { if (live) osd('Probando otra forma (' + (att + 1) + ' de ' + attempts.length + ')…'); tryAttempt(); return; }
+    if (!fix && !fixTried && attempts[0]) { fixTried = true; osd('Probando con el arreglo de audio y video…'); if (startFix(startMs / 1000 || 0, attempts[0].url)) return; }
     stopEngines();
     if (live) err('Este canal no está transmitiendo ahora.', 'Los canales de eventos (los que empiezan con una hora) solo funcionan cuando el evento está en vivo. Prueba otro con ▲ ▼ o la lista.');
     else err(reason || 'La señal no responde.', 'Puede que el enlace haya vencido. Cierra e intenta de nuevo.');
@@ -83,6 +89,45 @@
   }
   function play() { var p = v.play(); if (p && p.catch) p.catch(function () {}); }
 
+  // ---------- Arreglo de audio (AC3, E-AC3, DTS, MP2…) ----------
+  var audioChecked = false, fixTried = false, fixUrl = '';
+  function startFix(from, srcUrl) {
+    var item = cur(), base = srcUrl || fixUrl || (attempts[att] && attempts[att].url) || item.url;
+    var u = P.audioFix ? P.audioFix({ url: base, ua: item.ua || '', ref: item.ref || '', start: from || 0 }) : '';
+    if (!u) return false;
+    var dur = fix ? fix.dur : (isFinite(v.duration) && v.duration > 0 ? v.duration : 0);
+    if (!dur && item.duration) dur = item.duration / 1000;
+    fixUrl = base;
+    stopEngines(); started = false; $('err').hidden = true; spin(true);
+    fix = { off: from || 0, dur: live ? 0 : dur };
+    ts = mpegts.createPlayer({ type: 'mpegts', isLive: true, url: u }, { enableWorker: true, lazyLoad: false, liveBufferLatencyChasing: false });
+    ts.on(mpegts.Events.ERROR, function () { stopEngines(); err('No se pudo arreglar el audio de este video.', 'Ábrelo en tu reproductor externo (VLC) con el botón de abajo.'); showExtBtn(); });
+    ts.attachMediaElement(v); ts.load(); play();
+    clearTimeout(watchdog); watchdog = setTimeout(function () { if (!started) { stopEngines(); err('El arreglo de audio no arrancó.', 'Ábrelo en tu reproductor externo (VLC).'); showExtBtn(); } }, 25000);
+    return true;
+  }
+  // Si el video avanza pero el navegador no decodifica nada de audio, se pasa solo al arreglo
+  function audioCheck() {
+    if (audioChecked || fix) return; audioChecked = true;
+    var want = index;
+    setTimeout(function () {
+      if (want !== index || fix || closing || v.paused || v.muted) return;
+      var bytes = v.webkitAudioDecodedByteCount;
+      if (typeof bytes === 'number' && bytes === 0 && (v.currentTime || 0) > 1.5) {
+        var at = T();
+        if (startFix(at)) osd('Este video trae un audio que el PC no lee directo: lo estoy arreglando…');
+        else { osd('Este video trae un audio que el PC no puede leer. Ábrelo en VLC (botón ↗).'); showExtBtn(); }
+      }
+    }, 4000);
+  }
+  function showExtBtn() { var b = $('bExt'); if (b) { b.classList.add('pulse'); b.hidden = false; } }
+  function openExt() {
+    var item = cur(); osd('Abriendo en tu reproductor…');
+    P.external({ url: fixUrl || item.url, stk: item.stkReady ? null : item.stk, ua: item.ua || '', ref: item.ref || '', title: item.title || '' }, live ? 0 : T()).then(function (ok) {
+      if (ok) { v.pause(); osd('Abierto en tu reproductor externo'); } else osd('No se abrió ningún reproductor');
+    });
+  }
+
   function playIndex(i, from, announce) {
     if (typeof endT !== 'undefined' && endT) { clearInterval(endT); endT = null; } if ($('nextBtn')) $('nextBtn').hidden = true;
     index = (i + queue.length) % Math.max(1, queue.length);
@@ -100,7 +145,7 @@
       return;
     }
     if (item.stk) item.stkReady = false;   // la próxima vez se pide un enlace fresco
-    attempts = build(item).slice(0, live ? 8 : 24); att = 0; zapAt = Date.now(); tryAttempt();
+    fix = null; audioChecked = false; fixTried = false; fixUrl = ''; attempts = build(item).slice(0, live ? 8 : 24); att = 0; zapAt = Date.now(); tryAttempt();
   }
 
   // ---------- Eventos del video ----------
@@ -108,7 +153,8 @@
     spin(false);
     if (!started) {
       started = true; clearTimeout(watchdog);
-      if (startMs > 0 && !live && isFinite(v.duration)) { try { v.currentTime = startMs / 1000; } catch (e) {} }
+      if (startMs > 0 && !live && !fix && isFinite(v.duration)) { try { v.currentTime = startMs / 1000; } catch (e) {} }
+      audioCheck();
       startMs = 0;
       var item = cur(), a = attempts[att];
       if (att > 0 && item.id) worked[item.id] = { url: a.url, orig: item.url, tries: att };
@@ -130,8 +176,8 @@
   }
   function nextCheck() {
     var b = $('nextBtn'); if (!b || endT) return;
-    var left = (v.duration || 0) - (v.currentTime || 0);
-    var show = !live && index < queue.length - 1 && isFinite(v.duration) && v.duration > 60 && left <= 30;
+    var left = (D() || 0) - T();
+    var show = !live && index < queue.length - 1 && isFinite(D()) && D() > 60 && left <= 30;
     if (show) { b.textContent = 'Siguiente episodio  ›  ' + nextName(); if (b.hidden) b.hidden = false; } else if (!b.hidden) b.hidden = true;
   }
   v.addEventListener('timeupdate', nextCheck);
@@ -154,7 +200,7 @@
     var g = segNow; if (!g) return false;
     $('segSkip').hidden = true; segNow = null;
     if (g.t === 'outro' && index < queue.length - 1 && (!isFinite(v.duration) || g.e >= v.duration - 5)) { playIndex(index + 1, 0, true); return true; }
-    v.currentTime = Math.min(g.e, isFinite(v.duration) ? v.duration - 0.5 : g.e);
+    setT(Math.min(g.e, isFinite(D()) ? D() - 0.5 : g.e));
     return true;
   }
   $('segSkip').addEventListener('click', segSkip);
@@ -162,10 +208,10 @@
   window.mvSegSkip = segSkip;
   v.addEventListener('timeupdate', segCheck);
   v.addEventListener('timeupdate', function () {
-    if (live || !isFinite(v.duration)) return;
-    var p = v.duration ? v.currentTime / v.duration * 1000 : 0;
+    if (live || !isFinite(D())) return;
+    var p = D() ? T() / D() * 1000 : 0;
     if (!seeking) { $('seek').value = p; $('seek').style.setProperty('--p', p / 10 + '%'); }
-    $('tCur').textContent = fmt(v.currentTime); $('tDur').textContent = fmt(v.duration);
+    $('tCur').textContent = fmt(T()); $('tDur').textContent = fmt(D());
   });
 
   // ---------- Audio y subtítulos ----------
@@ -196,6 +242,7 @@
       h += '<h4>Subtítulos</h4><button data-t="-1">Sin subtítulos</button>' + Array.prototype.map.call(v.textTracks, function (t, i) { return '<button data-t="' + i + '" class="' + (t.mode === 'showing' ? 'on' : '') + '">' + esc(t.label || t.language || 'Subtítulo ' + (i + 1)) + '</button>'; }).join('');
     }
     if (!h) h = '<h4>Audio y subtítulos</h4><p style="margin:6px 10px;color:#B9B1A8">Este contenido trae un solo audio y no tiene subtítulos.</p>';
+    h += '<h4>¿No se escucha?</h4>' + (fix ? '<p style="margin:6px 10px;color:#B9B1A8">Arreglo de audio activado.</p>' : '<button data-fix="1">Arreglar el audio</button>') + '<button data-ext="1">Abrir en reproductor externo (VLC…)</button>';
     box.innerHTML = h; box.hidden = false;
     var b = box.querySelector('button'); if (b) b.focus();
   }
@@ -204,6 +251,8 @@
     var id = cur().id || '';
     if (b.dataset.a != null) { hls.audioTrack = +b.dataset.a; var t = hls.audioTracks[+b.dataset.a]; trackLog[id] = Object.assign(trackLog[id] || {}, { a: (t && (t.lang || t.name)) || '' }); }
     if (b.dataset.s != null) { var s = +b.dataset.s; hls.subtitleTrack = s; hls.subtitleDisplay = s >= 0; var st = hls.subtitleTracks[s]; trackLog[id] = Object.assign(trackLog[id] || {}, { s: s < 0 ? 'off' : (st && (st.lang || st.name)) || '' }); }
+    if (b.dataset.fix) { $('tracks').hidden = true; if (!startFix(T())) osd('El arreglo de audio no está disponible en este equipo'); return; }
+    if (b.dataset.ext) { $('tracks').hidden = true; openExt(); return; }
     if (b.dataset.t != null) Array.prototype.forEach.call(v.textTracks, function (t, i) { t.mode = i === +b.dataset.t ? 'showing' : 'disabled'; });
     $('tracks').hidden = true;
   });
@@ -253,8 +302,8 @@
   ['mousemove', 'mousedown', 'keydown', 'wheel'].forEach(function (ev) { window.addEventListener(ev, wake, true); });
   function toggle() { if (v.paused) play(); else v.pause(); }
   /** En vivo de verdad: sin final (Infinity) o de TV en vivo sin duración. Una película dentro de una lista de canales sí se adelanta. */
-  function liveNow() { return v.duration === Infinity || (live && !(v.duration > 0)); }
-  function seekBy(s) { if (liveNow()) return; if (!(v.duration > 0)) { v.currentTime = Math.max(0, v.currentTime + s); osd((s > 0 ? '+' : '') + s + ' s'); return; } v.currentTime = Math.max(0, Math.min(v.duration - 1, v.currentTime + s)); osd((s > 0 ? '+' : '') + s + ' s · ' + fmt(v.currentTime)); }
+  function liveNow() { if (fix) return !(fix.dur > 0); return v.duration === Infinity || (live && !(v.duration > 0)); }
+  function seekBy(s) { if (liveNow()) return; if (!(D() > 0)) { setT(Math.max(0, T() + s)); osd((s > 0 ? '+' : '') + s + ' s'); return; } var to = Math.max(0, Math.min(D() - 1, T() + s)); setT(to); osd((s > 0 ? '+' : '') + s + ' s · ' + fmt(to)); }
   function chan(d) { if (queue.length > 1) playIndex(index + d, 0, true); }
   function fav() {
     var it = cur(); if (!it.id) return;
@@ -263,8 +312,8 @@
   }
   function fullscreen() { P.fullscreen(); }
   var seeking = false;
-  $('seek').addEventListener('input', function () { seeking = true; this.style.setProperty('--p', this.value / 10 + '%'); $('tCur').textContent = fmt(this.value / 1000 * (v.duration || 0)); });
-  $('seek').addEventListener('change', function () { seeking = false; if (isFinite(v.duration)) v.currentTime = this.value / 1000 * v.duration; });
+  $('seek').addEventListener('input', function () { seeking = true; this.style.setProperty('--p', this.value / 10 + '%'); $('tCur').textContent = fmt(this.value / 1000 * (D() || 0)); });
+  $('seek').addEventListener('change', function () { seeking = false; if (isFinite(D())) setT(this.value / 1000 * D()); });
   $('vol').addEventListener('input', function () { v.volume = this.value / 100; v.muted = false; this.style.setProperty('--p', this.value + '%'); $('bMute').textContent = v.volume ? '🔊' : '🔇'; });
   $('vol').style.setProperty('--p', '100%');
   $('bPlay').onclick = toggle; $('bBack').onclick = function () { seekBy(-10); }; $('bFwd').onclick = function () { seekBy(10); };
@@ -275,6 +324,7 @@
   $('bFull').onclick = fullscreen; $('bClose').onclick = close; $('bFav').onclick = fav;
   $('bList').onclick = function () { listOpen() ? hideList() : showList(); };
   $('bTracks').onclick = tracksMenu;
+  if ($('bExt')) $('bExt').onclick = openExt;
   v.addEventListener('dblclick', fullscreen);
   // ---------- Pantalla táctil (PC o tablet con Windows): igual que en el celular ----------
   // Un toque: pausa/reproduce. Doble toque derecha +30 s, izquierda -30 s. Deslizar a la izquierda: brillo; a la derecha: volumen.
@@ -291,12 +341,12 @@
       // Deslizar a los lados: adelanta o atrasa según el recorrido del dedo (todo el ancho = 1/4 del video, entre 1 y 10 min)
       if (mode === 3 || (!mode && Math.abs(dx) > 24 && Math.abs(dx) > Math.abs(dy) * 1.5)) {
         e.preventDefault();
-        if (liveNow() || !(v.duration > 0)) { if (!mode) osd(liveNow() ? 'En vivo: no se puede adelantar' : 'Este video todavía no deja adelantar'); mode = 3; tStart.to = -1; return; }
-        if (mode !== 3) { mode = 3; tStart.from = v.currentTime; }
-        var span = Math.max(60, Math.min(600, v.duration / 4));
-        tStart.to = Math.max(0, Math.min(v.duration - 1, tStart.from + dx / w * span));
+        if (liveNow() || !(D() > 0)) { if (!mode) osd(liveNow() ? 'En vivo: no se puede adelantar' : 'Este video todavía no deja adelantar'); mode = 3; tStart.to = -1; return; }
+        if (mode !== 3) { mode = 3; tStart.from = T(); }
+        var span = Math.max(60, Math.min(600, D() / 4));
+        tStart.to = Math.max(0, Math.min(D() - 1, tStart.from + dx / w * span));
         var d = tStart.to - tStart.from;
-        osd((d >= 0 ? 'Adelantar +' : 'Atrasar -') + fmt(Math.abs(d)) + ' · ' + fmt(tStart.to) + ' / ' + fmt(v.duration));
+        osd((d >= 0 ? 'Adelantar +' : 'Atrasar -') + fmt(Math.abs(d)) + ' · ' + fmt(tStart.to) + ' / ' + fmt(D()));
         return;
       }
       if (!mode) {
@@ -312,7 +362,7 @@
       if (!tStart) return;
       var was = mode, st = tStart; tStart = null; mode = 0;
       e.preventDefault();
-      if (was === 3 && st.to >= 0) { v.currentTime = st.to; return; }   // sin clic ni doble clic simulados (el doble clic del mouse es pantalla completa)
+      if (was === 3 && st.to >= 0) { setT(st.to); return; }   // sin clic ni doble clic simulados (el doble clic del mouse es pantalla completa)
       if (was || Date.now() - st.at > 400) return;
       var now = Date.now();
       if (now - lastTap < 300) {
@@ -357,6 +407,7 @@
       case 'f': case 'F': case 'F11': fullscreen(); break;
       case 'l': case 'L': $('bList').click(); break;
       case 'a': case 'A': tracksMenu(); break;
+      case 'e': case 'E': openExt(); break;
       case 'Escape': case 'BrowserBack': case 'Backspace': close(); break;
       default: return false;
     }
@@ -369,7 +420,7 @@
     var item = cur();
     var r = {
       id: item.id || '', url: item.url || '', index: index,
-      position: Math.round((v.currentTime || 0) * 1000), duration: isFinite(v.duration) ? Math.round(v.duration * 1000) : 0,
+      position: Math.round(T() * 1000), duration: isFinite(D()) ? Math.round(D() * 1000) : 0,
       live: live, replaced: false, wantNext: wantNext, favToggles: Object.keys(favToggles).filter(function (k) { return favToggles[k]; }), tracks: trackLog, worked: worked
     };
     stopEngines();

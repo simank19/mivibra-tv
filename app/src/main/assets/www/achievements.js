@@ -266,17 +266,54 @@
       (fbErr ? '<p style="color:#FF8A80">' + esc(fbErr) + '</p>' : '') +
       '<div class="btns"><button class="btn f" data-act="fbSend"' + (fbBusy ? ' disabled' : '') + '>' + (IC.chat || '') + (fbBusy ? 'Enviando…' : 'Enviar') + '</button></div>' +
       (queue().length ? '<p class="muted">' + queue().length + ' comentario(s) esperando conexión para enviarse.</p>' : '') + '</div>';
-    if (!admin) return form;
+    if (!admin) return form + mineHtml();
     if (!fbList && !fbBusy) setTimeout(loadFeedback, 0);
     var list = fbList == null ? '<div class="spinner"></div>' : fbList.error ? '<p style="color:#FF8A80">' + esc(fbList.error) + '</p>' : !fbList.length ? '<p class="muted">Todavía no hay comentarios.</p>' :
       fbList.map(function (f) {
         var t = (FB_TYPES.find(function (x) { return x[0] === f.type; }) || [0, 'Comentario'])[1];
         return '<div class="fbitem glass' + (f.read ? '' : ' new') + '"><div class="fbh"><b>' + esc(t) + '</b><span>' + esc(f.name || 'Sin nombre') + (f.email ? ' · ' + esc(f.email) : '') + ' · ' + esc(f.device || '') + (f.ver ? ' · v' + esc(f.ver) : '') + ' · ' + new Date(f.at || 0).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) + '</span></div>' +
-          '<p>' + esc(f.text || '') + '</p><div class="btns">' + (f.read ? '' : '<button class="btn ghost sm f" data-act="fbRead" data-arg="' + esc(f.id) + '">Marcar como leído</button>') + '<button class="btn ghost sm f" data-act="fbDel" data-arg="' + esc(f.id) + '">Borrar</button></div></div>';
+          '<p>' + esc(f.text || '') + '</p>' +
+          (f.reply ? '<div class="fbreply"><b>Tu respuesta</b>' + (f.seen ? ' <span class="muted">· la vio</span>' : '') + '<p>' + esc(f.reply) + '</p></div>' : '') +
+          '<div class="btns"><button class="btn sm f" data-act="fbReply" data-arg="' + esc(f.id) + '">' + (f.reply ? 'Editar respuesta' : 'Responder') + '</button>' + (f.read ? '' : '<button class="btn ghost sm f" data-act="fbRead" data-arg="' + esc(f.id) + '">Marcar como leído</button>') + '<button class="btn ghost sm f" data-act="fbDel" data-arg="' + esc(f.id) + '">Borrar</button></div></div>';
       }).join('');
     var unread = fbList && fbList.length ? fbList.filter(function (f) { return !f.read; }).length : 0;
     return '<div class="panel glass"><h2>Comentarios de usuarios' + (unread ? ' · ' + unread + ' sin leer' : '') + '</h2><div class="btns" style="margin-bottom:10px"><button class="btn ghost sm f" data-act="fbReload">' + (IC.refresh || '') + 'Actualizar</button></div>' + list + '</div>' + form;
   };
+  // Los comentarios del propio usuario, con la respuesta del creador (se leen solo los suyos)
+  var fbMine = null;
+  function mineHtml() {
+    var u = MV.acct && MV.acct.user && MV.acct.user(); if (!u) return '';
+    if (fbMine == null) { setTimeout(loadMine, 0); return ''; }
+    if (!fbMine.length) return '';
+    return '<div class="panel glass"><h2>Tus comentarios</h2>' + fbMine.map(function (f) {
+      return '<div class="fbitem glass' + (f.reply && !f.seen ? ' new' : '') + '"><div class="fbh"><b>' + esc((FB_TYPES.find(function (x) { return x[0] === f.type; }) || [0, 'Comentario'])[1]) + '</b><span>' + when(f.at) + '</span></div><p>' + esc(f.text || '') + '</p>' +
+        (f.reply ? '<div class="fbreply"><b>Respuesta de MiVibra</b><span class="muted"> · ' + when(f.replyAt) + '</span><p>' + esc(f.reply) + '</p></div>' : '<p class="muted">Aún sin respuesta.</p>') + '</div>';
+    }).join('') + '</div>';
+  }
+  function when(t) { return t ? new Date(t).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : ''; }
+  function loadMine(cb) {
+    var u = MV.acct && MV.acct.user && MV.acct.user(), base = db(); if (!u || !base) { fbMine = []; return; }
+    base.collection('feedback').where('uid', '==', u.uid).limit(60).get().then(function (s) {
+      var l = []; s.forEach(function (d) { l.push(Object.assign({ id: d.id }, d.data())); });
+      fbMine = l.sort(function (a, b) { return (b.at || 0) - (a.at || 0); });
+      if (cb) cb(fbMine); else if (MV.rerender) MV.rerender();
+      // Al verlas en Ajustes quedan como vistas
+      if (!cb) markSeen();
+    }, function () { fbMine = []; });
+  }
+  function markSeen() {
+    var base = db(); if (!base || !fbMine) return;
+    fbMine.forEach(function (f) { if (f.reply && !f.seen) base.collection('feedback').doc(f.id).update({ seen: true }).catch(function () {}); });
+  }
+  // Aviso al abrir la app: si el creador respondió un comentario tuyo
+  setTimeout(function check() {
+    var u = MV.acct && MV.acct.user && MV.acct.user(); if (!u) { if (!check.n || check.n++ < 6) { check.n = check.n || 1; setTimeout(check, 30000); } return; }
+    loadMine(function (l) {
+      var nuevas = l.filter(function (f) { return f.reply && !f.seen; });
+      if (!nuevas.length) return;
+      MV.toast((nuevas.length > 1 ? 'Te respondieron ' + nuevas.length + ' comentarios' : 'Te respondieron tu comentario') + ': míralo en Ajustes › Comentarios', 6000);
+    });
+  }, 15000);
   function loadFeedback() {
     var base = db(); if (!base) { fbList = { error: 'Sin conexión con la cuenta.' }; MV.rerender(); return; }
     base.collection('feedback').orderBy('at', 'desc').limit(200).get().then(function (s) {
@@ -300,6 +337,21 @@
       });
     },
     fbReload: function () { fbList = null; MV.rerender(); },
+    fbReply: function (id) {
+      var f = (fbList || []).find(function (x) { return x.id === id; }); if (!f) return;
+      MV.modal('<h2>Responder a ' + esc(f.name || 'usuario') + '</h2><p class="muted" style="white-space:pre-wrap">' + esc(f.text || '') + '</p>' +
+        '<label class="field">Tu respuesta (la verá en Ajustes › Comentarios y le llega un aviso)<textarea class="in f" id="fbReplyIn" rows="5" maxlength="2000">' + esc(f.reply || '') + '</textarea></label>' +
+        '<div class="btns"><button class="btn f" data-act="fbReplySend" data-arg="' + esc(id) + '">Enviar respuesta</button><button class="btn ghost f" data-act="closeModal">Cancelar</button></div>');
+      setTimeout(function () { var t = document.getElementById('fbReplyIn'); if (t) t.focus(); }, 60);
+    },
+    fbReplySend: function (id) {
+      var t = document.getElementById('fbReplyIn'), text = (t && t.value || '').trim(); if (text.length < 2) { MV.toast('Escribe la respuesta'); return; }
+      var base = db(); if (!base) return;
+      base.collection('feedback').doc(id).update({ reply: text.slice(0, 2000), replyAt: Date.now(), read: true, seen: false }).then(function () {
+        (fbList || []).forEach(function (f) { if (f.id === id) { f.reply = text; f.replyAt = Date.now(); f.read = true; f.seen = false; } });
+        MV.closeModal(true); MV.toast('Respuesta enviada'); MV.rerender();
+      }, function (e) { MV.toast('No se pudo enviar (' + (e && e.code || e) + '). Publica las reglas nuevas de Firestore.', 5000); });
+    },
     fbRead: function (id) { var base = db(); if (!base) return; base.collection('feedback').doc(id).update({ read: true }).then(function () { (fbList || []).forEach(function (f) { if (f.id === id) f.read = true; }); MV.rerender(); }, function () { MV.toast('No se pudo marcar'); }); },
     fbDel: function (id) { MV.confirm('Borrar comentario', '¿Borrar este comentario?', 'Borrar').then(function (y) { if (!y) return; var base = db(); if (!base) return; base.collection('feedback').doc(id).delete().then(function () { fbList = (fbList || []).filter(function (f) { return f.id !== id; }); MV.rerender(); }, function () { MV.toast('No se pudo borrar'); }); }); }
   });

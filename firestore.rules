@@ -26,8 +26,13 @@ service cloud.firestore {
         && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 2000
         && request.resource.data.at is number
         && str(request.resource.data, 'email', 200) && str(request.resource.data, 'name', 100) && str(request.resource.data, 'device', 40) && str(request.resource.data, 'ver', 20);
-      allow read, delete: if admin();
-      allow update: if admin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      // El usuario lee los suyos (para ver la respuesta); el creador lee todos
+      allow read: if admin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow delete: if admin();
+      // El creador marca leído y responde; el usuario solo marca la respuesta como vista
+      allow update: if (admin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'reply', 'replyAt', 'seen'])
+          && (!('reply' in request.resource.data) || (request.resource.data.reply is string && request.resource.data.reply.size() <= 2000)))
+        || (signedIn() && resource.data.uid == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['seen']) && request.resource.data.seen == true);
     }
     // MiVibra Movimiento: el avatar 3D (.vrm) de cada usuario, en trozos de menos de 1 MB.
     // Lo escribe solo su dueño; lo pueden leer los usuarios permitidos (para verlo en el público y en partidas en línea).

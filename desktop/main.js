@@ -176,6 +176,83 @@ function openPlayer(reqJson) {
   });
 }
 ipcMain.on('player-ready', (e) => { e.returnValue = playerReq; });
+
+// ---------------- Reproductor externo (VLC, PotPlayer, MPC-HC o el que elijas) ----------------
+function extPlayerExe() {
+  try { const c = JSON.parse(fs.readFileSync(path.join(DATA, 'reproductor-externo.json'), 'utf8')); if (c.exe && fs.existsSync(c.exe)) return c.exe; } catch (e) {}
+  const pf = [process.env.ProgramFiles, process.env['ProgramFiles(x86)'], process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, 'Programs')].filter(Boolean);
+  const known = ['VideoLAN\\VLC\\vlc.exe', 'DAUM\\PotPlayer\\PotPlayerMini64.exe', 'DAUM\\PotPlayer\\PotPlayerMini.exe', 'MPC-HC\\mpc-hc64.exe', 'MPC-HC\\mpc-hc.exe', 'MPC-BE x64\\mpc-be64.exe', 'mpv\\mpv.exe'];
+  for (const d of pf) for (const k of known) { const f = path.join(d, k); if (fs.existsSync(f)) return f; }
+  return null;
+}
+async function pickExtPlayer() {
+  const r = await dialog.showOpenDialog(playerWin && !playerWin.isDestroyed() ? playerWin : win, { title: 'Elige tu reproductor (.exe): VLC, PotPlayer, MPC…', properties: ['openFile'], filters: [{ name: 'Programas', extensions: ['exe'] }] });
+  if (r.canceled || !r.filePaths[0]) return null;
+  fs.writeFileSync(path.join(DATA, 'reproductor-externo.json'), JSON.stringify({ exe: r.filePaths[0] }));
+  return r.filePaths[0];
+}
+/** Abre un video en el reproductor externo. item: { url, stk, ua, ref, title }, startSec opcional. */
+async function openExternalPlayer(item, startSec) {
+  let exe = extPlayerExe();
+  if (!exe) {
+    const parent = playerWin && !playerWin.isDestroyed() ? playerWin : win;
+    const r = await dialog.showMessageBox(parent, { type: 'question', title: 'Reproductor externo', message: 'No encontré VLC ni otro reproductor en este PC.', detail: 'Puedes elegir el programa que ya tengas o descargar VLC (gratis, de videolan.org): lee casi cualquier audio y video.', buttons: ['Elegir programa…', 'Descargar VLC', 'Cancelar'], defaultId: 0, cancelId: 2 });
+    if (r.response === 1) { shell.openExternal('https://www.videolan.org/vlc/'); return false; }
+    if (r.response !== 0) return false;
+    exe = await pickExtPlayer(); if (!exe) return false;
+  }
+  let url = item.url;
+  if (item.stk) url = await stalker.link(item.stk);
+  if (!url) return false;
+  const name = path.basename(exe).toLowerCase(), args = [];
+  if (name.startsWith('vlc')) {
+    if (item.ua) args.push('--http-user-agent=' + item.ua);
+    if (item.ref) args.push('--http-referrer=' + item.ref);
+    if (item.title) args.push('--meta-title=' + item.title);
+    if (startSec > 5) args.push('--start-time=' + Math.floor(startSec));
+    args.push(url);
+  } else if (name.startsWith('mpv')) {
+    if (item.ua) args.push('--user-agent=' + item.ua);
+    if (item.ref) args.push('--referrer=' + item.ref);
+    if (startSec > 5) args.push('--start=' + Math.floor(startSec));
+    args.push(url);
+  } else if (name.startsWith('potplayer')) { args.push(url); if (startSec > 5) args.push('/seek=' + Math.floor(startSec)); }
+  else args.push(url);
+  spawn(exe, args, { detached: true, stdio: 'ignore' }).unref();
+  return true;
+}
+ipcMain.handle('player-external', async (e, item, startSec) => { try { return await openExternalPlayer(item || {}, startSec || 0); } catch (x) { return false; } });
+ipcMain.handle('player-pick-external', async () => !!(await pickExtPlayer()));
+
+// ---------------- Arreglo de audio: AC3, E-AC3, DTS, MP2… (Chromium no los decodifica) ----------------
+// ffmpeg copia el video tal cual y pasa el audio a AAC; el reproductor lo recibe como MPEG-TS por el servidor local.
+function ffmpegPath() {
+  try { const p = require('ffmpeg-static'); if (p) { const f = p.replace('app.asar', 'app.asar.unpacked'); if (fs.existsSync(f)) return f; } } catch (e) {}
+  const local = path.join(DATA, 'ffmpeg', 'ffmpeg.exe'); return fs.existsSync(local) ? local : null;
+}
+const audioFixJobs = new Map();
+ipcMain.on('player-audiofix', (e, o) => {
+  if (!ffmpegPath() || !o || !o.url) { e.returnValue = ''; return; }
+  const k = crypto.randomBytes(12).toString('hex');
+  audioFixJobs.set(k, { url: o.url, ua: o.ua || '', ref: o.ref || '', start: +o.start || 0, at: Date.now() });
+  for (const [kk, j] of audioFixJobs) if (Date.now() - j.at > 6 * 3600e3) audioFixJobs.delete(kk);
+  e.returnValue = BASE + '/pc/audiofix/' + k + '.ts';
+});
+function serveAudioFix(req, res, key) {
+  const j = audioFixJobs.get(key), exe = ffmpegPath();
+  if (!j || !exe) { res.writeHead(404); res.end(); return; }
+  const args = ['-hide_banner', '-loglevel', 'error', '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '4'];
+  if (j.ua) args.push('-user_agent', j.ua);
+  if (j.ref) args.push('-headers', 'Referer: ' + j.ref + '\r\n');
+  if (j.start > 0) args.push('-ss', String(j.start));
+  args.push('-i', j.url, '-map', '0:v:0?', '-map', '0:a:0?', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-ac', '2', '-f', 'mpegts', 'pipe:1');
+  const ff = spawn(exe, args, { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
+  res.writeHead(200, { 'Content-Type': 'video/mp2t', 'Cache-Control': 'no-cache' });
+  ff.stdout.pipe(res);
+  const stop = () => { try { ff.kill('SIGKILL'); } catch (e) {} };
+  req.on('close', stop); res.on('close', stop); ff.on('exit', () => { try { res.end(); } catch (e) {} });
+}
+
 ipcMain.on('player-headers', (e, ua, ref) => { playerHeaders.ua = ua || ''; playerHeaders.ref = ref || ''; });
 ipcMain.handle('player-stalker', async (e, stk) => stalker.link(stk));
 ipcMain.on('player-full', () => { if (playerWin) playerWin.setFullScreen(!playerWin.isFullScreen()); });
@@ -566,7 +643,12 @@ const SYNC = {
   openBrowser(url) { openBrowser(url || 'https://www.google.com'); },
   openDiag() { openSupportPc(); },
   setPip() {}, publishHome() {}, setInicio() {},
-  play(json) { openPlayer(JSON.parse(json)); },
+  play(json) {
+    const r = JSON.parse(json);
+    // Reproductor externo elegido en Ajustes › Reproducción
+    if (r.ext) { const it = (r.queue || [])[r.index || 0] || {}; openExternalPlayer(it, (r.startMs || 0) / 1000).then((ok) => { if (!ok) openPlayer(r); else js('window.MV&&MV.toast&&MV.toast(' + JSON.stringify('Abierto en tu reproductor externo') + ')'); }); return; }
+    openPlayer(r);
+  },
   hasStorageAccess() { return true; },
   requestStorageAccess() {},
   storageRoots() { return JSON.stringify(storage.roots()); },
@@ -685,6 +767,7 @@ async function startServer() {
       if (!f.startsWith(path.normalize(DIRS.ejs))) { res.writeHead(403); res.end(); return true; }
       server.sendFile(req, res, f, { 'Cross-Origin-Resource-Policy': 'same-origin' }); return true;
     }
+    if (p.startsWith('/pc/audiofix/')) { serveAudioFix(req, res, path.basename(p, '.ts')); return true; }
     if (p === '/pc/vendor/hls.min.js') { server.sendFile(req, res, require.resolve('hls.js/dist/hls.min.js')); return true; }
     if (p === '/pc/vendor/mpegts.js') { server.sendFile(req, res, require.resolve('mpegts.js/dist/mpegts.js')); return true; }
     return false;
