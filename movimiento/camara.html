@@ -77,7 +77,10 @@ function msg(t, ok) { $('msg').textContent = t; $('msg').classList.toggle('ok', 
 
 async function camera() {
   if (stream) stream.getTracks().forEach((t) => t.stop());
-  stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 } }, audio: false });
+  // Celulares con buen procesador: más resolución (te ve mejor de lejos y con poca luz)
+  const hi = (navigator.hardwareConcurrency || 4) >= 6;
+  stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: hi ? 960 : 640 }, height: { ideal: hi ? 540 : 480 }, frameRate: { ideal: 30 } }, audio: false });
+  LUZ.reset(stream.getVideoTracks()[0]);
   const v = $('vid'); v.srcObject = stream; await v.play();
   v.style.transform = $('ov').style.transform = facing === 'user' ? 'scaleX(-1)' : 'none';
 }
@@ -86,7 +89,7 @@ async function model(q) {
   if (!files) files = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
   // "full" ve mejor manos, pies y giros; "lite" es más rápido en celulares sencillos
   const url = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_' + quality + '/float16/1/pose_landmarker_' + quality + '.task';
-  const opts = (d) => ({ baseOptions: { modelAssetPath: url, delegate: d }, runningMode: 'VIDEO', numPoses: 1, minPoseDetectionConfidence: 0.55, minPosePresenceConfidence: 0.55, minTrackingConfidence: 0.6 });
+  const opts = (d) => ({ baseOptions: { modelAssetPath: url, delegate: d }, runningMode: 'VIDEO', numPoses: 1, minPoseDetectionConfidence: 0.5, minPosePresenceConfidence: 0.5, minTrackingConfidence: 0.55 });
   const old = landmarker; let gpu = true;
   try { landmarker = await PoseLandmarker.createFromOptions(files, opts('GPU')); } catch (e) { gpu = false; landmarker = await PoseLandmarker.createFromOptions(files, opts('CPU')); }
   if (old) try { old.close(); } catch (e) {}
@@ -185,12 +188,62 @@ function check(lm) {
   if (h < 0.45) return msg('Acércate un paso');
   msg('¡Te veo completo! Listo para jugar', true);
 }
+// ---------- Luz: que la cámara se fije en ti y no en los bombillos ----------
+// Cada medio segundo se mide qué tan iluminada está tu silueta comparada con el resto de la imagen.
+// Si hay contraluz (bombillos, ventana) y tú quedas oscuro:
+//  1) se le pide a la cámara que mida la luz sobre tu cuerpo (punto de interés) y que suba la exposición, si el celular lo permite;
+//  2) si no basta, la imagen que analiza la detección se aclara solo en lo oscuro (curva suave): los bombillos no se queman más.
+const LUZ = (() => {
+  const sc = document.createElement('canvas'); sc.width = 64; sc.height = 48; const sg = sc.getContext('2d', { willReadFrequently: true });
+  const pc = document.createElement('canvas'); let pg = null;
+  let track = null, caps = {}, ev = 0, lift = 1, lastT = 0, lostT = 0, chip = null, poi = null;
+  function say(t) { if (!chip) { chip = document.createElement('div'); chip.style.cssText = 'position:fixed;right:12px;top:calc(70px + env(safe-area-inset-top));z-index:4;padding:6px 12px;border-radius:99px;font:800 11px DM Sans,sans-serif;background:rgba(0,0,0,.45);color:#FFE29A;display:none'; document.body.appendChild(chip); } chip.textContent = t; chip.style.display = t ? 'block' : 'none'; }
+  async function applyCam(o) { if (!track || !track.applyConstraints) return; try { await track.applyConstraints({ advanced: [o] }); } catch (e) {} }
+  return {
+    reset(t) { track = t; ev = 0; lift = 1; poi = null; try { caps = track.getCapabilities ? track.getCapabilities() : {}; } catch (e) { caps = {}; }
+      if (caps.exposureMode && caps.exposureMode.includes('continuous')) applyCam({ exposureMode: 'continuous' }); say(''); },
+    // imagen que ve la detección: la original, o aclarada en lo oscuro cuando hay contraluz
+    frame(v) {
+      if (lift <= 1.02) return v;
+      const w = Math.min(v.videoWidth, 640), h = Math.round(w * v.videoHeight / v.videoWidth);
+      if (pc.width !== w) { pc.width = w; pc.height = h; pg = pc.getContext('2d'); }
+      // aclarar + menos contraste en las luces: la persona sube, los bombillos casi no cambian
+      pg.filter = 'brightness(' + lift.toFixed(2) + ') contrast(' + (1 - (lift - 1) * 0.25).toFixed(2) + ') saturate(1.05)';
+      pg.drawImage(v, 0, 0, w, h); return pc;
+    },
+    measure(v, lm, now) {
+      if (now - lastT < 500 || !v.videoWidth) return; lastT = now;
+      sg.drawImage(v, 0, 0, 64, 48); const d = sg.getImageData(0, 0, 64, 48).data;
+      let all = 0, hot = 0, pin = 0, pn = 0;
+      // caja de la persona (con margen) a partir de la última detección
+      let box = null;
+      if (lm) { let x0 = 1, y0 = 1, x1 = 0, y1 = 0; [0, 11, 12, 23, 24, 25, 26].forEach((i) => { const p = lm[i]; if (p.visibility < 0.4) return; x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }); if (x1 > x0) box = [Math.max(0, x0 - 0.05), Math.max(0, y0 - 0.05), Math.min(1, x1 + 0.05), Math.min(1, y1 + 0.05)]; }
+      for (let y = 0; y < 48; y++) for (let x = 0; x < 64; x++) { const i = (y * 64 + x) * 4, L = (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 255; all += L; if (L > 0.94) hot++; if (box && x / 64 >= box[0] && x / 64 <= box[2] && y / 48 >= box[1] && y / 48 <= box[3]) { pin += L; pn++; } }
+      all /= 3072; const hotF = hot / 3072, person = pn ? pin / pn : null;
+      if (!lm) { lostT = lostT || now; if (now - lostT > 2000 && (hotF > 0.04 || all < 0.25)) { lift = Math.min(1.7, lift + 0.15); if (caps.exposureCompensation) { ev = Math.min(caps.exposureCompensation.max, ev + (caps.exposureCompensation.step || 0.33)); applyCam({ exposureCompensation: ev }); } say('Ajustando la luz para encontrarte…'); } return; }
+      lostT = 0;
+      // la cámara mide la luz sobre tu pecho
+      if (caps.pointsOfInterest !== undefined || 'pointsOfInterest' in caps) { const c = { x: (lm[11].x + lm[12].x + lm[23].x + lm[24].x) / 4, y: (lm[11].y + lm[12].y + lm[23].y + lm[24].y) / 4 }; if (!poi || Math.hypot(c.x - poi.x, c.y - poi.y) > 0.08) { poi = c; applyCam({ pointsOfInterest: [c] }); } }
+      const backlit = person !== null && person < 0.36 && (hotF > 0.03 || all - person > 0.12);
+      const target = 0.48;
+      if (backlit) {
+        if (caps.exposureCompensation && ev < caps.exposureCompensation.max) { ev = Math.min(caps.exposureCompensation.max, ev + (caps.exposureCompensation.step || 0.33)); applyCam({ exposureCompensation: ev }); }
+        lift = Math.max(1, Math.min(1.8, lift + (target / Math.max(0.08, person) - lift) * 0.4));
+        say('Contraluz: me fijo en ti, no en los bombillos');
+      } else if (person !== null && person > 0.62 && (ev > 0 || lift > 1)) {
+        if (ev > 0 && caps.exposureCompensation) { ev = Math.max(0, ev - (caps.exposureCompensation.step || 0.33)); applyCam({ exposureCompensation: ev }); }
+        lift = Math.max(1, lift - 0.1); if (lift <= 1.02) say('');
+      } else if (!backlit && lift <= 1.02) say('');
+    },
+  };
+})();
 function loop() {
   const v = $('vid');
   if (!paused && landmarker && v.readyState >= 2) {
-    const now = performance.now(), r = landmarker.detectForVideo(v, now), lm = r.landmarks && r.landmarks[0], wl = r.worldLandmarks && r.worldLandmarks[0];
+    const now = performance.now(), src = LUZ.frame(v), r = landmarker.detectForVideo(src, now), lm = r.landmarks && r.landmarks[0], wl = r.worldLandmarks && r.worldLandmarks[0];
     draw(lm, v.videoWidth, v.videoHeight);
     if (frames % 10 === 0) check(lm);
+    LUZ.measure(v, lm, now);
     if (conn && conn.open && now - lastSend > 30) {
       lastSend = now;
       // Se manda espejado si es la cámara frontal: así tu derecha es la derecha del avatar

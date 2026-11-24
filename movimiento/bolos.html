@@ -37,7 +37,7 @@ small{display:block;font-size:11px;letter-spacing:.2em;font-weight:800;color:#D6
 #phone svg{display:block;margin:4px auto 0}
 #phone path,#phone circle{stroke:#34D399;stroke-width:6;stroke-linecap:round;fill:none}
 #big{left:0;right:0;top:12%;text-align:center;display:none;pointer-events:none}
-#big.on{display:block}
+#big.on{display:block;animation:bigIn .45s cubic-bezier(.2,1.6,.4,1)}@keyframes bigIn{from{transform:scale(.4);opacity:0}to{transform:none;opacity:1}}#big.strike b{color:#FFE600;text-shadow:0 6px 0 #FF2EA8,0 0 30px #FF2EA8,0 18px 50px rgba(0,0,0,.6)}
 #big b{display:block;font-size:110px;font-weight:900;text-shadow:0 6px 0 #FF6A3D,0 18px 50px rgba(0,0,0,.6)}
 #big span{display:inline-block;margin-top:6px;font-size:24px;font-weight:800;padding:8px 18px;border-radius:99px;background:rgba(24,26,30,.7)}
 #connect{right:20px;top:110px;width:300px;padding:14px;display:none;text-align:center}
@@ -152,6 +152,52 @@ if (Q === 0) {
   by.forEach((list) => { if (list.length < 2) return; const gs = list.map((o) => { const g = (o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone()).applyMatrix4(o.matrixWorld); ['uv1', 'uv2', 'color'].forEach((a) => g.deleteAttribute && g.attributes[a] && g.deleteAttribute(a)); return g; });
     const mg = mergeGeometries(gs); if (!mg) return; const m = new THREE.Mesh(mg, list[0].material); S.add(m); list.forEach((o) => (o.visible = false)); });
 }
+
+// ---------- Efectos ----------
+// Dos sistemas de partículas instanciados (1 draw call cada uno): brillos que suman luz (chispas, estela) y confeti/polvo normal.
+const dotTex = tex(64, 64, (g, w, h) => { const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.35, 'rgba(255,255,255,.65)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); });
+function Particles(n, additive, map) {
+  const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false, toneMapped: false, side: THREE.DoubleSide, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending }), n);
+  im.frustumCulled = false; im.renderOrder = 3; im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3); S.add(im);
+  const P = [], m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), pos = new THREE.Vector3(), c = new THREE.Color(), zero = new THREE.Matrix4().makeScale(0, 0, 0);
+  for (let i = 0; i < n; i++) { P.push({ life: 0 }); im.setMatrixAt(i, zero); }
+  let next = 0;
+  return {
+    spawn(o) { const p = P[next]; next = (next + 1) % n; Object.assign(p, { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, grav: 0, drag: 0, size: 0.05, grow: 0, spin: 0, rot: Math.random() * 6, flat: false }, o, { life: o.life, max: o.life }); c.set(o.color || '#fff'); im.setColorAt(P.indexOf(p), c); im.instanceColor.needsUpdate = true; },
+    update(dt) {
+      for (let i = 0; i < n; i++) { const p = P[i]; if (p.life <= 0) continue;
+        p.life -= dt; if (p.life <= 0) { im.setMatrixAt(i, zero); continue; }
+        p.vy -= p.grav * dt; const k = Math.exp(-p.drag * dt); p.vx *= k; p.vy *= k; p.vz *= k; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; if (p.y < 0.01 && p.grav) { p.y = 0.01; p.vy *= -0.3; p.vx *= 0.6; p.vz *= 0.6; }
+        p.rot += p.spin * dt; const a = p.life / p.max, s2 = p.size * (p.grow ? 1 + (1 - a) * p.grow : (additive ? a : 1));
+        if (p.flat) q.setFromEuler(new THREE.Euler(p.rot, p.rot * 0.7, p.rot * 0.3)); else q.copy(cam.quaternion);
+        im.setMatrixAt(i, m4.compose(pos.set(p.x, p.y, p.z), q, sc.set(s2, s2 * (p.flat ? 0.6 : 1), s2))); }
+      im.instanceMatrix.needsUpdate = true;
+    },
+  };
+}
+const GLOW = Particles(Q === 0 ? 140 : 320, true, dotTex), BITS = Particles(Q === 0 ? 120 : 260, false, null);
+const CONF = ['#FF2EA8', '#00E5FF', '#FFE600', '#7CFF4D', '#B04DFF', '#FF6A3D', '#ffffff'];
+const R1 = (a, b) => a + Math.random() * (b - a);
+const FX = {
+  shake: 0, flash: 0, slow: 0,
+  trail(x, y, z, fire) { GLOW.spawn({ x: x + R1(-0.02, 0.02), y: y + R1(-0.02, 0.02), z, life: fire ? 0.42 : 0.3, size: fire ? 0.2 : 0.14, color: fire ? (Math.random() < 0.5 ? '#FF7B00' : '#FFD166') : (Math.random() < 0.5 ? '#B04DFF' : '#7FB3FF'), vy: fire ? R1(0.2, 0.6) : 0 }); },
+  hit(x, z, power) {
+    const n = Q === 0 ? 18 : 36;
+    for (let i = 0; i < n; i++) { const a = Math.random() * 6.28, sp = R1(1.2, 3.4) * (0.6 + power); GLOW.spawn({ x, y: 0.18, z, vx: Math.cos(a) * sp, vy: R1(0.8, 2.6), vz: Math.sin(a) * sp * 0.6, grav: 6, drag: 1.5, life: R1(0.35, 0.7), size: R1(0.05, 0.1), color: Math.random() < 0.6 ? '#FFE9A8' : '#FF9A4D' }); }
+    for (let i = 0; i < (Q === 0 ? 6 : 12); i++) BITS.spawn({ x: x + R1(-0.2, 0.2), y: 0.05, z: z + R1(-0.15, 0.15), vx: R1(-0.4, 0.4), vy: R1(0.1, 0.4), vz: R1(-0.3, 0.1), drag: 2, life: R1(0.6, 1.1), size: R1(0.12, 0.22), grow: 2, color: '#e8dcff' });
+    this.shake = Math.min(1, 0.35 + power * 0.5); this.flash = 0.6;
+  },
+  confetti(big) {
+    const n = big ? (Q === 0 ? 90 : 200) : (Q === 0 ? 40 : 80);
+    for (let i = 0; i < n; i++) BITS.spawn({ x: R1(-0.8, 0.8), y: R1(1.6, 2.4), z: HEAD - R1(0, 1.2), vx: R1(-1.2, 1.2), vy: R1(-0.2, 1.4), vz: R1(-0.6, 1.4), grav: 2.2, drag: 1.2, life: R1(1.8, 3), size: R1(0.05, 0.08), spin: R1(-9, 9), flat: true, color: CONF[i % CONF.length] });
+    for (let i = 0; i < (big ? 40 : 16); i++) GLOW.spawn({ x: R1(-0.9, 0.9), y: R1(0.4, 1.8), z: HEAD - R1(-0.5, 1.2), life: R1(0.4, 1), size: R1(0.12, 0.3), color: CONF[i % CONF.length] });
+  },
+  gutter(x, z) { for (let i = 0; i < 10; i++) BITS.spawn({ x, y: 0.05, z: z + R1(-0.2, 0.2), vx: R1(-0.2, 0.2), vy: R1(0.1, 0.3), drag: 2, life: R1(0.6, 1), size: R1(0.1, 0.2), grow: 1.5, color: '#9a93b5' }); },
+};
+// Tiras de neón junto a cada canal: laten con la chuza
+const NEON = [];
+[-1, 1].forEach((sd) => { const m = new THREE.MeshBasicMaterial({ color: '#B04DFF', toneMapped: false }); const st = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.025, -ZB + 4), m); st.position.set(sd * (GUT + 0.14), 0.02, (ZB + 4) / 2 - 2); S.add(st); NEON.push(m); });
+function neonTick(now) { const hot = G.cel > 0; NEON.forEach((m, i) => { if (hot) m.color.setHSL(((now / 600) + i * 0.5) % 1, 1, 0.6); else m.color.set(G.state === 'roll' ? '#FF6A3D' : '#B04DFF'); }); }
 
 // ---------- Máquina que recoge y coloca los pinos ----------
 // Baja la mesa, levanta los pinos que quedaron de pie, la barra barre los caídos al fondo y la mesa los vuelve a poner (o pone 10 nuevos).
@@ -270,7 +316,7 @@ function physics(dt) {
     const d = -ball2.z;
     if (!ball2.gut && d > 7) ball2.vx += ball2.hook * 0.9 * dt;
     ball2.vz *= 1 - 0.015 * dt;
-    if (!ball2.gut && Math.abs(ball2.x) > LW / 2 - 0.01) { ball2.gut = true; ball2.x = Math.sign(ball2.x) * GUT; ball2.vx = 0; ball2.y = BR - 0.06; SND.thud(); cue('¡Canal!', true); }
+    if (!ball2.gut && Math.abs(ball2.x) > LW / 2 - 0.01) { ball2.gut = true; ball2.x = Math.sign(ball2.x) * GUT; ball2.vx = 0; ball2.y = BR - 0.06; SND.thud(); cue('¡Canal!', true); FX.gutter(ball2.x, ball2.z); }
     if (ball2.z < -19.7) { ball2.live = false; SND.rollStop(); }
   }
   const pr = 0.06;
@@ -280,7 +326,9 @@ function physics(dt) {
       const dx = p.x - ball2.x, dz = p.z - ball2.z, dist = Math.hypot(dx, dz), md = BR + pr;
       if (dist < md && dist > 1e-4) {
         const nx = dx / dist, nz = dz / dist, rv = (ball2.vx - p.vx) * nx + (ball2.vz - p.vz) * nz;
-        if (rv > 0) { const j = (1 + 0.7) * rv / (1 / 7 + 1 / 1.5); ball2.vx -= j / 7 * nx; ball2.vz -= j / 7 * nz; p.vx += j / 1.5 * nx; p.vz += j / 1.5 * nz; if (j / 1.5 > 0.35) knock(p); if (!G.hitT) { G.hitT = G.t; const n = PINS.filter((q) => !q.gone).length; SND.play('pinos', 0.6 + 0.4 * Math.min(1, n / 10), 0.95 + Math.random() * 0.1); } }
+        if (rv > 0) { const j = (1 + 0.7) * rv / (1 / 7 + 1 / 1.5); ball2.vx -= j / 7 * nx; ball2.vz -= j / 7 * nz; p.vx += j / 1.5 * nx; p.vz += j / 1.5 * nz; if (j / 1.5 > 0.35) knock(p); if (!G.hitT) { G.hitT = G.t; const n = PINS.filter((q) => !q.gone).length; SND.play('pinos', 0.6 + 0.4 * Math.min(1, n / 10), 0.95 + Math.random() * 0.1); FX.hit(ball2.x, ball2.z, G.power || 0.6);
+          // cámara lenta si entra en el bolsillo con todos los pinos de pie (posible chuza)
+          if (n === 10 && Math.abs(Math.abs(ball2.x) - 0.07) < 0.09 && (G.power || 0) > 0.45) FX.slow = 0.9; } }
         ball2.x = p.x - nx * md; ball2.z = p.z - nz * md;
       }
     }
@@ -346,26 +394,59 @@ function big(t, s, ms) { $('bigT').textContent = t; $('bigS').textContent = s; $
 function meter(p, txt1, txt2, title) { $('mbar').style.width = (clamp(p, 0, 1) * 100).toFixed(0) + '%'; $('mv1').textContent = txt1; $('mv2').textContent = txt2 || ''; if (title) $('mt').textContent = title; }
 
 // ---------- Cámara del celular: apuntar con el cuerpo y lanzar con el brazo ----------
-const CAMS = { hist: [], state: 'hold', backT: 0, cx0: null, arm: 6 };
+// 1) Al empezar el turno se toma tu medida estando quieto (alto del tronco, ancho de hombros, dónde estás).
+// 2) Apuntas moviéndote a los lados (medido en anchos de hombro: da igual lo lejos que estés del celular).
+// 3) El brazo que baja primero detrás de la cadera es el del lanzamiento (sirve para zurdos).
+// 4) Se suelta la bola cuando la mano, subiendo rápido, pasa la cadera: la fuerza es la velocidad máxima del brazo
+//    (en tamaños de tu cuerpo) y el efecto, el movimiento de la mano hacia un lado al soltar.
+const LF = [0, 1, 2, 5, 6, 7, 8, 15, 16, 17, 18].reduce((o, i) => { o[i] = [new OneEuroF(1.6, 0.6), new OneEuroF(1.6, 0.6)]; return o; }, {});
+function OneEuroF(minCut, beta) { this.minCut = minCut; this.beta = beta; this.x = null; this.dx = 0; this.t = 0; }
+OneEuroF.prototype.f = function (x, t) { if (this.x === null) { this.x = x; this.t = t; return x; } const dt = Math.max(1e-3, (t - this.t) / 1000); this.t = t; const a = (c) => { const r = 2 * Math.PI * c * dt; return r / (r + 1); }; const dx = (x - this.x) / dt; this.dx += a(1) * (dx - this.dx); this.x += a(this.minCut + this.beta * Math.abs(this.dx)) * (x - this.x); return this.x; };
+const CAMS = { st: 'cal', cal: [], base: null, arm: -1, hist: [], peak: 0, backT: 0, aimS: 0, lastMsg: '' };
+function camReset() { CAMS.st = 'cal'; CAMS.cal = []; CAMS.base = null; CAMS.arm = -1; CAMS.hist = []; CAMS.peak = 0; CAMS.lastMsg = ''; Object.values(LF).forEach((f) => { f[0].x = f[1].x = null; }); }
+function camHint(t, hot) { if (CAMS.lastMsg === t) return; CAMS.lastMsg = t; cue(t, hot); }
 MVLink.onPose((l, ts, d, slot) => {
   if (!l || G.state !== 'aim' && G.state !== 'swing') return;
   const ts0 = turnSlot(); if (ts0 === -2 || (ts0 >= 0 && slot !== ts0)) return;
-  const v = (i) => l[i] && l[i][2] > 0.45; if (!(v(1) && v(2) && v(7) && v(8))) return;
-  const shY = (l[1][1] + l[2][1]) / 2, hipY = (l[7][1] + l[8][1]) / 2, torso = Math.max(0.06, hipY - shY), cx = 1 - (l[7][0] + l[8][0]) / 2;
-  if (CAMS.cx0 === null) CAMS.cx0 = cx;
-  if (G.state === 'aim') G.aimX = clamp((cx - CAMS.cx0) * 2.4, -0.42, 0.42);
-  // la muñeca que más se mueve es la del lanzamiento
-  const wr = [5, 6].map((i) => v(i) ? (l[i][1] - hipY) / torso : null), wx = [5, 6].map((i) => v(i) ? (1 - l[i][0]) / torso : null);
-  CAMS.hist.push({ ts, wr, wx }); CAMS.hist = CAMS.hist.filter((h) => ts - h.ts < 400);
-  const k = CAMS.arm === 6 ? 1 : 0;
-  if (wr[k] === null) return;
-  const y = wr[k];
-  if (CAMS.state === 'hold' && y > 0.3) { CAMS.state = 'back'; CAMS.backT = ts; if (G.state === 'aim') startSwing(); }
-  if (CAMS.state === 'back') {
-    const old = CAMS.hist[0]; const vy = old && old.wr[k] !== null ? (y - old.wr[k]) / Math.max(0.05, (ts - old.ts) / 1000) : 0;
-    G.power = clamp(-vy / 6, G.power * 0.98, 1);
-    if (y < 0.05 && vy < -1.8) { const vx = old && old.wx[k] !== null ? (wx[k] - old.wx[k]) / Math.max(0.05, (ts - old.ts) / 1000) : 0; release(clamp(-vy / 6, 0.25, 1), clamp(vx * 0.12, -1, 1)); CAMS.state = 'done'; }
-    else if (ts - CAMS.backT > 3500) CAMS.state = 'hold';
+  const v = (i) => l[i] && l[i][2] > 0.45; if (!(v(1) && v(2) && v(7) && v(8))) { camHint('Ponte de cuerpo entero frente al celular'); return; }
+  const P = (i) => [1 - l[i][0], l[i][1]];   // los puntos ya llegan suavizados (mano.js)
+  const s1 = P(1), s2 = P(2), h1 = P(7), h2 = P(8);
+  const shY = (s1[1] + s2[1]) / 2, hipY = (h1[1] + h2[1]) / 2, hipX = (h1[0] + h2[0]) / 2, torso = Math.max(0.06, hipY - shY), shW = Math.max(0.04, Math.abs(s1[0] - s2[0]));
+  // 1) medida: ~0,5 s quieto
+  if (CAMS.st === 'cal') {
+    CAMS.cal.push({ hipX, torso, shW, ts }); CAMS.cal = CAMS.cal.filter((c) => ts - c.ts < 600);
+    const xs = CAMS.cal.map((c) => c.hipX), still = CAMS.cal.length >= 8 && Math.max(...xs) - Math.min(...xs) < 0.03;
+    if (still) { const avg = (k) => CAMS.cal.reduce((a, c) => a + c[k], 0) / CAMS.cal.length; CAMS.base = { hipX: avg('hipX'), torso: avg('torso'), shW: avg('shW') }; CAMS.st = 'hold'; camHint('¡Listo! Muévete a los lados para apuntar · baja el brazo atrás y lanza'); }
+    else camHint('Quédate quieto un momento…');
+    return;
+  }
+  const B = CAMS.base, T = (B.torso * 0.7 + torso * 0.3);
+  // 2) apuntar (zona muerta pequeña y suavizado; se congela al empezar el swing)
+  if (G.state === 'aim') { let off = (hipX - B.hipX) / B.shW; off = Math.sign(off) * Math.max(0, Math.abs(off) - 0.12); CAMS.aimS += (clamp(off * 0.32, -0.42, 0.42) - CAMS.aimS) * 0.35; G.aimX = CAMS.aimS; }
+  // 3) muñecas en "tamaños de tronco" respecto a la cadera (positivo = más abajo que la cadera)
+  const W = [5, 6].map((i) => (v(i) ? { y: (P(i)[1] - hipY) / T, x: (P(i)[0] - hipX) / T } : null));
+  CAMS.hist.push({ ts, W }); CAMS.hist = CAMS.hist.filter((h) => ts - h.ts < 350);
+  // velocidad de la mano en los últimos ~0,1 s (en tamaños de tronco por segundo)
+  const vel = (k) => { const n = CAMS.hist[CAMS.hist.length - 1], o = CAMS.hist.find((h) => n.ts - h.ts <= 120) || CAMS.hist[0]; if (!o || !o.W[k] || !n.W[k] || n.ts === o.ts) return { vy: 0, vx: 0 }; const dt = (n.ts - o.ts) / 1000; return { vy: (n.W[k].y - o.W[k].y) / dt, vx: (n.W[k].x - o.W[k].x) / dt }; };
+  if (CAMS.st === 'hold') {
+    // el brazo que baja detrás de la cadera primero es el que lanza
+    const k = [0, 1].find((i) => W[i] && W[i].y > 0.32);
+    if (k !== undefined) { CAMS.arm = k; CAMS.st = 'back'; CAMS.backT = ts; CAMS.peak = 0; if (G.state === 'aim') startSwing(); camHint('¡Ahora adelante!', true); }
+    return;
+  }
+  if (CAMS.st === 'back') {
+    const k = CAMS.arm, w = W[k]; if (!w) return;
+    const { vy, vx } = vel(k), up = -vy;   // hacia arriba = positivo
+    if (up > CAMS.peak) CAMS.peak = up;
+    G.power = clamp(CAMS.peak / 6, G.power, 1);
+    meter(G.power, 'Brazo: ' + Math.round(G.power * 100) + ' %', '', 'FUERZA DEL BRAZO');
+    // suelta: la mano ya pasó la cadera subiendo, o la velocidad empezó a bajar después de un buen impulso
+    const passed = w.y < -0.05 && up > 1.2, fading = CAMS.peak > 2.2 && up < CAMS.peak * 0.55 && w.y < 0.15;
+    if (passed || fading) {
+      const pw = clamp(CAMS.peak / 6, 0.22, 1), hook = clamp(vx * 0.1 * (CAMS.arm === 1 ? 1 : -1), -1, 1);
+      release(pw, hook); CAMS.st = 'done';
+      camHint(pw > 0.85 ? '¡Bola de fuego!' : pw > 0.6 ? '¡Buen lanzamiento!' : 'Lanzamiento suave', pw > 0.85);
+    } else if (ts - CAMS.backT > 3500) { CAMS.st = 'hold'; camHint('Baja el brazo atrás y llévalo adelante con fuerza'); }
   }
 });
 // Tu avatar copia lo que haces (brazos, tronco y cabeza) mientras apuntas o esperas, y celebra contigo
@@ -383,7 +464,7 @@ function stickDraw() {
 
 // ---------- Flujo del turno ----------
 function newRoll() {
-  G.state = 'aim'; G.t = 0; G.cel = 0; G.power = 0; G.meterOn = false; G.hitT = 0; G.relT = null; CAMS.state = 'hold'; CAMS.cx0 = null; ball2.live = false; ball2.gut = false; ball2.y = BR;
+  G.state = 'aim'; G.t = 0; G.cel = 0; G.power = 0; G.meterOn = false; G.hitT = 0; G.relT = null; camReset(); CAMS.aimS = 0; G.aimX = 0; ball2.live = false; ball2.gut = false; ball2.y = BR;
   MVHand.pauseEnabled = true; drawScore();
   const f = G.frame + 1, r = G.rolls[G.frame].length + 1;
   if (PL[G.cur] && PL[G.cur].cpu) { cpuTurn(); return; }
@@ -422,7 +503,7 @@ function settle() {
     else if (!first && r[0] + r[1] === 10) msg = ['¡SPARE!', 'Tumbaste todos en dos bolas'];
     else msg = [down === 0 ? '¡Uy!' : down + (down === 1 ? ' pino' : ' pinos'), first ? 'Te quedan ' + (10 - down) : 'Total del turno: ' + (r[0] + r[1])];
   } else msg = [down === before && before === 10 ? '¡CHUZA!' : down === before ? '¡SPARE!' : down + ' pinos', 'Turno 10'];
-  if (msg[0].startsWith('¡CHUZA') || msg[0].startsWith('¡SPARE')) { G.cel = 2.3; CEL.t = 0; CEL.style = null; SND.ding(msg[0].startsWith('¡CHUZA') ? 988 : 784); const s0 = turnSlot(); MVLink.say(msg[0], true, s0 >= 0 ? s0 : undefined); }
+  if (msg[0].startsWith('¡CHUZA') || msg[0].startsWith('¡SPARE')) { FX.confetti(msg[0].startsWith('¡CHUZA')); document.getElementById('big').classList.toggle('strike', msg[0].startsWith('¡CHUZA')); G.cel = 2.3; CEL.t = 0; CEL.style = null; SND.ding(msg[0].startsWith('¡CHUZA') ? 988 : 784); const s0 = turnSlot(); MVLink.say(msg[0], true, s0 >= 0 ? s0 : undefined); }
   big(msg[0], msg[1]);
   // ¿siguiente bola o siguiente turno?
   let nextFrame = false, resetAll = false;
@@ -502,8 +583,13 @@ function camera(dt) {
   else if (G.state === 'roll' && ball2.z > -14) { tP.set(ball2.x * 0.4 + 0.3, 0.7, Math.min(ball2.z + 2.6, 3)); tL.set(ball2.x * 0.2, 0.2, ball2.z - 6); }
   else if (G.state === 'roll' || G.state === 'sweep' || G.state === 'end') { tP.set(0.55, 0.8, -15.9); tL.set(0, 0.35, -18.9); }
   else if (G.state === 'menu' || G.state === 'load') { tP.set(1.4, 2.2, 6.6); tL.set(0, 0.5, -12); }
-  else { const x = av ? av.scene.position.x : 0, z = av ? av.scene.position.z : 3; tP.set(x + 0.55, 1.75, z + 3.0); tL.set(x * 0.6, 0.45, -12); }
-  const k = 1 - Math.exp(-dt * (G.state === 'roll' ? 6 : 3)); cp.lerp(tP, k); cl.lerp(tL, k); cam.position.copy(cp); cam.lookAt(cl);
+  // su turno: la cámara va justo detrás y mira por su misma línea, así el personaje queda siempre en el centro
+  else { const x = av ? av.scene.position.x : 0, z = av ? av.scene.position.z : 3; tP.set(x, 1.65, z + 3.1); tL.set(x, 0.55, z - 12); }
+  const aiming = G.state === 'aim' || G.state === 'swing';
+  const k = 1 - Math.exp(-dt * (G.state === 'roll' ? 6 : aiming ? 7 : 3)); cp.lerp(tP, k); cl.lerp(tL, k); cam.position.copy(cp);
+  // sacudida al chocar con los pinos
+  if (FX.shake > 0.01) { FX.shake *= Math.exp(-dt * 7); cam.position.x += (Math.random() - 0.5) * FX.shake * 0.08; cam.position.y += (Math.random() - 0.5) * FX.shake * 0.06; }
+  cam.lookAt(cl);
 }
 cp.set(1.4, 2.2, 6.6); cl.set(0, 0.5, -12);
 
@@ -514,6 +600,7 @@ function loop(now) {
   requestAnimationFrame(loop);
   let dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (G.paused) dt = 0;
+  const rdt = dt; if (FX.slow > 0) { FX.slow -= rdt; dt *= 0.3; }
   G.t += dt;
   if (av) {
     const ax = G.state === 'aim' || G.state === 'swing' || G.state === 'menu' ? G.aimX : (av.scene.position.x);
@@ -544,6 +631,7 @@ function loop(now) {
   if (ball2.live || G.state === 'roll') {
     const sub = 4; for (let i = 0; i < sub; i++) physics(dt / sub);
     ball.position.set(ball2.x, ball2.y, ball2.z); ball.rotation.x -= ball2.vz * dt / BR; ball.visible = ball2.z > -19.8;
+    if (ball2.live && ball.visible) { const fire = (G.power || 0) > 0.85; FX.trail(ball2.x, ball2.y, ball2.z + 0.08, fire); if (fire || Q > 0) FX.trail(ball2.x, ball2.y, ball2.z + 0.16, fire); }
     if (SND.roll) SND.rollSet(ball2.live ? 0.55 : 0);
     placePins();
     const moving = PINS.some((p) => !p.gone && Math.hypot(p.vx, p.vz) > 0.03);
@@ -554,7 +642,8 @@ function loop(now) {
   aim.visible = G.state === 'aim';
   if (aim.visible) { const pos = aimGeo.attributes.position, hk = -(G.spin || 0); for (let j = 0; j <= NSEG; j++) { const d = 0.4 + j / NSEG * 17.6, x = G.aimX + 0.18 + hk * 0.45 * Math.pow(Math.max(0, d - 7) / 11, 2) * 0.5, z = 0.15 - d, w = 0.08 + j / NSEG * 0.05; pos.setXYZ(j * 2, x - w, 0.005, z); pos.setXYZ(j * 2 + 1, x + w, 0.005, z); } pos.needsUpdate = true; aimGeo.computeBoundingSphere(); }
   if ((now | 0) % 3 === 0) stickDraw();
-  camera(dt || 0.016);
+  camera(rdt || 0.016);
+  GLOW.update(dt); BITS.update(dt); neonTick(now);
   R.render(S, cam);
 }
 

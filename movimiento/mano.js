@@ -9,6 +9,23 @@
 
   // ---------------- Conexión con el celular ----------------
   const COLORS = ['#FF6A3D', '#2F7DF6', '#34D399', '#F43F5E'];
+  // ---------- Limpieza de los puntos del cuerpo (para todos los juegos) ----------
+  // · Suavizado "One Euro": quieto no tiembla y rápido no se atrasa.
+  // · Si un punto se pierde un instante (la mano pasa por delante, un reflejo), se mantiene el último ~0,25 s.
+  // · Un salto imposible de un cuadro a otro (un bombillo confundido con la mano) se ignora hasta confirmarlo.
+  function OE(minCut, beta) { this.minCut = minCut; this.beta = beta; this.x = null; this.dx = 0; this.t = 0; }
+  OE.prototype.f = function (x, t) { if (this.x === null) { this.x = x; this.t = t; return x; } const dt = Math.max(1e-3, (t - this.t) / 1000); this.t = t; const a = (c) => { const r = 2 * Math.PI * c * dt; return r / (r + 1); }; const dx = (x - this.x) / dt; this.dx += a(1) * (dx - this.dx); this.x += a(this.minCut + this.beta * Math.abs(this.dx)) * (x - this.x); return this.x; };
+  function cleanPose(P, l, ts) {
+    const F = P.flt || (P.flt = []);
+    return l.map((p, i) => {
+      if (!p) return p;
+      const f = F[i] || (F[i] = { x: new OE(1.5, 0.8), y: new OE(1.5, 0.8), last: null, lastT: 0, pend: 0 });
+      if (p[2] < 0.45) return f.last && ts - f.lastT < 250 ? [f.last[0], f.last[1], 0.46] : p;
+      if (f.last && Math.hypot(p[0] - f.last[0], p[1] - f.last[1]) > 0.35 && f.pend < 1) { f.pend++; return [f.last[0], f.last[1], p[2]]; }
+      f.pend = 0;
+      const q = [f.x.f(p[0], ts), f.y.f(p[1], ts), p[2]]; f.last = q; f.lastT = ts; return q;
+    });
+  }
   const MVLink = {
     peer: null, code: '', url: '', on: false, lm: null, ts: 0, rx: 0, paused: false,
     players: [null, null, null, null],   // hasta 4 celulares: cada uno es un jugador
@@ -65,6 +82,7 @@
       if (d.t === 'ph') { MVPhoto.part(d, P); return; }
       if (d.t === 'phx') { MVPhoto.cancelled(P); return; }
       if (d.t !== 'p' || !d.l) return;
+      d.raw = d.l; d.l = cleanPose(P, d.l, typeof d.ts === 'number' ? d.ts : performance.now());
       P.lm = d.l; P.rx = performance.now(); P.ts = typeof d.ts === 'number' ? d.ts : P.rx;
       this.lm = d.l; this.rx = P.rx; this.ts = P.ts;
       for (const f of this.listeners) try { f(d.l, P.ts, d, P.slot); } catch (e) { console.error(e); }
