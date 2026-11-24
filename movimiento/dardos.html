@@ -87,7 +87,7 @@ const ctx = await startGame({
       if (p.cpu) { G.cpuT -= dt; G.aim.lerp(G.cpuTarget, 1 - Math.exp(-dt * 3)); if (G.cpuT <= 0) throwDart(G.aim.x + rnd(-1, 1) * G.cpuErr, G.aim.y + rnd(-1, 1) * G.cpuErr, 0.7); }
       else if (c.camOf(k)) { const B = c.body(k), W = B.wr.r.y > B.wr.l.y ? B.wr.r : B.wr.l;
         if (W.y > -0.2) { G.aim.x = lerp(G.aim.x, clamp(W.x * 0.28, -0.7, 0.7), 0.25); G.aim.y = lerp(G.aim.y, BY + clamp((W.y - 0.4) * 0.3, -0.6, 0.6), 0.25); }
-        if (performance.now() - B.throwAt < 120 && !G.lock) { G.lock = true; throwDart(G.aim.x + B.throw.dx * 0.12, G.aim.y - B.throw.dy * 0.1, B.throw.pow); setTimeout(() => (G.lock = false), 800); } }
+        const e = !G.lock ? B.take('throw') : null; if (e) { G.lock = true; throwDart(G.aim.x + e.dx * 0.12, G.aim.y - e.dy * 0.1, e.pow); setTimeout(() => (G.lock = false), 800); } }
       else { const sp = 0.8 * dt; if (c.held.has('ArrowLeft')) G.aim.x -= sp; if (c.held.has('ArrowRight')) G.aim.x += sp; if (c.held.has('ArrowUp')) G.aim.y += sp; if (c.held.has('ArrowDown')) G.aim.y -= sp; G.aim.x = clamp(G.aim.x, -0.8, 0.8); G.aim.y = clamp(G.aim.y, BY - 0.8, BY + 0.8); }
       // el pulso tiembla un poco (menos en fácil)
       aimRing.position.set(G.aim.x + Math.sin(G.wob * 2.1) * w, G.aim.y + Math.sin(G.wob * 2.9 + 1) * w, BZ + 0.05); aimRing.visible = !p.cpu;

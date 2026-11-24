@@ -76,7 +76,7 @@ const ctx = await startGame({
     B.can = canHit;
     if (canHit) { if (c.P[k].cpu) { if (!B.cpuDecided) { B.cpuDecided = true; B.cpuMiss = Math.random() > 0.55 + c.lvlK() * 0.4; } if (!B.cpuMiss && reach < 0.8) hit(c, k, rnd(-0.8, 0.8), rnd(0.5, 0.9)); }
       else if (G.pl[k].want && performance.now() - G.pl[k].want.t < 450) { const w = G.pl[k].want; G.pl[k].want = null; hit(c, k, w.aim, w.pow); }
-      else if (c.camOf(k)) { const Bd = c.body(k); if (performance.now() - Bd.swingAt < 110) hit(c, k, Bd.swing.dir * (k ? -1 : 1) * 0.8, Bd.swing.pow); } }
+      else if (c.camOf(k)) { const Bd = c.body(k); const e = Bd.take('swing') || Bd.take('punchr') || Bd.take('punchl'); if (e) hit(c, k, (e.dir || 0) * (k ? -1 : 1) * 0.8, e.pow); } }
   },
   pose(c, k) {
     if (c.camOf(k) && G.phase !== 'serve') { c.mirror(k, { arms: 1, spine: 0.4, head: 0.6 }); return; }

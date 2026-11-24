@@ -69,7 +69,7 @@ const ctx = await startGame({
     if (G.phase === 'live') {
       if (p.cpu) { if (G.t > G.cpuT) { G.sel = G.cpuSel; throwTo(c, rnd(0.85, 1.05)); } }
       else if (c.camOf(G.turn)) { const B = c.body(G.turn); const W2 = B.wr.r.y > B.wr.l.y ? B.wr.r : B.wr.l; if (W2.y > 0) pickByX(W2.x * 6);
-        if (performance.now() - B.throwAt < 120 && G.t > 0.4) { pickByX(clamp(B.throw.dx * 2 + W2.x * 4, -10, 10)); throwTo(c, clamp(0.75 + B.throw.pow * 0.4, 0.5, 1.2)); } }
+        const e = G.t > 0.4 ? B.take('throw') : null; if (e) { pickByX(clamp(e.dx * 2 + W2.x * 4, -10, 10)); throwTo(c, clamp(0.75 + e.pow * 0.4, 0.5, 1.2)); } }
       else if (G.charging) G.pow = clamp(G.pow + dt * 0.9, 0, 1.25);
       const need = needPow(G.rec[G.sel]); if (!p.cpu) c.ui.meter(clamp(G.pow / 1.25, 0, 1), 'FUERZA DEL PASE', 'Ideal ' + Math.round(need / 1.25 * 100) + '%', Math.round(G.rec[G.sel].p.distanceTo(c.P[G.turn].av.scene.position)) + ' m');
     }

@@ -60,7 +60,7 @@ const ctx = await startGame({
       else if (c.camOf(k)) { const B = c.body(k), now = performance.now();
         f.block = B.wr.l.y > 0.05 && B.wr.r.y > 0.05 && Math.abs(B.wr.l.x) < 0.9 && Math.abs(B.wr.r.x) < 0.9 && B.handsGap < 1.2;
         f.duck = lerp(f.duck, B.crouch, 0.3); f.side = lerp(f.side, clamp(B.x * 0.5 + B.lean * 0.4, -1, 1), 0.3);
-        ['l', 'r'].forEach((s) => { if (now - B.punch[s] < 90 && !f.block) punch(c, k, s === 'l' ? 'L' : 'R', B.punch.pow, B.punch.y > 0.6 ? 'U' : null); }); }
+        ['l', 'r'].forEach((s) => { const e = B.take('punch' + s); if (e && !f.block) punch(c, k, s === 'l' ? 'L' : 'R', e.pow, e.y > 0.6 ? 'U' : null); }); }
       else { f.block = c.held.has('ArrowDown'); f.duck = lerp(f.duck, c.held.has('ArrowUp') ? 1 : 0, 0.3); f.side = lerp(f.side, 0, 0.2); }
       // el golpe avanza; a mitad de camino se decide si pega
       if (f.act) { f.act.t += dt; if (!f.act.done && f.act.t > 0.13) { f.act.done = true; land(c, k); } if (f.act.t > 0.32) f.act = null; }

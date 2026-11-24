@@ -89,7 +89,7 @@ const ctx = await startGame({
       if (p.cpu) { const lv = c.lvlK(); target = (7.2 + lv * 1.6 + R.ai * 0.6) * (k === 0 ? 1 : 1); R.aiT = (R.aiT || 0) - dt; if (R.aiT < 0) { R.aiT = rnd(0.6, 1.6); const nb = G.boxes.find((b) => b.s > R.s && b.s < R.s + 15 && b.gone <= 0 && !R.pow); R.tx = nb ? nb.x : clamp(R.tx + rnd(-2, 2), -2.6, 2.6); }
         if (R.pow && Math.random() < dt * 0.6) usePow(c, k); MUSH.concat(SLIME).forEach(([s, x]) => { if (s > R.s && s < R.s + 3 && Math.abs(x - R.x) < 1.3 && Math.random() < 0.5 * lv) R.tx = clamp(R.x + (x > R.x ? -2.2 : 2.2), -2.6, 2.6); });
         HAMMERS.forEach((s) => { if (s > R.s && s < R.s + 2.5 && Math.random() < 0.08 * lv) jump(c, k); }); }
-      else if (c.camOf(k)) { const B = c.body(k); target = clamp(B.stepRate * 1.9, 0, 10.5); R.tx = clamp((B.lean * 1.5 + B.x * 0.8) * 2.6, -2.8, 2.8); if (now - B.jumpAt < 120) jump(c, k); if (B.armsUp && R.pow) usePow(c, k); }
+      else if (c.camOf(k)) { const B = c.body(k); target = clamp(B.stepRate * 1.9, 0, 10.5); R.tx = clamp((B.lean * 1.5 + B.x * 0.8) * 2.6, -2.8, 2.8); if (B.take('jump')) jump(c, k); if (B.armsUp && R.pow) usePow(c, k); }
       else { target = 8.8; const tl = c.tilt(k); if (tl) R.tx = clamp(tl[0] * 3, -2.8, 2.8); }
       if (R.stun > 0) target = 0; if (R.slow > 0) target *= 0.5; if (R.boost > 0) target += 6;
       R.v = lerp(R.v, target, 1 - Math.exp(-dt * 2.2)); R.s += R.v * dt; R.x = lerp(R.x, R.tx, 1 - Math.exp(-dt * 6));

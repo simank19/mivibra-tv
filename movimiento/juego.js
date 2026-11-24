@@ -27,9 +27,13 @@ export class Cuerpo {
     Object.assign(this, { ok: false, ts: 0, sw: 0.2, x: 0, lean: 0, crouch: 0, armsUp: false, oneUp: false, jumpAt: -1e9, hist: [], x0: null, hip0: null,
       wr: { l: { x: 0, y: 0, vx: 0, vy: 0, vz: 0, sp: 0 }, r: { x: 0, y: 0, vx: 0, vy: 0, vz: 0, sp: 0 } },
       punch: { l: -1e9, r: -1e9, pow: 0 }, swingAt: -1e9, swing: { dir: 0, pow: 0, vy: 0 }, throwAt: -1e9, throw: { pow: 0, dx: 0, dy: 0, side: 'r' },
-      steps: 0, stepRate: 0, stepT: [], lastKnee: 0, kneeAt: -1e9, clapAt: -1e9, handsGap: 9 });
+      steps: 0, stepRate: 0, stepT: [], lastKnee: 0, kneeAt: -1e9, clapAt: -1e9, handsGap: 9, ev: {} });
   }
-  recenter() { this.x0 = null; this.hip0 = null; }
+  recenter() { this.x0 = null; this.hip0 = null; this.ev = {}; }
+  // Un gesto (golpe, lanzamiento, swing, salto) se guarda hasta que el juego lo usa (o pasan 0,6 s):
+  // así no se pierde aunque el TV dibuje pocos cuadros por segundo.
+  mark(kind, data) { this.ev[kind] = { t: performance.now(), d: data || {}, taken: false }; }
+  take(kind) { const e = this.ev[kind]; if (!e || e.taken || performance.now() - e.t > 600) return null; e.taken = true; return e.d; }
   feed(l, ts, w) {
     const v = (i) => l[i] && l[i][2] > 0.45; if (!(v(1) && v(2))) { this.ok = false; return; }
     this.ok = true; const now = performance.now();
@@ -41,7 +45,7 @@ export class Cuerpo {
     if (v(7) && v(8)) { const hx = (l[7][0] + l[8][0]) / 2, hy = (l[7][1] + l[8][1]) / 2; torso = Math.max(0.05, hy - sy); this.lean = (hx - sx) / sw;
       if (this.hip0 === null) this.hip0 = hy; this.hip0 = this.hip0 * 0.995 + hy * 0.005;
       const rise = (this.hip0 - hy) / torso; this.crouch = clamp(-rise * 2.2, 0, 1);
-      if (rise > 0.22 && now - this.jumpAt > 600) this.jumpAt = now; }
+      if (rise > 0.2 && now - this.jumpAt > 600) { this.jumpAt = now; this.mark('jump'); } }
     // muñecas: posición relativa al centro de los hombros (en anchos de hombro; x+ = derecha de la persona, y+ = arriba)
     const pt = { ts, l: v(5) ? [(sx - l[5][0]) / sw, (sy - l[5][1]) / sw] : null, r: v(6) ? [(sx - l[6][0]) / sw, (sy - l[6][1]) / sw] : null,
       zl: w && w[5] ? w[5][2] : null, zr: w && w[6] ? w[6][2] : null, kl: v(9) ? l[9][1] / sw : null, kr: v(10) ? l[10][1] / sw : null };
@@ -52,14 +56,14 @@ export class Cuerpo {
     const L = this.wr.l, R = this.wr.r;
     this.handsGap = pt.l && pt.r ? Math.hypot(L.x - R.x, L.y - R.y) : 9;
     // golpe recto (hacia el celular): la muñeca avanza rápido en profundidad o se estira hacia el centro
-    ['l', 'r'].forEach((s) => { const W = this.wr[s], fwd = W.vz > 1.6 || (W.vz === 0 && W.sp > 5 && Math.abs(W.y) < 0.9);
-      if (fwd && now - this.punch[s] > 280) { this.punch[s] = now; this.punch.pow = clamp(Math.max(W.vz / 4, W.sp / 10), 0.3, 1); this.punch.side = s; this.punch.y = W.y; } });
+    ['l', 'r'].forEach((s) => { const W = this.wr[s], fwd = W.vz > 1.0 || (W.sp > 4.2 && W.y > -1.4);
+      if (fwd && now - this.punch[s] > 260) { this.punch[s] = now; this.punch.pow = clamp(Math.max(W.vz / 3, W.sp / 9), 0.3, 1); this.punch.side = s; this.punch.y = W.y; this.mark('punch' + s, { pow: this.punch.pow, y: W.y }); } });
     // swing (raqueta, bate, palo): muñeca más rápida que cruza de lado a lado
     const F = L.sp > R.sp ? L : R;
-    if (Math.abs(F.vx) > 4 && now - this.swingAt > 450) { this.swingAt = now; this.swing = { dir: Math.sign(F.vx), pow: clamp((Math.abs(F.vx) - 4) / 7 + 0.35, 0.2, 1), vy: F.vy, hi: F.y }; }
+    if (Math.abs(F.vx) > 2.6 && now - this.swingAt > 450) { this.swingAt = now; this.swing = { dir: Math.sign(F.vx), pow: clamp((Math.abs(F.vx) - 2.6) / 7 + 0.3, 0.15, 1), vy: F.vy, hi: F.y }; this.mark('swing', this.swing); }
     // lanzamiento (dardo, pelota, bola): la mano va de atrás/arriba hacia adelante; dirección por el movimiento lateral
-    const T = R.sp + Math.max(0, R.vz) * 2 > L.sp + Math.max(0, L.vz) * 2 ? R : L, tp = Math.max(T.vz, 0) * 1.6 + Math.max(0, -T.vy) * 0.4 + T.sp * 0.25;
-    if (tp > 3.4 && now - this.throwAt > 700) { this.throwAt = now; this.throw = { pow: clamp((tp - 3.4) / 6 + 0.35, 0.2, 1), dx: clamp(T.vx / 6, -1, 1), dy: clamp(T.vy / 8, -1, 1), side: T === R ? 'r' : 'l' }; }
+    const T = R.sp + Math.max(0, R.vz) * 2 > L.sp + Math.max(0, L.vz) * 2 ? R : L, tp = Math.max(T.vz, 0) * 1.6 + T.sp * 0.5;
+    if (tp > 2.4 && T.y > -1.6 && now - this.throwAt > 700) { this.throwAt = now; this.throw = { pow: clamp((tp - 2.4) / 5 + 0.35, 0.2, 1), dx: clamp(T.vx / 6, -1, 1), dy: clamp(T.vy / 8, -1, 1), side: T === R ? 'r' : 'l' }; this.mark('throw', this.throw); }
     // palmas: las manos se juntan rápido
     if (this.handsGap < 0.5 && this.prevGap > 1.1 && now - this.clapAt > 300) this.clapAt = now; this.prevGap = this.handsGap;
     // trote en el sitio: rodillas que se alternan (cada cruce es un paso)
@@ -162,7 +166,7 @@ export async function startGame(cfg) {
   const NP = cfg.players || 2;
   const P = Array.from({ length: NP }, (_, k) => ({ k, name: k ? 'MiVibra' : 'Tú', av: null, slot: k, cpu: k > 0, color: MVLink.COLORS[k] || '#fff', cel: {} }));
   const BODY = [0, 1, 2, 3].map(() => new Cuerpo()), OLD = [0, 1, 2, 3].map(() => bodyReader()), EJ = [0, 1, 2, 3].map(() => new Espejo());
-  MVLink.onPose((l, ts, d, slot) => { if (slot < 4 && l) { BODY[slot].feed(l, ts, d.w); OLD[slot].feed(l, ts); EJ[slot].feed(d); } });
+  MVLink.onPose((l, ts, d, slot) => { if (slot < 4 && l) { BODY[slot].feed(d.raw || l, ts, d.w); OLD[slot].feed(l, ts); EJ[slot].feed(d); } });
   let ANIMS = null, myRec = null;
   async function makeAv(rec) { const a = await buildAvatar(rec, { lite: Q === 0 }); a.scene.traverse((o) => { if (o.isMesh) o.castShadow = false; }); S.add(a.scene); if (ANIMS) a.anim = new Animator(a, ANIMS); a.blob = E.blob(S, 0, 0, 0.55, 0.35); return a; }
   async function loadAvatars() {

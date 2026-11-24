@@ -61,7 +61,7 @@ const ctx = await startGame({
       if (u > 0.2) c.FX.trail(ballM.position, '#ffffff', 0.05);
       // el CPU batea con un error según la dificultad; con la cámara, el swing del cuerpo
       if (p.cpu && !Pt.swung && Pt.t > Pt.T - 0.05 + Pt.cpuErr) swing(rnd(0.6, 1));
-      if (c.camOf(k) && !Pt.swung) { const B = c.body(k); if (performance.now() - B.swingAt < 90) swing(B.swing.pow); }
+      if (c.camOf(k) && !Pt.swung) { const B = c.body(k); const e = B.take('swing') || B.take('throw'); if (e) swing(e.pow); }
       if (u >= 1.25 && !G.hit) { G.pitch = null; result(0, '¡STRIKE!'); }
     }
     if (G.hit) fly(c, dt);
