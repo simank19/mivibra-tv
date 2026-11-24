@@ -50,8 +50,10 @@ def main():
     shutil.move(os.path.join(out, 'editor'), os.path.join(out, 'editor-vrm'))
     os.makedirs(os.path.join(out, 'editor'), exist_ok=True)
     shutil.copy(os.path.join(OVR, 'editor.html'), os.path.join(out, 'editor', 'index.html'))
-    for f in ('avatar.js', 'anim.js', 'animaciones.json', 'mano.js', 'espejo.js', 'sonido.js', 'playa.js', 'cuerpo.js'):
-        shutil.copy(os.path.join(OVR, f), os.path.join(out, f))
+    # todos los módulos comunes (motor de juegos, estilo de las maquetas, efectos, sonidos…)
+    for f in sorted(os.listdir(OVR)):
+        if f.endswith('.js') or f in ('animaciones.json', 'patrocinadores.json'):
+            shutil.copy(os.path.join(OVR, f), os.path.join(out, f))
     # Avatares anime (cuerpos de Tripo con esqueleto propio) y su editor nuevo
     # Desde el muñeco MiVibra solo se publica su cuerpo (los cuerpos anime y sus piezas quedan en el repo)
     if os.path.exists(os.path.join(OVR, 'cuerpos')):
@@ -66,7 +68,7 @@ def main():
     if os.path.exists(os.path.join(OVR, 'bolos.html')):
         os.makedirs(os.path.join(out, 'bolos'), exist_ok=True)
         shutil.copy(os.path.join(OVR, 'bolos.html'), os.path.join(out, 'bolos', 'index.html'))
-    for game in ('futbol', 'voley'):
+    for game in ('futbol', 'voley', 'dardos', 'arco', 'boxeo', 'golf', 'beisbol', 'esqui', 'americano', 'baile', 'carrera', 'tenis-cancha'):
         if os.path.exists(os.path.join(OVR, game + '.html')):
             os.makedirs(os.path.join(out, game), exist_ok=True)
             shutil.copy(os.path.join(OVR, game + '.html'), os.path.join(out, game, 'index.html'))
