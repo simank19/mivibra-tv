@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Tiro con arco · MiVibra Movimiento</title>
+</head>
+<body>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@2.0.4/dist/qrcode.js"></script>
+<script src="../mano.js"></script>
+<script type="importmap">{"imports":{"three":"../vendor/three-0.183.2/three.module.min.js","three/addons/":"../vendor/three-0.183.2/addons/"}}</script>
+<script type="module">
+import { startGame, THREE, E, clamp, lerp, rnd } from '../juego.js';
+
+// Tiro con arco: 6 flechas cada uno a la diana de 30 m, con viento. Tensa, apunta y suelta.
+const TZ = -30, TY = 1.6, TS = 1.25, FACE = 0.62 * TS, SPOT = new THREE.Vector3(-0.1, 0, 3), GRAV = 9.8;
+const G = { turn: 0, n: [0, 0], sc: [[], []], ARROWS: 6, yaw: 0, pitch: 0.035, draw: 0, drawing: false, wind: 0, arrow: null, stuck: [], phase: 'aim', cpu: null, sx: 0, sy: 0 };
+let bow, string, arrowProto, flagM, dots;
+
+function makeArrow(col) { const a = new THREE.Group(); const sh = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.9, 5), E.mat('#c58b4c')); sh.rotation.x = Math.PI / 2; a.add(sh);
+  const tipm = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.08, 6), E.mat('#8a8f99')); tipm.rotation.x = -Math.PI / 2; tipm.position.z = -0.48; a.add(tipm);
+  const fl = new THREE.Mesh(new THREE.BoxGeometry(0.003, 0.07, 0.14), E.mat(col)); fl.position.z = 0.38; a.add(fl); const f2 = fl.clone(); f2.rotation.z = Math.PI / 2; a.add(f2); return a; }
+// velocidad de salida según el ángulo y la tensión
+function launch(yaw, pitch, draw) { const v = lerp(28, 62, clamp(draw, 0, 1)); return new THREE.Vector3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch)).multiplyScalar(v); }
+
+const ctx = await startGame({
+  id: 'arco', title: 'Tiro con arco', kicker: 'MIVIBRA MOVIMIENTO · CAMPO', loading: 'Preparando el campo de tiro…',
+  sub: '6 flechas cada uno a 30 m. Ojo con el viento.', turns: true, startSound: 'disparo', ambient: ['aplausos', 'aves', 'estadio-ambiente'],
+  how: 'Estira un brazo hacia la diana, tira la cuerda con la otra mano hasta la cara y suelta.',
+  modes: [{ id: 'cpu', label: 'Contra MiVibra', icon: '▶' }, { id: 'two', label: '2 jugadores (por turnos)', icon: '⚔', two: true }],
+  orbit: { c: [0, 1.6, -12], r: 16, y: 5 },
+  onSound(c) { c.amb('aves', 0.18); c.amb('estadio-ambiente', 0.08); },
+  async scene({ S }) { const r = E.seeded(7);
+    E.sky(S, '#3b9bff', '#e3f6ff'); E.lights(S, { ground: '#5aa04a' }); E.clouds(S, 9, 220, 60, r);
+    const g = new THREE.PlaneGeometry(300, 300, 60, 60); g.rotateX(-Math.PI / 2); const P = g.attributes.position;
+    for (let i = 0; i < P.count; i++) { const x = P.getX(i), z = P.getZ(i); P.setY(i, z < -60 ? (Math.sin(x * 0.04) + 1) * Math.min(12, (-60 - z) * 0.25) : 0); } g.computeVertexNormals();
+    S.add(new THREE.Mesh(g, E.mat('#5cc94f')));
+    const lanes = E.canvasTex(256, 256, (c, w, h) => { for (let i = 0; i < 8; i++) { c.fillStyle = i % 2 ? '#6fd65a' : '#62cc4d'; c.fillRect(i * w / 8, 0, w / 8, h); } });
+    E.plane(S, 26, 70, new THREE.MeshToonMaterial({ map: lanes }), 0.005).position.z = -30;
+    const line = new THREE.Mesh(new THREE.PlaneGeometry(26, 0.12), new THREE.MeshBasicMaterial({ color: '#ffffff' })); line.rotation.x = -Math.PI / 2; line.position.set(0, 0.01, 3.6); S.add(line);
+    const face = E.canvasTex(256, 256, (c) => { const cols = ['#ffffff', '#ffffff', '#1b1b2a', '#1b1b2a', '#3a86ff', '#3a86ff', '#ff2e4d', '#ff2e4d', '#ffd166', '#ffd166']; for (let i = 0; i < 10; i++) { c.fillStyle = cols[i]; c.beginPath(); c.arc(128, 128, 124 - i * 12.2, 0, 7); c.fill(); c.strokeStyle = 'rgba(0,0,0,.25)'; c.lineWidth = 1.5; c.stroke(); } c.strokeStyle = '#1b1b2a'; c.beginPath(); c.moveTo(122, 128); c.lineTo(134, 128); c.moveTo(128, 122); c.lineTo(128, 134); c.stroke(); });
+    const target = (x, z, s) => { const t = new THREE.Group(); t.add(new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 0.5), E.mat('#e8c46a')));
+      const f = new THREE.Mesh(new THREE.CircleGeometry(0.62, 48), new THREE.MeshBasicMaterial({ map: face })); f.position.z = 0.26; t.add(f);
+      [-0.5, 0.5].forEach((lx) => { const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.6, 0.08), E.mat('#8a5a33')); leg.position.set(lx, -0.85, -0.25); leg.rotation.x = 0.25; t.add(leg); });
+      t.position.set(x, TY, z); t.scale.setScalar(s); S.add(t); E.blob(S, x, z, 0.9 * s, 0.25); return t; };
+    target(0, TZ, TS); target(-7, -45, 1.1); target(7, -55, 1.1);
+    const fp = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 5, 6), E.mat('#ffffff')); fp.position.set(6, 2.5, -14); S.add(fp);
+    flagM = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.9, 8, 1), new THREE.MeshBasicMaterial({ color: '#ff2e4d', side: THREE.DoubleSide })); flagM.position.set(6, 4.5, -14); flagM.geometry.translate(0.8, 0, 0); S.add(flagM);
+    const tp = []; for (let i = 0; i < 40; i++) { const s = i % 2 ? -1 : 1; tp.push([s * (16 + r() * 20), 0, -10 - r() * 60, 0.9 + r() * 0.8]); } E.trees(S, tp, 'round', r);
+    const spots = E.stands(S, { x: 15, z: -4, ry: -Math.PI / 2, w: 12, rows: 4, color: '#3a86ff', rnd: r, fill: 0.85 }).concat(E.stands(S, { x: -15, z: -4, ry: Math.PI / 2, w: 12, rows: 4, color: '#ff4d6d', rnd: r, fill: 0.85 }));
+    const fans = E.crowd(S, spots, { rnd: r });
+    // arco y cuerda (se mueven con las manos del avatar)
+    bow = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.025, 6, 24, 2.2), E.mat('#6b3a1f')); S.add(bow);
+    string = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: '#ffffff' })); string.frustumCulled = false; S.add(string);
+    arrowProto = makeArrow('#ff2e4d');
+    dots = new THREE.InstancedMesh(new THREE.SphereGeometry(0.05, 6, 4), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.8 }), 26); dots.frustumCulled = false; S.add(dots);
+    return { tick: (t) => { fans.tick(t); const p = flagM.geometry.attributes.position; for (let i = 0; i < p.count; i++) p.setZ(i, Math.sin(p.getX(i) * 3 - t * 6) * 0.12 * (0.3 + Math.abs(G.wind))); p.needsUpdate = true; flagM.rotation.y = G.wind >= 0 ? 0 : Math.PI; } };
+  },
+  setup(c) { c.P.forEach((p, k) => { p.av.scene.position.set(k ? -2.6 : SPOT.x, 0, k ? 5 : SPOT.z); p.av.scene.rotation.y = Math.PI / 2; }); },
+  frame(c, dt) { if (c.state !== 'play') return;
+    c.P.forEach((p, k) => { const me = k === G.turn, sc = p.av.scene, tx = me ? SPOT.x : -2.6, tz = me ? SPOT.z : 5.4; sc.position.x = lerp(sc.position.x, tx, 1 - Math.exp(-dt * 4)); sc.position.z = lerp(sc.position.z, tz, 1 - Math.exp(-dt * 4)); sc.rotation.y = me ? Math.PI / 2 : Math.PI * 0.85; }); },
+  start(c) { G.turn = 0; G.n = [0, 0]; G.sc = [[], []]; G.stuck.forEach((a) => c.S.remove(a)); G.stuck = []; nextShot(); },
+  update(c, dt) {
+    const k = G.turn, p = c.P[k];
+    if (G.phase === 'aim') {
+      if (p.cpu) { const C = G.cpu; C.t += dt; G.draw = clamp(C.t / 1.4, 0, 1); G.yaw = lerp(G.yaw, C.yaw, 0.05); G.pitch = lerp(G.pitch, C.pitch, 0.05); if (C.t > 2.3) shoot(); }
+      else if (c.camOf(k)) { const B = c.body(k), b = B.bow;
+        if (b.up) { G.draw = lerp(G.draw, b.draw, 0.3); G.pitch = lerp(G.pitch, 0.035 + b.aimY * 0.09, 0.15); G.yaw = lerp(G.yaw, clamp(B.lean * 0.12 + B.x * 0.02, -0.12, 0.12), 0.15); G.wasDrawn = G.wasDrawn || G.draw > 0.6;
+          if (G.wasDrawn && (b.pullSp > 3.2 || G.draw < 0.35)) shoot(); }
+        else if (G.wasDrawn && G.draw > 0.45) shoot(); else G.draw = lerp(G.draw, 0, 0.1); }
+      else { const sp = 0.12 * dt; if (c.held.has('ArrowLeft')) G.yaw -= sp; if (c.held.has('ArrowRight')) G.yaw += sp; if (c.held.has('ArrowUp')) G.pitch += sp; if (c.held.has('ArrowDown')) G.pitch -= sp;
+        if (G.drawing) G.draw = clamp(G.draw + dt * 0.8, 0, 1); }
+      G.yaw = clamp(G.yaw, -0.2, 0.2); G.pitch = clamp(G.pitch, -0.05, 0.25);
+      c.ui.meter(G.draw, 'TENSIÓN', Math.round(G.draw * 100) + '%', 'Viento ' + (G.wind > 0 ? '→ ' : '← ') + Math.abs(G.wind).toFixed(1) + ' m/s');
+      // trayectoria punteada (la mitad del camino; en fácil más larga)
+      const o = bowNock(), v = launch(G.yaw, G.pitch, Math.max(0.55, G.draw)), d = new THREE.Object3D(), n = c.lvl === 0 ? 26 : c.lvl === 1 ? 14 : 6;
+      for (let i = 0; i < 26; i++) { const t = (i + 1) * 0.022; if (i < n && !p.cpu) { d.position.set(o.x + v.x * t + G.wind * 0.5 * t * t, o.y + v.y * t - GRAV / 2 * t * t, o.z + v.z * t); d.scale.setScalar(1 - i / 30); } else d.scale.setScalar(0); d.updateMatrix(); dots.setMatrixAt(i, d.matrix); } dots.instanceMatrix.needsUpdate = true;
+    } else { for (let i = 0; i < 26; i++) dots.setMatrixAt(i, new THREE.Matrix4().makeScale(0, 0, 0)); dots.instanceMatrix.needsUpdate = true; }
+    if (G.arrow) fly(c, dt);
+  },
+  pose(c, k, av) {
+    const me = k === G.turn && c.state === 'play';
+    if (!me) { c.clip(k, 'Idle'); return; }
+    c.clip(k, 'Idle');
+    // brazo izquierdo estirado hacia la diana (-z) y la mano derecha tira de la cuerda hasta la cara
+    const s = av.scene.position, aimDir = new THREE.Vector3(Math.sin(G.yaw), Math.sin(G.pitch), -Math.cos(G.yaw)).normalize();
+    const sh = c.sh(k, 'left'), bh = sh.clone().addScaledVector(aimDir, 0.5);
+    const pull = G.phase === 'aim' ? G.draw : 0, dh = bh.clone().addScaledVector(aimDir, -(0.2 + pull * 0.34)); dh.y += 0.05; dh.x += 0.03;
+    c.reach(k, 'left', bh, 1); c.reach(k, 'right', dh, 1);
+    const L = c.hand(k, 'left'), Rh = c.hand(k, 'right');
+    bow.position.copy(L); bow.lookAt(L.clone().add(new THREE.Vector3(aimDir.z, 0, -aimDir.x))); bow.rotateZ(-1.1 + Math.PI / 2 - 0.2);
+    const t1 = L.clone().add(new THREE.Vector3(0, 0.46, 0)).addScaledVector(aimDir, 0.18), t2 = L.clone().add(new THREE.Vector3(0, -0.46, 0)).addScaledVector(aimDir, 0.18);
+    const mid = G.phase === 'aim' ? Rh : t1.clone().lerp(t2, 0.5);
+    string.geometry.setFromPoints([t1, mid, t2]);
+    if (G.nocked) { G.nocked.position.copy(mid).addScaledVector(aimDir, 0.42); G.nocked.lookAt(G.nocked.position.clone().add(aimDir)); G.nocked.rotateY(Math.PI); G.nocked.visible = G.phase === 'aim'; }
+  },
+  camera(c) {
+    if (G.arrow && G.arrow.t > 0.05) { const a = G.arrow.m.position; return [new THREE.Vector3(a.x + 0.8, a.y + 0.55, a.z + 3.2), new THREE.Vector3(a.x, a.y, a.z - 6), 9]; }
+    if (G.phase === 'hit' && G.hitAt) { const h = G.hitAt; return [new THREE.Vector3(h.x + 1.2, h.y + 0.5, TZ + 4), new THREE.Vector3(h.x * 0.5, TY, TZ), 4]; }
+    const s = c.P[G.turn].av.scene.position; return [new THREE.Vector3(s.x - 2.7, 2.2, s.z + 4.4), new THREE.Vector3(0.3, 1.5, -8), 3];
+  },
+  key(c, key, ok) { if (G.phase === 'aim' && ok && !c.P[G.turn].cpu) G.drawing = true; },
+  keyUp(c, key) { if ((key === 'Enter' || key === ' ') && G.drawing) { G.drawing = false; if (G.draw > 0.25) shoot(); else G.draw = 0; } },
+  touch(c, t) {
+    if (G.phase !== 'aim' || c.P[G.turn].cpu) return;
+    // como una resortera: arrastra hacia abajo para tensar (lado = apuntar) y suelta para disparar
+    if (t.s === 'down') { G.sx = t.x; G.sy = t.y; G.touchDraw = true; }
+    else if (t.s === 'move' && G.touchDraw) { G.draw = clamp((t.y - G.sy) * 2.6, 0, 1); G.yaw = clamp(-(t.x - G.sx) * 0.5, -0.2, 0.2); G.pitch = clamp(0.035 + (t.y - G.sy) * 0.05, -0.05, 0.25); }
+    else if (t.s === 'up' && G.touchDraw) { G.touchDraw = false; if (G.draw > 0.2) shoot(); else G.draw = 0; }
+    else if (t.s === 'swipe' && t.mando && t.dy > 0.08) { G.draw = clamp(t.dy * 2.6, 0, 1); G.yaw = clamp(-t.dx * 0.5, -0.2, 0.2); shoot(); }
+  },
+  photoSub: () => tot(0) + ' – ' + tot(1),
+});
+
+window.MVA = G;
+function tot(k) { return G.sc[k].reduce((a, b) => a + b, 0); }
+function bowNock() { return ctx.hand(G.turn, 'left').add(new THREE.Vector3(0, 0.02, -0.1)); }
+function score() { const dots = (k) => Array.from({ length: G.ARROWS }, (_, i) => G.sc[k][i] === undefined ? '·' : G.sc[k][i]).join(' ');
+  ctx.ui.score(ctx.ui.pl(0, tot(0)) + `<span class="tag">${dots(0)}</span><span class="sep">|</span><span class="tag">${dots(1)}</span>` + ctx.ui.pl(1, tot(1))); }
+function nextShot() {
+  const k = G.turn, p = ctx.P[k]; G.phase = 'aim'; G.draw = 0; G.wasDrawn = false; G.drawing = false; G.yaw = 0; G.pitch = 0.035; G.hitAt = null;
+  G.wind = Math.round(rnd(-1, 1) * (ctx.lvl + 1) * 10) / 10; score();
+  G.nocked = arrowProto.clone(); G.nocked.children[2].material = G.nocked.children[3].material = E.mat(p.color); ctx.S.add(G.nocked);
+  if (p.cpu) { const lv = ctx.lvlK(), e = 0.03 * (1.3 - lv); G.cpu = { t: 0, yaw: -G.wind * 0.0045 + rnd(-1, 1) * e * 0.5, pitch: 0.0335 + rnd(-1, 1) * e * 0.3 }; }
+  else ctx.ui.cue(p.name + ': ' + (ctx.camOf(k) ? 'estira el brazo, tensa hasta la cara y suelta' : ctx.TOUCH ? 'arrastra hacia abajo para tensar y suelta' : 'apunta con las flechas · mantén OK para tensar y suelta'), true);
+  ctx.ui.keys(p.cpu ? '' : '← → ↑ ↓ apuntar · mantén OK para tensar · suelta para disparar');
+}
+function shoot() {
+  if (G.phase !== 'aim') return; G.phase = 'fly'; ctx.ui.meter(null);
+  const m = G.nocked; G.nocked = null; m.visible = true; const v = launch(G.yaw, G.pitch, G.draw);
+  G.arrow = { m, p: bowNock(), v, t: 0, good: false }; ctx.sfx.play('flecha'); ctx.FX.shake(0.15);
+}
+function fly(c, dt) {
+  const A = G.arrow; A.t += dt; A.v.y -= GRAV * dt; A.v.x += G.wind * dt; A.p.addScaledVector(A.v, dt);
+  A.m.position.copy(A.p); A.m.lookAt(A.p.clone().add(A.v)); A.m.rotateY(Math.PI); c.FX.trail(A.p, '#ffffff', 0.06);
+  // cámara lenta en los últimos metros si va al centro
+  if (!A.slow && A.p.z < TZ + 6) { A.slow = true; const r = Math.hypot(A.p.x, A.p.y - TY); if (r < FACE * 0.3) c.FX.slow(0.5, 0.25); }
+  if (A.p.z <= TZ + 0.33) {
+    const x = A.p.x, y = A.p.y, r = Math.hypot(x, y - TY); G.arrow = null;
+    let pts = 0; if (r <= FACE) pts = Math.max(1, 10 - Math.floor(r / (FACE / 10)));
+    if (pts) { A.m.position.z = TZ + 0.33 + 0.35; G.stuck.push(A.m); } else if (Math.abs(x) < 0.95 * TS && Math.abs(y - TY) < 0.95 * TS) { A.m.position.z = TZ + 0.6; G.stuck.push(A.m); } else { c.S.remove(A.m); }
+    G.sc[G.turn].push(pts); G.hitAt = new THREE.Vector3(x, y, TZ); G.phase = 'hit'; score();
+    const h = [x, y, TZ + 0.4];
+    if (pts >= 10) { c.FX.pop(x, y + 0.6, TZ + 0.6, r < FACE * 0.05 ? '¡X CENTRO!' : '¡DIEZ!', '#FFE600', 0.9); c.FX.sparks(h, 1, '#FFE9A8'); c.FX.ring(x, y, TZ + 0.4, '#FFE600', 1.2, false); c.FX.confetti([x, y + 2, TZ + 1], false, 1.5); c.FX.shake(0.5); c.crowd('ole'); }
+    else if (pts >= 8) { c.FX.pop(x, y + 0.5, TZ + 0.6, '¡' + pts + '!', '#00E5FF', 0.7); c.FX.stars(h, 6); c.crowd('aplausos'); }
+    else if (pts) { c.FX.pop(x, y + 0.5, TZ + 0.6, '' + pts, '#ffffff', 0.5); c.FX.dust(h, '#e8c46a', 6, 0.15); }
+    else { c.FX.pop(x, Math.max(1, y) + 0.4, TZ + 0.6, '¡FALLÓ!', '#B9B1A8', 0.6); c.FX.dust([x, 0, TZ], '#9bd17a', 8, 0.25); c.sfx.play('abucheo'); }
+    setTimeout(() => {
+      G.n[G.turn]++; const other = 1 - G.turn;
+      if (G.n[0] >= G.ARROWS && G.n[1] >= G.ARROWS) { const a = tot(0), b = tot(1), w = a >= b ? 0 : 1; return c.end(w, a === b ? '¡Empate!' : c.P[w].cpu ? 'Gana MiVibra' : '¡Gana ' + c.P[w].name + '!', a + ' – ' + b); }
+      if (G.n[other] < G.ARROWS) G.turn = other; nextShot();
+    }, 2200);
+  }
+}
+</script>
+</body>
+</html>

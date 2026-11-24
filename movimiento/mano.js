@@ -33,6 +33,7 @@
     get conn() { const p = this.players.find(Boolean); return p ? p.conn : null; },
     COLORS,
     onPose(fn) { this.listeners.push(fn); },
+    pads: [], onPad(fn) { this.pads.push(fn); },   // mando del celular: {t:'sw'|'tp'|'tilt', …}
     count() { return this.players.filter(Boolean).length; },
     // El código se guarda unas horas: al pasar de un juego a otro se reutiliza y el celular se reconecta solo
     savedCode() { try { const o = JSON.parse(localStorage.getItem('mv-link') || 'null'); if (o && Date.now() - o.at < 8 * 3600e3 && /^\d{6}$/.test(o.code)) return o.code; } catch (e) {} return null; },
@@ -81,6 +82,11 @@
       if (d.t === 'pause') { P.paused = !!d.on; this.paused = this.players.some((p) => p && p.paused); return; }
       if (d.t === 'ph') { MVPhoto.part(d, P); return; }
       if (d.t === 'phx') { MVPhoto.cancelled(P); return; }
+      // celular como mando: teclas (iguales al control remoto), deslizar, toque y giro
+      if (d.t === 'k') { const k = d.k, code = { Enter: 13, Escape: 27, Backspace: 8, ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40 }[k] || 0;
+        const ev = new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }); try { Object.defineProperty(ev, 'keyCode', { get: () => code }); } catch (e) {} ev.mvSlot = P.slot; dispatchEvent(ev); return; }
+      if (d.t === 'mando') { P.mando = !!d.on; return; }
+      if (d.t === 'sw' || d.t === 'tp' || d.t === 'tilt') { if (d.t === 'tilt') P.tilt = d.on ? [d.x, d.y] : null; for (const f of this.pads) try { f(d, P.slot); } catch (e) { console.error(e); } return; }
       if (d.t !== 'p' || !d.l) return;
       d.raw = d.l; d.l = cleanPose(P, d.l, typeof d.ts === 'number' ? d.ts : performance.now());
       P.lm = d.l; P.rx = performance.now(); P.ts = typeof d.ts === 'number' ? d.ts : P.rx;
@@ -153,6 +159,8 @@ html:not(.q0) .mvh-dim{backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6p
         '<div class="mvh-help">' + (opt.help || 'Con la cámara: levanta la mano, pásala por una opción y desliza por la flecha.<br>Con el control: flechas y OK.') + '</div>';
       this.items = opt.items; this.hov = -1; this.prog = 0; this.kbd = opt.focus || 0; this.pickT = 0;
       box.classList.add('on'); dim.classList.toggle('on', opt.dim !== false); this.open = true; this.paint();
+      // también con el dedo o el ratón (celular, tableta, PC)
+      this.opts().forEach((o, i) => { o.style.cursor = 'pointer'; o.onclick = () => { if (this.open) { this.kbd = i; this.pick(i); } }; });
     },
     close() { if (!built) return; box.classList.remove('on'); dim.classList.remove('on'); cur.classList.remove('on'); this.open = false; this.hov = -1; },
     opts() { return [...box.querySelectorAll('.mvh-opt')]; },

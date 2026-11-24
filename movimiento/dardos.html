@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Dardos · MiVibra Movimiento</title>
+</head>
+<body>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@2.0.4/dist/qrcode.js"></script>
+<script src="../mano.js"></script>
+<script type="importmap">{"imports":{"three":"../vendor/three-0.183.2/three.module.min.js","three/addons/":"../vendor/three-0.183.2/addons/"}}</script>
+<script type="module">
+import { startGame, THREE, E, clamp, lerp, rnd } from '../juego.js';
+
+// Dardos de salón: 5 rondas de 3 dardos; gana el que sume más. Diana grande de caricatura.
+const BZ = -4.4, BY = 1.73, BR = 0.675, LINE = -1.9;   // diana (centro y radio) y línea de tiro
+const RAD = (px) => px / 256 * BR;                    // radios de la textura → metros
+const NUMS = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5];
+function scoreAt(x, y) {
+  const dx = x, dy = y - BY, r = Math.hypot(dx, dy); if (r > RAD(200)) return { pts: 0, lbl: 'Afuera' };
+  if (r < RAD(10)) return { pts: 50, lbl: '¡DIANA!', bull: 2 }; if (r < RAD(22)) return { pts: 25, lbl: '¡25!', bull: 1 };
+  let a = Math.atan2(dx, dy) / (Math.PI * 2); a = (a + 1 + 0.025) % 1; const n = NUMS[Math.floor(a * 20) % 20];
+  if (r > RAD(190)) return { pts: n * 2, lbl: 'DOBLE ' + n, mult: 2 }; if (r > RAD(112) && r < RAD(120)) return { pts: n * 3, lbl: '¡TRIPLE ' + n + '!', mult: 3 };
+  return { pts: n, lbl: '' + n };
+}
+const G = { round: 0, ROUNDS: 5, turn: 0, dart: 0, sc: [0, 0], aim: new THREE.Vector2(0, BY), wob: 0, darts: [], fly: null, phase: 'aim', cpuT: 0 };
+let dartProto, aimRing;
+
+function makeDart(col) {
+  const g = new THREE.Group();
+  const b = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.17, 6), E.mat('#c9d1dc')); b.rotation.x = Math.PI / 2; g.add(b);
+  const t = new THREE.Mesh(new THREE.ConeGeometry(0.008, 0.07, 5), E.mat('#888888')); t.rotation.x = -Math.PI / 2; t.position.z = -0.12; g.add(t);
+  [0, Math.PI / 2].forEach((r) => { const f = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.003, 0.07), E.mat(col)); f.position.z = 0.1; f.rotation.z = r; g.add(f); });
+  return g;
+}
+
+const ctx = await startGame({
+  id: 'dardos', title: 'Dardos', kicker: 'MIVIBRA MOVIMIENTO · SALÓN', loading: 'Preparando el salón…', fov: 50,
+  sub: '5 rondas de 3 dardos. Gana quien sume más.', turns: true, startSound: 'campana',
+  how: 'Levanta la mano para apuntar y lanza el dardo hacia adelante.',
+  modes: [{ id: 'cpu', label: 'Contra MiVibra', icon: '▶' }, { id: 'two', label: '2 jugadores (por turnos)', icon: '⚔', two: true }],
+  orbit: { c: [0, 1.6, -3], r: 4.5, y: 2.4 },
+  async scene({ S }) { const r = E.seeded(7);
+    S.background = new THREE.Color('#2a1a12');
+    E.lights(S, { sky: '#fff1d6', ground: '#4a2a18', hemi: 1.5, sunI: 1.6, dir: [2, 8, 6] });
+    const fl = E.canvasTex(256, 256, (c) => { for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) { c.fillStyle = (i + j) % 2 ? '#3b2a6b' : '#ffd166'; c.fillRect(i * 32, j * 32, 32, 32); } }, [6, 6]);
+    E.plane(S, 20, 20, new THREE.MeshToonMaterial({ map: fl }));
+    const br = E.canvasTex(512, 256, (c, w, h) => { c.fillStyle = '#c4572f'; c.fillRect(0, 0, w, h); c.strokeStyle = '#8f3b1d'; c.lineWidth = 4; for (let y = 0; y < h; y += 32) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); for (let x = (y / 32) % 2 ? 0 : 32; x < w; x += 64) { c.beginPath(); c.moveTo(x, y); c.lineTo(x, y + 32); c.stroke(); } } }, [3, 2]);
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(20, 6), new THREE.MeshToonMaterial({ map: br })); wall.position.set(0, 3, -4.5); S.add(wall);
+    const dt = E.canvasTex(512, 512, (c, w) => { const cx = w / 2, R = 250; c.fillStyle = '#1b1b2a'; c.beginPath(); c.arc(cx, cx, R, 0, 7); c.fill();
+      for (let s = 0; s < 20; s++) { const a0 = (s - 0.5) / 20 * Math.PI * 2 - Math.PI / 2, a1 = a0 + Math.PI * 2 / 20;
+        [[200, 0], [190, 1], [120, 0], [112, 1]].forEach(([rr, ring]) => { c.fillStyle = ring ? (s % 2 ? '#06d6a0' : '#ff2e4d') : (s % 2 ? '#fff4d6' : '#1b1b2a'); c.beginPath(); c.moveTo(cx, cx); c.arc(cx, cx, rr, a0, a1); c.fill(); }); }
+      c.fillStyle = '#06d6a0'; c.beginPath(); c.arc(cx, cx, 22, 0, 7); c.fill(); c.fillStyle = '#ff2e4d'; c.beginPath(); c.arc(cx, cx, 10, 0, 7); c.fill();
+      c.fillStyle = '#fff'; c.font = 'bold 26px sans-serif'; c.textAlign = 'center'; NUMS.forEach((n, s) => { const a = s / 20 * Math.PI * 2 - Math.PI / 2; c.fillText(n, cx + Math.cos(a) * 225, cx + Math.sin(a) * 225 + 9); }); });
+    const board = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.06, 48), [E.mat('#1b1b2a'), new THREE.MeshBasicMaterial({ map: dt }), E.mat('#1b1b2a')]);
+    board.rotation.x = Math.PI / 2; board.position.set(0, BY, BZ); board.scale.set(1.35, 1, 1.35); S.add(board);
+    const cab = new THREE.Mesh(new THREE.BoxGeometry(1.9, 1.9, 0.1), E.mat('#6b3a1f')); cab.position.set(0, BY, BZ - 0.06); S.add(cab);
+    [-2, 0, 2].forEach((x) => { const l = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.3, 12, 1, true), new THREE.MeshToonMaterial({ color: '#06d6a0', side: THREE.DoubleSide })); l.position.set(x, 4.1, -2.5); S.add(l); const b = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), new THREE.MeshBasicMaterial({ color: '#fff6c4' })); b.position.set(x, 3.95, -2.5); S.add(b); });
+    const ln = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.01, 0.06), new THREE.MeshBasicMaterial({ color: '#ffffff' })); ln.position.set(0, 0.01, LINE + 0.25); S.add(ln);
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.1, 5), E.mat('#6b3a1f')); bar.position.set(-3.6, 0.55, -1.2); S.add(bar);
+    const top = new THREE.Mesh(new THREE.BoxGeometry(1, 0.08, 5.2), E.mat('#ffd166')); top.position.set(-3.6, 1.12, -1.2); S.add(top);
+    const spots = []; for (let i = 0; i < 7; i++) spots.push([-2.8, 0, -2.6 + i * 0.62, Math.PI / 2 - 0.5]);
+    for (let i = 0; i < 6; i++) spots.push([2.9, 0, -2.4 + i * 0.62, -Math.PI / 2 + 0.5]);
+    const fans = E.crowd(S, spots, { rnd: r });
+    // pizarra con el marcador (se redibuja)
+    const chalk = document.createElement('canvas'); chalk.width = chalk.height = 256; const chT = new THREE.CanvasTexture(chalk); chT.colorSpace = THREE.SRGBColorSpace;
+    const chm = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1), new THREE.MeshBasicMaterial({ map: chT })); chm.position.set(1.75, 1.8, -4.44); S.add(chm);
+    G.chalk = (rows) => { const c = chalk.getContext('2d'); c.fillStyle = '#1e3a2a'; c.fillRect(0, 0, 256, 256); c.strokeStyle = '#8a5a33'; c.lineWidth = 14; c.strokeRect(0, 0, 256, 256); c.fillStyle = '#fff'; c.font = 'bold 30px sans-serif'; rows.forEach((t, i) => { c.fillStyle = i === rows.length - 1 ? '#ffd166' : '#fff'; c.fillText(t, 22, 62 + i * 58); }); chT.needsUpdate = true; };
+    dartProto = makeDart('#06d6a0');
+    aimRing = new THREE.Mesh(new THREE.RingGeometry(0.045, 0.065, 28), new THREE.MeshBasicMaterial({ color: '#FFE600', transparent: true, opacity: 0.95, depthTest: false })); aimRing.renderOrder = 8; S.add(aimRing);
+    return { tick: (t) => fans.tick(t) };
+  },
+  setup(c) { c.P.forEach((p, k) => { p.av.scene.position.set(k ? -2.1 : 0.2, 0, k ? LINE + 1.4 : LINE); p.av.scene.rotation.y = Math.PI; }); },
+  frame(c, dt) {   // el que lanza va a la línea; el otro espera a un lado mirando
+    if (c.state !== 'play') return;
+    c.P.forEach((p, k) => { const me = k === G.turn, s = p.av.scene, tx = me ? 0.2 : -2.1, tz = me ? LINE : LINE + 1.4, d = Math.hypot(tx - s.position.x, tz - s.position.z);
+      s.position.x = lerp(s.position.x, tx, 1 - Math.exp(-dt * 3)); s.position.z = lerp(s.position.z, tz, 1 - Math.exp(-dt * 3));
+      s.rotation.y = lerp(s.rotation.y, me || d < 0.2 ? Math.PI : Math.PI * 0.75, 0.1); c.clip(k, d > 0.25 ? 'Walk' : 'Idle'); });
+  },
+  start(c) { G.round = 0; G.turn = 0; G.dart = 0; G.sc = [0, 0]; clearDarts(); score(); nextThrow(); },
+  update(c, dt) {
+    const k = G.turn, p = c.P[k];
+    if (G.phase === 'aim') {
+      G.wob += dt;
+      const lv = c.lvlK(), w = 0.035 * (1.6 - lv) + 0.01;
+      if (p.cpu) { G.cpuT -= dt; G.aim.lerp(G.cpuTarget, 1 - Math.exp(-dt * 3)); if (G.cpuT <= 0) throwDart(G.aim.x + rnd(-1, 1) * G.cpuErr, G.aim.y + rnd(-1, 1) * G.cpuErr, 0.7); }
+      else if (c.camOf(k)) { const B = c.body(k), W = B.wr.r.y > B.wr.l.y ? B.wr.r : B.wr.l;
+        if (W.y > -0.2) { G.aim.x = lerp(G.aim.x, clamp(W.x * 0.28, -0.7, 0.7), 0.25); G.aim.y = lerp(G.aim.y, BY + clamp((W.y - 0.4) * 0.3, -0.6, 0.6), 0.25); }
+        if (performance.now() - B.throwAt < 120 && !G.lock) { G.lock = true; throwDart(G.aim.x + B.throw.dx * 0.12, G.aim.y - B.throw.dy * 0.1, B.throw.pow); setTimeout(() => (G.lock = false), 800); } }
+      else { const sp = 0.8 * dt; if (c.held.has('ArrowLeft')) G.aim.x -= sp; if (c.held.has('ArrowRight')) G.aim.x += sp; if (c.held.has('ArrowUp')) G.aim.y += sp; if (c.held.has('ArrowDown')) G.aim.y -= sp; G.aim.x = clamp(G.aim.x, -0.8, 0.8); G.aim.y = clamp(G.aim.y, BY - 0.8, BY + 0.8); }
+      // el pulso tiembla un poco (menos en fácil)
+      aimRing.position.set(G.aim.x + Math.sin(G.wob * 2.1) * w, G.aim.y + Math.sin(G.wob * 2.9 + 1) * w, BZ + 0.05); aimRing.visible = !p.cpu;
+    } else aimRing.visible = false;
+    if (G.fly) { const F = G.fly; F.t += dt; const u = clamp(F.t / F.T, 0, 1);
+      F.d.position.lerpVectors(F.a, F.b, u); F.d.position.y += Math.sin(u * Math.PI) * F.arc; F.d.rotation.x = -0.15 + (0.5 - u) * 0.6;
+      if (u < 1) c.FX.trail(F.d.position, '#9fe8ff', 0.05); else landed(); }
+  },
+  pose(c, k, av, dt) {
+    const throwing = G.turn === k && c.state === 'play';
+    if (throwing && c.camOf(k)) { c.mirror(k, { arms: 1, spine: 0.5, head: 1 }); return; }
+    if (throwing) { const u = G.fly ? clamp(G.fly.t / 0.18, 0, 1) : 0, ready = G.phase === 'aim';
+      // mano junto a la oreja apuntando; al lanzar, el brazo se estira hacia la diana
+      const sh = c.sh(k, 'right'), f = new THREE.Vector3(0, 0, -1);
+      c.reach(k, 'right', ready ? sh.clone().add(new THREE.Vector3(0.02, 0.22, -0.05 + Math.sin(c.t * 3) * 0.01)) : sh.clone().add(new THREE.Vector3(0.02, 0.12 + u * 0.05, -0.15 - u * 0.3)), 1);
+      c.reach(k, 'left', c.sh(k, 'left').add(new THREE.Vector3(-0.08, -0.25, -0.18)), 0.8); }
+  },
+  camera(c) { const p = c.P[G.turn].av.scene.position; return [new THREE.Vector3(p.x + 0.75, 2.35, p.z + 2.9), new THREE.Vector3(p.x * 0.3, 1.5, BZ), 3]; },
+  key(c, key, ok) { if (G.phase === 'aim' && ok && !c.P[G.turn].cpu && !c.camOf(G.turn)) { const w = 0.035 * (1.6 - c.lvlK()) + 0.01; throwDart(aimRing.position.x + rnd(-1, 1) * w * 0.3, aimRing.position.y + rnd(-1, 1) * w * 0.3, 0.7); } },
+  touch(c, t, k) {
+    if (G.phase !== 'aim' || c.P[G.turn].cpu) return;
+    if (t.s === 'move' && !t.mando) { G.aim.x = clamp((t.x - 0.5) * 2.2, -0.8, 0.8); G.aim.y = clamp(BY + (0.45 - t.y) * 2.2, BY - 0.8, BY + 0.8); }
+    if (t.s === 'swipe' && t.dy < -0.05) { const pw = clamp(t.sp / 3, 0.2, 1.2); throwDart(G.aim.x + t.dx * 0.5, G.aim.y + (pw - 0.7) * 0.5, pw); }
+  },
+  photoSub: () => G.sc[0] + ' – ' + G.sc[1],
+});
+ctx.ui.touch([]);
+
+function clearDarts() { G.darts.forEach((d) => ctx.S.remove(d)); G.darts = []; }
+function score() {
+  const P = ctx.P; ctx.ui.score(ctx.ui.pl(0, G.sc[0]) + `<span class="tag">Ronda ${Math.min(G.round + 1, G.ROUNDS)}/${G.ROUNDS} · dardo ${G.dart + 1}/3</span>` + ctx.ui.pl(1, G.sc[1]));
+  G.chalk && G.chalk([P[0].name.slice(0, 8).toUpperCase() + '  ' + G.sc[0], P[1].name.slice(0, 8).toUpperCase() + '  ' + G.sc[1], 'RONDA ' + Math.min(G.round + 1, G.ROUNDS)]);
+}
+function nextThrow() {
+  const k = G.turn, p = ctx.P[k]; G.phase = 'aim'; G.wob = rnd(0, 6); G.aim.set(rnd(-0.1, 0.1), BY + rnd(-0.1, 0.1)); score();
+  if (p.cpu) { const lv = ctx.lvlK(); G.cpuT = rnd(1.1, 1.7); G.cpuErr = 0.17 * (1.25 - lv); G.cpuTarget = Math.random() < 0.7 ? new THREE.Vector2(0, BY + RAD(116)) : new THREE.Vector2(0, BY); }
+  else if (G.dart === 0) { ctx.ui.cue(p.name + ': ' + (ctx.camOf(k) ? 'levanta la mano, apunta y lanza' : ctx.TOUCH ? 'mueve el dedo para apuntar y desliza hacia arriba' : 'apunta con las flechas y OK para lanzar'), true); ctx.say(k, '¡Tu turno! Lanza', true); }
+  ctx.ui.keys(p.cpu ? '' : '← ↑ ↓ → apuntar · OK lanzar · Atrás: pausa');
+}
+function throwDart(x, y, pow) {
+  if (G.phase !== 'aim') return; G.phase = 'fly';
+  // fuerza: con poca se queda baja, con mucha sube
+  y += (pow - 0.7) * 0.25;
+  const d = dartProto.clone(); d.children[2].material = d.children[3].material = E.mat(ctx.P[G.turn].color); ctx.S.add(d); G.darts.push(d);
+  const a = ctx.hand(G.turn, 'right'); G.fly = { d, a, b: new THREE.Vector3(x, y, BZ + 0.13), t: 0, T: lerp(0.5, 0.32, clamp(pow, 0, 1)), arc: 0.18 };
+  ctx.sfx.play('swing');
+}
+function landed() {
+  const F = G.fly; G.fly = null; const r = scoreAt(F.b.x, F.b.y), k = G.turn;
+  if (r.pts === 0) { F.d.position.y -= 0.02; ctx.sfx.play('golpe'); ctx.FX.dust(F.d.position, '#c4572f', 6, 0.1); ctx.FX.pop(F.b.x, F.b.y + 0.3, BZ + 0.3, '¡UPS!', '#B9B1A8', 0.5); }
+  else { ctx.sfx.play('dardo'); ctx.FX.sparks(F.b, r.pts >= 40 ? 0.8 : 0.3, '#FFE9A8'); ctx.FX.ring(F.b.x, F.b.y, BZ + 0.08, r.mult === 3 || r.bull ? '#FFE600' : '#ffffff', 0.35, false); }
+  G.sc[k] += r.pts;
+  if (r.bull === 2) { ctx.FX.pop(0, BY + 0.55, BZ + 0.3, '¡DIANA!', '#FF2EA8', 0.9); ctx.FX.confetti([0, BY + 1, BZ + 1], false, 1); ctx.FX.shake(0.4); ctx.crowd('ole'); }
+  else if (r.mult === 3 && r.pts >= 45) { ctx.FX.pop(F.b.x, F.b.y + 0.35, BZ + 0.3, r.lbl, '#FFE600', 0.8); ctx.FX.stars(F.b, 6); ctx.crowd('aplausos'); }
+  else if (r.pts) ctx.FX.pop(F.b.x, F.b.y + 0.3, BZ + 0.3, '+' + r.pts, '#00E5FF', 0.45);
+  score(); G.phase = 'wait';
+  setTimeout(() => {
+    G.dart++;
+    if (G.dart >= 3) { G.dart = 0; const tot = G.darts.length; ctx.ui.cue(ctx.P[k].name + ' suma ' + G.sc[k] + ' puntos'); G.turn = 1 - G.turn; if (G.turn === 0) G.round++;
+      if (G.round >= G.ROUNDS) { const w = G.sc[0] === G.sc[1] ? 0 : G.sc[0] > G.sc[1] ? 0 : 1; score(); return ctx.end(w, G.sc[0] === G.sc[1] ? '¡Empate!' : ctx.P[w].cpu ? 'Gana MiVibra' : '¡Gana ' + ctx.P[w].name + '!', G.sc[0] + ' – ' + G.sc[1]); }
+      setTimeout(() => { clearDarts(); nextThrow(); }, 900); return; }
+    nextThrow();
+  }, 650);
+}
+</script>
+</body>
+</html>

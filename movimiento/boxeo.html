@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Boxeo · MiVibra Movimiento</title>
+</head>
+<body>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@2.0.4/dist/qrcode.js"></script>
+<script src="../mano.js"></script>
+<script type="importmap">{"imports":{"three":"../vendor/three-0.183.2/three.module.min.js","three/addons/":"../vendor/three-0.183.2/addons/"}}</script>
+<script type="module">
+import { startGame, THREE, E, clamp, lerp, rnd } from '../juego.js';
+
+// Boxeo de caricatura: 3 asaltos de 45 s. Golpea, cúbrete y esquiva. Gana por K.O. o por más energía al final.
+const FL = 1.01, ZA = [0.62, -0.62], ROUND_T = 45, ROUNDS = 3;
+const F = [0, 1].map(() => ({}));
+const G = { round: 1, t: ROUND_T, phase: 'fight', ko: -1 };
+const gloveCol = ['#ff2e4d', '#3a86ff'];
+
+const ctx = await startGame({
+  id: 'boxeo', title: 'Boxeo', kicker: 'MIVIBRA MOVIMIENTO · RING', loading: 'Armando el ring…', fov: 50,
+  sub: '3 asaltos. Golpea, cúbrete y esquiva: gana por K.O. o con más energía.', startSound: 'campana',
+  how: 'Lanza golpes rectos hacia el celular, sube los guantes a la cara para cubrirte y agáchate o muévete para esquivar.',
+  modes: [{ id: 'cpu', label: 'Contra MiVibra', icon: '▶' }, { id: 'two', label: '2 jugadores (2 celulares)', icon: '⚔', two: true }],
+  orbit: { c: [0, 1.8, 0], r: 6.5, y: 3.6 }, floorY: (p) => (Math.abs(p.x) < 3.5 && Math.abs(p.z) < 3.5 ? FL : 0),
+  onSound(c) { c.amb('estadio-ambiente', 0.15); },
+  async scene({ S }) {
+    const r = E.seeded(5);
+    S.background = new THREE.Color('#0d0a1e');
+    E.lights(S, { sky: '#fff2e0', ground: '#2a1a40', hemi: 1.3, sunI: 2.4, dir: [0, 14, 3] });
+    E.plane(S, 60, 60, '#1a1430', -0.02);
+    const base = new THREE.Mesh(new THREE.BoxGeometry(7.4, 1, 7.4), E.mat('#d62246')); base.position.y = 0.5; S.add(base);
+    const can = E.canvasTex(512, 512, (c, w, h) => { c.fillStyle = '#e9edf5'; c.fillRect(0, 0, w, h); c.fillStyle = '#3a86ff'; c.beginPath(); c.arc(w / 2, h / 2, 120, 0, 7); c.fill(); c.fillStyle = '#fff'; c.beginPath(); c.arc(w / 2, h / 2, 90, 0, 7); c.fill(); c.fillStyle = '#FF2EA8'; c.font = '900 64px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('MiVibra', w / 2, h / 2); });
+    const top = new THREE.Mesh(new THREE.PlaneGeometry(7, 7), new THREE.MeshToonMaterial({ map: can })); top.rotation.x = -Math.PI / 2; top.position.y = FL; S.add(top);
+    const cols = ['#ff4d6d', '#ffffff', '#3a86ff'], C = [[-3.4, -3.4], [3.4, -3.4], [3.4, 3.4], [-3.4, 3.4]];
+    C.forEach((p, i) => { const post = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 1.6, 8), E.mat(i % 2 ? '#3a86ff' : '#ff4d6d')); post.position.set(p[0], 1.8, p[1]); S.add(post); });
+    for (let rr = 0; rr < 3; rr++) for (let i = 0; i < 4; i++) { const a = C[i], b = C[(i + 1) % 4], len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, len, 6), E.mat(cols[rr])); rope.rotation.z = Math.PI / 2; rope.rotation.y = -Math.atan2(b[1] - a[1], b[0] - a[0]); rope.position.set((a[0] + b[0]) / 2, 1.3 + rr * 0.32, (a[1] + b[1]) / 2); S.add(rope); }
+    const beamM = new THREE.MeshBasicMaterial({ color: '#fff3c4', transparent: true, opacity: 0.08, depthWrite: false, side: THREE.DoubleSide });
+    [[-2.5, -2.5], [2.5, 2.5], [2.5, -2.5], [-2.5, 2.5]].forEach((p) => { const b = new THREE.Mesh(new THREE.ConeGeometry(2.4, 9, 16, 1, true), beamM); b.position.set(p[0] * 0.6, 5.5, p[1] * 0.6); S.add(b); const l = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.5, 0.4, 10), E.mat('#2b2b45', { emissive: '#fff3c4', emissiveIntensity: 0.6 })); l.position.set(p[0] * 0.6, 10, p[1] * 0.6); S.add(l); });
+    const spots = []; for (let ring = 0; ring < 7; ring++) { const R = 7 + ring * 0.7; for (let a2 = 0; a2 < Math.PI * 2; a2 += 0.62 / R) { if (r() > 0.88) continue; spots.push([Math.cos(a2) * R, ring * 0.45, Math.sin(a2) * R, -a2 - Math.PI / 2]); } }
+    const stepsG = []; for (let ring = 0; ring < 7; ring++) { const g = new THREE.CylinderGeometry(7.4 + ring * 0.7, 7.4 + ring * 0.7, 0.45 * (ring + 1), 40, 1, true); g.translate(0, 0.45 * (ring + 1) / 2 - 0.45, 0); stepsG.push(g); }
+    S.add(new THREE.Mesh(E.mergeGeometries(stepsG), new THREE.MeshToonMaterial({ color: '#2a2148', side: THREE.DoubleSide })));
+    const fans = E.crowdFlat(S, spots, { rnd: r, fog: '#0d0a1e', fogAmt: 0.035 });
+    return { tick: (t) => fans.tick(t) };
+  },
+  setup(c) {
+    c.P.forEach((p, k) => { p.av.scene.position.set(0, FL, ZA[k]); p.av.scene.rotation.y = k ? 0 : Math.PI;
+      ['left', 'right'].forEach((s) => { const g = new THREE.Mesh(new THREE.IcosahedronGeometry(0.1, 1), E.mat(gloveCol[k])); g.scale.set(1, 1.1, 1.25); c.hold(k, s, g); }); });
+  },
+  start(c) { G.round = 1; G.ko = -1; [0, 1].forEach((k) => Object.assign(F[k], { hp: 100, act: null, block: false, duck: 0, side: 0, stun: 0, cool: 0, ai: rnd(0.8, 1.6), hits: 0 })); newRound(); },
+  update(c, dt) {
+    if (G.phase !== 'fight') return;
+    G.t -= dt; if (G.t <= 0) return endRound();
+    [0, 1].forEach((k) => {
+      const f = F[k], o = F[1 - k]; f.cool -= dt; f.stun -= dt;
+      if (c.P[k].cpu) ai(c, k, dt);
+      else if (c.camOf(k)) { const B = c.body(k), now = performance.now();
+        f.block = B.wr.l.y > 0.05 && B.wr.r.y > 0.05 && Math.abs(B.wr.l.x) < 0.9 && Math.abs(B.wr.r.x) < 0.9 && B.handsGap < 1.2;
+        f.duck = lerp(f.duck, B.crouch, 0.3); f.side = lerp(f.side, clamp(B.x * 0.5 + B.lean * 0.4, -1, 1), 0.3);
+        ['l', 'r'].forEach((s) => { if (now - B.punch[s] < 90 && !f.block) punch(c, k, s === 'l' ? 'L' : 'R', B.punch.pow, B.punch.y > 0.6 ? 'U' : null); }); }
+      else { f.block = c.held.has('ArrowDown'); f.duck = lerp(f.duck, c.held.has('ArrowUp') ? 1 : 0, 0.3); f.side = lerp(f.side, 0, 0.2); }
+      // el golpe avanza; a mitad de camino se decide si pega
+      if (f.act) { f.act.t += dt; if (!f.act.done && f.act.t > 0.13) { f.act.done = true; land(c, k); } if (f.act.t > 0.32) f.act = null; }
+    });
+    hud();
+  },
+  pose(c, k, av, dt) {
+    const f = F[k]; if (!f || f.hp === undefined) return;
+    const s = av.scene, fwd = k ? 1 : -1;
+    c.clip(k, f.hp <= 0 ? 'Defeat' : 'Idle', f.hp <= 0 ? { loop: false } : undefined);
+    if (f.hp <= 0) return;
+    // esquivar: se agacha y se mueve de lado
+    s.position.y = FL - f.duck * 0.18; s.position.x = f.side * 0.35 * (k ? -1 : 1) * -1; s.position.z = ZA[k];
+    c.rot(k, 'spine', f.duck * 0.45, 0, -f.side * 0.25, 0.9);
+    if (f.stun > 0) c.rot(k, 'head', -0.3, 0, Math.sin(c.t * 30) * 0.2, 0.8);
+    if (c.camOf(k) && !f.act) { c.mirror(k, { arms: 1, spine: 0.4, head: 0.6 }); return; }
+    // guardia: guantes frente a la cara; cubriéndose, más arriba y juntos; golpeando, el brazo se estira a la cara del rival
+    ['left', 'right'].forEach((side) => {
+      const sh = c.sh(k, side), sx = side === 'left' ? 1 : -1, faceDir = new THREE.Vector3(0, 0, fwd);
+      let p = sh.clone().add(new THREE.Vector3(-sx * 0.1 * (k ? -1 : 1), f.block ? 0.2 : 0.12, 0)).addScaledVector(faceDir, f.block ? 0.16 : 0.2);
+      if (f.act && f.act.hand === (side === 'left' ? 'L' : 'R')) { const u = Math.sin(clamp(f.act.t / 0.3, 0, 1) * Math.PI), head = headPos(c, 1 - k);
+        if (f.act.up) head.y -= 0.15; p.lerp(head, u * 0.92); }
+      c.reach(k, side, p, 1);
+    });
+  },
+  camera(c) {
+    const me = c.P[1].cpu || !c.camOf(1) ? 0 : 0, s = c.P[me].av.scene.position, o = c.P[1 - me].av.scene.position;
+    if (G.phase === 'ko') return [new THREE.Vector3(o.x + 1.6, FL + 0.9, o.z + 0.4), new THREE.Vector3(o.x, FL + 0.3, o.z), 2];
+    return [new THREE.Vector3(s.x + 1.0, FL + 1.4, s.z + 2.1), new THREE.Vector3(o.x * 0.5 - 0.2, FL + 0.75, o.z), 4];
+  },
+  key(c, key, ok) { if (c.P[0].cpu) return; const k = 0;
+    if (key === 'ArrowLeft') punch(c, k, 'L', 0.7); if (key === 'ArrowRight' || ok) punch(c, k, 'R', 0.8); },
+  touch(c, t, k) { if (c.P[k].cpu) return;
+    if (t.s === 'tap') punch(c, k, t.x < 0.5 ? 'L' : 'R', 0.75);
+    if (t.s === 'swipe') { if (t.dy < -0.08 && Math.abs(t.dy) > Math.abs(t.dx)) punch(c, k, t.x < 0.5 ? 'L' : 'R', clamp(t.sp / 3, 0.5, 1), 'U');
+      else if (t.dy > 0.08) { F[k].block = true; setTimeout(() => (F[k].block = false), 700); }
+      else { F[k].side = t.dx > 0 ? 1 : -1; setTimeout(() => (F[k].side = 0), 500); } } },
+  photoSub: () => Math.round(F[0].hp) + ' – ' + Math.round(F[1].hp) + ' de energía',
+});
+ctx.ui.touch([{ label: '👊 Izq', key: 'ArrowLeft' }, { label: '🛡', key: 'ArrowDown' }, { label: '⤒', key: 'ArrowUp' }, { label: 'Der 👊', key: 'ArrowRight', ok: 1 }]);
+
+function headPos(c, k) { const a = c.P[k].av, h = new THREE.Vector3(); const b = a.humanoid.getRawBoneNode('head'); a.scene.updateMatrixWorld(true); if (b) b.getWorldPosition(h); h.y += 0.08; return h; }
+function punch(c, k, hand, pow, up) {
+  const f = F[k]; if (G.phase !== 'fight' || f.act || f.cool > 0 || f.stun > 0 || f.hp <= 0) return;
+  f.act = { hand, t: 0, pow: clamp(pow, 0.3, 1), up: up === 'U', done: false }; f.cool = 0.22; f.block = false; c.sfx.play('swing');
+}
+function land(c, k) {
+  const f = F[k], o = F[1 - k], a = f.act, head = headPos(c, 1 - k);
+  // si el rival esquivó (agachado o de lado), falla; si se cubre, pega poco
+  if (o.duck > 0.55 && !a.up || Math.abs(o.side) > 0.6) { c.sfx.play('swing'); c.FX.pop(head.x, head.y + 0.45, head.z, '¡FALLÓ!', '#B9B1A8', 0.4); return; }
+  let dmg = (a.up ? 14 : a.hand === 'R' ? 9 : 6) * (0.6 + a.pow * 0.6);
+  if (o.block) { dmg *= 0.2; c.sfx.play('golpe', 0.5); c.FX.sparks(head, 0.25, '#ffffff'); c.FX.pop(head.x, head.y + 0.4, head.z, '¡TAP!', '#00E5FF', 0.35); }
+  else { c.sfx.play('guante'); o.stun = 0.25 + a.pow * 0.25; f.hits++;
+    c.FX.stars(head, a.up ? 9 : 5); c.FX.sparks(head, a.pow, '#FFE9A8'); c.FX.ring(head.x, head.y, head.z, '#FFE600', 0.6, false); c.FX.shake(0.25 + a.pow * 0.4);
+    if (a.up || a.pow > 0.85) { c.FX.pop(head.x, head.y + 0.45, head.z, a.up ? '¡ZAS!' : ['¡POW!', '¡BAM!', '¡PUM!'][(Math.random() * 3) | 0], a.up ? '#FF2EA8' : '#FFE600', 0.6); c.FX.punch(4); } }
+  o.hp = Math.max(0, o.hp - dmg);
+  if (o.hp <= 0) ko(c, k);
+}
+function ai(c, k, dt) {
+  const f = F[k], o = F[1 - k], lv = c.lvlK();
+  f.ai -= dt; f.side = lerp(f.side, 0, 0.1);
+  // reacciona a golpes del rival: se cubre o esquiva (más seguido en difícil)
+  if (o.act && o.act.t < 0.05 && !f.react) { f.react = true; const r = Math.random(); if (r < 0.35 * lv) f.block = true; else if (r < 0.55 * lv) f.duck = 1; setTimeout(() => { f.block = false; f.duck = 0; f.react = false; }, 450); }
+  f.duck = lerp(f.duck, 0, 0.05);
+  if (f.ai <= 0 && !f.act) { f.ai = rnd(0.7, 1.6) / (0.6 + lv * 0.6); punch(c, k, Math.random() < 0.55 ? 'L' : 'R', rnd(0.4, 0.9) * (0.7 + lv * 0.3), Math.random() < 0.15 ? 'U' : null); }
+}
+function ko(c, k) {
+  G.phase = 'ko'; G.ko = k; const o = c.P[1 - k].av.scene.position;
+  c.FX.slow(1.2, 0.25); c.FX.flash('#ffffff', 0.5); c.FX.pop(o.x, FL + 1.5, o.z, '¡K.O.!', '#FF2EA8', 1.2); c.FX.shake(1); c.sfx.play('campana'); c.crowd('ole');
+  c.ui.big('¡K.O.!', c.P[k].name + ' gana', 2200);
+  setTimeout(() => c.end(k, c.P[k].cpu ? 'Gana MiVibra por K.O.' : '¡' + c.P[k].name + ' gana por K.O.!', 'Asalto ' + G.round), 2400);
+}
+function newRound() {
+  G.t = ROUND_T; G.phase = 'pre'; ctx.ui.big('ASALTO ' + G.round, '¡A pelear!', 1500); ctx.sfx.play('campana');
+  const hum = ctx.P.findIndex((p) => !p.cpu);
+  if (G.round === 1) ctx.ui.cue(ctx.camOf(0) ? 'Golpea hacia el celular · guantes a la cara = cubrirte · agáchate = esquivar' : ctx.TOUCH ? 'Toca izquierda/derecha para golpear · desliza arriba: gancho · abajo: cubrirte' : '← → golpes · ↓ cubrirte · ↑ agacharte', true, 5000);
+  ctx.ui.keys('← golpe izquierdo · → u OK golpe derecho · ↓ cubrirte · ↑ agacharte');
+  setTimeout(() => { G.phase = 'fight'; }, 1400); hud();
+}
+function endRound() {
+  G.phase = 'pre'; ctx.sfx.play('campana');
+  if (G.round >= ROUNDS) { const w = F[0].hp >= F[1].hp ? 0 : 1; return ctx.end(w, ctx.P[w].cpu ? 'Gana MiVibra por puntos' : '¡' + ctx.P[w].name + ' gana por puntos!', Math.round(F[0].hp) + ' – ' + Math.round(F[1].hp)); }
+  G.round++; [0, 1].forEach((k) => { F[k].hp = Math.min(100, F[k].hp + 12); }); ctx.ui.big('¡Descanso!', 'Recuperan un poco de energía', 1800); setTimeout(newRound, 2000);
+}
+function hud() {
+  const bar = (k) => `<span style="display:inline-block;width:120px;height:14px;border-radius:99px;background:rgba(255,255,255,.15);overflow:hidden;vertical-align:middle"><i style="display:block;height:100%;width:${F[k].hp}%;background:${F[k].hp > 35 ? 'linear-gradient(90deg,#7CFF4D,#FFE600)' : '#FF2EA8'}"></i></span>`;
+  ctx.ui.score(`<span class="pl"><i style="background:${gloveCol[0]}"></i>${ctx.P[0].name}</span>${bar(0)}<span class="tag">Asalto ${G.round} · ${Math.max(0, Math.ceil(G.t))} s</span>${bar(1)}<span class="pl"><i style="background:${gloveCol[1]}"></i>${ctx.P[1].name}</span>`);
+}
+</script>
+</body>
+</html>

@@ -42,6 +42,16 @@ button{font:inherit;cursor:pointer}
 #phImg{display:none;max-width:92vw;max-height:58vh;border-radius:16px;box-shadow:0 20px 50px rgba(0,0,0,.5)}
 #phBtns{display:none;gap:8px;width:min(420px,92vw)}
 #phFl{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:9}
+/* Mando: el celular como control (toques, deslizar y girar el teléfono) */
+#mando{position:fixed;inset:0;z-index:6;display:none;flex-direction:column;gap:12px;padding:calc(14px + env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom));background:linear-gradient(160deg,#2a1450,#14102a)}
+#mando.on{display:flex}
+#mando .hd{display:flex;align-items:center;gap:10px}#mando .hd b{font:800 18px 'Bricolage Grotesque',sans-serif;flex:1}
+#pad{flex:1;border-radius:28px;border:2px dashed rgba(255,255,255,.3);background:rgba(255,255,255,.06);display:grid;place-items:center;text-align:center;font-weight:800;color:#E4E6E8;touch-action:none;position:relative;overflow:hidden}
+#pad i{position:absolute;width:70px;height:70px;margin:-35px 0 0 -35px;border-radius:50%;background:radial-gradient(#FF2EA8,transparent 70%);pointer-events:none;opacity:0}
+#dpad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+#dpad button{height:58px;border-radius:18px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.12);color:#fff;font:900 22px sans-serif}
+#dpad button.ok{background:#FF2EA8;border-color:#FF2EA8}
+#dpad button:active{transform:scale(.95);background:rgba(255,255,255,.3)}
 </style>
 </head>
 <body>
@@ -50,9 +60,12 @@ button{font:inherit;cursor:pointer}
 <div class="msg glass" id="msg">Ponte de cuerpo entero frente al celular</div>
 <div class="bottom glass">
   <p>Apoya el celular de pie, a la altura de la cintura, a 2–3 m de ti. El video se procesa aquí: al TV solo llegan los puntos de tu cuerpo (y, si no la cancelas, una copia pequeña de la foto de celebración). Al cambiar de juego no tienes que volver a conectar.</p>
-  <div class="row"><button class="btn" id="flip">Cambiar cámara</button><button class="btn pri" id="pause">Pausa</button></div>
+  <div class="row"><button class="btn" id="flip">Cambiar cámara</button><button class="btn" id="mandoOn">Usar como mando</button><button class="btn pri" id="pause">Pausa</button></div>
 </div>
 <div id="ph"><div id="phT">¡Celebra!</div><div id="phN"></div><img id="phImg" alt="Foto de celebración"><div id="phBtns" class="row"><button class="btn pri" id="phSave">Guardar</button><button class="btn" id="phShare">Compartir</button><button class="btn" id="phClose">Listo</button></div><button class="btn" id="phX" style="flex:none;width:200px">No tomar foto</button></div><div id="phFl"></div>
+<div id="mando"><div class="hd"><b>Mando MiVibra</b><button class="btn" id="tilt" style="flex:0 0 auto;padding:0 14px">Girar: no</button><button class="btn pri" id="mandoOff" style="flex:0 0 auto;padding:0 14px">Cámara</button></div>
+  <div id="pad"><i id="padDot"></i><span>Toca para OK · desliza para lanzar,<br>patear o golpear (rápido = más fuerte)</span></div>
+  <div id="dpad"><button data-k="Escape">❚❚</button><button data-k="ArrowUp">▲</button><button data-k="Backspace">↩</button><button data-k="ArrowLeft">◀</button><button data-k="Enter" class="ok">OK</button><button data-k="ArrowRight">▶</button><span></span><button data-k="ArrowDown">▼</button><span></span></div></div>
 <div id="start"><div class="card glass">
   <small>MIVIBRA MOVIMIENTO</small>
   <h1>Celular como cámara</h1>
@@ -244,7 +257,7 @@ function loop() {
     draw(lm, v.videoWidth, v.videoHeight);
     if (frames % 10 === 0) check(lm);
     LUZ.measure(v, lm, now);
-    if (conn && conn.open && now - lastSend > 30) {
+    if (conn && conn.open && !mando && now - lastSend > 30) {
       lastSend = now;
       // Se manda espejado si es la cámara frontal: así tu derecha es la derecha del avatar
       conn.send(lm ? { t: 'p', v: 2, ts: Math.round(performance.now()), m: facing === 'user' ? 1 : 0, l: KEEP.map((i) => [+lm[i].x.toFixed(3), +lm[i].y.toFixed(3), +lm[i].visibility.toFixed(2)]), w: wl ? KEEP.map((i) => [+wl[i].x.toFixed(3), +wl[i].y.toFixed(3), +wl[i].z.toFixed(3)]) : undefined } : { t: 'p', l: null });
@@ -271,6 +284,30 @@ $('go').onclick = async () => {
   }
 };
 $('flip').onclick = async () => { facing = facing === 'user' ? 'environment' : 'user'; try { await camera(); } catch (e) { msg('No se pudo cambiar de cámara'); } };
+// ---- Mando ----
+let mando = false, tiltOn = false;
+const msend = (o) => { try { if (conn && conn.open) conn.send(o); } catch (e) {} };
+const buzz = (ms) => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} };
+$('mandoOn').onclick = () => { mando = true; $('mando').classList.add('on'); msend({ t: 'mando', on: true }); };
+$('mandoOff').onclick = () => { mando = false; $('mando').classList.remove('on'); msend({ t: 'mando', on: false }); };
+document.querySelectorAll('#dpad button').forEach((b) => b.addEventListener('pointerdown', (e) => { e.preventDefault(); buzz(12); msend({ t: 'k', k: b.dataset.k }); }));
+(() => { const pad = $('pad'), dot = $('padDot'); let st = null, pts = [];
+  const pos = (e) => { const r = pad.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]; };
+  pad.addEventListener('pointerdown', (e) => { pad.setPointerCapture(e.pointerId); const p = pos(e); st = { p, t: performance.now() }; pts = [[p[0], p[1], st.t]]; msend({ t: 'tp', s: 'down', x: p[0], y: p[1] }); dot.style.opacity = 1; dot.style.left = p[0] * 100 + '%'; dot.style.top = p[1] * 100 + '%'; });
+  pad.addEventListener('pointermove', (e) => { if (!st) return; const p = pos(e), now = performance.now(); pts.push([p[0], p[1], now]); pts = pts.filter((q) => now - q[2] < 160); dot.style.left = p[0] * 100 + '%'; dot.style.top = p[1] * 100 + '%'; msend({ t: 'tp', s: 'move', x: p[0], y: p[1] }); });
+  pad.addEventListener('pointerup', (e) => { if (!st) return; const p = pos(e), now = performance.now(), o = pts[0] || [p[0], p[1], st.t], dt = Math.max(16, now - o[2]) / 1000;
+    const dx = p[0] - st.p[0], dy = p[1] - st.p[1], vx = (p[0] - o[0]) / dt, vy = (p[1] - o[1]) / dt; dot.style.opacity = 0;
+    if (Math.hypot(dx, dy) < 0.04 && now - st.t < 350) { buzz(12); msend({ t: 'k', k: 'Enter' }); }
+    else { buzz(25); msend({ t: 'sw', dx, dy, vx, vy, sp: Math.hypot(vx, vy), x: p[0], y: p[1] }); }
+    msend({ t: 'tp', s: 'up', x: p[0], y: p[1] }); st = null; });
+})();
+$('tilt').onclick = async () => {
+  if (!tiltOn && window.DeviceOrientationEvent && DeviceOrientationEvent.requestPermission) { try { if ((await DeviceOrientationEvent.requestPermission()) !== 'granted') return; } catch (e) { return; } }
+  tiltOn = !tiltOn; $('tilt').textContent = 'Girar: ' + (tiltOn ? 'sí' : 'no'); if (!tiltOn) msend({ t: 'tilt', on: false });
+};
+let tiltAt = 0;
+addEventListener('deviceorientation', (e) => { if (!tiltOn || !mando) return; const now = performance.now(); if (now - tiltAt < 50) return; tiltAt = now;
+  msend({ t: 'tilt', on: true, x: Math.max(-1, Math.min(1, (e.gamma || 0) / 35)), y: Math.max(-1, Math.min(1, ((e.beta || 0) - 35) / 35)) }); });
 $('pause').onclick = () => { paused = !paused; $('pause').textContent = paused ? 'Seguir' : 'Pausa'; if (conn && conn.open) conn.send({ t: 'pause', on: paused }); };
 $('phX').onclick = () => { photoX = true; };
 $('phClose').onclick = () => { $('ph').classList.remove('on'); };
