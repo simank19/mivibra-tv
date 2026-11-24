@@ -72,7 +72,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { loadAnims, Animator } from '../anim.js';
 import { build as buildAvatar, decode as decodeAvatar, DEFAULT, PRESETS } from '../avatar.js';
-import { Espejo, celebrate, facesCam, snapCanvas, portraitSnap } from '../espejo.js';
+import { Espejo, celebrate, facesCam, snapCanvas, portraitSnap, reachArm, sad, headOf } from '../espejo.js';
 import { createFX } from '../fx.js';
 
 const $ = (id) => document.getElementById(id);
@@ -512,6 +512,9 @@ function endGame(after) {
     G.state = 'end'; CEL.t = 0; CEL.style = null; let wi = 0, title, sub;
     if (G.np > 1) { const t = PL.slice(0, G.np).map((p) => scores(p.rolls)[9] || 0); wi = t.indexOf(Math.max(...t)); setCur(wi); title = '¡Gana ' + PL[wi].name + '!'; sub = 'Bolos · ' + t[wi] + ' puntos'; }
     else { const tot = scores()[9] || 0; title = tot >= 120 ? '¡Juegazo!' : '¡Buen juego!'; sub = 'Bolos · ' + tot + ' puntos'; }
+    // si ganó la máquina: tu avatar triste con lágrimas (sin fiesta ni foto)
+    G.cpuWon = !!(PL[wi] && PL[wi].cpu);
+    if (G.cpuWon) { setCur(0); big('Gana MiVibra', '¡La próxima es tuya!', 2600); drawScore(); SND.play && SND.play('abucheo'); { const h = headOf(av); FXC.pop(h.x, h.y + 0.55, h.z, '¡BUAAA!', '#5ec8ff', 0.7); } setTimeout(() => endGame(true), 3800); return; }
     big(title, '¡Celebra! Tu avatar baila contigo', 2600); drawScore();
     { const p = av ? av.scene.position : { x: 0, y: 0, z: 2 }; FXC.party([p.x, 0.3, p.z - 1.5], '¡GENIAL!', '#FFE600'); setTimeout(() => FXC.fireworks([p.x, 0.5, p.z - 6], 6, 3, 3), 900); }
     const slot = MVLink.players[PL[wi].slot] ? PL[wi].slot : MVLink.players.findIndex(Boolean);
@@ -604,7 +607,8 @@ function loop(now) {
     // celebrando (chuza, spare o fin del juego): el avatar se voltea hacia ti y celebra contigo (o baila solo)
     G.cel = Math.max(0, (G.cel || 0) - dt); const celeb = G.cel > 0 || G.state === 'end' || G.state === 'menu';
     av.scene.rotation.y = lerp(av.scene.rotation.y, celeb ? 0.15 : Math.PI, 1 - Math.exp(-dt * 5));
-    if (celeb) { if (av.anim) { av.anim.play('Idle', { fade: 0.3 }); av.anim.update(dt); } celebrate(av, dt, myEJ(), CEL, facesCam(av.scene, cam)); }
+    if (G.state === 'end' && G.cpuWon) { if (av.anim) { av.anim.play('Idle', { fade: 0.3 }); av.anim.update(dt); } sad(av, dt, CEL); CEL.tt = (CEL.tt || 0) - dt; if (CEL.tt <= 0) { CEL.tt = 0.11; const h = headOf(av), f = new THREE.Vector3(0, 0, 1).applyQuaternion(av.scene.getWorldQuaternion(new THREE.Quaternion())); FXC.tears([h.x, h.y, h.z], [f.x, f.y, f.z]); CEL.bu = (CEL.bu || 0.8) - 0.11; if (CEL.bu <= 0) { CEL.bu = 1.8; FXC.pop(h.x, h.y + 0.5, h.z, '¡SNIF!', '#5ec8ff', 0.55); } } }
+    else if (celeb) { if (av.anim) { av.anim.play('Idle', { fade: 0.3 }); av.anim.update(dt); } celebrate(av, dt, myEJ(), CEL, facesCam(av.scene, cam)); }
     else {
       // de pie (apuntando, en el menú o mirando los pinos): animación natural + lo que hagas frente al celular
       const natural = av.anim && (G.state === 'aim' || G.state === 'menu' || G.state === 'load' || (G.state === 'sweep' && G.t > 1.2));

@@ -54,7 +54,7 @@ small{display:block;font-size:11px;letter-spacing:.2em;font-weight:800;color:#D6
 import * as THREE from 'three';
 import { loadAnims, Animator } from '../anim.js';
 import { build as buildAvatar, decode as decodeAvatar, DEFAULT, PRESETS } from '../avatar.js';
-import { Espejo, celebrate, facesCam, portraitSnap, reachArm } from '../espejo.js';
+import { Espejo, celebrate, facesCam, portraitSnap, reachArm, sad, headOf } from '../espejo.js';
 import { createFX } from '../fx.js';
 import { makeSound } from '../sonido.js';
 import * as E from '../estilo.js';
@@ -217,10 +217,15 @@ function point(w) {
 }
 function resetPositions() { PL.forEach((p) => { p.tx = p.i ? 1.8 : -1.8; p.tz = (p.team ? -1 : 1) * 4.5; }); }
 function drawScore() { [0, 1].forEach((k) => { $('p' + k).textContent = G.sc[k]; $('s' + k).classList.toggle('on', G.serveTeam === k && G.state !== 'end'); $('c' + k).style.background = k ? '#8E5CF7' : '#FF6A3D'; }); $('n0').textContent = G.two ? 'J1 y J2' : 'Tu equipo'; }
+
+// cuando gana la máquina: tu avatar triste con lágrimas de cómic (sin fiesta ni foto)
+function sadT(a, dt, st) { sad(a, dt, st); st.tt = (st.tt || 0) - dt; if (st.tt <= 0) { st.tt = 0.11; const h = headOf(a), f = new THREE.Vector3(0, 0, 1).applyQuaternion(a.scene.getWorldQuaternion(new THREE.Quaternion())); FXC.tears([h.x, h.y, h.z], [f.x, f.y, f.z]); st.bu = (st.bu || 0.8) - 0.11; if (st.bu <= 0) { st.bu = 1.8; FXC.pop(h.x, h.y + 0.5, h.z, ['¡BUAAA!', '¡SNIF!'][(Math.random() * 2) | 0], '#5ec8ff', 0.55); } } }
 function endGame() {
   G.state = 'end'; MVHand.pauseEnabled = false; const w = G.sc[0] > G.sc[1] ? 0 : 1; G.win = w;
   teamOf(w).forEach((p) => { CELS[PL.indexOf(p)].t = 0; });
   const title = w === 0 ? '¡Ganó tu equipo!' : 'Gana MiVibra';
+  G.cpuWon = w === 1 && !teamOf(1).some((p) => isHuman(p));
+  if (G.cpuWon) { big(title, '¡La próxima es tuya!', 2400); SND.play('abucheo', 0.6); const me = PL[0].av; if (me) { const h = headOf(me); FXC.pop(h.x, h.y + 0.55, h.z, '¡BUAAA!', '#5ec8ff', 0.7); } setTimeout(endMenu, 3800); return; }
   big(title, '¡Celebra! Tu avatar baila contigo', 2400); SND.play('ovacion'); SND.play('aplausos', 0.7, 1, 1);
   { const a = teamOf(w)[0].av ? teamOf(w)[0].av.scene.position : { x: 0, y: 0, z: 0 }; FXC.party([a.x, 0.3, a.z], w === 0 ? '¡GANAMOS!' : '¡BIEN!', '#FFE600'); setTimeout(() => FXC.fireworks([0, 0, -10], 6, 8, 7), 900); }
   const hs = PL.filter((p) => isHuman(p) && MVLink.players[p.slot]).map((p) => p.slot);
@@ -269,7 +274,8 @@ function frameScene(dt, now) {
     const face = p.team === 0 ? Math.PI : 0;
     a.scene.rotation.y = lerp(a.scene.rotation.y, party && p.team === 0 ? 0.2 : face, 0.12);
     if (a.anim) { if (p.act !== 'spike') a.anim.play(p.mv ? 'Run' : 'Idle', { fade: 0.2, speed: p.mv ? 0.9 : 1 }); a.anim.update(dt); }
-    if (party) celebrate(a, dt, camOn(p) ? EJ[p.slot] : null, CELS[k], facesCam(a.scene, cam));
+    if (G.state === 'end' && G.cpuWon && p.team === 0) { a.scene.rotation.y = 0; sadT(a, dt, CELS[k]); }
+    else if (party) celebrate(a, dt, camOn(p) ? EJ[p.slot] : null, CELS[k], facesCam(a.scene, cam));
     else {
       if (camOn(p)) EJ[p.slot].apply(a, dt, { arms: 1, spine: 0.6, head: 1 }, facesCam(a.scene, cam));
       // contacto con la bola: brazos juntos abajo (recibir), arriba (colocar) o un brazo arriba (rematar)
@@ -292,7 +298,7 @@ function frameScene(dt, now) {
 function camera(dt) {
   let p, l;
   if (G.state === 'menu' || G.state === 'load') { const a = performance.now() / 8000; p = new THREE.Vector3(Math.sin(a) * 15, 5, Math.cos(a) * 15); l = new THREE.Vector3(0, 1, 0); }
-  else if (G.state === 'end') { const s = PL[G.win === 0 ? 0 : 2].av.scene.position; p = new THREE.Vector3(s.x + 0.8, 1.7, s.z + (G.win === 0 ? -3.4 : 3.4)); l = new THREE.Vector3(s.x, 1.0, s.z); }
+  else if (G.state === 'end') { const s = PL[G.win === 0 || G.cpuWon ? 0 : 2].av.scene.position; p = new THREE.Vector3(s.x + 0.8, 1.7, s.z + (G.win === 0 ? -3.4 : 3.4)); l = new THREE.Vector3(s.x, 1.0, s.z); }
   else { const bx = ball.position.x; p = new THREE.Vector3(bx * 0.25, 5.0, 13.2); l = new THREE.Vector3(bx * 0.2, 0.9, -1.2); }
   const k = 1 - Math.exp(-dt * 2.5); cam.position.lerp(p, k); cam.userData.l = (cam.userData.l || l.clone()).lerp(l, k); cam.lookAt(cam.userData.l);
 }
@@ -352,7 +358,7 @@ MVLink.onChange = () => { if (G.state === 'menu' && MVHand.open) startMenu(); };
 setTimeout(() => { if (MVLink.code) { $('code').textContent = MVLink.code; const q = MVLink.qr(5); if (q) $('qr').src = q; } }, 400);
 requestAnimationFrame(loop);
 loadAvatars().then(() => { $('loading').style.display = 'none'; drawScore(); startMenu(); }).catch((e) => { console.error(e); $('loading').textContent = 'No se pudo cargar el avatar'; });
-window.MVV = { G, PL, pick: (id) => { MVHand.close(); menuPick(id); } };
+window.MVV = { G, PL, end: () => endGame(), pick: (id) => { MVHand.close(); menuPick(id); } };
 </script>
 </body>
 </html>

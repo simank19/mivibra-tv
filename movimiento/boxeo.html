@@ -59,7 +59,7 @@ const ctx = await startGame({
       if (c.P[k].cpu) ai(c, k, dt);
       else if (c.camOf(k)) { const B = c.body(k), now = performance.now();
         f.block = B.wr.l.y > 0.05 && B.wr.r.y > 0.05 && Math.abs(B.wr.l.x) < 0.9 && Math.abs(B.wr.r.x) < 0.9 && B.handsGap < 1.2;
-        f.duck = lerp(f.duck, B.crouch, 0.3); f.side = lerp(f.side, clamp(B.x * 0.5 + B.lean * 0.4, -1, 1), 0.3);
+        f.duck = lerp(f.duck, clamp(B.crouch * 1.3, 0, 1), 0.35); f.side = lerp(f.side, clamp(B.x * 0.95 + B.lean * 0.8, -1.4, 1.4), 0.35);
         ['l', 'r'].forEach((s) => { const e = B.take('punch' + s); if (e && !f.block) punch(c, k, s === 'l' ? 'L' : 'R', e.pow, e.y > 0.6 ? 'U' : null); }); }
       else { f.block = c.held.has('ArrowDown'); f.duck = lerp(f.duck, c.held.has('ArrowUp') ? 1 : 0, 0.3); f.side = lerp(f.side, 0, 0.2); }
       // el golpe avanza; a mitad de camino se decide si pega
@@ -73,8 +73,16 @@ const ctx = await startGame({
     c.clip(k, f.hp <= 0 ? 'Defeat' : 'Idle', f.hp <= 0 ? { loop: false } : undefined);
     if (f.hp <= 0) return;
     // esquivar: se agacha y se mueve de lado
-    s.position.y = FL - f.duck * 0.18; s.position.x = f.side * 0.35 * (k ? -1 : 1) * -1; s.position.z = ZA[k];
-    c.rot(k, 'spine', f.duck * 0.45, 0, -f.side * 0.25, 0.9);
+    const t = c.t + k * 0.7, d = f.duck, bounce = d < 0.3 && !f.stun ? Math.abs(Math.sin(t * 6.5)) * 0.035 : 0;
+    s.position.y = FL + bounce; s.position.x = f.side * 0.45 * (k ? 1 : -1); s.position.z = ZA[k];
+    // rodillas dobladas (más al agacharse) y cadera que baja
+    const kn = 0.18 + d * 0.75;
+    c.rot(k, 'leftUpperLeg', -kn, 0, 0, 0.9); c.rot(k, 'rightUpperLeg', -kn, 0, 0, 0.9); c.rot(k, 'leftLowerLeg', kn * 1.9, 0, 0, 0.9); c.rot(k, 'rightLowerLeg', kn * 1.9, 0, 0, 0.9);
+    c.rot(k, 'leftFoot', -kn * 0.9, 0, 0, 0.9); c.rot(k, 'rightFoot', -kn * 0.9, 0, 0, 0.9);
+    const hp = av.humanoid.getNormalizedBoneNode('hips'); if (hp) hp.position.y -= (0.04 + d * 0.22);
+    // guardia de perfil, vaivén (bob & weave) y el tronco que acompaña el golpe
+    const punchTw = f.act ? Math.sin(clamp(f.act.t / 0.3, 0, 1) * Math.PI) * (f.act.hand === 'R' ? 0.45 : -0.3) : 0;
+    c.rot(k, 'spine', 0.12 + d * 0.5, 0.22 + punchTw, -f.side * 0.3 + Math.sin(t * 2.3) * 0.07, 0.9);
     if (f.stun > 0) c.rot(k, 'head', -0.3, 0, Math.sin(c.t * 30) * 0.2, 0.8);
     if (c.camOf(k) && !f.act) { c.mirror(k, { arms: 1, spine: 0.4, head: 0.6 }); return; }
     // guardia: guantes frente a la cara; cubriéndose, más arriba y juntos; golpeando, el brazo se estira a la cara del rival
@@ -105,12 +113,12 @@ ctx.ui.touch([{ label: '👊 Izq', key: 'ArrowLeft' }, { label: '🛡', key: 'Ar
 function headPos(c, k) { const a = c.P[k].av, h = new THREE.Vector3(); const b = a.humanoid.getRawBoneNode('head'); a.scene.updateMatrixWorld(true); if (b) b.getWorldPosition(h); h.y += 0.08; return h; }
 function punch(c, k, hand, pow, up) {
   const f = F[k]; if (G.phase !== 'fight' || f.act || f.cool > 0 || f.stun > 0 || f.hp <= 0) return;
-  f.act = { hand, t: 0, pow: clamp(pow, 0.3, 1), up: up === 'U', done: false }; f.cool = 0.22; f.block = false; c.sfx.play('swing');
+  f.act = { hand, t: 0, pow: clamp(pow, 0.3, 1), up: up === 'U', done: false, os: F[1 - k].side, od: F[1 - k].duck }; f.cool = 0.22; f.block = false; c.sfx.play('swing');
 }
 function land(c, k) {
   const f = F[k], o = F[1 - k], a = f.act, head = headPos(c, 1 - k);
   // si el rival esquivó (agachado o de lado), falla; si se cubre, pega poco
-  if (o.duck > 0.55 && !a.up || Math.abs(o.side) > 0.6) { c.sfx.play('swing'); c.FX.pop(head.x, head.y + 0.45, head.z, '¡FALLÓ!', '#B9B1A8', 0.4); return; }
+  if ((o.duck > 0.55 && !a.up) || Math.abs(o.side - a.os) > 0.35 || (o.duck - a.od > 0.3 && !a.up)) { c.sfx.play('swing'); c.FX.pop(head.x, head.y + 0.45, head.z, '¡FALLÓ!', '#B9B1A8', 0.4); return; }
   let dmg = (a.up ? 14 : a.hand === 'R' ? 9 : 6) * (0.6 + a.pow * 0.6);
   if (o.block) { dmg *= 0.2; c.sfx.play('golpe', 0.5); c.FX.sparks(head, 0.25, '#ffffff'); c.FX.pop(head.x, head.y + 0.4, head.z, '¡TAP!', '#00E5FF', 0.35); }
   else { c.sfx.play('guante'); o.stun = 0.25 + a.pow * 0.25; f.hits++;
@@ -121,9 +129,9 @@ function land(c, k) {
 }
 function ai(c, k, dt) {
   const f = F[k], o = F[1 - k], lv = c.lvlK();
-  f.ai -= dt; f.side = lerp(f.side, 0, 0.1);
+  f.ai -= dt; f.mv = (f.mv || 0) - dt; if (f.mv <= 0) { f.mv = rnd(0.6, 1.5); f.tside = rnd(-0.7, 0.7); } f.side = lerp(f.side, f.tside || 0, 0.06);
   // reacciona a golpes del rival: se cubre o esquiva (más seguido en difícil)
-  if (o.act && o.act.t < 0.05 && !f.react) { f.react = true; const r = Math.random(); if (r < 0.35 * lv) f.block = true; else if (r < 0.55 * lv) f.duck = 1; setTimeout(() => { f.block = false; f.duck = 0; f.react = false; }, 450); }
+  if (o.act && o.act.t < 0.05 && !f.react) { f.react = true; const r = Math.random(); if (r < 0.35 * lv) f.block = true; else if (r < 0.55 * lv) f.duck = 1; else if (r < 0.75 * lv) f.tside = (f.side > 0 ? -1 : 1) * 1.1, f.side += (f.tside - f.side) * 0.8; setTimeout(() => { f.block = false; f.duck = 0; f.react = false; }, 450); }
   f.duck = lerp(f.duck, 0, 0.05);
   if (f.ai <= 0 && !f.act) { f.ai = rnd(0.7, 1.6) / (0.6 + lv * 0.6); punch(c, k, Math.random() < 0.55 ? 'L' : 'R', rnd(0.4, 0.9) * (0.7 + lv * 0.3), Math.random() < 0.15 ? 'U' : null); }
 }

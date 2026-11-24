@@ -108,7 +108,9 @@ export function bodyReader() {
     if (Math.max(sp(pt.w5, o.w5), sp(pt.w6, o.w6)) > 3.2) B.actAt = performance.now();
     const k11 = pt.a11 && o.a11 ? (o.a11[1] - pt.a11[1]) / dt : 0, k12 = pt.a12 && o.a12 ? (o.a12[1] - pt.a12[1]) / dt : 0;
     const kk = Math.max(k11, k12);
-    if (kk > 2.2 && performance.now() - B.kickAt > 700) { B.kickAt = performance.now(); B.kickPow = Math.min(1, (kk - 2.2) / 4 + 0.35); const f = k11 > k12 ? pt.a11 : pt.a12, of = k11 > k12 ? o.a11 : o.a12; B.kickSide = (of[0] - f[0]) * 6; }
+    if (kk > 2.2 && performance.now() - B.kickAt > 700) { B.kickAt = performance.now(); B.kickPow = Math.min(1, (kk - 2.2) / 4 + 0.35); const f = k11 > k12 ? pt.a11 : pt.a12, of = k11 > k12 ? o.a11 : o.a12; // dirección: hacia dónde va el pie (movimiento lateral en anchos de hombro) + cuánto cruza el pie respecto a la cadera + la inclinación
+      const hx = v(7) && v(8) ? (l[7][0] + l[8][0]) / 2 : shX, foot0 = k11 > k12 ? -0.35 : 0.35, across = (hx - f[0]) / sw - foot0;
+      B.kickSide = Math.max(-1.8, Math.min(1.8, ((of[0] - f[0]) / sw) * 1.4 + across * 0.9 + B.lean * 0.6)); }
   };
   B.recenter = () => { B.sh0 = null; B.hip0 = null; };
   return B;

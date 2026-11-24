@@ -65,10 +65,23 @@ const ctx = await startGame({
     const k = G.turn, p = c.P[k];
     if (G.phase === 'aim') {
       if (p.cpu) { const C = G.cpu; C.t += dt; G.draw = clamp(C.t / 1.4, 0, 1); G.yaw = lerp(G.yaw, C.yaw, 0.05); G.pitch = lerp(G.pitch, C.pitch, 0.05); if (C.t > 2.3) shoot(); }
-      else if (c.camOf(k)) { const B = c.body(k), b = B.bow;
-        if (b.up) { G.draw = lerp(G.draw, b.draw, 0.3); G.pitch = lerp(G.pitch, 0.035 + b.aimY * 0.09, 0.15); G.yaw = lerp(G.yaw, clamp(B.lean * 0.12 + B.x * 0.02, -0.12, 0.12), 0.15); G.wasDrawn = G.wasDrawn || G.draw > 0.6;
-          if (G.wasDrawn && (b.pullSp > 3.2 || G.draw < 0.35)) shoot(); }
-        else if (G.wasDrawn && G.draw > 0.45) shoot(); else G.draw = lerp(G.draw, 0, 0.1); }
+      else if (c.camOf(k)) { const B = c.body(k), L = B.wr.l, R = B.wr.r, A = G.ba || (G.ba = {});
+        if (!A.side) {
+          // el brazo del arco: el que está estirado (de lado o hacia la pantalla) a la altura del hombro; la otra mano, cerca de la cara
+          const dl = Math.hypot(L.x, L.y - 0.3), dr = Math.hypot(R.x, R.y - 0.3), ext = dl > dr ? 'l' : 'r', e = B.wr[ext], pl = B.wr[ext === 'l' ? 'r' : 'l'];
+          const extOk = Math.abs(e.y) < 1.2 && (Math.max(dl, dr) > 1.05 || (e.z != null && pl.z != null && pl.z - e.z > 0.25)), pullOk = Math.hypot(pl.x, pl.y - 0.3) < 1.0;
+          if (extOk && pullOk) { A.hold = (A.hold || 0) + dt; if (A.hold > 0.25) { A.side = ext; A.x0 = e.x; A.y0 = e.y; A.px = pl.x; A.py = pl.y; c.sfx.play('click'); } } else A.hold = 0;
+          G.draw = lerp(G.draw, 0, 0.1);
+        } else {
+          // apuntas moviendo el brazo estirado (izquierda/derecha y arriba/abajo); sueltas con la otra mano
+          const e = B.wr[A.side], pl = B.wr[A.side === 'l' ? 'r' : 'l'];
+          G.draw = clamp(G.draw + dt * 1.3, 0, 1);
+          G.yaw = lerp(G.yaw, clamp((e.x - A.x0) * 0.07, -0.2, 0.2), 0.2);
+          G.pitch = lerp(G.pitch, clamp(0.035 + (e.y - A.y0) * 0.05, -0.05, 0.25), 0.2);
+          const moved = Math.hypot(pl.x - A.px, pl.y - A.py);
+          if (G.draw > 0.5 && (pl.sp > 2.6 || moved > 0.75)) shoot();
+          else if (moved > 0.75 || Math.abs(e.y) > 1.7) { A.side = null; A.hold = 0; }
+        } }
       else { const sp = 0.12 * dt; if (c.held.has('ArrowLeft')) G.yaw -= sp; if (c.held.has('ArrowRight')) G.yaw += sp; if (c.held.has('ArrowUp')) G.pitch += sp; if (c.held.has('ArrowDown')) G.pitch -= sp;
         if (G.drawing) G.draw = clamp(G.draw + dt * 0.8, 0, 1); }
       G.yaw = clamp(G.yaw, -0.2, 0.2); G.pitch = clamp(G.pitch, -0.05, 0.25);
@@ -121,11 +134,11 @@ function bowNock() { return ctx.hand(G.turn, 'left').add(new THREE.Vector3(0, 0.
 function score() { const dots = (k) => Array.from({ length: G.ARROWS }, (_, i) => G.sc[k][i] === undefined ? '·' : G.sc[k][i]).join(' ');
   ctx.ui.score(ctx.ui.pl(0, tot(0)) + `<span class="tag">${dots(0)}</span><span class="sep">|</span><span class="tag">${dots(1)}</span>` + ctx.ui.pl(1, tot(1))); }
 function nextShot() {
-  const k = G.turn, p = ctx.P[k]; G.phase = 'aim'; G.draw = 0; G.wasDrawn = false; G.drawing = false; G.yaw = 0; G.pitch = 0.035; G.hitAt = null;
+  const k = G.turn, p = ctx.P[k]; G.phase = 'aim'; G.draw = 0; G.wasDrawn = false; G.drawing = false; G.yaw = 0; G.pitch = 0.035; G.hitAt = null; G.ba = {};
   G.wind = Math.round(rnd(-1, 1) * (ctx.lvl + 1) * 10) / 10; score();
   G.nocked = arrowProto.clone(); G.nocked.children[2].material = G.nocked.children[3].material = E.mat(p.color); ctx.S.add(G.nocked);
   if (p.cpu) { const lv = ctx.lvlK(), e = 0.03 * (1.3 - lv); G.cpu = { t: 0, yaw: -G.wind * 0.0045 + rnd(-1, 1) * e * 0.5, pitch: 0.0335 + rnd(-1, 1) * e * 0.3 }; }
-  else ctx.ui.cue(p.name + ': ' + (ctx.camOf(k) ? 'estira el brazo, tensa hasta la cara y suelta' : ctx.TOUCH ? 'arrastra hacia abajo para tensar y suelta' : 'apunta con las flechas · mantén OK para tensar y suelta'), true);
+  else ctx.ui.cue(p.name + ': ' + (ctx.camOf(k) ? 'estira un brazo (el arco) y lleva la otra mano a la cara · mueve el brazo estirado para apuntar · suelta con la otra mano' : ctx.TOUCH ? 'arrastra hacia abajo para tensar y suelta' : 'apunta con las flechas · mantén OK para tensar y suelta'), true);
   ctx.ui.keys(p.cpu ? '' : '← → ↑ ↓ apuntar · mantén OK para tensar · suelta para disparar');
 }
 function shoot() {

@@ -58,7 +58,7 @@ small{display:block;font-size:11px;letter-spacing:.2em;font-weight:800;color:#D6
 import * as THREE from 'three';
 import { loadAnims, Animator } from '../anim.js';
 import { build as buildAvatar, decode as decodeAvatar, DEFAULT, PRESETS } from '../avatar.js';
-import { Espejo, celebrate, facesCam, portraitSnap, reachArm } from '../espejo.js';
+import { Espejo, celebrate, facesCam, portraitSnap, reachArm, sad, headOf } from '../espejo.js';
 import { createFX } from '../fx.js';
 import { makeSound } from '../sonido.js';
 import * as E from '../estilo.js';
@@ -178,9 +178,14 @@ function result(goal, why) {
   else { big(why === 'Afuera' ? '¡AFUERA!' : '¡ATAJADA!', why === 'Afuera' ? P[k].name + ' la mandó afuera' : P[kp].name + ' la sacó', 2200); SND.play(why === 'Afuera' ? 'arena' : 'aplausos', 0.8); if (!P[kp].cpu && why !== 'Afuera') MVLink.say('¡Atajada!', true, P[kp].slot); }
   setTimeout(nextShot, 3200);
 }
+
+// cuando gana la máquina: tu avatar triste con lágrimas de cómic (sin fiesta ni foto)
+function sadT(a, dt, st) { sad(a, dt, st); st.tt = (st.tt || 0) - dt; if (st.tt <= 0) { st.tt = 0.11; const h = headOf(a), f = new THREE.Vector3(0, 0, 1).applyQuaternion(a.scene.getWorldQuaternion(new THREE.Quaternion())); FXC.tears([h.x, h.y, h.z], [f.x, f.y, f.z]); st.bu = (st.bu || 0.8) - 0.11; if (st.bu <= 0) { st.bu = 1.8; FXC.pop(h.x, h.y + 0.5, h.z, ['¡BUAAA!', '¡SNIF!'][(Math.random() * 2) | 0], '#5ec8ff', 0.55); } } }
 function endGame() {
   G.state = 'end'; MVHand.pauseEnabled = false; keys(''); const w = goals(0) > goals(1) ? 0 : 1; G.win = w; CELS[w].t = 0; CELS[w].style = null;
   const title = P[w].cpu ? 'Gana MiVibra' : (G.mode === 'cpu' ? '¡Ganaste la tanda!' : '¡Gana ' + P[w].name + '!');
+  G.cpuWon = P[w].cpu && P.some((p) => !p.cpu);
+  if (G.cpuWon) { big(title, '¡La próxima es tuya!', 2400); SND.play('abucheo', 0.6); const me = P.find((p) => !p.cpu).av; if (me) { const h = headOf(me); FXC.pop(h.x, h.y + 0.55, h.z, '¡BUAAA!', '#5ec8ff', 0.7); } setTimeout(endMenu, 3800); return; }
   big(title, '¡Celebra! Tu avatar baila contigo', 2400); SND.play('ovacion'); SND.play('aplausos', 0.7, 1, 1);
   { const a = P[w].av ? P[w].av.scene.position : { x: 0, y: 0, z: 0 }; FXC.party([a.x, 0.3, a.z], '¡CAMPEÓN!', '#FFE600'); setTimeout(() => FXC.fireworks([a.x, 0, a.z - 6], 6, 5, 6), 900); }
   const slots = [0, 1].filter((k) => !P[k].cpu && MVLink.players[P[k].slot]).map((k) => P[k].slot);
@@ -210,6 +215,7 @@ function frameScene(dt, now) {
   A.scene.position.set(ax, 0, az); A.scene.rotation.y = lerp(A.scene.rotation.y, partyA ? 0 : Math.PI, 0.12);
   if (A.anim) { A.anim.play(run ? 'Run' : 'Idle', { fade: 0.2 }); A.anim.update(dt); }
   if (partyA) { celebrate(A, dt, camOf(k) ? EJ[P[k].slot] : null, CELS[k], facesCam(A.scene, cam)); }
+  else if (G.state === 'end' && G.cpuWon && !P[k].cpu) { A.scene.rotation.y = 0; sadT(A, dt, CELS[k]); }
   else if (kickU >= 0) kickPose(A, kickU);
   else if (camOf(k)) EJ[P[k].slot].apply(A, dt, { arms: 1, spine: 0.6, head: 1 }, facesCam(A.scene, cam));
   A.update(dt);
@@ -218,7 +224,8 @@ function frameScene(dt, now) {
   K.scene.position.set(kx, 0, GZ + 0.35); K.scene.rotation.y = 0;
   K.scene.rotation.z = lerp(K.scene.rotation.z, -KP.dive * 0.9, 0.25); K.scene.position.y = Math.abs(KP.dive) * 0.35;
   if (K.anim) { K.anim.play('Idle', { fade: 0.2 }); K.anim.update(dt); }
-  if (celebP || (G.state === 'end' && G.win === kp)) { K.scene.rotation.z = lerp(K.scene.rotation.z, 0, 0.2); celebrate(K, dt, camOf(kp) ? EJ[P[kp].slot] : null, CELS[kp], facesCam(K.scene, cam)); }
+  if (G.state === 'end' && G.cpuWon && !P[kp].cpu) { K.scene.rotation.z = 0; K.scene.position.y = 0; sadT(K, dt, CELS[kp]); }
+  else if (celebP || (G.state === 'end' && G.win === kp)) { K.scene.rotation.z = lerp(K.scene.rotation.z, 0, 0.2); celebrate(K, dt, camOf(kp) ? EJ[P[kp].slot] : null, CELS[kp], facesCam(K.scene, cam)); }
   else {
     if (camOf(kp)) EJ[P[kp].slot].apply(K, dt, { arms: 1, spine: 0.7, head: 1 }, facesCam(K.scene, cam));
     // manos hacia la pelota cuando viene
@@ -237,7 +244,7 @@ function camera(dt) {
   const kp = keeperOf(), keepHuman = !P[kp].cpu && P[G.kicker].cpu;
   let p, l;
   if (G.state === 'menu' || G.state === 'load') { const a = performance.now() / 7000; p = new THREE.Vector3(Math.sin(a) * 9, 3.2, -2 + Math.cos(a) * 9); l = new THREE.Vector3(0, 1, GZ + 2); }
-  else if (G.state === 'end' && P[G.win].av) { const s = P[G.win].av.scene.position; p = new THREE.Vector3(s.x + 0.6, 1.5, s.z + (s.z < -5 ? 3 : 3)); l = new THREE.Vector3(s.x, 1.0, s.z); }
+  else if (G.state === 'end' && P[G.win].av) { const s = (G.cpuWon ? P.find((p) => !p.cpu) : P[G.win]).av.scene.position; p = new THREE.Vector3(s.x + 0.6, 1.5, s.z + (s.z < -5 ? 3 : 3)); l = new THREE.Vector3(s.x, 1.0, s.z); }
   else if (keepHuman) { p = new THREE.Vector3(G.keeper.x * 0.3, 2.3, GZ - 4.2); l = new THREE.Vector3(0, 0.9, 0); }
   else { p = new THREE.Vector3(0.3, 2.3, 6.6); l = new THREE.Vector3(-0.6, 0.6, GZ + 3); }   // detrás de tu avatar (3ra persona)
   const k = 1 - Math.exp(-dt * 3); cam.position.lerp(p, k); cam.userData.l = (cam.userData.l || l.clone()).lerp(l, k); cam.lookAt(cam.userData.l);
@@ -250,7 +257,7 @@ function logic(dt) {
     if (P[k].cpu) { if (G.t > 1.6) { G.state = 'run'; G.t = 0; const lv = LVL[G.lvl]; G.pending = { x: rnd(-2.4, 2.4) * (Math.random() < 0.6 ? 1 : 0.5), y: rnd(0.25, 1.9), pow: rnd(0.45, 0.9) }; if (Math.random() < lv.err) { G.pending.x = Math.sign(G.pending.x || 1) * rnd(2.9, 3.6); } } }
     else if (camOf(k)) {
       const B = BODY[P[k].slot];
-      if (B.kickAt > (G.kickFrom || 0)) { G.pending = { x: clamp(B.kickSide * 1.8 + rnd(-0.3, 0.3), -3.2, 3.2), y: clamp(0.2 + B.kickPow * 1.7, 0.15, 2.5), pow: B.kickPow }; G.state = 'run'; G.t = 0; }
+      if (B.kickAt > (G.kickFrom || 0)) { G.pending = { x: clamp(B.kickSide * 2.0 + rnd(-0.15, 0.15), -3.3, 3.3), y: clamp(0.2 + B.kickPow * 1.7, 0.15, 2.5), pow: B.kickPow }; G.state = 'run'; G.t = 0; }
       else if (G.t > 9) { G.pending = { x: rnd(-1.5, 1.5), y: 0.4, pow: 0.3 }; G.state = 'run'; G.t = 0; cue('Patada suave: patea más fuerte la próxima'); }
     } else {
       // control: la mira va y viene; OK la fija y después OK patea con la fuerza de la barra
@@ -262,7 +269,7 @@ function logic(dt) {
   if (G.state === 'run' && G.t > 0.7) { const p = G.pending; shoot(p.x, p.y, p.pow); $('meter').classList.remove('on'); }
   // arquero
   if (G.state === 'aim' || G.state === 'run' || G.state === 'flight') {
-    if (camOf(kp)) { const B = BODY[P[kp].slot]; const tx = clamp(B.x * 0.85 + B.lean * 1.4, -2.7, 2.7); KP.x = lerp(KP.x, tx, 0.3); KP.dive = clamp(B.lean * 0.9, -1, 1); KP.reachY = B.armsUp ? 2.25 : B.oneUp ? 1.95 : 1.45; if (performance.now() - B.jumpAt < 500) KP.reachY += 0.35; }
+    if (camOf(kp)) { const B = BODY[P[kp].slot]; const tx = clamp(B.x * 1.9 + B.lean * 1.6, -2.9, 2.9); KP.x = lerp(KP.x, tx, 0.45); KP.dive = clamp(B.lean * 0.9, -1, 1); KP.reachY = B.armsUp ? 2.25 : B.oneUp ? 1.95 : 1.45; if (performance.now() - B.jumpAt < 500) KP.reachY += 0.35; }
     else if (!P[kp].cpu) { KP.x = clamp(KP.x + KP.vx * dt, -2.7, 2.7); KP.vx *= 0.9; KP.dive = lerp(KP.dive, clamp(KP.vx / 4, -1, 1), 0.2); KP.reachY = 1.9; }
     else if (G.state === 'flight' && G.flight.t > 0.12) { KP.x = lerp(KP.x, G.keeper.guess, 0.16); KP.dive = clamp((KP.x) / 2.2, -1, 1); KP.reachY = 2.1; }
     else { KP.x = Math.sin(G.t * 2) * 0.25; KP.dive = 0; }
@@ -343,7 +350,7 @@ MVLink.onChange = () => { if (G.state === 'menu' && MVHand.open) startMenu(); };
 setTimeout(() => { if (MVLink.code) { $('code').textContent = MVLink.code; const q = MVLink.qr(5); if (q) $('qr').src = q; } }, 400);
 drawScore(); requestAnimationFrame(loop);
 loadAvatars().then(() => { $('loading').style.display = 'none'; startMenu(); }).catch((e) => { console.error(e); $('loading').textContent = 'No se pudo cargar el avatar'; });
-window.MVF = { G, P, BODY, cam, pick: (id) => { MVHand.close(); menuPick(id); }, shoot, nextShot };
+window.MVF = { G, P, BODY, cam, end: () => endGame(), pick: (id) => { MVHand.close(); menuPick(id); }, shoot, nextShot };
 </script>
 </body>
 </html>

@@ -115,6 +115,9 @@ export function createFX(THREE, S, cam, Q = 2) {
         for (let i = 0; i < 6; i++) GLOW.add({ x, y: p.y, z, vy: vy * R1(0.85, 1), grav: 5, life: R1(0.3, 0.6), size: 0.07, color: '#FFD166' });
       }, k * 380);
     },
+    // lágrimas de cómic: dos chorritos que salen de los ojos hacia los lados (llamar seguido mientras llora)
+    tears(p, fwd = [0, 0, 1]) { p = at(p); const sx = fwd[2], sz = -fwd[0];
+      [-1, 1].forEach((sd) => BITS.add({ cell: 0, x: p.x + sx * sd * 0.07 + fwd[0] * 0.12, y: p.y + 0.05, z: p.z + sz * sd * 0.07 + fwd[2] * 0.12, vx: sx * sd * R1(0.8, 1.3), vy: R1(0.6, 1.1), vz: sz * sd * R1(0.8, 1.3), grav: 5, life: R1(0.6, 0.9), size: R1(0.1, 0.14), color: '#5ec8ff', floor: 0.01, bounce: 0 })); },
     // celebración completa: confeti + fuegos + destello + palabra
     party(p, word = '¡BIEN!', color = '#FFE600') { p = at(p); this.confetti({ x: p.x, y: p.y + 2.6, z: p.z + 0.5 }, true, 2); this.fireworks({ x: p.x, y: p.y, z: p.z - 4 }, 5, 3, 3.2); this.flash('#ffffff', 0.35); this.pop(p.x, p.y + 1.6, p.z, word, color, 1.3); },
     update(dt) {

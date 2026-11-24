@@ -264,3 +264,22 @@ export function reachArm(av, side, target, k = 1, poleY = -1) {
   N(p + 'UpperArm').quaternion.slerp(q1, k); N(p + 'LowerArm').quaternion.slerp(q2, k);
   const hn = N(p + 'Hand'); if (hn) hn.quaternion.slerp(qI, k * 0.7);
 }
+
+// Desilusión (cuando gana la máquina): cabeza gacha, hombros caídos y se seca las lágrimas con las manos, a ratos
+export function sad(av, dt, state) {
+  state.t = (state.t || 0) + dt;
+  const N = av.humanoid.getNormalizedBoneNode, t = state.t, sob = Math.sin(t * 9) * 0.04;
+  const set = (n, x, y, z, k = 0.25) => { const b = N(n); if (!b) return; _q.setFromEuler(new THREE.Euler(x, y, z)); b.quaternion.slerp(_q, k); };
+  set('spine', 0.28 + sob, 0, 0); set('chest', 0.15, 0, 0); set('neck', 0.25, 0, 0); set('head', 0.35 + sob * 1.5, Math.sin(t * 0.7) * 0.25, 0);
+  // se seca los ojos (manos a la cara) o deja caer los brazos
+  const wipe = Math.floor(t / 1.6) % 2 === 0;
+  av.scene.updateMatrixWorld(true);
+  const hd = av.humanoid.getRawBoneNode('head'), hp = new THREE.Vector3(); if (hd) hd.getWorldPosition(hp);
+  const toW = (x, y, z) => new THREE.Vector3(x, y, z).applyMatrix4(av.scene.matrixWorld);
+  const inv = new THREE.Matrix4().copy(av.scene.matrixWorld).invert(), hl = hp.clone().applyMatrix4(inv);
+  if (wipe) { reachArm(av, 'left', toW(hl.x + 0.07, hl.y - 0.02 + Math.sin(t * 14) * 0.02, hl.z + 0.12), 1); reachArm(av, 'right', toW(hl.x - 0.07, hl.y - 0.02 + Math.sin(t * 14 + 1) * 0.02, hl.z + 0.12), 1); }
+  else { reachArm(av, 'left', toW(0.2, hl.y * 0.45, 0.02), 1); reachArm(av, 'right', toW(-0.2, hl.y * 0.45, 0.02), 1); }
+  const h = N('hips'); if (h) h.position.y -= 0.03;
+}
+// posición de la cabeza en el mundo (para sacar las lágrimas)
+export function headOf(av) { const b = av.humanoid.getRawBoneNode('head'), p = new THREE.Vector3(); av.scene.updateMatrixWorld(true); if (b) b.getWorldPosition(p); return p; }

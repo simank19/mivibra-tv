@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import * as E from './estilo.js';
 import { loadAnims, Animator } from './anim.js';
 import { build as buildAvatar, decode as decodeAvatar, DEFAULT, PRESETS } from './avatar.js';
-import { Espejo, celebrate, facesCam, portraitSnap, reachArm, dance, DANCES } from './espejo.js';
+import { Espejo, celebrate, facesCam, portraitSnap, reachArm, dance, DANCES, sad, headOf } from './espejo.js';
 import { createFX } from './fx.js';
 import { SFX } from './sfx.js';
 import { makeSound } from './sonido.js';
@@ -33,7 +33,7 @@ export class Cuerpo {
   // Un gesto (golpe, lanzamiento, swing, salto) se guarda hasta que el juego lo usa (o pasan 0,6 s):
   // así no se pierde aunque el TV dibuje pocos cuadros por segundo.
   mark(kind, data) { this.ev[kind] = { t: performance.now(), d: data || {}, taken: false }; }
-  take(kind) { const e = this.ev[kind]; if (!e || e.taken || performance.now() - e.t > 600) return null; e.taken = true; return e.d; }
+  take(kind) { const e = this.ev[kind]; if (!e || e.taken || performance.now() - e.t > 600) return null; e.taken = true; return Object.assign({ t: e.t }, e.d); }
   feed(l, ts, w) {
     const v = (i) => l[i] && l[i][2] > 0.45; if (!(v(1) && v(2))) { this.ok = false; return; }
     this.ok = true; const now = performance.now();
@@ -48,11 +48,11 @@ export class Cuerpo {
       if (rise > 0.2 && now - this.jumpAt > 600) { this.jumpAt = now; this.mark('jump'); } }
     // muñecas: posición relativa al centro de los hombros (en anchos de hombro; x+ = derecha de la persona, y+ = arriba)
     const pt = { ts, l: v(5) ? [(sx - l[5][0]) / sw, (sy - l[5][1]) / sw] : null, r: v(6) ? [(sx - l[6][0]) / sw, (sy - l[6][1]) / sw] : null,
-      zl: w && w[5] ? w[5][2] : null, zr: w && w[6] ? w[6][2] : null, kl: v(9) ? l[9][1] / sw : null, kr: v(10) ? l[10][1] / sw : null };
+      zl: w && w[5] ? w[5][2] : null, zr: w && w[6] ? w[6][2] : null, kl: v(9) ? l[9][1] / sw : null, kr: v(10) ? l[10][1] / sw : null, al: v(11) ? l[11][1] / sw : null, ar: v(12) ? l[12][1] / sw : null, sy: sy / sw };
     this.hist.push(pt); this.hist = this.hist.filter((h) => ts - h.ts < 220);
     const o = this.hist.find((h) => ts - h.ts >= 90) || this.hist[0], dt = Math.max(0.03, (ts - o.ts) / 1000);
     ['l', 'r'].forEach((s) => { const W = this.wr[s], p = pt[s], q = o[s]; if (!p) return; W.x = p[0]; W.y = p[1];
-      if (q) { W.vx = (p[0] - q[0]) / dt; W.vy = (p[1] - q[1]) / dt; } const zz = pt['z' + s], zq = o['z' + s]; W.vz = zz !== null && zq !== null && zz !== undefined && zq !== undefined ? (zq - zz) / dt : 0; W.sp = Math.hypot(W.vx, W.vy); });
+      if (q) { W.vx = (p[0] - q[0]) / dt; W.vy = (p[1] - q[1]) / dt; } const zz = pt['z' + s], zq = o['z' + s]; W.z = zz; W.vz = zz !== null && zq !== null && zz !== undefined && zq !== undefined ? (zq - zz) / dt : 0; W.sp = Math.hypot(W.vx, W.vy); });
     const L = this.wr.l, R = this.wr.r;
     this.handsGap = pt.l && pt.r ? Math.hypot(L.x - R.x, L.y - R.y) : 9;
     // golpe recto (hacia el celular): la muñeca avanza rápido en profundidad o se estira hacia el centro
@@ -68,7 +68,15 @@ export class Cuerpo {
     if (this.handsGap < 0.5 && this.prevGap > 1.1 && now - this.clapAt > 300) this.clapAt = now; this.prevGap = this.handsGap;
     // trote en el sitio: rodillas que se alternan (cada cruce es un paso)
     if (pt.kl !== null && pt.kr !== null) { const d = Math.sign(pt.kl - pt.kr); if (d && d !== this.lastKnee && Math.abs(pt.kl - pt.kr) > 0.18) { this.lastKnee = d; this.steps++; this.stepT.push(now); this.kneeAt = now; } }
-    this.stepT = this.stepT.filter((t) => now - t < 1500); this.stepRate = this.stepT.length / 1.5;
+    this.stepT = this.stepT.filter((t) => now - t < 1500); const cross = this.stepT.length / 1.5;
+    // trote más fluido: energía del movimiento de rodillas, tobillos, rebote del cuerpo y braceo (por si no se ven bien las piernas)
+    const dv = (a, b) => (a !== null && b !== null && a !== undefined && b !== undefined ? Math.abs(a - b) / dt : 0);
+    const kv = dv(pt.kl, o.kl) + dv(pt.kr, o.kr), av = dv(pt.al, o.al) + dv(pt.ar, o.ar), bob = dv(pt.sy, o.sy), arm = (Math.abs(L.vy) + Math.abs(R.vy)) / 2;
+    const raw = Math.max(0, Math.max(kv * 1.2, av * 1.0, bob * 7, arm * 1.0) - 0.5) * 2.4;
+    const fd = this.lastTs ? clamp((ts - this.lastTs) / 1000, 0.005, 0.2) : 0.033; this.lastTs = ts;
+    this.runE = (this.runE || 0) + (raw - (this.runE || 0)) * (1 - Math.exp(-fd * 3.2));
+    if (raw > 0.6) this.moveAt = now;
+    this.stepRate = Math.max(cross, Math.min(5, this.runE));
   }
   // brazo de arco: uno estirado hacia un lado a la altura del hombro, el otro tira hacia la cara
   get bow() { const L = this.wr.l, R = this.wr.r, ext = Math.abs(L.x) > Math.abs(R.x) ? L : R, pull = ext === L ? R : L;
@@ -220,11 +228,15 @@ export async function startGame(cfg) {
   function endGame(w, title, sub) {
     if (ctx.state === 'end') return;
     ctx.state = 'end'; ctx.win = w; ctx.t = 0; MVHand.pauseEnabled = false; ui.meter(null); ui.keys(''); ui.touch([]);
-    P.forEach((p, k) => { p.cel = {}; if (k !== w && p.av && p.av.anim && !(cfg.noDefeat || []).includes(k)) p.av.anim.play('Defeat', { loop: false, fade: 0.25 }); });
-    ui.big(title, sub || '¡Celebra! Tu avatar baila contigo', 2600);
-    ctx.crowd('ole'); setTimeout(() => ctx.crowd('aplausos'), 600);
+    P.forEach((p, k) => { p.cel = {}; if (k !== w && p.cpu && p.av && p.av.anim && !(cfg.noDefeat || []).includes(k)) p.av.anim.play('Defeat', { loop: false, fade: 0.25 }); if (k !== w && !p.cpu && p.av && p.av.anim) p.av.anim.play('Idle', { fade: 0.3 }); });
+    // ¿Ganó la máquina? Entonces ella celebra y tu avatar se pone triste (sin fiesta ni foto de celebración)
+    const cpuWon = w >= 0 && P[w].cpu && P.some((p) => !p.cpu);
+    ctx.cpuWon = cpuWon;
+    ui.big(title, sub || (cpuWon ? '¡La próxima es tuya!' : '¡Celebra! Tu avatar baila contigo'), 2600);
     const W = w >= 0 ? P[w] : P[0], a = W.av ? W.av.scene.position : new THREE.Vector3();
-    FX.party([a.x, a.y + 0.3, a.z], cfg.partyWord ? cfg.partyWord(w) : (w >= 0 && P[w].cpu ? '¡BIEN!' : '¡CAMPEÓN!'), '#FFE600');
+    if (cpuWon) { sfx.play('abucheo', 0.5); const me = P.find((p) => !p.cpu); if (me && me.av) { const h = headOf(me.av); FX.pop(h.x, h.y + 0.55, h.z, '¡BUAAA!', '#5ec8ff', 0.7); } P.forEach((p) => { if (!p.cpu && MVLink.players[p.slot]) MVLink.say('Ganó MiVibra… ¡la revancha!', false, p.slot); }); setTimeout(endMenu, 4600); return; }
+    ctx.crowd('ole'); setTimeout(() => ctx.crowd('aplausos'), 600);
+    FX.party([a.x, a.y + 0.3, a.z], cfg.partyWord ? cfg.partyWord(w) : '¡CAMPEÓN!', '#FFE600');
     setTimeout(() => FX.fireworks([a.x, a.y, a.z - 6], 6, 5, 5), 900);
     P.forEach((p) => { if (!p.cpu && MVLink.players[p.slot]) MVLink.say(p === W ? '¡Ganaste! Celebra para la foto' : 'Buen juego. ¡La revancha!', p === W, p.slot); });
     const slots = P.filter((p) => !p.cpu && MVLink.players[p.slot]).map((p) => p.slot);
@@ -309,7 +321,9 @@ export async function startGame(cfg) {
   function camera(dt) {
     let p, l, k = 3;
     if (ctx.state === 'menu' || ctx.state === 'load') { const o = cfg.orbit || { c: [0, 1, 0], r: 9, y: 3.5 }, a = performance.now() / 8000; p = new THREE.Vector3(o.c[0] + Math.sin(a) * o.r, o.y, o.c[2] + Math.cos(a) * o.r); l = new THREE.Vector3(...o.c); k = 2; }
-    else if (ctx.state === 'end' && ctx.t > 0.6) { const W = P[Math.max(0, ctx.win)].av; if (W) { const s = W.scene.position, f = new THREE.Vector3(0, 0, 1).applyQuaternion(W.scene.quaternion); p = s.clone().addScaledVector(f, 3.2).add(new THREE.Vector3(0.6, 1.5, 0)); l = s.clone().add(new THREE.Vector3(0, 1.0, 0)); k = 2.5; } }
+    else if (ctx.state === 'end' && ctx.t > 0.6) { const W = (ctx.cpuWon ? P.find((p) => !p.cpu) : P[Math.max(0, ctx.win)]).av; if (W) { const s = W.scene.position, f = new THREE.Vector3(0, 0, 1).applyQuaternion(W.scene.quaternion); const sd = new THREE.Vector3(f.z, 0, -f.x); // de lado (para que la máquina no tape a tu avatar triste)
+        p = ctx.cpuWon ? s.clone().addScaledVector(f, 1.7).addScaledVector(sd, 1.5).add(new THREE.Vector3(0, 1.25, 0)) : s.clone().addScaledVector(f, 3.2).add(new THREE.Vector3(0.6, 1.5, 0));
+        l = s.clone().add(new THREE.Vector3(0, ctx.cpuWon ? 0.85 : 1.0, 0)); k = ctx.cpuWon ? 60 : 2.5; } }
     let fov = cfg.fov || 50;
     if (!p) { const c = cfg.camera ? cfg.camera(ctx, dt) : null; if (c) { p = c[0]; l = c[1]; k = c[2] || 3; if (c[3]) fov = c[3]; } }
     // acercar o alejar (para ver lejos sin dejar de ver tu avatar en 3ra persona)
@@ -331,6 +345,7 @@ export async function startGame(cfg) {
     P.forEach((p, k) => { const a = p.av; if (!a) return;
       if (a.anim) a.anim.update(dt);
       if (ctx.state === 'end' && k === ctx.win) celebrate(a, dt, ctx.camOf(k) ? EJ[p.slot] : null, p.cel, facesCam(a.scene, cam));
+      else if (ctx.state === 'end' && !p.cpu && ctx.win >= 0 && P[ctx.win].cpu) { sad(a, dt, p.cel); p.cel.tt = (p.cel.tt || 0) - dt; if (p.cel.tt <= 0) { p.cel.tt = 0.11; const h = headOf(a), f = new THREE.Vector3(0, 0, 1).applyQuaternion(a.scene.getWorldQuaternion(new THREE.Quaternion())); FX.tears([h.x, h.y, h.z], [f.x, f.y, f.z]); p.cel.bu = (p.cel.bu || 0.8) - 0.11; if (p.cel.bu <= 0) { p.cel.bu = 1.8; FX.pop(h.x, h.y + 0.5, h.z, ['¡BUAAA!', '¡SNIF!', 'ñaaa…'][(Math.random() * 3) | 0], '#5ec8ff', 0.55); } } }
       else if (cfg.pose && ctx.state !== 'load' && (ctx.state !== 'menu' || cfg.poseInMenu)) cfg.pose(ctx, k, a, dt);
       a.update(dt);
       if (a.blob) { a.scene.getWorldPosition(tmpV); a.blob.position.set(tmpV.x, (cfg.floorY ? cfg.floorY(tmpV) : 0) + 0.015, tmpV.z); a.blob.visible = a.scene.visible; } });

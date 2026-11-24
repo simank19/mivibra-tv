@@ -65,7 +65,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { loadAnims, Animator } from '../anim.js';
 import { build as buildAvatar, decode as decodeAvatar, DEFAULT, PRESETS } from '../avatar.js';
-import { Espejo, celebrate, facesCam, snapCanvas, portraitSnap, reachArm } from '../espejo.js';
+import { Espejo, celebrate, facesCam, snapCanvas, portraitSnap, reachArm, sad, headOf } from '../espejo.js';
 import { createFX } from '../fx.js';
 
 const $ = (id) => document.getElementById(id);
@@ -366,7 +366,8 @@ function placeScene(dt, now) {
     const bvx = P.bvxS = lerp(P.bvxS || 0, ((P.bx ?? 0) - (P.bx0 ?? P.bx ?? 0)) / Math.max(dt, 1e-3), 0.2); P.bx0 = P.bx;
     if (a.anim) { a.anim.play(party ? 'Idle' : Math.abs(bvx) > 0.5 ? 'Walk' : 'Idle', { fade: 0.25, speed: Math.abs(bvx) > 0.5 ? 1.5 : 1 }); a.anim.update(dt); }
     const E = ctl(side) === 'cam' ? EJ[slotOf(side)] : null;
-    if (party) celebrate(a, dt, E, CELS[side], facesCam(a.scene, cam));
+    if (G.state === 'end' && G.cpuWon && side === 0) sadT(a, dt, CELS[side]);
+    else if (party) celebrate(a, dt, E, CELS[side], facesCam(a.scene, cam));
     else {
       // tronco: gira con el golpe (hacia la izquierda en la derecha, al revés en el revés) y se agacha un poco listo para jugar
       const sp = a.humanoid.getNormalizedBoneNode('spine'); if (sp) sp.quaternion.multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0.18, arc * 0.5 * (back ? -1 : 1) * handSign * dz, 0)));
@@ -385,7 +386,7 @@ function placeScene(dt, now) {
 // cámara: detrás de ti, siguiendo un poco la bola
 const cP = new THREE.Vector3(0, 2.5, 3.9), cL = new THREE.Vector3(0, 0.7, -0.8), tP = new THREE.Vector3(), tL = new THREE.Vector3();
 function camera(dt) {
-  if (G.state === 'end' && G.win >= 0 && SIDES[G.win].av) { const p = SIDES[G.win].av.scene.position, d = G.win === 0 ? -1 : 1; tP.set(p.x + 0.5, 1.6, p.z + d * 3.2); tL.set(p.x - 0.3, 0.9, p.z); }
+  if (G.state === 'end' && G.win >= 0 && SIDES[G.win].av) { const wv = G.cpuWon ? 0 : G.win, p = SIDES[wv].av.scene.position, d = wv === 0 ? -1 : 1; tP.set(p.x + 0.5, 1.6, p.z + d * 3.2); tL.set(p.x - 0.3, 0.9, p.z); }
   else if (G.state === 'menu' || G.state === 'load') { const a = performance.now() / 6000; tP.set(Math.sin(a) * 3.6, 2.4, Math.cos(a) * 3.6); tL.set(0, 0.7, 0); }
   else { tP.set(PADS[0].x * 0.2, 2.55, PZ + 2.25); tL.set(B.live ? B.p.x * 0.2 : 0, 0.6, -0.7); }
   const k = 1 - Math.exp(-dt * 3); cP.lerp(tP, k); cL.lerp(tL, k); cam.position.copy(cP); cam.lookAt(cL);
@@ -401,11 +402,16 @@ function pause() {
   if (G.state === 'menu' || G.state === 'end' || MVHand.open) return; G.paused = true;
   MVHand.menu({ kicker: 'PARTIDO EN PAUSA', title: 'Pausa', items: [{ id: 'resume', label: 'Continuar', icon: '▶' }, { id: 'again', label: 'Reiniciar partido', icon: '↻' }, { id: 'menu', label: 'Menú principal', icon: '☰' }, { id: 'exit', label: 'Salir', icon: '✕' }], back: 'resume', onPick: menuPick });
 }
+
+// cuando gana la máquina: tu avatar triste con lágrimas de cómic (sin fiesta ni foto)
+function sadT(a, dt, st) { sad(a, dt, st); st.tt = (st.tt || 0) - dt; if (st.tt <= 0) { st.tt = 0.11; const h = headOf(a), f = new THREE.Vector3(0, 0, 1).applyQuaternion(a.scene.getWorldQuaternion(new THREE.Quaternion())); FXC.tears([h.x, h.y, h.z], [f.x, f.y, f.z]); st.bu = (st.bu || 0.8) - 0.11; if (st.bu <= 0) { st.bu = 1.8; FXC.pop(h.x, h.y + 0.5, h.z, ['¡BUAAA!', '¡SNIF!'][(Math.random() * 2) | 0], '#5ec8ff', 0.55); } } }
 function endGame() {
   G.state = 'end'; MVHand.pauseEnabled = false; const w = G.sc[0] > G.sc[1] ? 0 : 1; drawScore(); SND.play('cheer');
   G.win = w; CELS[w].t = 0; CELS[w].style = null; const l = SIDES[1 - w].av; if (l && l.anim) { l.anim.play('Defeat', { loop: false, fade: 0.2 }); l.swingT = 99; }
   [0, 1].forEach((k) => { if (MVLink.players[k]) MVLink.say(k === w ? '¡Ganaste el partido! Celebra para la foto' : 'Buen partido. ¡La revancha!', k === w, k); });
   const title = G.mode === 'cpu' ? (w === 0 ? '¡Ganaste!' : 'Gana MiVibra') : '¡Gana ' + SIDES[w].name + '!';
+  G.cpuWon = G.mode === 'cpu' && w === 1;
+  if (G.cpuWon) { big(title, '¡La próxima es tuya!', 2400); const me = SIDES[0].av; if (me) { const h = headOf(me); FXC.pop(h.x, h.y + 0.55, h.z, '¡BUAAA!', '#5ec8ff', 0.7); } setTimeout(endMenu, 3800); return; }
   big(title, '¡Celebra! Tu avatar baila contigo', 2400);
   { const a = SIDES[w].av ? SIDES[w].av.scene.position : { x: 0, y: 0, z: 0 }; FXC.party([a.x, 0.3, a.z], '¡CAMPEÓN!', '#FFE600'); setTimeout(() => FXC.fireworks([0, 0.5, 0], 5, 3, 3.5), 900); }
   const ps = ctl(w) === 'cam' && MVLink.players[slotOf(w)] ? [slotOf(w)] : (G.mode === 'cpu' && MVLink.players[0] ? [0] : []);
@@ -492,7 +498,7 @@ MVLink.onChange = () => { plsDraw(); if (G.state === 'menu' && MVHand.open) star
 setTimeout(() => { if (MVLink.code) { $('code').textContent = MVLink.code; const q = MVLink.qr(5); if (q) $('qr').src = q; } }, 400);
 requestAnimationFrame(loop);
 loadAvatars().then(() => { $('loading').style.display = 'none'; startMenu(); }).catch((e) => { console.error(e); $('loading').textContent = 'No se pudo cargar el avatar'; });
-window.MVT = { G, EJ, B, PADS, HAND, serve, pick: (id) => { MVHand.close(); menuPick(id); }, setX: (x) => { PADS[0].vk = 0; PADS[0].x = x; } };
+window.MVT = { G, EJ, end: () => endGame(), B, PADS, HAND, serve, pick: (id) => { MVHand.close(); menuPick(id); }, setX: (x) => { PADS[0].vk = 0; PADS[0].x = x; } };
 </script>
 </body>
 </html>
