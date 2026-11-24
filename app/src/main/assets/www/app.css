@@ -1611,3 +1611,16 @@ html.pip .ytp .ytmc, html.pip .ytp .xm, html.pip .ytp .ytside { display: none !i
 .ytp.tv .ctl .iconbtn { width: 58px; height: 58px; font-size: 15px; }
 .ytp.tv .ctl .iconbtn svg { width: 24px; height: 24px; }
 .ytp.tv .ctl [data-yt="info"] { width: auto; padding: 0 18px; border-radius: 29px; }
+
+/* Ventanita de YouTube fuera del Inicio: pequeña (200 px de alto, el mínimo de YouTube), sin título, y cambia de esquina para no tapar el foco */
+.ytp.ytmini:not(.ythero) { width: 356px; transition: left .2s, right .2s, top .2s, bottom .2s; }
+.ytp.ytmini:not(.ythero) .ytvid { height: 200px; }
+.ytp.ytmini:not(.ythero) .ytmc { justify-content: center; padding: 4px 6px; gap: 2px; }
+.ytp.ytmini:not(.ythero) .ytmc .t { display: none; }
+.ytp.ytmini:not(.ythero) .ytmc .iconbtn { width: 36px; height: 36px; }
+.ytp.ytmini .ytmc .ytm10 { font: 800 12px var(--ui); }
+.ytp.ytmini .ytmc .iconbtn:focus { background: #fff; color: #111; outline: none; transform: scale(1.1); }
+.ytp.ytmini.ythero .ytmc .ytm10 { display: none; }
+.ytp.ytmini.ytc-l { right: auto; left: 16px; }
+.ytp.ytmini.ytc-t { bottom: auto; top: 16px; }
+.ytp.ytmini.ytaway { visibility: hidden; pointer-events: none; }

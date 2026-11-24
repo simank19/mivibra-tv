@@ -2687,6 +2687,8 @@
           '<button class="iconbtn f" data-act="listDelete" data-arg="' + l.id + '" aria-label="Eliminar">' + IC.trash + '</button></div>';
       }) : '<p class="muted">' + (provBlock ? 'Aún no has agregado listas propias.' : 'No has agregado listas.') + '</p>') +
       '<div class="line"><div class="t"><b>Elegir de dónde reproducir</b><span>Encendido: antes de ver una película o capítulo te muestra tus fuentes (listas, Xtream y addons); mientras eliges, la app las prueba y te marca cuál funciona. Apagado: arranca sola con el mejor enlace.</span></div><button class="toggle f' + (P.askSource !== false ? ' on' : '') + '" data-act="askSrcToggle" aria-label="Elegir de dónde reproducir"></button></div>' +
+      '<div class="line"><div class="t"><b>YouTube minimizado fuera del Inicio</b><span>' + (P.ytMiniMode === 'pause' ? 'Se pausa al salir del Inicio y sigue solo cuando regresas (en su recuadro).' : 'Sigue sonando en una ventanita pequeña que se aparta de lo que vas a elegir.') + '</span></div>' +
+        '<div class="seg"><button class="chip f' + (P.ytMiniMode !== 'pause' ? ' on' : '') + '" data-act="ytMiniMode" data-arg="float">Ventanita</button><button class="chip f' + (P.ytMiniMode === 'pause' ? ' on' : '') + '" data-act="ytMiniMode" data-arg="pause">Pausar</button></div></div>' +
       '<div class="line"><div class="t"><b>Cargar el catálogo completo de los addons</b><span>Después de abrir, sigue pidiendo en segundo plano todas las páginas de cada catálogo (anime, películas, series…) hasta traerlo todo. Apágalo si tu equipo va lento.</span></div><button class="toggle f' + (P.stDeep !== false ? ' on' : '') + '" data-act="stDeepToggle"></button></div>' +
       '<div class="line"><div class="t"><b>Actualizar addons al abrir la app</b><span>Vuelve a pedir los catálogos de tus addons cada vez que abres MiVibra (si está apagado, se guardan 12 horas).</span></div><button class="toggle f' + (P.stAutoRefresh ? ' on' : '') + '" data-act="stAutoToggle" aria-label="Actualizar addons al abrir la app"></button></div>' +
       '<div class="line"><div class="t"><b>Actualizar addons ahora</b><span>Vuelve a cargar todos los addons y plugins (catálogos nuevos, cambios de configuración).</span></div><button class="btn ghost f" data-act="stRefreshNow">Actualizar</button></div>' +
@@ -3713,6 +3715,7 @@
     showHidden: function () { MV._showHidden = !MV._showHidden; MV.rerender(); },
     srcPick: function (i) { if (MV._srcPick) MV._srcPick(i); },
     spPick: function (i) { if (MV._spPick) MV._spPick(i); },
+    ytMiniMode: function (m) { P.ytMiniMode = m; MV.savePrefs(); MV.rerender(); MV.toast(m === 'pause' ? 'YouTube se pausará al salir del Inicio' : 'YouTube seguirá sonando en una ventanita pequeña'); },
     askSrcToggle: function (_, el) { P.askSource = P.askSource === false; MV.savePrefs(); if (el) el.classList.toggle('on', P.askSource !== false); MV.toast(P.askSource !== false ? 'Antes de reproducir podrás elegir la fuente (la app te muestra cuál funciona)' : 'Se reproducirá solo con el mejor enlace'); },
     stDeepToggle: function (_, el) {
       P.stDeep = P.stDeep === false; MV.savePrefs(); if (el) el.classList.toggle('on', P.stDeep !== false);
@@ -5230,7 +5233,7 @@
       var b = box();
       var nx = list[idx + 1];
       b.innerHTML = '<div class="ytvid"><div id="ytFrame"></div><div class="yttap" data-yt="tap"></div></div><button class="iconbtn x" data-yt="close" aria-label="Cerrar video">' + IC.close + '</button><button class="iconbtn xm" data-yt="mini" aria-label="Minimizar"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>' +
-        '<div class="ytmc"><div class="t"><b>' + esc(v.title || '') + '</b><span>' + esc(v.channel || '') + '</span></div><button class="iconbtn f" data-yt="prev" aria-label="Anterior">' + IC.prev + '</button><button class="iconbtn on f" data-yt="toggle" aria-label="Pausa">' + IC.pause + '</button><button class="iconbtn f" data-yt="next" aria-label="Siguiente">' + IC.next + '</button><button class="iconbtn f" data-yt="max" aria-label="Pantalla completa"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14v6h6M20 10V4h-6M4 20l7-7M20 4l-7 7"/></svg></button><button class="iconbtn f" data-yt="close" aria-label="Cerrar">' + IC.close + '</button></div>' + '<div class="ytside" id="ytSide" hidden></div>' +
+        '<div class="ytmc"><div class="t"><b>' + esc(v.title || '') + '</b><span>' + esc(v.channel || '') + '</span></div><button class="iconbtn f" data-yt="prev" aria-label="Anterior">' + IC.prev + '</button><button class="iconbtn f ytm10" data-yt="back10" aria-label="Atrás 10 s">−10</button><button class="iconbtn on f" data-yt="toggle" aria-label="Pausa">' + IC.pause + '</button><button class="iconbtn f ytm10" data-yt="fwd10" aria-label="Adelante 10 s">+10</button><button class="iconbtn f" data-yt="next" aria-label="Siguiente">' + IC.next + '</button><button class="iconbtn f" data-yt="max" aria-label="Pantalla completa"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14v6h6M20 10V4h-6M4 20l7-7M20 4l-7 7"/></svg></button><button class="iconbtn f" data-yt="close" aria-label="Cerrar">' + IC.close + '</button></div>' + '<div class="ytside" id="ytSide" hidden></div>' +
         '<div class="bar"><div class="ythint" id="ytHint"></div><div class="ytprog"><span id="ytCur">0:00</span><div class="trk" data-yt="seek" tabindex="0" role="slider" aria-label="Avance (← → para moverte 10 s)"><i id="ytFill"><b></b></i></div><span id="ytDur">0:00</span></div><div class="t"><b>' + esc(v.title || '') + '</b><span>' + esc(v.channel || '') + (list.length > 1 ? ' · ' + (idx + 1) + ' de ' + list.length : '') + (nx ? ' · Sigue: ' + esc(nx.title.slice(0, 50)) : '') + '</span></div>' +
         '<div class="ctl"><button class="iconbtn" data-yt="mini" aria-label="Minimizar (sigue sonando mientras navegas)"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button><button class="iconbtn" data-yt="prev" aria-label="Anterior">' + IC.prev + '</button><button class="iconbtn" data-yt="back10" aria-label="Atrás 10 s">−10</button><button class="iconbtn on" data-yt="toggle" aria-label="Pausa">' + IC.pause + '</button><button class="iconbtn" data-yt="fwd10" aria-label="Adelante 10 s">+10</button><button class="iconbtn" data-yt="next" aria-label="Siguiente">' + IC.next + '</button>' + (MV.isKids() ? '' : '<button class="iconbtn" data-yt="queue" aria-label="Cola (lo que sigue)"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h12M4 12h12M4 18h8M18 15v6M15 18h6"/></svg></button><button class="iconbtn" data-yt="info" aria-label="Detalles y comentarios" style="font-size:12px;width:auto;padding:0 12px">💬<span class="ytlbl"> Comentarios</span></button><button class="iconbtn" data-yt="lyrics" aria-label="Letra">' + IC.lyrics + '</button><button class="iconbtn" data-yt="addpl" aria-label="Añadir a una lista">' + IC.plAdd + '</button>') + '<button class="iconbtn" data-yt="close" aria-label="Cerrar">' + IC.close + '</button></div></div>';
       b.querySelectorAll('[data-yt]').forEach(function (btn) { btn.onclick = function (e) { e.stopPropagation(); act(btn.dataset.yt, e); }; });
@@ -5347,7 +5350,17 @@
       var hb = view.name === 'home' && !MV.modalOpen() ? document.querySelector('.vlive .scr') : null, r = hb && hb.getBoundingClientRect();
       var ok = r && r.width > 120;
       b.classList.toggle('ythero', !!ok);
-      if (!ok) { b.style.cssText = ''; return; }
+      if (!ok) {
+        b.style.cssText = '';
+        if (P.ytMiniMode === 'pause' && view.name !== 'home') {
+          // Fuera del Inicio: en pausa y sin ventanita; al volver al Inicio sigue sola
+          if (!autoPaused) { try { if (player && player.getPlayerState && player.getPlayerState() === 1) { player.pauseVideo(); autoPaused = true; MV.toast('YouTube en pausa: sigue cuando vuelvas al Inicio', 3000); } else autoPaused = 'idle'; } catch (e) {} }
+          b.classList.add('ytaway'); return;
+        }
+        b.classList.remove('ytaway'); if (autoPaused) { var w0 = autoPaused; autoPaused = false; if (w0 === true) try { player.playVideo(); } catch (e) {} } dodge(); return;
+      }
+      b.classList.remove('ytaway', 'ytc-l', 'ytc-t');
+      if (autoPaused) { var was = autoPaused; autoPaused = false; if (was === true) try { player.playVideo(); } catch (e) {} }
       // Se recorta lo que quedaría encima de la barra de arriba o del menú de abajo
       var qb = document.querySelector('.qbar'), topLim = qb ? Math.max(0, qb.getBoundingClientRect().bottom) : 0;
       var sd = document.querySelector('.side'), sr = sd && sd.getBoundingClientRect(), botLim = sr && sr.top > window.innerHeight / 2 ? sr.top : window.innerHeight;
@@ -5355,6 +5368,21 @@
       b.style.cssText = 'left:' + r.left + 'px;top:' + r.top + 'px;width:' + r.width + 'px;height:' + r.height + 'px;right:auto;bottom:auto;' +
         'clip-path:inset(' + Math.round(cT) + 'px 0 ' + Math.round(cB) + 'px 0 round 18px);' + (gone ? 'visibility:hidden;' : '');
     }
+    var autoPaused = false;
+    // Ventanita flotante: si lo que vas a elegir queda debajo, salta a otra esquina (nunca tapa el foco)
+    function dodge() {
+      var b = box(); if (!b || !mini || b.classList.contains('ythero') || b.classList.contains('ytaway')) return;
+      var f = document.activeElement; if (!f || b.contains(f) || !f.getBoundingClientRect) return;
+      var fr = f.getBoundingClientRect(), w = b.offsetWidth, h = b.offsetHeight, W = window.innerWidth, H = window.innerHeight, m = 16;
+      var corners = [['', ''], ['ytc-l', ''], ['', 'ytc-t'], ['ytc-l', 'ytc-t']];
+      var cur = [b.classList.contains('ytc-l') ? 'ytc-l' : '', b.classList.contains('ytc-t') ? 'ytc-t' : ''];
+      var rectOf = function (c) { var x = c[0] ? m : W - m - w, y = c[1] ? m : H - m - h; return { l: x, t: y, r: x + w, b: y + h }; };
+      var hit = function (c) { var r = rectOf(c); return !(fr.right < r.l || fr.left > r.r || fr.bottom < r.t || fr.top > r.b); };
+      if (!hit(cur)) return;
+      var best = corners.find(function (c) { return !hit(c); }); if (!best) return;
+      b.classList.toggle('ytc-l', !!best[0]); b.classList.toggle('ytc-t', !!best[1]);
+    }
+    document.addEventListener('focusin', function () { if (mini) setTimeout(dodge, 0); });
     var dockRaf = 0;
     document.addEventListener('scroll', function () { if (mini && !dockRaf) dockRaf = requestAnimationFrame(function () { dockRaf = 0; dock(); }); }, true);
     window.addEventListener('resize', function () { if (mini) dock(); });
@@ -5362,7 +5390,7 @@
       mini = !!on; var b = box(); if (!b) return;
       clearInterval(dockIv); dockIv = null;
       if (mini) { try { pvStop(); } catch (e) {} dockIv = setInterval(dock, 100); setTimeout(dock, 0); }
-      else { b.classList.remove('ythero'); b.style.cssText = ''; }
+      else { b.classList.remove('ythero', 'ytaway', 'ytc-l', 'ytc-t'); b.style.cssText = ''; if (autoPaused === true) { try { player.playVideo(); } catch (e) {} } autoPaused = false; }
       b.classList.toggle('ytmini', mini); document.body.classList.toggle('yt-open', !mini); document.body.classList.toggle('yt-mini', mini);
       var sd = document.getElementById('ytSide'); if (sd && mini) { sd.hidden = true; b.classList.remove('ytsideon'); }
       if (mini) { b.classList.remove('ui'); clearTimeout(hideT); setTimeout(function () { MV.focusFirst && MV.focusFirst(); }, 30); }
@@ -5394,7 +5422,7 @@
       player = null;
       var b = box(); b.hidden = true; b.innerHTML = ''; b.classList.remove('ui', 'ytmini');
       document.body.classList.remove('yt-open', 'yt-mini'); var wasMini = mini; mini = false;
-      clearInterval(dockIv); dockIv = null; b.classList.remove('ythero'); b.style.cssText = '';
+      clearInterval(dockIv); dockIv = null; b.classList.remove('ythero', 'ytaway', 'ytc-l', 'ytc-t'); b.style.cssText = ''; autoPaused = false;
       if (view.name === 'home') setTimeout(function () { try { heroPreview(); } catch (e) {} }, 300);
       if (wasMini) return;
       setTimeout(function () { var el = document.querySelector('[data-fid="y-' + ((list[idx] || {}).id || '') + '"]'); if (el) el.focus(); else MV.focusFirst(); }, 50);
