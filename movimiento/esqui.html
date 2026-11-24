@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Esquí · MiVibra Movimiento</title>
+</head>
+<body>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@2.0.4/dist/qrcode.js"></script>
+<script src="../mano.js"></script>
+<script type="importmap">{"imports":{"three":"../vendor/three-0.183.2/three.module.min.js","three/addons/":"../vendor/three-0.183.2/addons/"}}</script>
+<script type="module">
+import { startGame, THREE, E, clamp, lerp, rnd } from '../juego.js';
+
+// Esquí slalom: bajen al mismo tiempo pasando entre las banderas. Cada puerta perdida suma 3 s. Hay saltos.
+const cx = (z) => Math.sin(z * 0.025) * 12;
+const H = (x, z) => { const d = Math.abs(x - cx(z)); let y = z * 0.32 + Math.cos(z * 0.06) * 0.6; if (d > 10) y += Math.sin(x * 0.08) * 1.2 + (d - 10) * 0.14; return y; };
+const NG = 24, GATE = (i) => { const z = -10 - i * 14; return { z, x: cx(z) + (i % 2 ? 3.6 : -3.6), col: i % 2 ? '#ff2e4d' : '#2f6bff' }; };
+const FIN = -10 - NG * 14 - 8, JUMPS = [-95, -195, -285], START = 6;
+const SK = [0, 1].map(() => ({}));
+const G = { t: 0, phase: 'pre' };
+
+const ctx = await startGame({
+  id: 'esqui', title: 'Esquí', kicker: 'MIVIBRA MOVIMIENTO · MONTAÑA', loading: 'Pisando la nieve…', fov: 58,
+  sub: 'Slalom: pasa entre las banderas. Cada puerta perdida suma 3 segundos.',
+  how: 'Inclínate para girar, agáchate para ir más rápido y salta en las rampas.',
+  modes: [{ id: 'cpu', label: 'Carrera contra MiVibra', icon: '▶' }, { id: 'two', label: '2 jugadores (2 celulares)', icon: '⚔', two: true }],
+  orbit: { c: [0, 2, -20], r: 18, y: 12 }, floorY: (p) => H(p.x, p.z),
+  onSound(c) { c.amb('estadio-ambiente', 0.06); },
+  async scene({ S }) {
+    const r = E.seeded(31);
+    E.sky(S, '#2b7bff', '#e9f6ff', '#cfe8ff'); E.lights(S, { sky: '#ffffff', ground: '#5d7fb8', hemi: 1.1, sunI: 2.6, dir: [10, 8, 4] }); E.clouds(S, 8, 240, 70, r);
+    E.fog(S, '#cfe6ff', 140, 460);
+    const g = new THREE.PlaneGeometry(240, 480, 90, 200); g.rotateX(-Math.PI / 2); g.translate(0, 0, -175);
+    const P = g.attributes.position, col = new Float32Array(P.count * 3), c = new THREE.Color();
+    for (let i = 0; i < P.count; i++) { const x = P.getX(i), z = P.getZ(i), d = Math.abs(x - cx(z)); P.setY(i, H(x, z));
+      c.set(d < 10 ? '#ffffff' : '#d6e4f5'); if (Math.abs(d - 9.4) < 1.1) c.set('#4f86d9'); if (Math.abs(x - cx(z) - 2.5 * Math.sin(z * 0.35)) < 0.35) c.set('#c3d6ee'); col.set([c.r, c.g, c.b], i * 3); }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.computeVertexNormals();
+    S.add(new THREE.Mesh(g, new THREE.MeshToonMaterial({ vertexColors: true, color: '#ffffff', gradientMap: E.mat('#fff').gradientMap, emissive: '#7d93b8', emissiveIntensity: 0.3 })));
+    const mts = []; for (let i = 0; i < 9; i++) { const h = 50 + r() * 50, m = new THREE.ConeGeometry(30 + r() * 20, h, 6); m.translate(-160 + i * 40 + r() * 10, h / 2 - 200, -470); mts.push(m); }
+    S.add(new THREE.Mesh(E.mergeGeometries(mts), E.mat('#5f86c4')));
+    const caps = mts.map((m) => { const b = m.clone(); b.computeBoundingBox(); const top = new THREE.ConeGeometry(12, 18, 6); const bb = b.boundingBox; top.translate((bb.min.x + bb.max.x) / 2, bb.max.y - 9, (bb.min.z + bb.max.z) / 2); return top; });
+    S.add(new THREE.Mesh(E.mergeGeometries(caps), E.mat('#ffffff')));
+    const tp = []; for (let i = 0; i < 220; i++) { const z = 40 - r() * 420, s = r() < 0.5 ? -1 : 1, x = cx(z) + s * (13 + r() * 50); tp.push([x, H(x, z), z, 1.2 + r() * 1.6]); }
+    E.trees(S, tp, 'pine', r);
+    for (let i = 0; i < NG; i++) { const q = GATE(i), y = H(q.x, q.z);
+      [-1.4, 1.4].forEach((o) => { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.6, 5), E.mat(q.col)); p.position.set(q.x + o, y + 0.8, q.z); S.add(p); });
+      const f = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 0.6), new THREE.MeshBasicMaterial({ color: q.col, side: THREE.DoubleSide })); f.position.set(q.x, y + 1.3, q.z); S.add(f); }
+    // rampas de salto (cuñas de nieve)
+    JUMPS.forEach((z) => { const w = new THREE.Mesh(new THREE.BoxGeometry(8, 0.6, 4), E.mat('#eaf3ff')); const x = cx(z); w.position.set(x, H(x, z) + 0.1, z); w.rotation.x = -0.15 - 0.31; S.add(w);
+      const st = new THREE.Mesh(new THREE.PlaneGeometry(8, 0.4), new THREE.MeshBasicMaterial({ color: '#FF2EA8' })); st.position.set(x, H(x, z) + 0.55, z - 2); st.rotation.x = -Math.PI / 2 - 0.3; S.add(st); });
+    // salida y meta con público
+    const fz = FIN, fxx = cx(fz), fy = H(fxx, fz);
+    const arch = new THREE.Mesh(new THREE.TorusGeometry(7, 0.8, 8, 20, Math.PI), E.mat('#ff4d6d')); arch.position.set(fxx, fy, fz); S.add(arch);
+    const sarch = new THREE.Mesh(new THREE.TorusGeometry(6, 0.6, 8, 20, Math.PI), E.mat('#06d6a0')); sarch.position.set(cx(START), H(cx(START), START), START - 1); S.add(sarch);
+    const spots = []; for (let i = 0; i < 140; i++) { const s = i % 2 ? -1 : 1, x = fxx + s * (11 + Math.floor(i / 28) * 0.7), z = fz + 10 - (i % 28) * 0.7; spots.push([x, H(x, z), z, s > 0 ? -Math.PI / 2 : Math.PI / 2]); }
+    const fans = E.crowdFlat(S, spots, { rnd: r });
+    return { tick: (t) => fans.tick(t) };
+  },
+  setup(c) {
+    c.P.forEach((p, k) => {
+      [-0.09, 0.09].forEach((o) => { const s = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.03, 1.3), E.mat(k ? '#3a86ff' : '#ff2e4d')); s.position.set(o, 0.03, 0.12); s.rotation.x = 0.31; p.av.scene.add(s); });
+      ['left', 'right'].forEach((sd) => { const pl = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.9, 5), E.mat('#1b1b2a')); pl.position.y = -0.35; pl.rotation.x = 0.9; c.hold(k, sd, pl); });
+      const gog = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.08, 0.18), E.mat('#06d6a0')); gog.position.set(0, 0.17, 0.07); const hd = p.av.humanoid.getRawBoneNode('head'); if (hd) hd.add(gog);
+    });
+  },
+  start(c) {
+    G.phase = 'pre'; G.t = 0;
+    SK.forEach((s, k) => Object.assign(s, { x: cx(START) + (k ? 2 : -2), z: START, y: H(cx(START), START), vy: 0, air: false, v: 0, steer: 0, tuck: 0, gate: 0, miss: 0, done: false, time: 0, streak: 0, jumpT: 0 }));
+    let n = 3; c.ui.big('' + n, 'Prepárate', 800); c.sfx.play('click');
+    const cd = setInterval(() => { n--; if (n > 0) { c.ui.big('' + n, '', 800); c.sfx.play('click'); } else { clearInterval(cd); c.ui.big('¡YA!', '', 900); c.sfx.play('disparo'); G.phase = 'race'; c.FX.pop(cx(START), H(cx(START), START) + 3, START - 3, '¡YA!', '#FFE600', 1); } }, 900);
+    c.ui.cue(c.camOf(0) ? 'Inclínate para girar · agáchate: más rápido · salta en las rampas' : c.TOUCH ? 'Arrastra el dedo a los lados para girar · desliza arriba: saltar' : '← → girar · ↓ agacharse (más rápido) · ↑ u OK saltar', true, 5000);
+    c.ui.keys('← → girar · ↓ agacharse · ↑ / OK saltar');
+  },
+  update(c, dt) {
+    if (G.phase !== 'race') return; G.t += dt;
+    SK.forEach((s, k) => { if (s.done) return; s.time += dt; ctrl(c, k, s, dt); move(c, k, s, dt); });
+    hud(c);
+    if (SK.every((s) => s.done)) finish(c);
+  },
+  frame(c, dt) {
+    if (c.state === 'menu') return;
+    c.P.forEach((p, k) => { const s = SK[k]; if (s.z === undefined) return; const a = p.av.scene; a.position.set(s.x, s.y, s.z); a.rotation.y = Math.PI - s.steer * 0.5; a.rotation.z = -s.steer * 0.25; c.clip(k, 'Idle'); });
+  },
+  pose(c, k) {
+    const s = SK[k]; if (s.z === undefined) return; const t = 0.35 + s.tuck * 0.45;
+    ['left', 'right'].forEach((sd) => { c.rot(k, sd + 'UpperLeg', -t * 1.1, 0, 0, 1); c.rot(k, sd + 'LowerLeg', t * 1.9, 0, 0, 1); c.rot(k, sd + 'Foot', -t * 0.6, 0, 0, 1); });
+    c.rot(k, "spine", t * 0.8, 0, 0, 1);
+    if (c.camOf(k)) { c.mirror(k, { arms: 1, spine: 0, head: 0.6 }); return; }
+    ['left', 'right'].forEach((sd, i) => c.reach(k, sd, c.at(k, (i ? -1 : 1) * 0.28, 0.55 - s.tuck * 0.1 + Math.sin(c.t * 6 + i * 3) * 0.04 * (1 - s.tuck), 0.32), 1));
+  },
+  camera(c) {
+    const k = c.P[0].cpu && !c.P[1].cpu ? 1 : 0, s = SK[k]; if (s.z === undefined) return null;
+    return [new THREE.Vector3(s.x + 0.8, s.y + 2.5, s.z + 4.8), new THREE.Vector3(s.x - s.steer * 2, s.y - 3.5, s.z - 20), 6];
+  },
+  key(c, key, ok, slot) { const k = slot === 1 ? 1 : 0, s = SK[k]; if ((ok || key === 'ArrowUp') && !c.P[k].cpu) hop(c, k, s); },
+  touch(c, t, k) { const s = SK[k]; if (c.P[k].cpu) return;
+    if ((t.s === 'down' || t.s === 'move') && !t.mando) s.touchSteer = clamp((t.x - 0.5) * 3, -1, 1);
+    if (t.s === 'up') s.touchSteer = 0; if (t.s === 'swipe' && t.dy < -0.08) hop(c, k, s); },
+  photoSub: () => SK.map((s) => s.time ? (s.time + s.miss * 3).toFixed(1) + ' s' : '—').join(' – '),
+});
+
+function ctrl(c, k, s, dt) {
+  const p = c.P[k]; let st = 0, tk = 0;
+  if (p.cpu) { const q = GATE(Math.min(s.gate, NG - 1)), tx = s.gate < NG ? q.x : cx(s.z - 10), lv = c.lvlK(); st = clamp((tx - s.x) * 0.5 + rnd(-0.2, 0.2), -1, 1) * (0.7 + lv * 0.3); tk = lv > 0.7 && Math.abs(st) < 0.3 ? 1 : 0.4; if (s.jumpReady) hop(c, k, s); s.cpuK = 0.82 + lv * 0.2; }
+  else if (c.camOf(k)) { const B = c.body(k); st = clamp(B.lean * 1.6 + B.x * 0.6, -1, 1); tk = B.crouch; if (performance.now() - B.jumpAt < 120) hop(c, k, s); }
+  else { const tl = c.tilt(k); if (tl) st = clamp(tl[0] * 1.3, -1, 1); else if (s.touchSteer) st = s.touchSteer; else st = (c.held.has('ArrowRight') ? 1 : 0) - (c.held.has('ArrowLeft') ? 1 : 0); tk = c.held.has('ArrowDown') ? 1 : 0; }
+  s.steer = lerp(s.steer, st, 1 - Math.exp(-dt * 6)); s.tuck = lerp(s.tuck, tk, 1 - Math.exp(-dt * 5));
+}
+function hop(c, k, s) { if (s.air || G.phase !== 'race') return; s.air = true; s.vy = 4 + (s.jumpReady ? 5 : 0); if (s.jumpReady) { c.FX.pop(s.x, s.y + 2.5, s.z - 3, '¡VUELA!', '#00E5FF', 0.9); c.FX.punch(5); } c.sfx.play('salto'); s.jumpReady = false; }
+function move(c, k, s, dt) {
+  const off = Math.abs(s.x - cx(s.z)) > 9.5, vmax = (22 + s.tuck * 6) * (s.cpuK || 1) * (off ? 0.45 : 1) * (1 - Math.abs(s.steer) * 0.18);
+  s.v = lerp(s.v, vmax, 1 - Math.exp(-dt * (s.v < vmax ? 0.45 : 2)));
+  s.z -= s.v * dt; s.x += s.steer * 9 * dt;
+  const gy = H(s.x, s.z);
+  if (s.air) { s.vy -= 14 * dt; s.y += s.vy * dt + (gy - s.y) * 0; if (s.y <= gy) { s.y = gy; s.air = false; c.FX.dust([s.x, gy, s.z], '#ffffff', 10, 0.3); c.sfx.play('esqui'); if (s.vy < -6) c.FX.shake(0.3); } }
+  else s.y = gy;
+  // rampas: al pasar por ellas, sale volando
+  JUMPS.forEach((jz) => { if (!s.air && s.z < jz + 1.5 && s.z > jz - 1.5 && Math.abs(s.x - cx(jz)) < 4) { s.jumpReady = true; hop(c, k, s); } });
+  if (!s.air && !off && Math.random() < 0.5) c.FX.trail([s.x + rnd(-0.2, 0.2), s.y + 0.1, s.z + 0.6], '#ffffff', 0.18);
+  if (off && !s.air && Math.random() < 0.3) c.FX.dust([s.x, s.y, s.z], '#ffffff', 2, 0.25);
+  // puertas
+  if (s.gate < NG) { const q = GATE(s.gate); if (s.z < q.z) { s.gate++; const ok = Math.abs(s.x - q.x) < 1.4;
+    if (ok) { s.streak++; if (!c.P[k].cpu) { c.sfx.play('ok', 0.6); c.FX.ring(q.x, H(q.x, q.z) + 1, q.z, '#7CFF4D', 1.4, false); if (s.streak % 5 === 0) { c.FX.pop(q.x, H(q.x, q.z) + 2.6, q.z, '¡RACHA x' + s.streak + '!', '#FFE600', 0.9); c.FX.stars([q.x, H(q.x, q.z) + 1.5, q.z], 6); } } }
+    else { s.miss++; s.streak = 0; if (!c.P[k].cpu) { c.sfx.play('error', 0.6); c.FX.pop(q.x, H(q.x, q.z) + 2.4, q.z, '+3 s', '#FF2EA8', 0.8); } } } }
+  if (s.z <= FIN) { s.done = true; s.time = +s.time.toFixed(2); c.FX.confetti([s.x, s.y + 3, FIN - 2], true, 3); c.crowd('ole'); c.FX.pop(s.x, s.y + 3, FIN - 2, '¡META!', '#FFE600', 1); }
+}
+function hud(c) { const t = (k) => (SK[k].time + SK[k].miss * 3).toFixed(1);
+  c.ui.score(c.ui.pl(0, t(0)) + `<span class="tag">Puerta ${Math.min(NG, SK[0].gate)}/${NG} · ${Math.round(SK[0].v * 3.6)} km/h · fallas ${SK[0].miss}</span>` + c.ui.pl(1, t(1))); }
+function finish(c) {
+  G.phase = 'done'; const T = SK.map((s) => s.time + s.miss * 3), w = T[0] <= T[1] ? 0 : 1;
+  c.end(w, c.P[w].cpu ? 'Gana MiVibra' : '¡Gana ' + c.P[w].name + '!', T.map((x) => x.toFixed(1) + ' s').join(' – '));
+}
+</script>
+</body>
+</html>

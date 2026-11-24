@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Baile · MiVibra Movimiento</title>
+<style>
+#track{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);width:min(860px,94vw);height:104px;z-index:5;display:none;pointer-events:none}
+#track.on{display:block}
+#track .rail{position:absolute;inset:18px 0;border-radius:24px;background:rgba(20,8,48,.7);border:1px solid rgba(255,255,255,.2)}
+#track .hit{position:absolute;left:12%;top:6px;width:92px;height:92px;margin-left:-46px;border-radius:22px;border:3px solid #FFE600;box-shadow:0 0 18px #FFE600, inset 0 0 14px rgba(255,230,0,.5)}
+#track .card{position:absolute;top:12px;width:80px;height:80px;margin-left:-40px;border-radius:18px;background:linear-gradient(160deg,#2a1260,#170a3a);border:2px solid var(--c);display:grid;place-items:center;box-shadow:0 0 14px var(--c)}
+#track .card svg{width:56px;height:56px}#track .card b{position:absolute;right:4px;bottom:0;font:900 20px sans-serif;color:var(--c)}
+#track .card.ok{opacity:.25}#track .card path{stroke:var(--c);stroke-width:7;stroke-linecap:round;fill:none}#track .card circle{fill:var(--c)}
+#combo{position:fixed;right:22px;top:110px;z-index:5;text-align:right;display:none}#combo.on{display:block}
+#combo b{display:block;font:900 54px 'Bricolage Grotesque',sans-serif;color:#FFE600;text-shadow:0 0 18px #FF2EA8}#combo span{font-weight:800;letter-spacing:.14em;font-size:13px}
+#judge{position:fixed;left:50%;top:30%;transform:translateX(-50%);z-index:5;font:900 46px 'Bricolage Grotesque',sans-serif;pointer-events:none;opacity:0;transition:opacity .25s}
+#judge.on{opacity:1;animation:jpop .35s cubic-bezier(.2,1.6,.4,1)}@keyframes jpop{0%{transform:translateX(-50%) scale(.5)}100%{transform:translateX(-50%) scale(1)}}
+#file{display:none}
+</style>
+</head>
+<body>
+<input type="file" id="file" accept="audio/*">
+<div id="track"><div class="rail"></div><div class="hit"></div><div id="cards"></div></div>
+<div id="combo"><span>RACHA</span><b id="comboN">0</b></div><div id="judge"></div>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@2.0.4/dist/qrcode.js"></script>
+<script src="../mano.js"></script>
+<script type="importmap">{"imports":{"three":"../vendor/three-0.183.2/three.module.min.js","three/addons/":"../vendor/three-0.183.2/addons/"}}</script>
+<script type="module">
+import { startGame, THREE, E, clamp, lerp, rnd, dance } from '../juego.js';
+
+// Baile: como en las fiestas. Copia al bailarín (en espejo) siguiendo las tarjetas. Música propia MiVibra
+// o tu propia canción: se detectan el ritmo (BPM) y las partes fuertes, y se arma la coreografía sola.
+// Pasos: ángulo de cada brazo visto desde la persona (0 = a su derecha, 90 = arriba, 180 = a su izquierda).
+const MOVES = {
+  arriba: { R: 70, L: 110, key: 'ArrowUp', icon: '↑', col: '#FFE600' },
+  abajo: { R: -60, L: -120, key: 'ArrowDown', icon: '↓', col: '#00E5FF' },
+  derecha: { R: 15, L: 15, key: 'ArrowRight', icon: '→', col: '#FF2EA8' },
+  izquierda: { R: 165, L: 165, key: 'ArrowLeft', icon: '←', col: '#7CFF4D' },
+  disco: { R: 50, L: -130, key: 'ArrowRight', icon: '↗', col: '#B04DFF' },
+  disco2: { R: -50, L: 130, key: 'ArrowLeft', icon: '↖', col: '#FF6A3D' },
+  avion: { R: 0, L: 180, key: 'ArrowDown', icon: '⟷', col: '#00E5FF' },
+  victoria: { R: 60, L: 120, key: 'ArrowUp', icon: '✌', col: '#FFE600' },
+};
+const EASY = ['arriba', 'abajo', 'derecha', 'izquierda'], HARD = ['disco', 'disco2', 'avion', 'arriba', 'victoria'];
+const SONGS = [
+  { id: 's0', name: 'Vibra Latina', bpm: 96, style: 'latin', key: 0, dance: 'salsa' },
+  { id: 's1', name: 'Neón Pop', bpm: 116, style: 'pop', key: 5, dance: 'disco' },
+  { id: 's2', name: 'Fiesta Electro', bpm: 126, style: 'electro', key: 2, dance: 'festejo' },
+];
+const G = { song: null, beats: [], moves: [], idx: 0, t0: 0, score: [0, 0], combo: [0, 0], best: [0, 0], perfect: [0, 0], phase: 'idle', energy: 0 };
+let pads = [], beams = [], ballM, ringA, ringB, glow, AC = null, master = null, srcNode = null;
+
+// ---------- Música MiVibra (sintetizada en vivo) ----------
+function ac() { if (!AC) { AC = new (window.AudioContext || window.webkitAudioContext)(); master = AC.createGain(); master.gain.value = 0.8; master.connect(AC.destination); } if (AC.state === 'suspended') AC.resume(); return AC; }
+const nz = (() => { let b = null; return () => { if (b) return b; const a = ac(); b = a.createBuffer(1, a.sampleRate, a.sampleRate); const d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b; }; })();
+function kick(t, v = 1) { const a = ac(), o = a.createOscillator(), g = a.createGain(); o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.12); g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.3); o.connect(g).connect(master); o.start(t); o.stop(t + 0.32); }
+function noiseHit(t, dur, v, f, type = 'highpass') { const a = ac(), n = a.createBufferSource(), fl = a.createBiquadFilter(), g = a.createGain(); n.buffer = nz(); fl.type = type; fl.frequency.value = f; g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur); n.connect(fl).connect(g).connect(master); n.start(t, Math.random() * 0.5); n.stop(t + dur + 0.02); }
+function tone(t, f, dur, v, type = 'sawtooth', cut = 1200) { const a = ac(), o = a.createOscillator(), fl = a.createBiquadFilter(), g = a.createGain(); o.type = type; o.frequency.value = f; fl.type = 'lowpass'; fl.frequency.value = cut; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + 0.01); g.gain.exponentialRampToValueAtTime(0.001, t + dur); o.connect(fl).connect(g).connect(master); o.start(t); o.stop(t + dur + 0.05); }
+const PROG = [[0, 3, 7], [8, 12, 15], [3, 7, 10], [10, 14, 17]];   // i – VI – III – VII
+function synthSong(S) {
+  const bpm = S.bpm, beat = 60 / bpm, bars = Math.round(84 / (beat * 4)), plan = [];
+  for (let b = 0; b < bars; b++) { const sec = b < 4 ? 0 : b >= bars - 4 ? 0 : Math.floor((b - 4) / 8) % 2 ? 2 : 1; plan.push(sec); }
+  return { bpm, beat, bars, plan, dur: bars * 4 * beat, energy: (bar) => plan[bar] || 0,
+    play(t0) { const root = 110 * Math.pow(2, S.key / 12); let bar = 0; const self = this;
+      const sched = () => { const now = ac().currentTime; while (bar < bars && t0 + bar * 4 * beat < now + 0.6) { const bt = t0 + bar * 4 * beat, e = plan[bar], ch = PROG[bar % 4];
+          for (let i = 0; i < 4; i++) { const t = bt + i * beat;
+            if (S.style === 'latin') { kick(t, 0.9); noiseHit(t + beat * 0.75, 0.09, e ? 0.4 : 0.2, 1800, 'bandpass'); if (i % 2) noiseHit(t + beat * 0.5, 0.12, e ? 0.5 : 0.25, 2500, 'bandpass'); }
+            else { if (S.style === 'electro' || i % 2 === 0) kick(t, 1); if (i % 2) noiseHit(t, 0.16, e ? 0.5 : 0.3, 1500, 'bandpass'); }
+            if (e) { noiseHit(t, 0.03, 0.12, 7000); noiseHit(t + beat / 2, 0.03, 0.18, 7000); }
+            const bn = root / 2 * Math.pow(2, ch[0] / 12); tone(t, bn, beat * 0.45, 0.25, 'square', 500); if (S.style !== 'latin') tone(t + beat / 2, bn * 2, beat * 0.3, 0.12, 'square', 600); }
+          if (e) ch.forEach((n) => tone(bt, root * 2 * Math.pow(2, n / 12), beat * 3.6, 0.05, 'sawtooth', e === 2 ? 2600 : 1400));
+          if (e === 2) for (let i = 0; i < 8; i++) tone(bt + i * beat / 2, root * 4 * Math.pow(2, ch[(i * 2) % 3] / 12), beat * 0.3, 0.05, 'triangle', 4000);
+          bar++; }
+        if (bar < bars && self.on) setTimeout(sched, 200); };
+      this.on = true; sched(); },
+    stop() { this.on = false; } };
+}
+// ---------- Tu canción: ritmo y partes fuertes ----------
+async function analyze(file) {
+  const a = ac(), buf = await a.decodeAudioData(await file.arrayBuffer()), sr = buf.sampleRate, ch = buf.getChannelData(0), hop = 512, n = Math.floor(ch.length / hop);
+  const en = new Float32Array(n); for (let i = 0; i < n; i++) { let s = 0; for (let j = 0; j < hop; j++) { const v = ch[i * hop + j]; s += v * v; } en[i] = Math.sqrt(s / hop); }
+  const on = new Float32Array(n); for (let i = 1; i < n; i++) on[i] = Math.max(0, en[i] - en[i - 1]);
+  const fps = sr / hop; let best = 0, bpm = 120;
+  for (let b = 80; b <= 160; b += 0.5) { const lag = fps * 60 / b; let s = 0; for (let i = 0; i + lag * 4 < n; i += 2) s += on[i] * (on[Math.round(i + lag)] + on[Math.round(i + lag * 2)] * 0.5); if (s > best) { best = s; bpm = b; } }
+  const per = fps * 60 / bpm; let ph = 0, pb = 0; for (let o = 0; o < per; o++) { let s = 0; for (let i = o; i < n; i += per) s += on[Math.round(i)]; if (s > pb) { pb = s; ph = o; } }
+  const beat = 60 / bpm, off = ph / fps, bars = Math.floor((buf.duration - off) / (beat * 4)), be = [];
+  for (let b = 0; b < bars; b++) { let s = 0, c = 0; const i0 = Math.floor((off + b * 4 * beat) * fps), i1 = Math.floor((off + (b + 1) * 4 * beat) * fps); for (let i = i0; i < i1 && i < n; i++) { s += en[i]; c++; } be.push(c ? s / c : 0); }
+  const sorted = be.slice().sort((x, y) => x - y), lo = sorted[Math.floor(sorted.length * 0.25)] || 0, hi = sorted[Math.floor(sorted.length * 0.55)] || 0;
+  const plan = be.map((v) => (v >= hi ? 2 : v >= lo ? 1 : 0));
+  return { bpm, beat, bars, plan, off, dur: buf.duration, name: file.name.replace(/\.[^.]+$/, '').slice(0, 30), energy: (bar) => plan[bar] || 0,
+    play(t0) { srcNode = a.createBufferSource(); srcNode.buffer = buf; srcNode.connect(master); srcNode.start(t0 - off >= a.currentTime ? t0 - off : a.currentTime, t0 - off >= a.currentTime ? 0 : a.currentTime - (t0 - off)); },
+    stop() { try { srcNode && srcNode.stop(); } catch (e) {} } };
+}
+// coreografía: un paso por compás (en las partes fuertes, cada 2 tiempos y pasos más difíciles)
+function choreo(song, lvl) {
+  const out = [], beat = song.beat, off = song.off || 0; let last = '';
+  for (let b = 2; b < song.bars - 1; b++) { const e = song.plan[b], per = e === 2 && lvl > 0 ? 2 : 4, pool = e === 0 ? EASY.slice(0, 2) : e === 1 || lvl === 0 ? EASY : HARD;
+    for (let q = 0; q < 4; q += per) { let m; do m = pool[(Math.random() * pool.length) | 0]; while (m === last && pool.length > 1); last = m; out.push({ m, t: off + (b * 4 + q) * beat, len: per * beat, e, res: [null, null], best: [0, 0] }); } }
+  return out;
+}
+
+const ctx = await startGame({
+  id: 'baile', title: 'Baile', kicker: 'MIVIBRA MOVIMIENTO · DISCO NEÓN', loading: 'Encendiendo el neón…', fov: 50, players: 3, noDefeat: [2], poseInMenu: true,
+  sub: 'Copia al bailarín como en un espejo. Elige una canción o carga la tuya.', lvl: true, startSound: 'perfecto', ambient: ['aplausos'],
+  how: 'Ponte frente al celular con el cuerpo completo: tus brazos deben quedar igual que el bailarín (en espejo).',
+  levels: [{ name: 'Fácil', k: 0 }, { name: 'Normal', k: 1 }, { name: 'Experto', k: 2 }],
+  modes: SONGS.map((s) => ({ id: s.id, label: s.name + ' · ' + s.bpm + ' BPM', icon: '♪' })).concat([{ id: 'up', label: 'Cargar mi canción', icon: '⤒' }, { id: 'two', label: '2 jugadores (' + SONGS[1].name + ')', icon: '⚔', two: true }]),
+  orbit: { c: [0, 1.4, -1.5], r: 6, y: 2.6 },
+  partyWord: () => '¡QUÉ BAILE!',
+  async scene({ S }) {
+    const r = E.seeded(51);
+    S.background = new THREE.Color('#0a0420');
+    E.lights(S, { sky: '#ffd6ff', ground: '#2a0a50', hemi: 1.4, sunI: 1.9, dir: [0, 6, 9] });
+    const neon = (col) => new THREE.MeshBasicMaterial({ color: col });
+    const fl = E.canvasTex(512, 512, (c, w, h) => { c.fillStyle = '#120830'; c.fillRect(0, 0, w, h); c.strokeStyle = 'rgba(255,46,170,.55)'; c.lineWidth = 3; for (let i = 0; i <= 8; i++) { c.beginPath(); c.moveTo(i * w / 8, 0); c.lineTo(i * w / 8, h); c.stroke(); c.beginPath(); c.moveTo(0, i * h / 8); c.lineTo(w, i * h / 8); c.stroke(); } }, [3, 3]);
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(24, 24), new THREE.MeshBasicMaterial({ map: fl })); floor.rotation.x = -Math.PI / 2; S.add(floor);
+    const wallM = new THREE.MeshBasicMaterial({ color: '#160a3a' });
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(24, 10), wallM); back.position.set(0, 5, -7); S.add(back);
+    [-1, 1].forEach((s) => { const w = new THREE.Mesh(new THREE.PlaneGeometry(20, 10), wallM); w.position.set(s * 9, 5, 2); w.rotation.y = -s * Math.PI / 2; S.add(w); });
+    const roof = new THREE.Mesh(new THREE.PlaneGeometry(24, 20), new THREE.MeshBasicMaterial({ color: '#0d0628' })); roof.position.set(0, 8, 2); roof.rotation.x = Math.PI / 2; S.add(roof);
+    const cols = ['#ff2ea8', '#00e5ff', '#ffe600', '#7cff4d', '#b04dff'];
+    G.arcs = cols.map((col, i) => { const a = new THREE.Mesh(new THREE.TorusGeometry(2.6 + i * 0.75, 0.07, 6, 48, Math.PI), neon(col)); a.position.set(0, 0.05, -6.8 + i * 0.02); S.add(a); return a; });
+    for (let i = 0; i < 6; i++) [-1, 1].forEach((s) => { const t = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 6, 6), neon(cols[(i + (s > 0 ? 2 : 0)) % 5])); t.position.set(s * 8.95, 3.4, -5 + i * 1.7); t.rotation.x = 0.5 * (i % 2 ? 1 : -1); S.add(t); });
+    const glowT = E.canvasTex(256, 256, (c) => { const g = c.createRadialGradient(128, 128, 10, 128, 128, 128); g.addColorStop(0, 'rgba(255,60,200,.55)'); g.addColorStop(0.5, 'rgba(120,40,255,.35)'); g.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = g; c.fillRect(0, 0, 256, 256); });
+    glow = new THREE.Mesh(new THREE.PlaneGeometry(9, 9), new THREE.MeshBasicMaterial({ map: glowT, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); glow.position.set(0, 2.2, -4); S.add(glow);
+    const stage = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.6, 0.3, 40), E.mat('#24104f')); stage.position.set(0, 0.15, -2.6); S.add(stage);
+    ringA = new THREE.Mesh(new THREE.TorusGeometry(2.45, 0.06, 6, 60), neon('#00e5ff')); ringA.rotation.x = Math.PI / 2; ringA.position.set(0, 0.31, -2.6); S.add(ringA);
+    ringB = new THREE.Mesh(new THREE.TorusGeometry(1.7, 0.04, 6, 48), neon('#ff2ea8')); ringB.rotation.x = Math.PI / 2; ringB.position.set(0, 0.03, 1.6); S.add(ringB);
+    const P6 = [[-0.75, 2.1], [0.75, 2.1], [-0.45, 1.1], [0.45, 1.1], [-1.3, 1.5], [1.3, 1.5]];
+    pads = P6.map((p) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.02, 24), new THREE.MeshBasicMaterial({ color: '#3a2070' })); m.position.set(p[0], 0.02, p[1]); S.add(m);
+      const h = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 1.6, 24, 1, true), new THREE.MeshBasicMaterial({ color: '#ffe600', transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide })); h.position.set(p[0], 0.82, p[1]); S.add(h); return { m, h, on: 0 }; });
+    ballM = new THREE.Mesh(new THREE.IcosahedronGeometry(0.55, 1), new THREE.MeshToonMaterial({ color: '#e8ecff', flatShading: true, emissive: '#6a5aa0', emissiveIntensity: 0.5 })); ballM.position.set(0, 7.2, -2); S.add(ballM);
+    beams = [['#ff2ea8', -3, 0.5, 0.1], ['#00e5ff', 3, -0.5, 0.1], ['#ffe600', -1, 0.15, -0.2], ['#7cff4d', 1.2, -0.2, -0.2]].map(([col, x, rz, rx]) => { const b = new THREE.Mesh(new THREE.ConeGeometry(1.5, 8, 16, 1, true), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.07, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending })); b.position.set(x, 4, -2); b.rotation.set(rx, 0, rz); b.geometry.translate(0, -4, 0); b.position.y = 8; S.add(b); return b; });
+    // bailarines de fondo en silueta
+    const sil = []; for (let i = 0; i < 10; i++) sil.push([-6.5 + i * 1.45 + r() * 0.3, 0, -5.6 + r() * 0.4, 0]);
+    const fans = E.crowd(S, sil, { rnd: r });
+    return { tick: (t) => fans.tick(t) };
+  },
+  setup(c) {
+    const P = c.P; P[2].name = 'Guía'; P[2].av.scene.position.set(0, 0.3, -2.6); P[2].av.scene.rotation.y = 0; P[2].av.scene.scale.setScalar(1.4);
+    // contorno de neón del guía
+    P[2].av.scene.traverse((o) => { if (o.isSkinnedMesh) { const h = o.clone(); h.material = new THREE.MeshBasicMaterial({ color: '#00e5ff', side: THREE.BackSide }); h.scale.multiplyScalar(1.04); o.parent.add(h); } });
+    P[0].av.scene.position.set(-0.55, 0, 1.6); P[1].av.scene.position.set(0.85, 0, 1.6); P.forEach((p, k) => { if (k < 2) p.av.scene.rotation.y = Math.PI; });
+  },
+  async start(c, mode) {
+    stopMusic(); G.phase = 'load'; c.P[1].av.scene.visible = mode === 'two';
+    c.P[0].av.scene.position.x = mode === 'two' ? -0.85 : 0;
+    let song;
+    if (mode === 'up') { song = await pickFile(c); if (!song) { c.menu(); return; } }
+    else { const S = SONGS.find((s) => s.id === mode) || SONGS[1]; song = synthSong(S); song.name = S.name; song.style = S.dance; }
+    G.song = song; G.moves = choreo(song, c.lvl); G.idx = 0; G.score = [0, 0]; G.combo = [0, 0]; G.best = [0, 0]; G.perfect = [0, 0];
+    document.getElementById('track').classList.add('on'); document.getElementById('combo').classList.add('on');
+    c.ui.big(song.name, Math.round(song.bpm) + ' BPM · ' + G.moves.length + ' pasos', 2200);
+    c.ui.cue(c.camOf(0) ? 'Copia al bailarín en espejo cuando la tarjeta llegue al cuadro amarillo' : c.TOUCH ? 'Toca la flecha de cada tarjeta cuando llegue al cuadro amarillo' : 'Pulsa la flecha de cada tarjeta cuando llegue al cuadro amarillo', true, 5000);
+    c.ui.keys('');
+    const a = ac(); G.t0 = a.currentTime + 2.4; song.play(G.t0); G.phase = 'dance'; hud(c);
+  },
+  update(c, dt) {
+    if (G.phase !== 'dance' || !AC) return;
+    if (c.paused) return;
+    const t = AC.currentTime - G.t0, beat = G.song.beat;
+    G.beat = t / beat; G.bar = Math.floor((t - (G.song.off || 0)) / (beat * 4)); G.energy = lerp(G.energy, G.song.energy(G.bar), 0.05);
+    // calificar con la cámara: el mejor momento de la segunda mitad del paso
+    G.moves.forEach((mv) => { if (t < mv.t - beat * 0.3 || t > mv.t + mv.len) return; for (let k = 0; k < 2; k++) { if (c.P[k].cpu || !c.camOf(k) || mv.res[k]) continue; const B = c.body(k); if (!B.ok) continue;
+      const d = (a, b) => { let x = Math.abs(a - b) % 360; return x > 180 ? 360 - x : x; }, M = MOVES[mv.m], s = 1 - (d(B.arm('r'), M.R) + d(B.arm('l'), M.L)) / 180; mv.best[k] = Math.max(mv.best[k], s); } });
+    G.moves.forEach((mv) => { if (t > mv.t + mv.len * 0.75) for (let k = 0; k < 2; k++) if (!mv.res[k] && !c.P[k].cpu && (c.camOf(k) || t > mv.t + 0.35 * beat * 2)) judge(c, k, mv, c.camOf(k) ? (mv.best[k] > 0.8 ? 2 : mv.best[k] > 0.62 ? 1 : 0) : 0); });
+    // fin de la canción
+    if (t > G.song.dur - (G.song.off || 0) + 0.5 || t > (G.moves.length ? G.moves[G.moves.length - 1].t + 4 * beat : 0) && G.idx >= G.moves.length) finish(c);
+    drawTrack(t); hud(c);
+  },
+  frame(c, dt, now) {
+    const b = G.beat || now * 2, ph = b % 1, pulse = Math.pow(1 - ph, 3), E2 = G.phase === 'dance' ? G.energy : 0.3;
+    ballM.rotation.y += dt * 0.6; ringA.scale.setScalar(1 + pulse * 0.04); ringB.material.color.setHSL((now * 0.1) % 1, 1, 0.55);
+    beams.forEach((bm, i) => { bm.rotation.z = Math.sin(now * (0.6 + i * 0.13) + i) * 0.5; bm.material.opacity = 0.05 + E2 * 0.05 + pulse * 0.05 * E2; });
+    glow.material.opacity = 0.6 + pulse * 0.4 * E2; G.arcs.forEach((a, i) => { a.scale.setScalar(1 + (i === Math.floor(b) % 5 ? pulse * 0.06 : 0)); });
+    pads.forEach((p, i) => { p.on = Math.max(0, p.on - dt * 2.5); const on = (Math.floor(b) % 3) === Math.floor(i / 2) && G.phase === 'dance'; if (on && ph < 0.1) p.on = 1;
+      p.m.material.color.set(p.on > 0.05 ? (i % 2 ? '#ff2ea8' : '#ffe600') : '#3a2070'); p.h.material.opacity = p.on * 0.18; p.h.material.color.set(i % 2 ? '#ff2ea8' : '#ffe600'); });
+  },
+  pose(c, k, av, dt) {
+    c.clip(k, 'Idle');
+    const bpm = G.song ? G.song.bpm : 110, t = G.phase === 'dance' && AC ? AC.currentTime - G.t0 : c.t;
+    dance(av, Math.max(0, t), (G.song && G.song.style) || 'disco', 0.9, bpm);
+    if (k === 2) { // guía: muestra el paso actual (en espejo) y anticipa el siguiente
+      const mv = currentMove(t), M = mv ? MOVES[mv.m] : null; if (!M) return;
+      const rad = (a) => a * Math.PI / 180, bob = Math.sin(t * bpm / 60 * Math.PI) * 0.04;
+      c.arm(k, 'left', [Math.cos(rad(M.R)), Math.sin(rad(M.R)) + bob, 0.18]); c.arm(k, 'right', [Math.cos(rad(M.L)), Math.sin(rad(M.L)) + bob, 0.18]); return; }
+    if (c.camOf(k)) { c.mirror(k, { arms: 1, spine: 0.6, head: 1 }); return; }
+    // sin cámara: el avatar hace el paso que marcaste
+    const M = MOVES[(G.lastKey && G.lastKey[k]) || (currentMove(t) || {}).m]; if (!M || G.phase !== 'dance') return;
+    const rad = (a) => a * Math.PI / 180; c.arm(k, 'right', [-Math.cos(rad(M.R)), Math.sin(rad(M.R)), 0.15]); c.arm(k, 'left', [-Math.cos(rad(M.L)), Math.sin(rad(M.L)), 0.15]);
+  },
+  camera(c) { const sw = Math.sin(c.t * 0.25) * 0.4; return [new THREE.Vector3(1.0 + sw, 2.9, 6.6), new THREE.Vector3(-0.1, 1.1, -2.4), 2]; },
+  key(c, key, ok, slot) { if (G.phase !== 'dance') return; const k = slot === 1 && !c.P[1].cpu ? 1 : 0; pressMove(c, k, key); },
+  touch(c, t, k) { if (G.phase !== 'dance' || t.s !== 'swipe') return; const key = Math.abs(t.dx) > Math.abs(t.dy) ? (t.dx > 0 ? 'ArrowRight' : 'ArrowLeft') : (t.dy < 0 ? 'ArrowUp' : 'ArrowDown'); pressMove(c, k, key); },
+  photoSub: () => G.score[0] + ' puntos · racha ' + G.best[0],
+  endTitle: () => '¡Qué baile!',
+});
+ctx.ui.touch([{ label: '←', key: 'ArrowLeft' }, { label: '↑', key: 'ArrowUp' }, { label: '↓', key: 'ArrowDown' }, { label: '→', key: 'ArrowRight' }]);
+addEventListener('click', () => { if (AC && AC.state === 'suspended' && !ctx.paused) AC.resume(); });
+setInterval(() => { if (AC && G.phase === 'dance') { if (ctx.paused && AC.state === 'running') AC.suspend(); else if (!ctx.paused && AC.state === 'suspended') AC.resume(); } }, 300);
+
+function currentMove(t) { let m = null; for (const mv of G.moves) { if (mv.t - G.song.beat * 0.5 <= t) m = mv; else break; } return m; }
+function pressMove(c, k, key) {
+  if (c.P[k].cpu) return; const t = AC.currentTime - G.t0, beat = G.song.beat; G.lastKey = G.lastKey || [];
+  const mv = G.moves.find((m) => !m.res[k] && Math.abs(m.t - t) < beat * 0.6); const hit = Object.keys(MOVES).find((n) => MOVES[n].key === key); if (hit) { G.lastKey[k] = hit; setTimeout(() => { if (G.lastKey[k] === hit) G.lastKey[k] = null; }, 600); }
+  if (!mv) return; if (MOVES[mv.m].key !== key) return judge(c, k, mv, 0);
+  const e = Math.abs(mv.t - t) / beat; judge(c, k, mv, e < 0.22 ? 2 : e < 0.45 ? 1 : 0);
+}
+function judge(c, k, mv, q) {
+  mv.res[k] = ['fallo', 'bien', 'perfecto'][q]; const el = document.getElementById('judge'), av = c.P[k].av.scene.position;
+  if (q) { G.combo[k]++; G.best[k] = Math.max(G.best[k], G.combo[k]); const mult = 1 + Math.min(3, Math.floor(G.combo[k] / 5)); G.score[k] += (q === 2 ? 100 : 50) * mult; if (q === 2) G.perfect[k]++; }
+  else G.combo[k] = 0;
+  if (k === 0 || c.P[0].cpu) { el.textContent = ['¡UPS!', '¡BIEN!', '¡PERFECTO!'][q]; el.style.color = ['#B9B1A8', '#00E5FF', '#FFE600'][q]; el.classList.remove('on'); void el.offsetWidth; el.classList.add('on'); clearTimeout(el.h); el.h = setTimeout(() => el.classList.remove('on'), 500); }
+  if (q === 2) { c.FX.stars([av.x, 1.4, av.z], 5, MOVES[mv.m].col); c.FX.sparks([av.x, 1.2, av.z], 0.3, MOVES[mv.m].col); c.sfx.play('ritmo', 0.5); }
+  if (q && G.combo[k] > 0 && G.combo[k] % 10 === 0) { c.FX.pop(av.x, 2.4, av.z, '¡RACHA x' + G.combo[k] + '!', '#FF2EA8', 0.8); c.FX.confetti([0, 4, 0], false, 3); c.crowd('aplausos'); c.FX.flash('#FF2EA8', 0.2); }
+  if (!q && G.combo[k] >= 8) c.sfx.play('error', 0.4);
+}
+function drawTrack(t) {
+  const box = document.getElementById('cards'), beat = G.song.beat, W = box.parentElement.clientWidth;
+  const vis = G.moves.filter((m) => m.t > t - beat * 1.2 && m.t < t + beat * 8);
+  box.innerHTML = vis.map((m) => { const M = MOVES[m.m], x = (0.12 + (m.t - t) / (beat * 8) * 0.88) * W, r = (a) => a * Math.PI / 180;
+    // figurita: brazos en espejo (como los verás en el guía)
+    const ax = (a) => (28 + Math.cos(r(a)) * 20).toFixed(0), ay = (a) => (22 - Math.sin(r(a)) * 20).toFixed(0);
+    return `<div class="card${m.res[0] ? ' ok' : ''}" style="left:${x.toFixed(0)}px;--c:${M.col}"><svg viewBox="0 0 56 56"><circle cx="28" cy="10" r="6"/><path d="M28 18L28 38M28 38L20 52M28 38L36 52M28 22L${ax(M.R)} ${ay(M.R)}M28 22L${ax(M.L)} ${ay(M.L)}"/></svg><b>${M.icon}</b></div>`; }).join('');
+  G.idx = G.moves.filter((m) => m.t < t).length;
+}
+function hud(c) { const two = !c.P[1].cpu; document.getElementById('comboN').textContent = 'x' + G.combo[0];
+  c.ui.score(c.ui.pl(0, G.score[0]) + `<span class="tag">${G.song ? G.song.name : ''} · ${Math.round(G.idx / Math.max(1, G.moves.length) * 100)}%</span>` + (two ? c.ui.pl(1, G.score[1]) : '')); }
+function stopMusic() { if (G.song) G.song.stop(); }
+function finish(c) {
+  if (G.phase !== 'dance') return; G.phase = 'done'; stopMusic(); document.getElementById('track').classList.remove('on'); document.getElementById('combo').classList.remove('on');
+  const max = G.moves.length * 100 * 3, st = (k) => Math.max(1, Math.min(5, Math.ceil(G.score[k] / max * 5 * 1.6))), two = !c.P[1].cpu;
+  const w = two ? (G.score[0] >= G.score[1] ? 0 : 1) : 0;
+  c.end(w, two ? '¡Gana ' + c.P[w].name + '!' : '★'.repeat(st(0)) + '☆'.repeat(5 - st(0)), G.score[w] + ' puntos · ' + G.perfect[w] + ' perfectos · racha ' + G.best[w]);
+}
+function pickFile(c) {
+  return new Promise((ok) => { const f = document.getElementById('file'); f.value = ''; c.ui.cue('Elige una canción de tu equipo (mp3, m4a, wav…)', true, 6000);
+    f.onchange = async () => { const file = f.files[0]; if (!file) return ok(null); c.ui.big('Analizando…', 'Buscando el ritmo de tu canción', 4000);
+      try { const s = await analyze(file); s.style = s.bpm < 105 ? 'salsa' : s.bpm < 122 ? 'disco' : 'festejo'; c.ui.cue('Ritmo: ' + Math.round(s.bpm) + ' BPM · ' + s.plan.filter((x) => x === 2).length + ' compases fuertes', false, 4000); ok(s); }
+      catch (e) { c.ui.cue('No pude leer ese archivo de audio', true); ok(null); } };
+    f.click(); setTimeout(() => { if (!f.files.length) { /* sigue esperando a que elija */ } }, 1000); });
+}
+</script>
+</body>
+</html>

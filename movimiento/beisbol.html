@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Béisbol · MiVibra Movimiento</title>
+</head>
+<body>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@2.0.4/dist/qrcode.js"></script>
+<script src="../mano.js"></script>
+<script type="importmap">{"imports":{"three":"../vendor/three-0.183.2/three.module.min.js","three/addons/":"../vendor/three-0.183.2/addons/"}}</script>
+<script type="module">
+import { startGame, THREE, E, clamp, lerp, rnd } from '../juego.js';
+
+// Béisbol: derby de batazos. 2 entradas de 5 lanzamientos por jugador. Sencillo 1, doble 2, triple 3, jonrón 4.
+const HOME = new THREE.Vector3(0, 0, 5.5), MOUND = new THREE.Vector3(0, 0.25, -4), WALL = 29.5, PITCHES = 5, INN = 2;
+const G = { inn: 0, bat: 0, n: 0, sc: [0, 0], phase: 'wait', pitch: null, hit: null, swingT: -1, log: [] };
+let ballM, fans;
+
+const ctx = await startGame({
+  id: 'beisbol', title: 'Béisbol', kicker: 'MIVIBRA MOVIMIENTO · ESTADIO', loading: 'Marcando el diamante…', fov: 50,
+  sub: 'Derby de batazos: 2 entradas de 5 lanzamientos. ¡Busca el jonrón!', turns: true, startSound: 'silbato',
+  how: 'Ponte de lado como bateador y haz el swing con las dos manos justo cuando llegue la pelota.',
+  modes: [{ id: 'cpu', label: 'Contra MiVibra', icon: '▶' }, { id: 'two', label: '2 jugadores (por turnos)', icon: '⚔', two: true }],
+  orbit: { c: [0, 2, -6], r: 22, y: 9 },
+  onSound(c) { c.amb('estadio-ambiente', 0.2); },
+  async scene(c0) {
+    const S = c0.S, r = E.seeded(21);
+    E.sky(S, '#ff9a5a', '#ffe0b0', '#ffc38a'); E.lights(S, { sky: '#ffe6c8', sun: '#ffd2a0', dir: [-8, 8, -6], ground: '#5aa04a' }); E.clouds(S, 6, 220, 50, r);
+    const grass = E.canvasTex(256, 256, (c, w, h) => { for (let i = 0; i < 8; i++) { c.fillStyle = i % 2 ? '#5fcf4a' : '#52bf3f'; c.fillRect(i * w / 8, 0, w / 8, h); } }, [6, 6]);
+    E.plane(S, 160, 160, new THREE.MeshToonMaterial({ map: grass }));
+    const dirt = new THREE.Mesh(new THREE.CircleGeometry(26, 40, Math.PI * 0.25, Math.PI * 0.5), E.mat('#d99a5b')); dirt.rotation.x = -Math.PI / 2; dirt.rotation.z = Math.PI; dirt.position.set(0, 0.01, 6); S.add(dirt);
+    const inf = new THREE.Mesh(new THREE.PlaneGeometry(14, 14), new THREE.MeshToonMaterial({ color: '#5fcf4a' })); inf.rotation.x = -Math.PI / 2; inf.rotation.z = Math.PI / 4; inf.position.set(0, 0.02, -4); S.add(inf);
+    const mound = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 2.2, 0.25, 20), E.mat('#d99a5b')); mound.position.set(0, 0.1, -4); S.add(mound);
+    const base = (x, z) => { const b = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.08, 0.45), E.mat('#ffffff')); b.position.set(x, 0.05, z); b.rotation.y = Math.PI / 4; S.add(b); };
+    const R = 9.9 * 0.9; base(0, 5.5); base(R * 0.707, 5.5 - R * 0.707); base(0, 5.5 - R * 1.414); base(-R * 0.707, 5.5 - R * 0.707);
+    const hp = new THREE.Mesh(new THREE.CircleGeometry(2.4, 24), E.mat('#d99a5b')); hp.rotation.x = -Math.PI / 2; hp.position.set(0, 0.015, 5.5); S.add(hp);
+    // líneas de foul
+    [-1, 1].forEach((sx) => { const l = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 45), new THREE.MeshBasicMaterial({ color: '#ffffff' })); l.rotation.x = -Math.PI / 2; l.rotation.z = -sx * Math.PI / 4; l.position.set(sx * 15.9, 0.03, 5.5 - 15.9); S.add(l); });
+    fans = E.bowl(S, { w: 64, d: 60, gap: 2, rows: 10, rnd: r, color: '#2d4a7a', sides: [1, 1, 1, 1] });
+    const sb = document.createElement('canvas'); sb.width = 512; sb.height = 160; const sbT = new THREE.CanvasTexture(sb); sbT.colorSpace = THREE.SRGBColorSpace;
+    const sbm = new THREE.Mesh(new THREE.PlaneGeometry(14, 4.4), new THREE.MeshBasicMaterial({ map: sbT })); sbm.position.set(0, 12, -34); S.add(sbm);
+    G.board = (a, b, e) => { const c = sb.getContext('2d'); c.fillStyle = '#1b3a2a'; c.fillRect(0, 0, 512, 160); c.font = 'bold 44px monospace'; c.fillStyle = '#fff'; c.fillText('ENTRADA ' + e, 20, 60); c.fillStyle = '#ffd166'; c.fillText(a, 20, 125); sbT.needsUpdate = true; };
+    E.boards(S, 60, 52, r, c0.sponsors);
+    ballM = new THREE.Mesh(new THREE.IcosahedronGeometry(0.08, 2), E.mat('#ffffff')); ballM.visible = false; S.add(ballM);
+    return { tick: (t) => fans.tick(t) };
+  },
+  setup(c) {
+    c.P.forEach((p, k) => {
+      const bat = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.018, 0.75, 8), E.mat('#c58b4c')); bat.position.y = 0.35; c.hold(k, 'left', bat); p.bat = bat;
+      const glove = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), E.mat('#8a5a33')); glove.scale.set(1, 1.2, 0.6); c.hold(k, 'right', glove); p.glove = glove;
+      const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.2, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), E.mat(k ? '#b0172f' : '#1b3a8a')); helmet.position.y = 0.1; const hd = p.av.humanoid.getRawBoneNode('head'); if (hd) hd.add(helmet);
+    });
+  },
+  start(c) { G.inn = 0; G.bat = 0; G.n = 0; G.sc = [0, 0]; G.log = [[], []]; atBat(); },
+  update(c, dt) {
+    const k = G.bat, p = c.P[k];
+    if (G.pitch) { const Pt = G.pitch; Pt.t += dt; const u = Pt.t / Pt.T;
+      ballM.position.lerpVectors(Pt.a, Pt.b, u); ballM.position.x += Math.sin(u * Math.PI) * Pt.curve; ballM.position.y += Math.sin(u * Math.PI) * 0.25;
+      if (u > 0.2) c.FX.trail(ballM.position, '#ffffff', 0.05);
+      // el CPU batea con un error según la dificultad; con la cámara, el swing del cuerpo
+      if (p.cpu && !Pt.swung && Pt.t > Pt.T - 0.05 + Pt.cpuErr) swing(rnd(0.6, 1));
+      if (c.camOf(k) && !Pt.swung) { const B = c.body(k); if (performance.now() - B.swingAt < 90) swing(B.swing.pow); }
+      if (u >= 1.25 && !G.hit) { G.pitch = null; result(0, '¡STRIKE!'); }
+    }
+    if (G.hit) fly(c, dt);
+    if (G.swingT >= 0) G.swingT += dt / 0.32;
+  },
+  frame(c, dt) {
+    if (c.state !== 'play') return;
+    const bat = c.P[G.bat].av.scene, pit = c.P[1 - G.bat].av.scene;
+    bat.position.set(-0.75, 0, 5.6); bat.rotation.y = Math.PI / 2;
+    pit.position.copy(MOUND); pit.rotation.y = 0;
+    c.P.forEach((p, k) => { p.bat.visible = k === G.bat; p.glove.visible = k !== G.bat; });
+  },
+  pose(c, k, av) {
+    c.clip(k, 'Idle');
+    if (k === G.bat) {
+      if (c.camOf(k) && G.swingT < 0) { c.mirror(k, { arms: 1, spine: 0.6, head: 0.6 }); return; }
+      const A = c.at(k, -0.22, 1.0, -0.12), B = c.at(k, 0.02, 0.72, 0.38), C = c.at(k, 0.34, 0.95, -0.05), u = clamp(G.swingT, 0, 1);
+      const h = G.swingT < 0 ? A.add(new THREE.Vector3(0, Math.sin(c.t * 4) * 0.015, 0)) : u < 0.5 ? A.lerp(B, u * 2) : B.lerp(C, (u - 0.5) * 2);
+      c.reach(k, 'left', h, 1); c.reach(k, 'right', h.clone().add(new THREE.Vector3(0, 0.06, 0)), 1);
+      c.rot(k, 'spine', 0.15, (u - 0.3) * 0.8, 0, 0.7);
+    } else {
+      // lanzador: se prepara y lanza
+      const pt = G.windT === undefined ? -1 : G.windT, sh = c.sh(k, 'right');
+      if (pt >= 0 && pt < 1) { const back = sh.clone().add(new THREE.Vector3(-0.1, 0.25, -0.35)), fr = sh.clone().add(new THREE.Vector3(0, -0.1, 0.45)); c.reach(k, 'right', pt < 0.6 ? back : back.lerp(fr, (pt - 0.6) / 0.4), 1); }
+      c.reach(k, 'left', c.sh(k, 'left').add(new THREE.Vector3(0.05, -0.05, 0.25)), 0.8);
+    }
+  },
+  camera(c) {
+    if (G.hit && G.hit.t > 0.15) { const b = ballM.position; return [new THREE.Vector3(b.x * 0.6, Math.max(4, b.y + 3), b.z + 14), b.clone(), 3]; }
+    return [new THREE.Vector3(-2.3, 2.7, 9.8), new THREE.Vector3(0.3, 1.0, -5), 3];
+  },
+  key(c, key, ok) { if (ok && G.pitch && !c.P[G.bat].cpu) swing(0.85); },
+  touch(c, t) { if (!G.pitch || c.P[G.bat].cpu) return; if (t.s === 'tap') swing(0.75); if (t.s === 'swipe') swing(clamp(t.sp / 3, 0.4, 1)); },
+  photoSub: () => G.sc[0] + ' – ' + G.sc[1] + ' carreras',
+});
+
+
+function hud() { const row = (k) => G.log[k].slice(-PITCHES).map((x) => x).join(' ') || '·';
+  ctx.ui.score(ctx.ui.pl(0, G.sc[0]) + `<span class="tag">Entrada ${G.inn + 1}/${INN} · batea ${ctx.P[G.bat].name} · ${G.n}/${PITCHES}</span>` + ctx.ui.pl(1, G.sc[1]));
+  G.board && G.board(ctx.P[0].name.slice(0, 6).toUpperCase() + ' ' + G.sc[0] + '  ' + ctx.P[1].name.slice(0, 6).toUpperCase() + ' ' + G.sc[1], 0, G.inn + 1); }
+function atBat() {
+  const p = ctx.P[G.bat]; hud(); ctx.ui.big('Batea ' + p.name, 'Entrada ' + (G.inn + 1), 1500);
+  if (!p.cpu) { ctx.ui.cue(ctx.camOf(G.bat) ? 'Haz el swing cuando llegue la pelota' : ctx.TOUCH ? 'Toca o desliza cuando llegue la pelota' : 'OK justo cuando llegue la pelota', true); ctx.say(G.bat, '¡A batear!', true); }
+  ctx.ui.keys(p.cpu ? '' : 'OK: batear (justo a tiempo)');
+  setTimeout(pitch, 2000);
+}
+function pitch() {
+  if (ctx.state !== 'play') return; G.windT = 0; const t0 = performance.now();
+  const w = () => { G.windT = (performance.now() - t0) / 700; if (G.windT < 1) requestAnimationFrame(w); else go(); }; w();
+  function go() {
+    G.windT = undefined; const lv = ctx.lvlK(), p = ctx.P[G.bat];
+    const T = rnd(0.85, 1.05) - lv * 0.25 + (p.cpu ? 0 : 0.1);
+    G.pitch = { t: 0, T, a: new THREE.Vector3(0.15, 1.5, -3.6), b: new THREE.Vector3(rnd(-0.12, 0.12), rnd(0.65, 0.85), 5.3), curve: Math.random() < 0.3 * lv ? rnd(-0.4, 0.4) : 0, swung: false, cpuErr: rnd(-1, 1) * 0.11 * (1.3 - lv) };
+    ballM.visible = true; ctx.sfx.play('swing');
+  }
+}
+function swing(pow) {
+  const Pt = G.pitch; if (!Pt || Pt.swung) return; Pt.swung = true; G.swingT = 0; ctx.sfx.play('swing');
+  // calidad del contacto según qué tan cerca del momento ideal (la pelota en el plato)
+  const e = Pt.t - Pt.T * 0.97, q = 1 - Math.abs(e) / 0.13;
+  if (q <= 0) return; // falló: sigue y será strike
+  G.pitch = null; const dir = clamp(-e / 0.13, -1, 1) * 0.7 + rnd(-0.1, 0.1);   // temprano = jala a la izquierda
+  const speed = 18 + 26 * q * clamp(pow, 0.3, 1), ang = THREE.MathUtils.degToRad(8 + 30 * q + rnd(-8, 8));
+  const v = new THREE.Vector3(Math.sin(dir) * Math.cos(ang), Math.sin(ang), -Math.cos(dir) * Math.cos(ang)).multiplyScalar(speed);
+  G.hit = { p: ballM.position.clone(), v, t: 0, q }; ctx.sfx.play('batazo'); ctx.FX.sparks(ballM.position, q, '#FFE9A8'); ctx.FX.shake(0.2 + q * 0.4);
+  if (q > 0.85 && pow > 0.7) { ctx.FX.slow(0.6, 0.3); ctx.FX.punch(6); ctx.FX.pop(ballM.position.x, 1.8, 5, '¡CRACK!', '#FFE600', 0.7); }
+}
+function fly(c, dt) {
+  const H = G.hit; H.t += dt; H.v.y -= 9.8 * dt; H.v.multiplyScalar(1 - 0.004 * dt * H.v.length()); H.p.addScaledVector(H.v, dt); ballM.position.copy(H.p); c.FX.trail(H.p, '#fff4c4', 0.12);
+  const d = Math.hypot(H.p.x - HOME.x, H.p.z - HOME.z), foul = Math.abs(Math.atan2(H.p.x - HOME.x, HOME.z - H.p.z)) > Math.PI / 4 + 0.02;
+  if ((H.p.z < -WALL + 1 || Math.abs(H.p.x) > 31) && !foul && H.p.y > 0.5) { G.hit = null; c.FX.fireworks([H.p.x, 3, -30], 5, 10, 10); c.FX.confetti([H.p.x * 0.5, 5, -22], true, 6); return result(4, '¡JONRÓN!'); }
+  if (H.p.y <= 0.08) { G.hit = null; c.FX.dust(H.p, '#d99a5b', 10, 0.3);
+    if (foul) return result(0, 'FOUL');
+    const high = H.t > 3.2 && d < 26; if (high || (d < 9 && Math.random() < 0.5)) return result(0, '¡OUT!');
+    return d < 18 ? result(1, '¡SENCILLO!') : d < 25 ? result(2, '¡DOBLE!') : result(3, '¡TRIPLE!'); }
+}
+function result(pts, word) {
+  const k = G.bat; G.sc[k] += pts; G.log[k].push(pts); G.n++; ctx.sfx.play(pts ? 'ole' : word === '¡STRIKE!' ? 'error' : 'abucheo', pts ? 1 : 0.5);
+  if (pts) ctx.crowd(pts >= 3 ? 'ole' : 'aplausos');
+  const b = ballM.position; ctx.FX.pop(pts ? b.x * 0.5 : 0, pts ? Math.max(2, b.y + 1.5) : 2, pts ? b.z * 0.6 : 3, word + (pts ? ' +' + pts : ''), pts >= 4 ? '#FFE600' : pts ? '#00E5FF' : '#B9B1A8', pts >= 4 ? 1.4 : 0.9);
+  if (pts >= 4) { ctx.FX.flash('#FFE600', 0.3); ctx.ui.big('¡JONRÓN!', '+4 carreras', 1600); }
+  hud();
+  setTimeout(() => {
+    ballM.visible = false; G.swingT = -1;
+    if (G.n >= PITCHES) { G.n = 0; G.bat = 1 - G.bat; if (G.bat === 0) G.inn++;
+      if (G.inn >= INN) { const w = G.sc[0] >= G.sc[1] ? 0 : 1; return ctx.end(w, G.sc[0] === G.sc[1] ? '¡Empate!' : ctx.P[w].cpu ? 'Gana MiVibra' : '¡Gana ' + ctx.P[w].name + '!', G.sc[0] + ' – ' + G.sc[1] + ' carreras'); }
+      return atBat(); }
+    pitch();
+  }, pts >= 4 ? 2600 : 1800);
+}
+</script>
+</body>
+</html>

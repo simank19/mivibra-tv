@@ -68,7 +68,7 @@ export function createFX(THREE, S, cam, Q = 2) {
       g.translate(w / 2, h / 2); g.rotate(-0.08);
       // fondo de explosión
       g.fillStyle = stroke; g.beginPath(); for (let i = 0; i < 24; i++) { const r = i % 2 ? 72 : 96, a = i / 24 * Math.PI * 2; g.lineTo(Math.cos(a) * r * 2.4, Math.sin(a) * r * 0.85); } g.fill();
-      g.font = '900 104px "Bricolage Grotesque", "Arial Black", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      let fs = 104; g.font = '900 ' + fs + 'px "Bricolage Grotesque", "Arial Black", sans-serif'; const tw = g.measureText(text).width; if (tw > 440) { fs = Math.floor(fs * 440 / tw); g.font = '900 ' + fs + 'px "Bricolage Grotesque", "Arial Black", sans-serif'; } g.textAlign = 'center'; g.textBaseline = 'middle';
       g.lineWidth = 16; g.strokeStyle = stroke; g.strokeText(text, 0, 6); g.fillStyle = color; g.fillText(text, 0, 6);
       g.fillStyle = 'rgba(255,255,255,.55)'; g.fillText(text, -3, 0); g.fillStyle = color; g.fillText(text, 0, 3);
     });

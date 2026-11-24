@@ -216,7 +216,7 @@ export async function startGame(cfg) {
   function endGame(w, title, sub) {
     if (ctx.state === 'end') return;
     ctx.state = 'end'; ctx.win = w; ctx.t = 0; MVHand.pauseEnabled = false; ui.meter(null); ui.keys(''); ui.touch([]);
-    P.forEach((p, k) => { p.cel = {}; if (k !== w && p.av && p.av.anim) p.av.anim.play('Defeat', { loop: false, fade: 0.25 }); });
+    P.forEach((p, k) => { p.cel = {}; if (k !== w && p.av && p.av.anim && !(cfg.noDefeat || []).includes(k)) p.av.anim.play('Defeat', { loop: false, fade: 0.25 }); });
     ui.big(title, sub || '¡Celebra! Tu avatar baila contigo', 2600);
     ctx.crowd('ole'); setTimeout(() => ctx.crowd('aplausos'), 600);
     const W = w >= 0 ? P[w] : P[0], a = W.av ? W.av.scene.position : new THREE.Vector3();
@@ -324,7 +324,7 @@ export async function startGame(cfg) {
     P.forEach((p, k) => { const a = p.av; if (!a) return;
       if (a.anim) a.anim.update(dt);
       if (ctx.state === 'end' && k === ctx.win) celebrate(a, dt, ctx.camOf(k) ? EJ[p.slot] : null, p.cel, facesCam(a.scene, cam));
-      else if (cfg.pose && ctx.state !== 'menu' && ctx.state !== 'load') cfg.pose(ctx, k, a, dt);
+      else if (cfg.pose && ctx.state !== 'load' && (ctx.state !== 'menu' || cfg.poseInMenu)) cfg.pose(ctx, k, a, dt);
       a.update(dt);
       if (a.blob) { a.scene.getWorldPosition(tmpV); a.blob.position.set(tmpV.x, (cfg.floorY ? cfg.floorY(tmpV) : 0) + 0.015, tmpV.z); a.blob.visible = a.scene.visible; } });
     if (cfg.frame) cfg.frame(ctx, dt, now / 1000);

@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Fútbol americano · MiVibra Movimiento</title>
+</head>
+<body>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@2.0.4/dist/qrcode.js"></script>
+<script src="../mano.js"></script>
+<script type="importmap">{"imports":{"three":"../vendor/three-0.183.2/three.module.min.js","three/addons/":"../vendor/three-0.183.2/addons/"}}</script>
+<script type="module">
+import { startGame, THREE, E, clamp, lerp, rnd } from '../juego.js';
+
+// Fútbol americano: reto del mariscal. 5 jugadas cada uno: elige receptor y lanza antes de que llegue la defensa.
+// Pase completo 3, pase largo 5, touchdown 7. Intercepción o captura: 0.
+const W = 30, D = 80, LOS = 14, QBZ = 17.5, EZ = -D / 2 + 7, PLAYS = 5;
+const G = { turn: 0, n: [0, 0], sc: [0, 0], phase: 'wait', sel: 0, pow: 0, charging: false, ball: null, t: 0, rec: [], def: [], rush: null };
+let ballM, ring, fans;
+
+function bot(S, col, helmet) {   // jugador sencillo (barato): cuerpo, casco, piernas que corren
+  const g = new THREE.Group(); const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.45, 3, 8), E.mat(col)); body.position.y = 0.75; g.add(body);
+  const h = new THREE.Mesh(new THREE.SphereGeometry(0.19, 10, 8), E.mat(helmet)); h.position.y = 1.22; g.add(h);
+  const legs = [-0.1, 0.1].map((x) => { const l = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.3, 2, 6), E.mat('#ffffff')); l.position.set(x, 0.3, 0); g.add(l); return l; });
+  S.add(g); const b = E.blob(S, 0, 0, 0.4, 0.3); return { g, legs, b, p: new THREE.Vector3(), v: new THREE.Vector3(), ph: rnd(0, 6) };
+}
+
+const ctx = await startGame({
+  id: 'americano', title: 'Fútbol americano', kicker: 'MIVIBRA MOVIMIENTO · ESTADIO', loading: 'Pintando las yardas…', fov: 52,
+  sub: 'Reto del mariscal: 5 jugadas cada uno. Pase 3, pase largo 5, touchdown 7.', turns: true, startSound: 'silbato',
+  how: 'Apunta con el brazo hacia un lado y lanza el balón hacia adelante (como un pase).',
+  modes: [{ id: 'cpu', label: 'Contra MiVibra', icon: '▶' }, { id: 'two', label: '2 jugadores (por turnos)', icon: '⚔', two: true }],
+  orbit: { c: [0, 2, 0], r: 30, y: 14 },
+  onSound(c) { c.amb('estadio-ambiente', 0.22); },
+  async scene(c0) {
+    const S = c0.S, r = E.seeded(41);
+    E.sky(S, '#1a2b6b', '#ffb36b', '#ff8a5c'); E.lights(S, { sky: '#ffd9b0', ground: '#3b6b3a', sun: '#ffe0b8', dir: [-6, 9, 4] });
+    const f = E.canvasTex(512, 1366, (c, w, h) => { for (let i = 0; i < 20; i++) { c.fillStyle = i % 2 ? '#4fbf47' : '#45b03e'; c.fillRect(0, i * h / 20, w, h / 20); }
+      c.strokeStyle = '#fff'; c.lineWidth = 5; c.fillStyle = '#fff'; c.font = 'bold 40px sans-serif';
+      for (let i = 0; i <= 10; i++) { const y = h * (0.09 + i * 0.082); c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); const yd = Math.min(i, 10 - i) * 10; if (yd) { c.fillText(yd, 20, y - 8); c.fillText(yd, w - 70, y - 8); } }
+      c.fillStyle = '#ff4d6d'; c.fillRect(0, 0, w, h * 0.09); c.fillStyle = '#3a86ff'; c.fillRect(0, h * 0.91, w, h * 0.09); c.fillStyle = '#fff'; c.font = 'bold 70px sans-serif'; c.textAlign = 'center'; c.fillText('★ MiVibra ★', w / 2, h * 0.06); });
+    E.plane(S, 160, 180, '#3f9a38', -0.02);
+    E.plane(S, W, D, new THREE.MeshToonMaterial({ map: f }));
+    const gm = E.mat('#ffd166'), gz = -D / 2 + 0.5;
+    const up = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 3, 8), gm); up.position.set(0, 1.5, gz); S.add(up);
+    const cb = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 5.6, 8), gm); cb.rotation.z = Math.PI / 2; cb.position.set(0, 3, gz); S.add(cb);
+    [-2.8, 2.8].forEach((x) => { const u = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 6, 8), gm); u.position.set(x, 6, gz); S.add(u); });
+    const los = new THREE.Mesh(new THREE.PlaneGeometry(W, 0.18), new THREE.MeshBasicMaterial({ color: '#3a86ff' })); los.rotation.x = -Math.PI / 2; los.position.set(0, 0.02, LOS); S.add(los);
+    fans = E.bowl(S, { w: W + 8, d: D + 8, gap: 2, rows: 12, rnd: r, color: '#3b2f6b', wave: true });
+    E.boards(S, W, D, r, c0.sponsors);
+    [[-22, -30], [22, -30], [-22, 30], [22, 30]].forEach((p) => { const t = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 22, 6), E.mat('#8892a6')); t.position.set(p[0], 11, p[1]); S.add(t); const l = new THREE.Mesh(new THREE.BoxGeometry(5, 2.4, 0.6), E.mat('#ffffff', { emissive: '#fff6c4', emissiveIntensity: 1 })); l.position.set(p[0], 22.5, p[1]); l.lookAt(0, 0, 0); S.add(l); });
+    G.rec = [0, 1, 2, 3].map(() => bot(S, '#ff4d6d', '#c81d3a')); G.def = [0, 1, 2, 3].map(() => bot(S, '#3a86ff', '#1b3a8a')); G.rush = bot(S, '#3a86ff', '#1b3a8a');
+    ballM = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 8), E.mat('#8a4a22')); ballM.scale.set(1, 1, 1.7); ballM.visible = false; S.add(ballM);
+    ring = new THREE.Mesh(new THREE.RingGeometry(0.7, 0.9, 32), new THREE.MeshBasicMaterial({ color: '#FFE600', transparent: true, opacity: 0.9, side: THREE.DoubleSide })); ring.rotation.x = -Math.PI / 2; S.add(ring);
+    return { tick: (t) => fans.tick(t) };
+  },
+  setup(c) { c.P.forEach((p, k) => { const h = new THREE.Mesh(new THREE.SphereGeometry(0.21, 14, 10), E.mat(k ? '#1b3a8a' : '#c81d3a')); h.scale.set(1, 0.95, 1.08); h.position.y = 0.1; const hd = p.av.humanoid.getRawBoneNode('head'); if (hd) hd.add(h); }); },
+  start(c) { G.turn = 0; G.n = [0, 0]; G.sc = [0, 0]; play(); },
+  update(c, dt) {
+    if (G.phase === 'wait') return; G.t += dt;
+    const lv = c.lvlK(), p = c.P[G.turn];
+    // receptores corren su ruta; defensas los persiguen
+    G.rec.forEach((R, i) => { const rt = R.route, t = G.t; if (G.phase === 'live' || G.phase === 'air') { const dir = t < rt.cut ? new THREE.Vector3(0, 0, -1) : rt.d; R.v.lerp(dir.clone().multiplyScalar(rt.sp), 0.1); R.p.addScaledVector(R.v, dt); R.p.x = clamp(R.p.x, -W / 2 + 1, W / 2 - 1); } });
+    G.def.forEach((Df, i) => { const R = G.rec[i], tgt = R.p.clone().add(new THREE.Vector3(0, 0, -1.2)), d = tgt.sub(Df.p); const sp = (5.2 + lv * 1.8) * (G.t < 0.6 ? 0.3 : 1); if (d.length() > 0.5) { Df.v.copy(d.normalize().multiplyScalar(sp)); Df.p.addScaledVector(Df.v, dt); } else Df.v.set(0, 0, 0); });
+    if (G.phase === 'live') { const Rh = G.rush, d = c.P[G.turn].av.scene.position.clone().sub(Rh.p); Rh.v.copy(d.normalize().multiplyScalar(G.t < 1.2 ? 0.6 : 2.4 + lv)); Rh.p.addScaledVector(Rh.v, dt);
+      if (Rh.p.distanceTo(c.P[G.turn].av.scene.position) < 0.9) sacked(c); }
+    // elegir y lanzar
+    if (G.phase === 'live') {
+      if (p.cpu) { if (G.t > G.cpuT) { G.sel = G.cpuSel; throwTo(c, rnd(0.85, 1.05)); } }
+      else if (c.camOf(G.turn)) { const B = c.body(G.turn); const W2 = B.wr.r.y > B.wr.l.y ? B.wr.r : B.wr.l; if (W2.y > 0) pickByX(W2.x * 6);
+        if (performance.now() - B.throwAt < 120 && G.t > 0.4) { pickByX(clamp(B.throw.dx * 2 + W2.x * 4, -10, 10)); throwTo(c, clamp(0.75 + B.throw.pow * 0.4, 0.5, 1.2)); } }
+      else if (G.charging) G.pow = clamp(G.pow + dt * 0.9, 0, 1.25);
+      const need = needPow(G.rec[G.sel]); if (!p.cpu) c.ui.meter(clamp(G.pow / 1.25, 0, 1), 'FUERZA DEL PASE', 'Ideal ' + Math.round(need / 1.25 * 100) + '%', Math.round(G.rec[G.sel].p.distanceTo(c.P[G.turn].av.scene.position)) + ' m');
+    }
+    if (G.ball) flyBall(c, dt);
+    ring.position.copy(G.rec[G.sel].p).setY(0.04); ring.visible = G.phase === 'live' && !p.cpu;
+  },
+  frame(c, dt) {
+    const bots = G.rec.concat(G.def, [G.rush]);
+    bots.forEach((B) => { const sp = B.v.length(); B.ph += dt * sp * 2.2; B.g.position.copy(B.p); B.g.position.y = Math.abs(Math.sin(B.ph)) * 0.06 * clamp(sp, 0, 1); if (sp > 0.2) B.g.rotation.y = Math.atan2(B.v.x, B.v.z);
+      B.legs[0].rotation.x = Math.sin(B.ph) * 0.7 * clamp(sp / 4, 0, 1); B.legs[1].rotation.x = -B.legs[0].rotation.x; B.b.position.set(B.p.x, 0.015, B.p.z); });
+    if (c.state !== 'play') return;
+    c.P.forEach((p, k) => { const s = p.av.scene; if (k === G.turn) { s.position.set(0, 0, QBZ); s.rotation.y = Math.PI + clamp(-G.rec[G.sel].p.x * 0.03, -0.5, 0.5); } else { s.position.set(-W / 2 - 2, 0, 10); s.rotation.y = Math.PI / 2; } });
+  },
+  pose(c, k) {
+    c.clip(k, 'Idle'); if (k !== G.turn || c.state !== 'play') return;
+    if (c.camOf(k) && G.phase === 'live') { c.mirror(k, { arms: 1, spine: 0.5, head: 0.8 }); return; }
+    const sh = c.sh(k, 'right'), u = G.throwT === undefined ? -1 : G.throwT;
+    const back = sh.clone().add(c.at(k, -0.05, 0, -0.25).sub(c.at(k, 0, 0, 0))).add(new THREE.Vector3(0, 0.25 + (G.charging ? G.pow * 0.05 : 0), 0)), fwd = sh.clone().add(c.at(k, 0.05, 0, 0.45).sub(c.at(k, 0, 0, 0))).add(new THREE.Vector3(0, 0.05, 0));
+    c.reach(k, 'right', u < 0 ? back : back.lerp(fwd, clamp(u, 0, 1)), 1);
+    c.reach(k, 'left', c.sh(k, 'left').add(c.at(k, 0.1, 0, 0.3).sub(c.at(k, 0, 0, 0))), 0.8);
+  },
+  camera(c) {
+    if (G.ball && G.ball.t > 0.1) { const b = ballM.position; return [new THREE.Vector3(b.x * 0.5 + 2, b.y + 4, b.z + 10), b.clone(), 4]; }
+    if (G.phase === 'after' && G.after) { const a = G.after; return [new THREE.Vector3(a.x + 3, 3.5, a.z + 8), a.clone().setY(1), 3]; }
+    const s = c.P[G.turn].av.scene.position; return [new THREE.Vector3(s.x + 1.6, 3.2, s.z + 5.5), new THREE.Vector3(G.rec[G.sel].p.x * 0.4, 1.2, s.z - 14), 3];
+  },
+  key(c, key, ok) { if (G.phase !== 'live' || c.P[G.turn].cpu) return; if (key === 'ArrowLeft') cycle(-1); if (key === 'ArrowRight') cycle(1); if (ok) { G.charging = true; G.pow = 0; } },
+  keyUp(c, key) { if ((key === 'Enter' || key === ' ') && G.charging) { G.charging = false; throwTo(c, G.pow); } },
+  touch(c, t) {
+    if (G.phase !== 'live' || c.P[G.turn].cpu) return;
+    if (t.s === 'tap' && !t.mando) { pickByX((t.x - 0.5) * 30); }
+    if (t.s === 'swipe' && t.dy < -0.05) { pickByX(clamp(t.dx * 50 + (t.mando ? 0 : (t.x - 0.5) * 20), -14, 14)); throwTo(c, clamp(t.sp / 2.6, 0.4, 1.25)); }
+  },
+  photoSub: () => G.sc[0] + ' – ' + G.sc[1] + ' puntos',
+});
+
+function cycle(d) { const order = G.rec.map((R, i) => [R.p.x, i]).sort((a, b) => a[0] - b[0]).map((a) => a[1]); G.sel = order[(order.indexOf(G.sel) + d + 4) % 4]; ctx.sfx.play('click'); }
+function pickByX(x) { let b = 0, bd = 1e9; G.rec.forEach((R, i) => { const d = Math.abs(R.p.x - x); if (d < bd) { bd = d; b = i; } }); G.sel = b; }
+function needPow(R) { const d = R.p.distanceTo(new THREE.Vector3(0, 0, QBZ)); return clamp(0.3 + d / 32, 0.3, 1.25); }
+function hud() { ctx.ui.score(ctx.ui.pl(0, G.sc[0]) + `<span class="tag">Jugada ${Math.min(PLAYS, G.n[G.turn] + 1)}/${PLAYS} · ${ctx.P[G.turn].name} de mariscal</span>` + ctx.ui.pl(1, G.sc[1])); }
+function play() {
+  G.phase = 'wait'; G.t = 0; G.ball = null; G.after = null; G.throwT = undefined; G.pow = 0; G.charging = false; ballM.visible = false; hud();
+  const xs = [-10, -4, 4, 10]; G.rec.forEach((R, i) => { R.p.set(xs[i], 0, LOS - 0.5); R.v.set(0, 0, 0); const side = xs[i] < 0 ? -1 : 1, kind = (Math.random() * 3) | 0;
+    R.route = { cut: kind === 0 ? 99 : rnd(1, 2.4), d: kind === 1 ? new THREE.Vector3(-side, 0, -0.3).normalize() : new THREE.Vector3(side * 0.5, 0, -1).normalize(), sp: rnd(6, 7.5) }; });
+  G.def.forEach((Df, i) => { Df.p.set(xs[i] + rnd(-0.5, 0.5), 0, LOS - 4); Df.v.set(0, 0, 0); }); G.rush.p.set(rnd(-2, 2), 0, LOS - 1.5); G.rush.v.set(0, 0, 0);
+  G.sel = 1; const p = ctx.P[G.turn];
+  ctx.ui.big('¡HUT!', p.name + ' de mariscal', 1100); ctx.sfx.play('silbato');
+  if (!p.cpu && G.n[G.turn] === 0) ctx.ui.cue(ctx.camOf(G.turn) ? 'Señala con la mano al receptor y lanza hacia adelante' : ctx.TOUCH ? 'Toca un receptor o desliza hacia él (rápido = lejos)' : '← → elige receptor · mantén OK para la fuerza y suelta', true, 5000);
+  ctx.ui.keys(p.cpu ? '' : '← → receptor · mantén OK: fuerza · suelta: pase');
+  if (p.cpu) { G.cpuT = rnd(1.6, 3); G.cpuSel = (Math.random() * 4) | 0; }
+  setTimeout(() => { G.phase = 'live'; }, 900);
+}
+function throwTo(c, pow) {
+  if (G.phase !== 'live') return; G.phase = 'air'; c.ui.meter(null); G.charging = false;
+  const R = G.rec[G.sel], need = needPow(R), err = (pow - need);   // fuerza de más: se pasa; de menos: queda corto
+  const from = c.hand(G.turn, 'right'), T = 0.6 + R.p.distanceTo(from) / 22;
+  const tgt = R.p.clone().addScaledVector(R.v, T).add(new THREE.Vector3(rnd(-0.4, 0.4) * (1.4 - c.lvlK() * 0.4), 0, -err * 14)); tgt.y = 1.3;
+  G.ball = { a: from, b: tgt, t: 0, T, R }; ballM.visible = true; c.sfx.play('swing'); G.throwT = 0; const t0 = performance.now(); const a = () => { G.throwT = (performance.now() - t0) / 250; if (G.throwT < 1) requestAnimationFrame(a); }; a();
+}
+function flyBall(c, dt) {
+  const B = G.ball; B.t += dt; const u = clamp(B.t / B.T, 0, 1);
+  ballM.position.lerpVectors(B.a, B.b, u); ballM.position.y += Math.sin(u * Math.PI) * (2 + B.T * 2.2); ballM.rotation.z += dt * 20; ballM.lookAt(B.b); c.FX.trail(ballM.position, '#ffe2b8', 0.1);
+  if (u < 1) return; G.ball = null;
+  const R = B.R, d = R.p.distanceTo(B.b.clone().setY(0)), Df = G.def[G.rec.indexOf(R)], dd = Df.p.distanceTo(B.b.clone().setY(0)), lv = c.lvlK();
+  const at = B.b.clone().setY(0); G.after = at; G.phase = 'after';
+  if (dd < 1.1 && Math.random() < 0.35 + lv * 0.3) return outcome(c, 0, '¡INTERCEPCIÓN!', at);
+  if (d > 1.6) { c.FX.dust(at, '#7ee05a', 8, 0.25); return outcome(c, 0, 'INCOMPLETO', at); }
+  R.v.set(0, 0, -7); const yards = QBZ - at.z;
+  if (at.z <= EZ) return outcome(c, 7, '¡TOUCHDOWN!', at);
+  outcome(c, yards > 20 ? 5 : 3, yards > 20 ? '¡PASE LARGO!' : '¡COMPLETO!', at);
+}
+function sacked(c) { G.phase = 'after'; G.after = c.P[G.turn].av.scene.position.clone(); c.FX.stars(G.after.clone().setY(1.2), 8); c.FX.shake(0.6); c.sfx.play('caida'); outcome(c, 0, '¡CAPTURA!', G.after); }
+function outcome(c, pts, word, at) {
+  G.sc[G.turn] += pts; G.n[G.turn]++; hud(); c.ui.meter(null);
+  c.FX.pop(at.x, 2.6, at.z, word + (pts ? ' +' + pts : ''), pts >= 7 ? '#FFE600' : pts ? '#00E5FF' : '#B9B1A8', pts >= 7 ? 1.3 : 0.9);
+  if (pts >= 7) { c.FX.confetti([at.x, 4, at.z], true, 4); c.FX.fireworks([0, 0, -D / 2 - 4], 6, 10, 10); c.FX.flash('#FFE600', 0.3); c.crowd('ole'); c.sfx.play('perfecto'); }
+  else if (pts) { c.FX.stars([at.x, 1.6, at.z], 6); c.crowd('aplausos'); c.sfx.play('ok'); } else c.sfx.play(word.startsWith('¡INT') ? 'abucheo' : 'error', 0.6);
+  setTimeout(() => {
+    if (G.n[0] >= PLAYS && G.n[1] >= PLAYS) { const w = G.sc[0] >= G.sc[1] ? 0 : 1; return c.end(w, G.sc[0] === G.sc[1] ? '¡Empate!' : c.P[w].cpu ? 'Gana MiVibra' : '¡Gana ' + c.P[w].name + '!', G.sc[0] + ' – ' + G.sc[1]); }
+    if (G.n[1 - G.turn] < PLAYS) G.turn = 1 - G.turn; play();
+  }, pts >= 7 ? 2600 : 1900);
+}
+</script>
+</body>
+</html>
