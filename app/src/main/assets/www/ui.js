@@ -2917,6 +2917,8 @@
     // Si había otro video abierto (por ejemplo en la ventana flotante), se cierra y su avance se guarda aparte
     if (playing) replaced = playing;
     playing = Object.assign({ started: Date.now() }, ctx); MV.kidsSessionStart(); MV.playing = true;
+    // enlaces de Xtream con la clave y el servidor actuales de la lista (los guardados pueden ser viejos)
+    if (MV.xtFresh && req.queue) req.queue.forEach(function (x) { if (!x) return; if (x.url) x.url = MV.xtFresh(x.url); if (Array.isArray(x.alts)) x.alts = x.alts.map(function (a) { return typeof a === 'string' ? MV.xtFresh(a) : a; }); });
     req.audioLang = P.audioLang; req.subLang = P.subLang; req.subKey = P.subKey || '';
     req.subAddons = MV.stremioSubBases ? MV.stremioSubBases() : [];
     // Los addons de subtítulos buscan por el ID de IMDb: si aún no se conoce (no se abrió la ficha), se pide antes de abrir el reproductor
@@ -3287,10 +3289,10 @@
         (function (i) {
           probing++;
           var x = SRC[i];
-          MV.call('probe', [JSON.stringify([{ url: x.url, ua: x.ua || (o.it && o.it.ua) || '', ref: x.ref || (o.it && o.it.ref) || '' }])]).then(function (res) {
+          MV.call('probe', [JSON.stringify([{ url: MV.xtFresh ? MV.xtFresh(x.url) : x.url, ua: x.ua || (o.it && o.it.ua) || '', ref: x.ref || (o.it && o.it.ref) || '' }])]).then(function (res) {
             var r = res && res[0];
             if (r && r.ok) { x.ok = true; x.ms = r.ms; status(i, '✓ Funciona · ' + (r.ms / 1000).toFixed(1) + ' s', '#3ecf8e'); if (best < 0) best = i; }
-            else status(i, '✕ No responde' + (r && r.code ? ' (' + r.code + ')' : ''), '#ff6b6b', true);
+            else status(i, r && (r.code === 401 || r.code === 403) ? '✕ La cuenta no deja abrirlo (' + r.code + '): puede estar en uso en otro equipo' : '✕ No responde' + (r && r.code ? ' (' + r.code + ')' : ''), '#ff6b6b', true);
           }).catch(function () { status(i, 'Sin probar', '#9aa0a6'); }).then(function () { probing--; banner(); pump(); });
         })(qi++);
       }
@@ -3353,7 +3355,7 @@
     var cands = [LINKS[it.key], url].concat(alts).filter(function (u, i, a) { return u && a.indexOf(u) === i && (u === url || u === LINKS[it.key] || alts.indexOf(u) >= 0); });
     var plain = function (first) { var rest = cands.filter(function (u) { return u !== first; }); return { url: first, alts: rest }; };
     if (!A || it.stk || cands.length < 2) return Promise.resolve(plain(cands[0] || url));
-    var probe = MV.call('probe', [JSON.stringify(cands.slice(0, 4).map(function (u) { return { url: u, ua: it.ua || '', ref: it.ref || '' }; }))]).catch(function () { return null; });
+    var probe = MV.call('probe', [JSON.stringify(cands.slice(0, 4).map(function (u) { return { url: MV.xtFresh ? MV.xtFresh(u) : u, ua: it.ua || '', ref: it.ref || '' }; }))]).catch(function () { return null; });
     var timer = new Promise(function (r) { setTimeout(function () { r(null); }, 3000); });
     return Promise.race([probe, timer]).then(function (res) {
       if (!res || !res.length) return plain(cands[0]);

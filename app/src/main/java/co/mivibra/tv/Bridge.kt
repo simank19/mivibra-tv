@@ -26,6 +26,8 @@ class Bridge(private val a: MainActivity) {
     private val dl = Executors.newFixedThreadPool(2)
     /** Pedidos a internet (addons, listas, fichas): muchos a la vez, para que uno lento no haga esperar a los demás. */
     private val net = Executors.newFixedThreadPool(12)
+    // Pedidos de texto (fichas de TMDB, APIs): aparte de las descargas grandes de listas, para que no esperen detrás de ellas (en TV la ficha no llegaba)
+    private val api = Executors.newFixedThreadPool(6)
 
     private fun reply(id: String, ok: Boolean, data: Any?) {
         val payload = JSONObject().put("ok", ok).put("data", data ?: JSONObject.NULL)
@@ -60,7 +62,7 @@ class Bridge(private val a: MainActivity) {
     @JavascriptInterface
     fun httpGet(id: String, url: String, headersJson: String?, mode: String?) {
         // Respuestas chicas (addons, fichas): muchas a la vez. Listas y catálogos (pueden pesar decenas de MB): de a 4, para no llenar la memoria
-        (if (mode == "small") net else io).execute {
+        (when (mode) { "small" -> net; "file" -> io; else -> api }).execute {
             try {
                 if (mode == "file") {
                     val f = netFile(url)

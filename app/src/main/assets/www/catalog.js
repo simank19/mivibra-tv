@@ -393,6 +393,18 @@
   }
   /** Servidor sin /get.php ni parámetros (conserva la carpeta si la tiene: http://srv.com/iptv) */
   function xtBase(list) { return cleanHost(list.host); }
+  /** Enlace de Xtream guardado con un usuario/clave o servidor viejo (por ejemplo, en un TV con el catálogo guardado de antes):
+   *  se arma con los datos actuales de la lista. Así no sale "401" cuando la cuenta cambió de clave o de servidor. */
+  MV.xtFresh = function (url) {
+    var m = /^(https?:\/\/[^\/]+)(\/(?:movie|series|live))\/([^\/]+)\/([^\/]+)\/([^\/]+)$/i.exec(String(url || '')); if (!m) return url;
+    var xs = (S.lists || []).filter(function (l) { return l && l.type === 'xtream' && l.user && l.pass && l.host; });
+    var host = m[1].toLowerCase(), u = m[3]; try { u = decodeURIComponent(u); } catch (e) {}
+    var same = function (l) { return xtBase(l).toLowerCase() === host; };
+    var l = xs.filter(function (l) { return same(l) && l.user === u; })[0] || xs.filter(function (l) { return l.user === u; })[0] || xs.filter(same)[0];
+    if (!l) return url;
+    var nu = xtBase(l) + m[2] + '/' + encodeURIComponent(l.user) + '/' + encodeURIComponent(l.pass) + '/' + m[5];
+    return nu;
+  };
   function xtHdr(list) { return list.ua ? { 'User-Agent': list.ua } : null; }
   function xtGet(list, action, extra, big) {
     // Pedidos chicos al reproducir (capítulos de una serie, ficha): vía rápida, sin esperar a que terminen de bajar las listas
