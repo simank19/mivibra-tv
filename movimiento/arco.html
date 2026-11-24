@@ -96,9 +96,11 @@ const ctx = await startGame({
     if (G.nocked) { G.nocked.position.copy(mid).addScaledVector(aimDir, 0.42); G.nocked.lookAt(G.nocked.position.clone().add(aimDir)); G.nocked.rotateY(Math.PI); G.nocked.visible = G.phase === 'aim'; }
   },
   camera(c) {
-    if (G.arrow && G.arrow.t > 0.05) { const a = G.arrow.m.position; return [new THREE.Vector3(a.x + 0.8, a.y + 0.55, a.z + 3.2), new THREE.Vector3(a.x, a.y, a.z - 6), 9]; }
-    if (G.phase === 'hit' && G.hitAt) { const h = G.hitAt; return [new THREE.Vector3(h.x + 1.2, h.y + 0.5, TZ + 4), new THREE.Vector3(h.x * 0.5, TY, TZ), 4]; }
-    const s = c.P[G.turn].av.scene.position; return [new THREE.Vector3(s.x - 2.7, 2.2, s.z + 4.4), new THREE.Vector3(0.3, 1.5, -8), 3];
+    // siempre detrás del arquero (3ra persona); al disparar se acerca la vista (zoom) a la flecha y a la diana
+    const s = c.P[G.turn].av.scene.position, base = new THREE.Vector3(s.x - 2.7, 2.2, s.z + 4.4);
+    if (G.arrow && G.arrow.t > 0.05) { const a = G.arrow.m.position; return [base, a.clone(), 6, 22]; }
+    if (G.phase === 'hit' && G.hitAt) return [base, G.hitAt.clone(), 3, 12];
+    return [base, new THREE.Vector3(0.3, 1.5, -8), 3, 55];
   },
   key(c, key, ok) { if (G.phase === 'aim' && ok && !c.P[G.turn].cpu) G.drawing = true; },
   keyUp(c, key) { if ((key === 'Enter' || key === ' ') && G.drawing) { G.drawing = false; if (G.draw > 0.25) shoot(); else G.draw = 0; } },

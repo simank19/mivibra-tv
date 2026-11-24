@@ -90,8 +90,9 @@ const ctx = await startGame({
     }
   },
   camera(c) {
-    if (G.hit && G.hit.t > 0.15) { const b = ballM.position; return [new THREE.Vector3(b.x * 0.6, Math.max(4, b.y + 3), b.z + 14), b.clone(), 3]; }
-    return [new THREE.Vector3(-2.3, 2.7, 9.8), new THREE.Vector3(0.3, 1.0, -5), 3];
+    // siempre detrás del bateador; si batea, la vista sube y sigue la pelota con zoom
+    if (G.hit && G.hit.t > 0.15) { const b = ballM.position; return [new THREE.Vector3(-2.6, 3.4, 10.6), b.clone(), 4, 34]; }
+    return [new THREE.Vector3(-2.3, 2.7, 9.8), new THREE.Vector3(0.3, 1.0, -5), 3, 50];
   },
   key(c, key, ok) { if (ok && G.pitch && !c.P[G.bat].cpu) swing(0.85); },
   touch(c, t) { if (!G.pitch || c.P[G.bat].cpu) return; if (t.s === 'tap') swing(0.75); if (t.s === 'swipe') swing(clamp(t.sp / 3, 0.4, 1)); },

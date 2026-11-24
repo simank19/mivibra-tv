@@ -306,7 +306,10 @@ export async function startGame(cfg) {
     let p, l, k = 3;
     if (ctx.state === 'menu' || ctx.state === 'load') { const o = cfg.orbit || { c: [0, 1, 0], r: 9, y: 3.5 }, a = performance.now() / 8000; p = new THREE.Vector3(o.c[0] + Math.sin(a) * o.r, o.y, o.c[2] + Math.cos(a) * o.r); l = new THREE.Vector3(...o.c); k = 2; }
     else if (ctx.state === 'end' && ctx.t > 0.6) { const W = P[Math.max(0, ctx.win)].av; if (W) { const s = W.scene.position, f = new THREE.Vector3(0, 0, 1).applyQuaternion(W.scene.quaternion); p = s.clone().addScaledVector(f, 3.2).add(new THREE.Vector3(0.6, 1.5, 0)); l = s.clone().add(new THREE.Vector3(0, 1.0, 0)); k = 2.5; } }
-    if (!p) { const c = cfg.camera ? cfg.camera(ctx, dt) : null; if (c) { p = c[0]; l = c[1]; k = c[2] || 3; } }
+    let fov = cfg.fov || 50;
+    if (!p) { const c = cfg.camera ? cfg.camera(ctx, dt) : null; if (c) { p = c[0]; l = c[1]; k = c[2] || 3; if (c[3]) fov = c[3]; } }
+    // acercar o alejar (para ver lejos sin dejar de ver tu avatar en 3ra persona)
+    if (Math.abs(cam.fov - fov) > 0.05 && !FX.punching) { cam.fov = lerp(cam.fov, fov, 1 - Math.exp(-dt * 3)); cam.updateProjectionMatrix(); }
     if (!p) return;
     if (!camInit) { cam.position.copy(p); camL.copy(l); camInit = true; }
     const a = 1 - Math.exp(-dt * k); cam.position.lerp(p, a); camL.lerp(l, a); cam.lookAt(camL);

@@ -91,6 +91,7 @@ export function createFX(THREE, S, cam, Q = 2) {
     slow(sec = 0.8, k = 0.3) { st.slow = Math.max(st.slow, sec); st.slowK = k; },
     shake(a = 0.5) { st.shake = Math.min(1.2, Math.max(st.shake, a)); },
     punch(deg = 6) { st.punch = deg; },
+    get punching() { return st.punch > 0.05 || st.fov0 !== null; },
     flash, _live: () => [GLOW.live(), BITS.live()],
     ring, pop,
     trail(p, color = '#9fd0ff', size = 0.14, fire = false) { p = at(p);

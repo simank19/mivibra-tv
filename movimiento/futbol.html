@@ -239,7 +239,7 @@ function camera(dt) {
   if (G.state === 'menu' || G.state === 'load') { const a = performance.now() / 7000; p = new THREE.Vector3(Math.sin(a) * 9, 3.2, -2 + Math.cos(a) * 9); l = new THREE.Vector3(0, 1, GZ + 2); }
   else if (G.state === 'end' && P[G.win].av) { const s = P[G.win].av.scene.position; p = new THREE.Vector3(s.x + 0.6, 1.5, s.z + (s.z < -5 ? 3 : 3)); l = new THREE.Vector3(s.x, 1.0, s.z); }
   else if (keepHuman) { p = new THREE.Vector3(G.keeper.x * 0.3, 2.3, GZ - 4.2); l = new THREE.Vector3(0, 0.9, 0); }
-  else { p = new THREE.Vector3(0.6, 1.7, 4.4); l = new THREE.Vector3(0, 1.0, GZ); }
+  else { p = new THREE.Vector3(0.3, 2.3, 6.6); l = new THREE.Vector3(-0.6, 0.6, GZ + 3); }   // detrás de tu avatar (3ra persona)
   const k = 1 - Math.exp(-dt * 3); cam.position.lerp(p, k); cam.userData.l = (cam.userData.l || l.clone()).lerp(l, k); cam.lookAt(cam.userData.l);
 }
 
@@ -343,7 +343,7 @@ MVLink.onChange = () => { if (G.state === 'menu' && MVHand.open) startMenu(); };
 setTimeout(() => { if (MVLink.code) { $('code').textContent = MVLink.code; const q = MVLink.qr(5); if (q) $('qr').src = q; } }, 400);
 drawScore(); requestAnimationFrame(loop);
 loadAvatars().then(() => { $('loading').style.display = 'none'; startMenu(); }).catch((e) => { console.error(e); $('loading').textContent = 'No se pudo cargar el avatar'; });
-window.MVF = { G, P, BODY, pick: (id) => { MVHand.close(); menuPick(id); }, shoot, nextShot };
+window.MVF = { G, P, BODY, cam, pick: (id) => { MVHand.close(); menuPick(id); }, shoot, nextShot };
 </script>
 </body>
 </html>
