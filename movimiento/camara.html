@@ -60,7 +60,7 @@ button{font:inherit;cursor:pointer}
 <div class="msg glass" id="msg">Ponte de cuerpo entero frente al celular</div>
 <div class="bottom glass">
   <p>Apoya el celular de pie, a la altura de la cintura, a 2–3 m de ti. El video se procesa aquí: al TV solo llegan los puntos de tu cuerpo (y, si no la cancelas, una copia pequeña de la foto de celebración). Al cambiar de juego no tienes que volver a conectar.</p>
-  <div class="row"><button class="btn" id="flip">Cambiar cámara</button><button class="btn" id="mandoOn">Usar como mando</button><button class="btn pri" id="pause">Pausa</button></div>
+  <div class="row"><button class="btn" id="flip">Cambiar cámara</button><button class="btn" id="mandoOn">Usar como mando</button><button class="btn" id="songBtn">♪ Subir canción</button><input type="file" id="songFile" accept="audio/*" style="display:none"><button class="btn pri" id="pause">Pausa</button></div>
 </div>
 <div id="ph"><div id="phT">¡Celebra!</div><div id="phN"></div><img id="phImg" alt="Foto de celebración"><div id="phBtns" class="row"><button class="btn pri" id="phSave">Guardar</button><button class="btn" id="phShare">Compartir</button><button class="btn" id="phClose">Listo</button></div><button class="btn" id="phX" style="flex:none;width:200px">No tomar foto</button></div><div id="phFl"></div>
 <div id="mando"><div class="hd"><b>Mando MiVibra</b><button class="btn" id="tilt" style="flex:0 0 auto;padding:0 14px">Girar: no</button><button class="btn pri" id="mandoOff" style="flex:0 0 auto;padding:0 14px">Cámara</button></div>
@@ -284,6 +284,16 @@ $('go').onclick = async () => {
   }
 };
 $('flip').onclick = async () => { facing = facing === 'user' ? 'environment' : 'user'; try { await camera(); } catch (e) { msg('No se pudo cambiar de cámara'); } };
+// ---- Subir una canción al TV (para el juego de baile) ----
+$('songBtn').onclick = () => { if (!peer || !code) return status('Primero conéctate al TV', false); $('songFile').click(); };
+$('songFile').onchange = () => { const f = $('songFile').files[0]; if (!f) return; if (f.size > 25e6) return status('La canción pesa mucho (máx. 25 MB)', false);
+  const c = peer.connect('mivibra-mv-' + code, { reliable: true, serialization: 'binary', label: 'cancion' });
+  c.on('open', async () => { const buf = await f.arrayBuffer(), CH = 64000, n = Math.ceil(buf.byteLength / CH);
+    c.send({ t: 'song-start', name: f.name.replace(/\.[^.]+$/, '').slice(0, 40), type: f.type, n });
+    for (let i = 0; i < n; i++) { c.send({ t: 'song-chunk', i, b: buf.slice(i * CH, (i + 1) * CH) }); if (i % 8 === 7) { status('Enviando canción… ' + Math.round((i + 1) / n * 100) + '%', true); await new Promise((r) => setTimeout(r, 30)); } }
+    c.send({ t: 'song-end' }); status('Canción enviada: elígela en el TV', true); });
+  c.on('data', (d) => { if (d && d.t === 'song-ok') { status('¡El TV recibió tu canción!', true); setTimeout(() => c.close(), 1500); } });
+  c.on('error', () => status('No se pudo enviar la canción', false)); $('songFile').value = ''; };
 // ---- Mando ----
 let mando = false, tiltOn = false;
 const msend = (o) => { try { if (conn && conn.open) conn.send(o); } catch (e) {} };

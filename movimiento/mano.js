@@ -59,6 +59,12 @@
       peer.on('disconnected', () => { try { peer.reconnect(); } catch (e) {} });
       addEventListener('pagehide', () => { try { peer.destroy(); } catch (e) {} });
       peer.on('connection', (c) => {
+        // canal aparte (confiable, binario) para mandar una canción desde el celular
+        if (c.label === 'cancion') { let parts = [], meta = null;
+          c.on('data', (d) => { if (!d) return; if (d.t === 'song-start') { meta = d; parts = []; this.songProgress && this.songProgress(0, d.name); }
+            else if (d.t === 'song-chunk' && meta) { parts.push(d.b); this.songProgress && this.songProgress(parts.length / meta.n, meta.name); }
+            else if (d.t === 'song-end' && meta) { const blob = new Blob(parts, { type: meta.type || 'audio/mpeg' }); const m = meta; meta = null; parts = []; try { c.send({ t: 'song-ok' }); } catch (e) {} if (this.onSong) this.onSong(blob, m.name); else this.pendingSong = { blob, name: m.name }; } });
+          return; }
         let P = null;
         // el celular dice qué jugador era (para seguir siendo el mismo al cambiar de juego)
         const join = (want) => {

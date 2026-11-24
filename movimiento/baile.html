@@ -78,7 +78,7 @@ function synthSong(S) {
     stop() { this.on = false; } };
 }
 // ---------- Tu canción: ritmo y partes fuertes ----------
-async function analyze(file) {
+async function analyze(file, name) {
   const a = ac(), buf = await a.decodeAudioData(await file.arrayBuffer()), sr = buf.sampleRate, ch = buf.getChannelData(0), hop = 512, n = Math.floor(ch.length / hop);
   const en = new Float32Array(n); for (let i = 0; i < n; i++) { let s = 0; for (let j = 0; j < hop; j++) { const v = ch[i * hop + j]; s += v * v; } en[i] = Math.sqrt(s / hop); }
   const on = new Float32Array(n); for (let i = 1; i < n; i++) on[i] = Math.max(0, en[i] - en[i - 1]);
@@ -89,7 +89,7 @@ async function analyze(file) {
   for (let b = 0; b < bars; b++) { let s = 0, c = 0; const i0 = Math.floor((off + b * 4 * beat) * fps), i1 = Math.floor((off + (b + 1) * 4 * beat) * fps); for (let i = i0; i < i1 && i < n; i++) { s += en[i]; c++; } be.push(c ? s / c : 0); }
   const sorted = be.slice().sort((x, y) => x - y), lo = sorted[Math.floor(sorted.length * 0.25)] || 0, hi = sorted[Math.floor(sorted.length * 0.55)] || 0;
   const plan = be.map((v) => (v >= hi ? 2 : v >= lo ? 1 : 0));
-  return { bpm, beat, bars, plan, off, dur: buf.duration, name: file.name.replace(/\.[^.]+$/, '').slice(0, 30), energy: (bar) => plan[bar] || 0,
+  return { bpm, beat, bars, plan, off, dur: buf.duration, name: (name || file.name || 'Mi canción').replace(/\.[^.]+$/, '').slice(0, 30), energy: (bar) => plan[bar] || 0,
     play(t0) { srcNode = a.createBufferSource(); srcNode.buffer = buf; srcNode.connect(master); srcNode.start(t0 - off >= a.currentTime ? t0 - off : a.currentTime, t0 - off >= a.currentTime ? 0 : a.currentTime - (t0 - off)); },
     stop() { try { srcNode && srcNode.stop(); } catch (e) {} } };
 }
@@ -106,7 +106,7 @@ const ctx = await startGame({
   sub: 'Copia al bailarín como en un espejo. Elige una canción o carga la tuya.', lvl: true, startSound: 'perfecto', ambient: ['aplausos'],
   how: 'Ponte frente al celular con el cuerpo completo: tus brazos deben quedar igual que el bailarín (en espejo).',
   levels: [{ name: 'Fácil', k: 0 }, { name: 'Normal', k: 1 }, { name: 'Experto', k: 2 }],
-  modes: SONGS.map((s) => ({ id: s.id, label: s.name + ' · ' + s.bpm + ' BPM', icon: '♪' })).concat([{ id: 'up', label: 'Cargar mi canción', icon: '⤒' }, { id: 'two', label: '2 jugadores (' + SONGS[1].name + ')', icon: '⚔', two: true }]),
+  modes: SONGS.map((s) => ({ id: s.id, label: s.name + ' · ' + s.bpm + ' BPM', icon: '♪' })).concat([{ id: 'phone', label: 'Canción desde el celular', icon: '📱' }, { id: 'up', label: 'Cargar canción en este equipo', icon: '⤒' }, { id: 'two', label: '2 jugadores (' + SONGS[1].name + ')', icon: '⚔', two: true }]),
   orbit: { c: [0, 1.4, -1.5], r: 6, y: 2.6 },
   partyWord: () => '¡QUÉ BAILE!',
   async scene({ S }) {
@@ -149,6 +149,7 @@ const ctx = await startGame({
     c.P[0].av.scene.position.x = mode === 'two' ? -0.85 : 0;
     let song;
     if (mode === 'up') { song = await pickFile(c); if (!song) { c.menu(); return; } }
+    else if (mode === 'phone') { song = await phoneSong(c); if (!song) { c.menu(); return; } }
     else { const S = SONGS.find((s) => s.id === mode) || SONGS[1]; song = synthSong(S); song.name = S.name; song.style = S.dance; }
     G.song = song; G.moves = choreo(song, c.lvl); G.idx = 0; G.score = [0, 0]; G.combo = [0, 0]; G.best = [0, 0]; G.perfect = [0, 0];
     document.getElementById('track').classList.add('on'); document.getElementById('combo').classList.add('on');
@@ -234,6 +235,20 @@ function finish(c) {
   const max = G.moves.length * 100 * 3, st = (k) => Math.max(1, Math.min(5, Math.ceil(G.score[k] / max * 5 * 1.6))), two = !c.P[1].cpu;
   const w = two ? (G.score[0] >= G.score[1] ? 0 : 1) : 0;
   c.end(w, two ? '¡Gana ' + c.P[w].name + '!' : '★'.repeat(st(0)) + '☆'.repeat(5 - st(0)), G.score[w] + ' puntos · ' + G.perfect[w] + ' perfectos · racha ' + G.best[w]);
+}
+// canción enviada desde el celular conectado (botón "♪ Subir canción" en la pantalla de la cámara)
+let phoneQ = null;
+MVLink.songProgress = (p, name) => { if (G.waitPhone) ctx.ui.big('Recibiendo…', name + ' · ' + Math.round(p * 100) + '%', 1500); };
+MVLink.onSong = (blob, name) => { phoneQ = { blob, name }; if (G.waitPhone) G.waitPhone(); else if (ctx.state === 'menu') { ctx.ui.cue('Llegó «' + name + '» del celular. Elige «Canción desde el celular»', true, 6000); } };
+async function analyzeBlob(c, q) { c.ui.big('Analizando…', 'Buscando el ritmo de «' + q.name + '»', 4000);
+  try { const s = await analyze(q.blob, q.name); s.style = s.bpm < 105 ? 'salsa' : s.bpm < 122 ? 'disco' : 'festejo'; c.ui.cue('Ritmo: ' + Math.round(s.bpm) + ' BPM · ' + s.plan.filter((x) => x === 2).length + ' compases fuertes', false, 4000); return s; }
+  catch (e) { c.ui.cue('No pude leer ese archivo de audio', true); return null; } }
+function phoneSong(c) {
+  if (phoneQ) { const q = phoneQ; return analyzeBlob(c, q); }
+  if (!MVLink.count()) { c.ui.cue('Primero conecta el celular con el código QR', true, 5000); return Promise.resolve(null); }
+  c.ui.big('Sube tu canción', 'En el celular toca «♪ Subir canción»', 60000);
+  return new Promise((ok) => { const to = setTimeout(() => { G.waitPhone = null; c.ui.cue('No llegó ninguna canción', true); ok(null); }, 120000);
+    G.waitPhone = () => { clearTimeout(to); G.waitPhone = null; analyzeBlob(c, phoneQ).then(ok); }; });
 }
 function pickFile(c) {
   return new Promise((ok) => { const f = document.getElementById('file'); f.value = ''; c.ui.cue('Elige una canción de tu equipo (mp3, m4a, wav…)', true, 6000);
