@@ -25,7 +25,9 @@ class Bridge(private val a: MainActivity) {
     /** Descargas largas (MEGA, colecciones) aparte: así no traban la carga de listas ni el resto de la app. */
     private val dl = Executors.newFixedThreadPool(2)
     /** Pedidos a internet (addons, listas, fichas): muchos a la vez, para que uno lento no haga esperar a los demás. */
-    private val net = Executors.newFixedThreadPool(12)
+    // Pedidos chicos (addons, fichas, cuentas): cada uno en su propio hilo (hasta 48 a la vez), así un addon lento
+    // no deja en fila a los demás (antes con 12 hilos los addons lentos tapaban todo y "no respondía" nadie)
+    private val net = java.util.concurrent.ThreadPoolExecutor(8, 48, 30L, java.util.concurrent.TimeUnit.SECONDS, java.util.concurrent.SynchronousQueue()).also { it.rejectedExecutionHandler = java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy() }
     // Pedidos de texto (fichas de TMDB, APIs): aparte de las descargas grandes de listas, para que no esperen detrás de ellas (en TV la ficha no llegaba)
     private val api = Executors.newFixedThreadPool(6)
 
@@ -69,7 +71,8 @@ class Bridge(private val a: MainActivity) {
                     val code = Net.download(url, f, headers(headersJson), decompress = true)
                     reply(id, code < 400, JSONObject().put("status", code).put("path", servedPath(f)))
                 } else {
-                    val (code, txt) = Net.text(url, headers(headersJson))
+                    // pedidos chicos con tiempos cortos: si un servidor no contesta, se suelta rápido
+                    val (code, txt) = Net.text(url, headers(headersJson), if (mode == "small") 9000 else 20000)
                     reply(id, code < 400, JSONObject().put("status", code).put("text", txt))
                 }
             } catch (e: Exception) {

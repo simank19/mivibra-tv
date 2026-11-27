@@ -265,7 +265,7 @@
   /** Pide los enlaces en segundo plano (al abrir la ficha), para que al darle Reproducir ya estén. */
   var PF = 0;
   MV.stremioPrefetch = function (type, id) { if (!id || !lists().length || PF) return; PF = 1; MV.stremioStreams(type, id).catch(function () {}).then(function () { PF = 0; }); };
-  /** Un addon que tarda demasiado no frena a los demás: a los 12 s se sigue sin él. */
+  /** Un addon que tarda demasiado no frena a los demás: a los 16 s se sigue sin él. */
   function withTimeout(p, ms) { return Promise.race([p, new Promise(function (_, rej) { setTimeout(function () { rej(new Error('tardó demasiado')); }, ms); })]); }
   function rawStreams(type, id, only) {
     var ls = lists().filter(function (l) { return !only || l.id === only; });
@@ -279,7 +279,7 @@
     ls.forEach(function (l) { var m = l.man || {}; if (m.resources && res(m, 'stream') && ok.indexOf(l) < 0 && D[l.name] === undefined) D[l.name] = 'no tiene este tipo de contenido'; });
     var failed = 0;   // addons que no respondieron (caídos o lentos): un "sin enlaces" así no es definitivo
     var jobs = ok.map(function (l) {
-      return withTimeout(MV.getSmallJSON(base(l.url) + '/stream/' + tyFor(l.man || {}) + '/' + encodeURIComponent(id) + '.json'), 12000).then(function (j) {
+      return withTimeout(MV.getSmallJSON(base(l.url) + '/stream/' + tyFor(l.man || {}) + '/' + encodeURIComponent(id) + '.json'), 16000).then(function (j) {
         var all = (j && j.streams) || [];
         var tn = all.filter(function (s) { return s.infoHash && !s.url; }).length;
         MV._stTorrents = (MV._stTorrents || 0) + tn;
@@ -290,7 +290,7 @@
           var h = (s.behaviorHints && s.behaviorHints.proxyHeaders && s.behaviorHints.proxyHeaders.request) || {};
           return { url: s.url, title: String(s.title || s.description || s.name || '').replace(/\s+/g, ' ').trim(), src: s.name || l.name || '', lid: l.id, ua: h['User-Agent'] || h['user-agent'] || '', ref: h.Referer || h.referer || '' };
         });
-      }).catch(function (e) { failed++; var m = (e && e.message) || ''; if (typeof D[l.name] !== 'number') D[l.name] = 'no respondió' + (/40[13]/.test(m) ? ' (acceso denegado: revisa su configuración)' : /cert|ssl|handshake|trust/i.test(m) ? ' (el equipo no acepta su certificado https: revisa la fecha y hora del TV)' : /timeout|tiempo|timed out|tard/i.test(m) ? ' (tardó más de 12 s)' : /unknownhost|resolve|dns/i.test(m) ? ' (no se encontró el servidor: revisa el internet o el DNS del TV)' : m ? ' (' + m.slice(0, 80) + ')' : ''); return []; });
+      }).catch(function (e) { failed++; var m = (e && e.message) || ''; if (typeof D[l.name] !== 'number') D[l.name] = 'no respondió' + (/40[13]/.test(m) ? ' (acceso denegado: revisa su configuración)' : /cert|ssl|handshake|trust/i.test(m) ? ' (el equipo no acepta su certificado https: revisa la fecha y hora del TV)' : /timeout|tiempo|timed out|tard/i.test(m) ? ' (tardó más de 16 s)' : /unknownhost|resolve|dns/i.test(m) ? ' (no se encontró el servidor: revisa el internet o el DNS del TV)' : m ? ' (' + m.slice(0, 80) + ')' : ''); return []; });
     });
     // Primero los que se ven como video (mp4, mkv, m3u8…); al final los que pueden ser páginas web
     function score(x) { var u = x.url.toLowerCase().split('?')[0]; return /\.(mp4|mkv|m3u8|webm|avi|mov|ts|mpd)$/.test(u) ? 0 : /\/(hls|stream|video|playlist|manifest)/.test(u) ? 1 : 2; }

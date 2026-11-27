@@ -57,8 +57,8 @@ object Net {
         return if (b1 == 0x1f && b2 == 0x8b) GZIPInputStream(bis, 64 * 1024) else bis
     }
 
-    fun text(url: String, headers: Map<String, String> = emptyMap()): Pair<Int, String> {
-        val c = open(url, headers)
+    fun text(url: String, headers: Map<String, String> = emptyMap(), timeoutMs: Int = 20000): Pair<Int, String> {
+        val c = open(url, headers, timeoutMs)
         try {
             val code = c.responseCode
             val txt = body(c).use { it.readBytes().toString(Charsets.UTF_8) }
