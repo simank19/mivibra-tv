@@ -3012,14 +3012,16 @@
   function imdbFor(it, type, name) {
     var im = (it._meta && it._meta.imdb) || it.imdb || '';
     if (/^tt\d+/.test(im)) return Promise.resolve(im);
-    var tid = it.tid || it.ltid || (it._meta && (it._meta.tmdbId || it._meta.t)) || '';
+    var tid = String((it._meta && it._meta.tmdbId) || it.ltid || it.tid || '').replace(/^[a-z]+:/, '');
     var tv = type === 'series';
     var byTid = tid && MV.tmdb ? MV.tmdb('/' + (tv ? 'tv' : 'movie') + '/' + tid + '/external_ids', '').then(function (x) { return x && /^tt\d+/.test(x.imdb_id || '') ? x.imdb_id : null; }).catch(function () { return null; }) : Promise.resolve(null);
     return byTid.then(function (id) { return id || findImdb(name || MV.cleanTitle(it.name) || it.name, it.year || '', type, it.orig); }).then(function (id) { if (id) it.imdb = id; return id; });
   }
   MV.imdbFor = imdbFor;
   function findImdb(name, year, type, orig) {
-    var tv = type === 'series';
+    var tv = type === 'series', ym = String(name || '').match(/[(\[]\s*((19|20)\d{2})\s*[)\]]/);
+    if (ym && !year) year = ym[1];
+    name = (MV.cleanTitle(name) || name).replace(/[(\[]\s*(19|20)\d{2}\s*[)\]]/g, ' ').replace(/\s{2,}/g, ' ').trim();
     return MV.cinemetaImdb(name, year, type).then(function (id) {
       if (id || !MV.tmdb) return id;
       var q = function (txt, lang) {
@@ -3277,6 +3279,23 @@
         if (max) setQ(i, qFromHeight(max), /VIDEO-RANGE=PQ|VIDEO-RANGE=HLG/i.test(txt));
       }).catch(function () {});
     }
+    // Por qué una cuenta Xtream no deja abrir: se le pregunta al servidor (vencida, conexiones en uso, bloqueada…)
+    var WHY = {};
+    function xtWhy(i, url, code) {
+      var u = MV.xtFresh ? MV.xtFresh(url) : url, m = /^(https?:\/\/[^\/]+)\/(?:movie|series|live)\/([^\/]+)\/([^\/]+)\//i.exec(u); if (!m) return;
+      var k = m[1] + '|' + m[2];
+      var p = WHY[k] || (WHY[k] = (MV.getSmallJSON || MV.getJSON)(m[1] + '/player_api.php?username=' + m[2] + '&password=' + m[3]).catch(function () { return null; }));
+      p.then(function (j) {
+        var ui = j && j.user_info, msg;
+        if (!ui) msg = 'El servidor no responde a la cuenta (' + code + ')';
+        else if (+ui.auth === 0) msg = 'Usuario o contraseña ya no son válidos: actualízalos en Ajustes › Listas';
+        else if (ui.status && !/^active$/i.test(ui.status)) msg = 'La cuenta está ' + ({ Expired: 'vencida', Banned: 'bloqueada', Disabled: 'desactivada' }[ui.status] || ui.status);
+        else if (ui.exp_date && +ui.exp_date * 1000 < Date.now()) msg = 'La cuenta venció el ' + new Date(+ui.exp_date * 1000).toLocaleDateString('es-CO');
+        else if (+ui.max_connections && +ui.active_cons >= +ui.max_connections) msg = 'La cuenta está en uso (' + ui.active_cons + ' de ' + ui.max_connections + ' conexiones): cierra la otra pantalla';
+        else msg = 'La cuenta está activa pero el servidor rechazó este video (' + code + '): puede que ya no lo tengan';
+        status(i, '✕ ' + esc(msg), '#ff6b6b', true);
+      });
+    }
     function row(x, i) {
       var tg = (x.tags || []).concat(tagsOf(x.url)).filter(function (v, k, a) { return v && a.indexOf(v) === k; });
       if (!x.q) { var qq = qualityOf([x.name, x.src, (x.tags || []).join(' '), String(x.url).split('?')[0]].join(' ')); if (qq) { x.q = qq.q; x.hdr = qq.hdr; } }
@@ -3327,6 +3346,7 @@
           one().then(function (r) { return r && !r.ok && (r.code === 401 || r.code === 403 || r.code === 458 || r.code === 509) ? new Promise(function (ok) { setTimeout(ok, 1500); }).then(one) : r; }).then(function (r) {
             if (acc) delete BUSY[acc];
             if (r && r.ok) { x.ok = true; x.ms = r.ms; status(i, '✓ Funciona · ' + (r.ms / 1000).toFixed(1) + ' s', '#3ecf8e'); if (best < 0) best = i; hlsQuality(i); }
+            else if (r && (r.code === 401 || r.code === 403) && acc) { status(i, '✕ La cuenta no deja abrirlo (' + r.code + ') · revisando la cuenta…', '#ff6b6b', true); xtWhy(i, x.url, r.code); }
             else status(i, r && (r.code === 401 || r.code === 403) ? '✕ La cuenta no deja abrirlo (' + r.code + '): puede estar en uso en otro equipo' : '✕ No responde' + (r && r.code ? ' (' + r.code + ')' : ''), '#ff6b6b', true);
           }).catch(function () { if (acc) delete BUSY[acc]; status(i, 'Sin probar', '#9aa0a6'); }).then(function () { probing--; banner(); pump(); });
         })(nx);

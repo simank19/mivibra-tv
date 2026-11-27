@@ -2294,6 +2294,8 @@
       .replace(/\((?!(19|20)\d{2}\))[^)]*\)/g, ' ')
       .replace(/\b(4k|uhd|fhd|hd|sd|hevc|x26[45]|h26[45]|1080p|720p|480p|latino|lat|castellano|esp|sub|subtitulado|dual|multi|cam|ts)\b/gi, ' ')
       .replace(RX.episode, ' ')
+      // etiquetas de idioma al final del nombre: "John Wick 4 (2023) CAST", "… VOSE", "… [ESP]"
+      .replace(/(\s+[\-–|]?\s*(cast|vose|vos|vo|spa|eng|ingl[eé]s|espa[nñ]ol|castellano|latino|lat|audio latino|dual|sub|subs)\.?)+\s*$/i, ' ')
       .replace(/\s{2,}/g, ' ').replace(/[\s\-–|:.]+$/, '').trim();
   }
   function tmdb(path, params) {
