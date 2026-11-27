@@ -2301,7 +2301,10 @@
   function tmdb(path, params) {
     var key = (P.tmdbKey || '').trim();
     var bearer = key.indexOf('eyJ') === 0;
-    var url = 'https://api.themoviedb.org/3' + path + '?language=es-ES' + (params || '') + (bearer ? '' : '&api_key=' + encodeURIComponent(key));
+    // TMDB responde 400 con parámetros repetidos o mal formados: un solo idioma, año de 4 cifras y nada vacío
+    params = String(params || '').replace(/&(year|first_air_date_year|primary_release_year)=([^&]*)/g, function (_, k, v) { var y = /(19|20)\d{2}/.exec(v); return y ? '&' + k + '=' + y[0] : ''; }).replace(/&query=(?=&|$)/g, '');
+    var url = 'https://api.themoviedb.org/3' + path + '?' + (/(^|&)language=/.test(params) ? '' : 'language=es-ES') + params + (bearer ? '' : '&api_key=' + encodeURIComponent(key));
+    url = url.replace('?&', '?');
     // vía rápida (no espera a que bajen las listas ni a otros pedidos grandes): así la ficha no se queda en "sin ficha"
     return (MV.getSmallJSON || MV.getJSON)(url, bearer ? { Authorization: 'Bearer ' + key, Accept: 'application/json' } : null);
   }
