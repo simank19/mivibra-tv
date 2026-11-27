@@ -400,7 +400,8 @@
     var xs = (S.lists || []).filter(function (l) { return l && l.type === 'xtream' && l.user && l.pass && l.host; });
     var host = m[1].toLowerCase(), u = m[3]; try { u = decodeURIComponent(u); } catch (e) {}
     var same = function (l) { return xtBase(l).toLowerCase() === host; };
-    var l = xs.filter(function (l) { return same(l) && l.user === u; })[0] || xs.filter(function (l) { return l.user === u; })[0] || xs.filter(same)[0];
+    // Solo la misma cuenta (mismo usuario): nunca se cambia por otra cuenta del mismo servidor (eso daba 401/403)
+    var l = xs.filter(function (l) { return same(l) && l.user === u; })[0] || xs.filter(function (l) { return l.user === u; })[0];
     if (!l) return url;
     var nu = xtBase(l) + m[2] + '/' + encodeURIComponent(l.user) + '/' + encodeURIComponent(l.pass) + '/' + m[5];
     return nu;

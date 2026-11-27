@@ -2979,12 +2979,12 @@
       if (P.askSource !== false && !/^stalker:|^file:/.test(url)) {
         var srcs = it.srcs || {}, nm0 = MV.cleanTitle(it.name) || it.name;
         var lst = [url].concat(alts).filter(function (u, k, a) { return u && a.indexOf(u) === k; }).map(function (u, k) {
-          var ln = listName(srcs[u] || (k === 0 ? it.list : ''));
-          return { url: u, kind: 'tu lista', name: ln || (k === 0 ? 'Tu lista' : 'Otra fuente · ' + (hostOf(u) || '')) };
+          var lid = srcs[u] || (k === 0 ? it.list : ''), ln = listName(lid), lo = S.lists.find(function (x) { return x.id === lid; });
+          return { url: u, kind: 'tu lista', name: ln || (k === 0 ? 'Tu lista' : 'Otra fuente · ' + (hostOf(u) || '')), ua: (lo && lo.ua) || (k === 0 ? it.ua : '') || '', lid: lid };
         });
         var hasAd = it.type === 'movie' && MV.stHasStreamers && MV.stHasStreamers();
         smartPick({ title: nm0, it: it, list: lst, opts: { name: nm0, alt: it.orig || '', year: it.year || '', olang: it.olang || '' },
-          addon: hasAd ? function () { var im = imdb || ''; return (/^tt\d+/.test(im) ? Promise.resolve(im) : findImdb(nm0, it.year || '', 'movie', it.orig)).then(function (id) { return id ? { type: 'movie', id: id } : null; }); } : null
+          addon: hasAd ? function () { return imdbFor(it, 'movie', nm0).then(function (id) { return id ? { type: 'movie', id: id } : null; }); } : null
         }).then(function (r) {
           if (r.lid) it._stLid = r.lid;
           launch({ queue: [q(it, { url: r.url, ua: r.ua || it.ua || '', ref: r.ref || it.ref || '', alts: r.alts })], index: 0, live: false, startMs: prog ? prog.pos : 0 }, { item: it });
@@ -3008,6 +3008,16 @@
   };
   /** Número de IMDb de un título por su nombre. Cinemeta conoce sobre todo los nombres en inglés; las novelas,
    *  los doramas y lo que en tu lista viene con nombre en español se buscan además en TMDB (en español). */
+  /** IMDb de un título: el que ya trae, o por su ficha de TMDB (la de la lista o la que se aprendió), o por el nombre. */
+  function imdbFor(it, type, name) {
+    var im = (it._meta && it._meta.imdb) || it.imdb || '';
+    if (/^tt\d+/.test(im)) return Promise.resolve(im);
+    var tid = it.tid || it.ltid || (it._meta && (it._meta.tmdbId || it._meta.t)) || '';
+    var tv = type === 'series';
+    var byTid = tid && MV.tmdb ? MV.tmdb('/' + (tv ? 'tv' : 'movie') + '/' + tid + '/external_ids', '').then(function (x) { return x && /^tt\d+/.test(x.imdb_id || '') ? x.imdb_id : null; }).catch(function () { return null; }) : Promise.resolve(null);
+    return byTid.then(function (id) { return id || findImdb(name || MV.cleanTitle(it.name) || it.name, it.year || '', type, it.orig); }).then(function (id) { if (id) it.imdb = id; return id; });
+  }
+  MV.imdbFor = imdbFor;
   function findImdb(name, year, type, orig) {
     var tv = type === 'series';
     return MV.cinemetaImdb(name, year, type).then(function (id) {
@@ -3026,8 +3036,7 @@
   function searchElsewhere(it, prog) {
     var name = MV.cleanTitle(it.name) || it.name;
     MV.toast('Buscando «' + name + '» en otras fuentes…', 3000);
-    var im = (it._meta && it._meta.imdb) || it.imdb || '';
-    (/^tt\d+/.test(im) ? Promise.resolve(im) : findImdb(name, it.year || '', 'movie', it.orig)).then(function (id) {
+    imdbFor(it, 'movie', name).then(function (id) {
       if (!id) { MV.markDeadKey(it.key, true); throw new Error('No encontré «' + name + '» en otras fuentes'); }
       return MV.stremioPick('movie', id, name, false, false, { year: it.year || '', alt: it.orig || '', olang: it.olang, startMs: prog ? prog.pos : 0 });
     }).then(function (s) {
@@ -3056,8 +3065,7 @@
     var anime = (MV.isAnimeIt && MV.isAnimeIt(series)) || series.anime;
     var opts = { name: name, alt: series.orig || '', olang: series.olang || '', year: series.year || '' };
     var byImdb = function () {
-      var im = (series._meta && series._meta.imdb) || series.imdb || '';
-      return (/^tt\d+/.test(im) ? Promise.resolve(im) : findImdb(name, series.year || '', 'series', series.orig)).then(function (id) {
+      return imdbFor(series, 'series', name).then(function (id) {
         if (!id) throw new Error('No encontré «' + name + '» en otras fuentes');
         return MV.stremioPick('series', id + ':' + e.season + ':' + e.ep, label, false, false, opts);
       });
@@ -3238,7 +3246,9 @@
    * o = { title, it, list: [{url, name, ua, ref}], addon: () => Promise<{type,id}|null>, opts }
    */
   function smartPick(o) {
-    var SRC = [], done = false, best = -1, touched = false, addonsDone = !o.addon, probing = 0, qi = 0;
+    var SRC = [], done = false, best = -1, touched = false, addonsDone = !o.addon, probing = 0, qi = 0, BUSY = {};
+    // cuenta de un enlace Xtream (servidor + usuario): de a una prueba por cuenta
+    function acctOf(u) { var m = /^https?:\/\/([^\/]+)\/(?:movie|series|live)\/([^\/]+)\//i.exec(String(u || '')); return m ? (m[1] + '|' + m[2]).toLowerCase() : ''; }
     var canProbe = !!(A && A.probe);
     function tagsOf(u) {
       var t = [], low = String(u).toLowerCase();
@@ -3297,7 +3307,7 @@
           return '<button class="btn f" data-act="spPick" data-arg="' + o2.i + '"' + (k ? '' : ' id="spGo"') + ' style="width:100%;margin-bottom:6px;justify-content:flex-start;background:' + (k ? 'rgba(62,207,142,.18)' : '#3ecf8e') + ';color:' + (k ? '#c9f5e2' : '#0b1a12') + ';border-color:#3ecf8e">▶ ' + qBadge(o2.x) + 'Funciona en: ' + esc(o2.x.name) + (o2.x.kind ? ' <small style="opacity:.75;margin-left:6px">' + esc(o2.x.kind) + '</small>' : '') + '</button>';
         }).join('') + ad;
         if (!touched && first) { var g = document.getElementById('spGo'); if (g) g.focus(); }
-      } else if (addonsDone && qi >= SRC.length && !probing && canProbe) {
+      } else if (addonsDone && SRC.every(function (y) { return y.qd; }) && !probing && canProbe) {
         b.innerHTML = '<p class="muted" style="margin:4px 0">' + (SRC.length ? 'Ninguna fuente respondió a la prueba. Puedes intentar igual con cualquiera.' : 'No encontré fuentes para este título.') + '</p>' + ad;
       } else {
         b.innerHTML = '<p class="muted" style="margin:4px 0">Buscando la que funciona…</p>' + ad;
@@ -3306,16 +3316,20 @@
     // Se prueban de a 3 a la vez; cada resultado se muestra apenas llega
     function pump() {
       if (!canProbe) { banner(); return; }
-      while (probing < 3 && qi < SRC.length && !done) {
+      while (probing < 3 && !done) {
+        // la siguiente sin probar cuya cuenta no se esté probando ya
+        var nx = -1; for (var j = 0; j < SRC.length; j++) if (!SRC[j].qd && !BUSY[acctOf(SRC[j].url)]) { nx = j; break; }
+        if (nx < 0) break; SRC[nx].qd = true; qi++;
         (function (i) {
           probing++;
-          var x = SRC[i];
-          MV.call('probe', [JSON.stringify([{ url: MV.xtFresh ? MV.xtFresh(x.url) : x.url, ua: x.ua || (o.it && o.it.ua) || '', ref: x.ref || (o.it && o.it.ref) || '' }])]).then(function (res) {
-            var r = res && res[0];
+          var x = SRC[i], acc = acctOf(x.url); if (acc) BUSY[acc] = 1;
+          var one = function () { return MV.call('probe', [JSON.stringify([{ url: MV.xtFresh ? MV.xtFresh(x.url) : x.url, ua: x.ua || (o.it && o.it.ua) || '', ref: x.ref || (o.it && o.it.ref) || '' }])]).then(function (res) { return res && res[0]; }); };
+          one().then(function (r) { return r && !r.ok && (r.code === 401 || r.code === 403 || r.code === 458 || r.code === 509) ? new Promise(function (ok) { setTimeout(ok, 1500); }).then(one) : r; }).then(function (r) {
+            if (acc) delete BUSY[acc];
             if (r && r.ok) { x.ok = true; x.ms = r.ms; status(i, '✓ Funciona · ' + (r.ms / 1000).toFixed(1) + ' s', '#3ecf8e'); if (best < 0) best = i; hlsQuality(i); }
             else status(i, r && (r.code === 401 || r.code === 403) ? '✕ La cuenta no deja abrirlo (' + r.code + '): puede estar en uso en otro equipo' : '✕ No responde' + (r && r.code ? ' (' + r.code + ')' : ''), '#ff6b6b', true);
-          }).catch(function () { status(i, 'Sin probar', '#9aa0a6'); }).then(function () { probing--; banner(); pump(); });
-        })(qi++);
+          }).catch(function () { if (acc) delete BUSY[acc]; status(i, 'Sin probar', '#9aa0a6'); }).then(function () { probing--; banner(); pump(); });
+        })(nx);
       }
       banner();
     }
@@ -3335,7 +3349,8 @@
       add(o.list || []);
       if (!SRC.length) { var f = document.querySelector('[data-act="confirmNo"]'); if (f) f.focus(); } else { var r0 = document.getElementById('spR0'); if (r0) r0.focus(); }
       if (o.addon) {
-        o.addon().then(function (ad) {
+        var addonT = new Promise(function (_, rej) { setTimeout(function () { rej(new Error('lento')); }, 25000); });
+        Promise.race([o.addon().then(function (ad) {
           if (!ad || !ad.id || done) { adMsg = 'No pude identificar este título para buscarlo en tus addons.'; return []; }
           MV._stTorrents = 0; MV._stTorSrc = []; MV._stDiag = {};
           return MV.stremioStreams(ad.type, ad.id).then(function (st) {
@@ -3353,7 +3368,7 @@
               return { url: x.url, ua: x.ua, ref: x.ref, lid: x.lid, src: x.src, kind: 'addon', name: ln + (label && label.toLowerCase() !== ln.toLowerCase() ? ' · ' + label.slice(0, 30) : ''), tags: [lang === 'lat' ? 'Latino' : lang === 'cast' ? 'Castellano' : lang === 'sub' ? 'Subtitulado' : '', String(x.title || '').split(/\n/)[0].slice(0, 60)] };
             });
           });
-        }).catch(function () { adMsg = 'Tus addons no respondieron.'; return []; }).then(function (list) { addonsDone = true; if (!done) { add(list); banner(); } });
+        }), addonT]).catch(function (e) { adMsg = e && e.message === 'lento' ? 'Tus addons tardaron demasiado en responder (revisa tu conexión o los addons en Ajustes).' : 'Tus addons no respondieron.'; return []; }).then(function (list) { addonsDone = true; if (!done) { add(list); banner(); } });
       }
     });
   }
@@ -3364,8 +3379,7 @@
     if (!(MV.stHasStreamers && MV.stHasStreamers())) return Promise.resolve(null);
     var name = MV.cleanTitle(series.name) || series.name, anime = (MV.isAnimeIt && MV.isAnimeIt(series)) || series.anime;
     var byImdb = function () {
-      var im = (series._meta && series._meta.imdb) || series.imdb || '';
-      return (/^tt\d+/.test(im) ? Promise.resolve(im) : findImdb(name, series.year || '', 'series', series.orig)).then(function (id) { return id ? { type: 'series', id: id + ':' + e.season + ':' + e.ep } : null; });
+      return imdbFor(series, 'series', name).then(function (id) { return id ? { type: 'series', id: id + ':' + e.season + ':' + e.ep } : null; });
     };
     return anime && +e.season <= 1 ? kitsuId(name).then(function (kid) { return kid ? { type: 'series', id: kid + ':' + e.ep, anime: true } : byImdb(); }) : byImdb();
   }
