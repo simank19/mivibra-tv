@@ -3216,7 +3216,7 @@
     var main = S.lists.find(function (l) { return l.id === it.list; });
     function tagsOf(u) {
       var t = [], low = u.toLowerCase();
-      [['2160|4k|uhd', '4K'], ['1080', '1080p'], ['720', '720p'], ['480', '480p'], ['latino|lat\\b', 'Latino'], ['castellano', 'Castellano'], ['\\bsub', 'Subtitulado']].forEach(function (r) { if (new RegExp(r[0]).test(low)) t.push(r[1]); });
+      [['2160|4k|uhd', '4K'], ['1440|\\b2k\\b|qhd', '2K'], ['1080|fhd|full.?hd', '1080p'], ['720', '720p'], ['480|576|\\bsd\\b', '480p'], ['latino|lat\\b', 'Latino'], ['castellano', 'Castellano'], ['\\bsub', 'Subtitulado']].forEach(function (r) { if (new RegExp(r[0]).test(low)) t.push(r[1]); });
       var ext = (low.split('?')[0].match(/\.(mp4|mkv|m3u8|avi|ts)$/) || [])[1]; if (ext) t.push(ext.toUpperCase());
       if (LINKS[it.key] === u) t.unshift('Funcionó la última vez');
       if (MV.hostPenalty(u) < 0) t.push('Ha fallado antes');
@@ -3242,14 +3242,35 @@
     var canProbe = !!(A && A.probe);
     function tagsOf(u) {
       var t = [], low = String(u).toLowerCase();
-      [['2160|4k|uhd', '4K'], ['1080', '1080p'], ['720', '720p'], ['latino|lat\\b', 'Latino'], ['castellano', 'Castellano'], ['\\bsub', 'Subtitulado']].forEach(function (r) { if (new RegExp(r[0]).test(low)) t.push(r[1]); });
+      [['latino|lat\\b', 'Latino'], ['castellano', 'Castellano'], ['\\bsub', 'Subtitulado']].forEach(function (r) { if (new RegExp(r[0]).test(low)) t.push(r[1]); });
       var ext = (low.split('?')[0].match(/\.(mp4|mkv|m3u8|avi|ts)$/) || [])[1]; if (ext) t.push(ext.toUpperCase());
       if (o.it && LINKS[o.it.key] === u) t.unshift('Funcionó la última vez');
       return t;
     }
+    // Calidad de cada fuente (4K, 2K, 1080p, 720p…): sale del nombre, la descripción del addon o el enlace;
+    // si es HLS (.m3u8) y no lo dice, se lee de la lista de calidades al probarla.
+    function qualityOf(txt) {
+      var t = ' ' + String(txt || '').toLowerCase().replace(/[._\-\[\]()|]/g, ' ') + ' ', Q = [[/\b(2160p?|4k|uhd|ultra ?hd)\b/, '4K', 6], [/\b(1440p?|2k|qhd)\b/, '2K', 5], [/\b(1080p?|1080i|fhd|full ?hd)\b/, '1080p', 4], [/\b(720p?|hd ?rip|hdtv)\b/, '720p', 3], [/\b(576p?|540p?|480p?|sd|dvd ?rip)\b/, '480p', 2], [/\b(hdcam|cam|cam ?rip|ts ?rip|telesync)\b/, 'CAM', 0], [/\b(360p?|240p?)\b/, '360p', 1]];
+      for (var k = 0; k < Q.length; k++) if (Q[k][0].test(t)) return { q: Q[k][1], r: Q[k][2], hdr: /\b(hdr10\+?|hdr|dolby ?vision|dovi|dv)\b/.test(t) };
+      return null;
+    }
+    function qFromHeight(h) { return h >= 2000 ? '4K' : h >= 1400 ? '2K' : h >= 1000 ? '1080p' : h >= 700 ? '720p' : h >= 460 ? '480p' : h ? '360p' : ''; }
+    var QCOL = { '4K': '#b388ff', '2K': '#5ec8ff', '1080p': '#3ecf8e', '720p': '#ffd166', '480p': '#c9c2ba', '360p': '#9aa0a6', 'CAM': '#ff6b6b' };
+    function qBadge(x) { if (!x.q) return ''; return '<em style="display:inline-block;margin-right:8px;padding:2px 8px;border-radius:8px;font-style:normal;font-size:.78em;font-weight:800;vertical-align:1px;background:' + QCOL[x.q] + ';color:#111">' + x.q + (x.hdr ? ' HDR' : '') + '</em>'; }
+    function setQ(i, q, hdr) { var x = SRC[i]; if (!x || !q) return; x.q = q; x.hdr = !!hdr; var b = document.querySelector('#spR' + i + ' b'); if (b) b.innerHTML = qBadge(x) + esc(x.name); banner(); }
+    // Lee la calidad real de una lista HLS (RESOLUTION=…x…), sin bajar el video
+    function hlsQuality(i) {
+      var x = SRC[i]; if (!x || x.q || !/\.m3u8(\?|$)/i.test(x.url) || !MV.getText) return;
+      var hd = {}; if (x.ua || (o.it && o.it.ua)) hd['User-Agent'] = x.ua || o.it.ua; if (x.ref || (o.it && o.it.ref)) hd.Referer = x.ref || o.it.ref;
+      MV.getText(MV.xtFresh ? MV.xtFresh(x.url) : x.url, hd, true).then(function (txt) {
+        var m, max = 0, re = /RESOLUTION=(\d+)x(\d+)/gi; while ((m = re.exec(String(txt || '')))) max = Math.max(max, +m[2], Math.round(+m[1] * 9 / 16));
+        if (max) setQ(i, qFromHeight(max), /VIDEO-RANGE=PQ|VIDEO-RANGE=HLG/i.test(txt));
+      }).catch(function () {});
+    }
     function row(x, i) {
       var tg = (x.tags || []).concat(tagsOf(x.url)).filter(function (v, k, a) { return v && a.indexOf(v) === k; });
-      return '<button class="stopt f" data-act="spPick" data-arg="' + i + '" id="spR' + i + '"><b>' + esc(x.name) + '</b>' +
+      if (!x.q) { var qq = qualityOf([x.name, x.src, (x.tags || []).join(' '), String(x.url).split('?')[0]].join(' ')); if (qq) { x.q = qq.q; x.hdr = qq.hdr; } }
+      return '<button class="stopt f" data-act="spPick" data-arg="' + i + '" id="spR' + i + '"><b>' + qBadge(x) + esc(x.name) + '</b>' +
         '<span id="spS' + i + '" style="font-weight:700">' + (canProbe ? '… Probando' : '') + '</span>' + (tg.length ? '<span>' + tg.map(esc).join(' · ') + '</span>' : '') + '</button>';
     }
     function add(list) {
@@ -3273,7 +3294,7 @@
         var okL = SRC.map(function (x, i) { return { x: x, i: i }; }).filter(function (o2) { return o2.x.ok; }).sort(function (a2, b2) { return (a2.x.ms || 0) - (b2.x.ms || 0); }).slice(0, 5);
         var first = !document.getElementById('spGo');
         b.innerHTML = okL.map(function (o2, k) {
-          return '<button class="btn f" data-act="spPick" data-arg="' + o2.i + '"' + (k ? '' : ' id="spGo"') + ' style="width:100%;margin-bottom:6px;justify-content:flex-start;background:' + (k ? 'rgba(62,207,142,.18)' : '#3ecf8e') + ';color:' + (k ? '#c9f5e2' : '#0b1a12') + ';border-color:#3ecf8e">▶ Funciona en: ' + esc(o2.x.name) + (o2.x.kind ? ' <small style="opacity:.75;margin-left:6px">' + esc(o2.x.kind) + '</small>' : '') + '</button>';
+          return '<button class="btn f" data-act="spPick" data-arg="' + o2.i + '"' + (k ? '' : ' id="spGo"') + ' style="width:100%;margin-bottom:6px;justify-content:flex-start;background:' + (k ? 'rgba(62,207,142,.18)' : '#3ecf8e') + ';color:' + (k ? '#c9f5e2' : '#0b1a12') + ';border-color:#3ecf8e">▶ ' + qBadge(o2.x) + 'Funciona en: ' + esc(o2.x.name) + (o2.x.kind ? ' <small style="opacity:.75;margin-left:6px">' + esc(o2.x.kind) + '</small>' : '') + '</button>';
         }).join('') + ad;
         if (!touched && first) { var g = document.getElementById('spGo'); if (g) g.focus(); }
       } else if (addonsDone && qi >= SRC.length && !probing && canProbe) {
@@ -3291,7 +3312,7 @@
           var x = SRC[i];
           MV.call('probe', [JSON.stringify([{ url: MV.xtFresh ? MV.xtFresh(x.url) : x.url, ua: x.ua || (o.it && o.it.ua) || '', ref: x.ref || (o.it && o.it.ref) || '' }])]).then(function (res) {
             var r = res && res[0];
-            if (r && r.ok) { x.ok = true; x.ms = r.ms; status(i, '✓ Funciona · ' + (r.ms / 1000).toFixed(1) + ' s', '#3ecf8e'); if (best < 0) best = i; }
+            if (r && r.ok) { x.ok = true; x.ms = r.ms; status(i, '✓ Funciona · ' + (r.ms / 1000).toFixed(1) + ' s', '#3ecf8e'); if (best < 0) best = i; hlsQuality(i); }
             else status(i, r && (r.code === 401 || r.code === 403) ? '✕ La cuenta no deja abrirlo (' + r.code + '): puede estar en uso en otro equipo' : '✕ No responde' + (r && r.code ? ' (' + r.code + ')' : ''), '#ff6b6b', true);
           }).catch(function () { status(i, 'Sin probar', '#9aa0a6'); }).then(function () { probing--; banner(); pump(); });
         })(qi++);
