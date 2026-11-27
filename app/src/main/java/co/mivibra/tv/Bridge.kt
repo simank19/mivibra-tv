@@ -28,7 +28,9 @@ class Bridge(private val a: MainActivity) {
     // Pedidos chicos (addons, fichas, cuentas): cada uno en su propio hilo (hasta 32 a la vez), así un addon lento
     // no deja en fila a los demás (antes con 12 hilos los addons lentos tapaban todo y "no respondía" nadie)
     // (nunca en el hilo que llama: eso congelaba la app mientras se buscaba de dónde reproducir)
-    private val net = java.util.concurrent.ThreadPoolExecutor(32, 32, 30L, java.util.concurrent.TimeUnit.SECONDS, java.util.concurrent.LinkedBlockingQueue()).also { it.allowCoreThreadTimeOut(true) }
+    // Cuántos a la vez según la memoria del equipo: en TV con poca memoria muchas respuestas grandes juntas cerraban la app
+    private val netN: Int = try { val am = a.getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager; val lm = am.largeMemoryClass; if (am.isLowRamDevice || lm <= 256) 8 else if (lm <= 384) 14 else 24 } catch (_: Exception) { 10 }
+    private val net = java.util.concurrent.ThreadPoolExecutor(netN, netN, 30L, java.util.concurrent.TimeUnit.SECONDS, java.util.concurrent.LinkedBlockingQueue()).also { it.allowCoreThreadTimeOut(true) }
     // Pedidos de texto (fichas de TMDB, APIs): aparte de las descargas grandes de listas, para que no esperen detrás de ellas (en TV la ficha no llegaba)
     private val api = Executors.newFixedThreadPool(6)
 

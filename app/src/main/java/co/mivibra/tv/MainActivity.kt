@@ -49,6 +49,16 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
+        // Si la app se cierra por un error, se guarda qué pasó para mostrarlo al abrirla de nuevo (y poder arreglarlo)
+        val prev = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { t, e ->
+            try {
+                val sw = java.io.StringWriter(); e.printStackTrace(java.io.PrintWriter(sw))
+                val mem = Runtime.getRuntime().let { r -> "memoria " + (r.totalMemory() - r.freeMemory()) / 1048576 + "/" + r.maxMemory() / 1048576 + " MB" }
+                File(filesDir, "crash.txt").writeText("Versión " + BuildConfig.VERSION_NAME + " · " + android.os.Build.MODEL + " · Android " + android.os.Build.VERSION.RELEASE + " · " + mem + " · hilo " + t.name + "\n" + sw.toString().take(3500))
+            } catch (_: Throwable) {}
+            prev?.uncaughtException(t, e)
+        }
 
         val loader = WebViewAssetLoader.Builder()
             .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
@@ -89,6 +99,7 @@ class MainActivity : ComponentActivity() {
                 // Si la vez anterior Android cerró la página por falta de memoria, la app arranca en modo liviano
                 val gone = getSharedPreferences("mv", MODE_PRIVATE).getLong("rendererGone", 0L)
                 if (System.currentTimeMillis() - gone < 6 * 3600_000L) web.evaluateJavascript("window.MV&&(MV.lowMem=true)", null)
+                try { val cf = File(filesDir, "crash.txt"); if (cf.exists()) { val txt = cf.readText(); cf.delete(); web.evaluateJavascript("window.MV&&MV.showCrash&&MV.showCrash(" + org.json.JSONObject.quote(txt) + ")", null) } } catch (_: Exception) {}
                 val list = queue.toList()
                 queue.clear()
                 list.forEach { web.evaluateJavascript(it, null) }

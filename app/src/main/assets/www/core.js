@@ -288,6 +288,12 @@
     return true;
   };
   MV.modalOpen = function () { return modalStack.length > 0; };
+  /** La app se cerró sola la vez pasada: se muestra qué pasó (para mandar foto y arreglarlo). */
+  MV.showCrash = function (txt) {
+    setTimeout(function () {
+      MV.modal('<h2>La app se cerró sola la vez pasada</h2><p>Si vuelve a pasar, toma una foto de esto y envíala para arreglarlo.</p><pre style="max-height:40vh;overflow:auto;white-space:pre-wrap;font-size:12px;line-height:1.35;background:rgba(0,0,0,.35);padding:10px;border-radius:10px">' + MV.esc(String(txt || '')) + '</pre><div class="btns"><button class="btn f" data-act="closeModal" data-autofocus>Entendido</button></div>');
+    }, 2500);
+  };
   MV.confirm = function (title, text, okLabel) {
     return new Promise(function (res) {
       MV._confirmRes = res;
