@@ -2984,7 +2984,7 @@
         });
         var hasAd = it.type === 'movie' && MV.stHasStreamers && MV.stHasStreamers();
         smartPick({ title: nm0, it: it, list: lst, opts: { name: nm0, alt: it.orig || '', year: it.year || '', olang: it.olang || '' },
-          addon: hasAd ? function () { return imdbFor(it, 'movie', nm0).then(function (id) { return id ? { type: 'movie', id: id } : null; }); } : null
+          addon: hasAd ? function () { return imdbFor(it, 'movie', nm0).then(function (id) { return id ? { type: 'movie', id: id } : it._tmdbFound ? { type: 'movie', id: 'tmdb:' + it._tmdbFound } : null; }); } : null
         }).then(function (r) {
           if (r.lid) it._stLid = r.lid;
           launch({ queue: [q(it, { url: r.url, ua: r.ua || it.ua || '', ref: r.ref || it.ref || '', alts: r.alts })], index: 0, live: false, startMs: prog ? prog.pos : 0 }, { item: it });
@@ -3012,7 +3012,8 @@
   function imdbFor(it, type, name) {
     var tv = type === 'series', m0 = it._meta || {}, chain = Promise.resolve(null);
     var step = function (f) { chain = chain.then(function (id) { return id || Promise.resolve().then(f).catch(function () { return null; }); }); };
-    var byTid = function (t) { t = String(t || '').replace(/^[a-z]+:/, ''); if (!/^\d+$/.test(t) || !MV.tmdb) return null; return MV.tmdb('/' + (tv ? 'tv' : 'movie') + '/' + t + '/external_ids', '').then(function (x) { return x && /^tt\d+/.test(x.imdb_id || '') ? x.imdb_id : null; }); };
+    var D = it._idDiag = [];
+    var byTid = function (t) { t = String(t || '').replace(/^[a-z]+:/, ''); if (!/^\d+$/.test(t) || !MV.tmdb) return null; it._tmdbFound = t; return MV.tmdb('/' + (tv ? 'tv' : 'movie') + '/' + t + '/external_ids', '').then(function (x) { if (!(x && x.imdb_id)) D.push('TMDB ' + t + ' sin IMDb'); return x && /^tt\d+/.test(x.imdb_id || '') ? x.imdb_id : null; }, function (e) { D.push('TMDB: ' + ((e && e.message) || 'sin respuesta')); return null; }); };
     var im = m0.imdb || it.imdb || '';
     step(function () { return /^tt\d+/.test(im) ? im : null; });
     // 1) por la ficha de TMDB (la que se ve en pantalla, la que trae la lista o la que se aprendió)
@@ -3022,18 +3023,20 @@
     // 3) por el nombre: el de la lista, el de la ficha, el original y sin el subtítulo ("John Carter: Entre dos mundos" → "John Carter")
     var n0 = name || MV.cleanTitle(it.name) || it.name;
     [n0, (it._meta && it._meta.title) || '', it.orig || '', String(n0).split(/\s*[:\-–]\s+/)[0]].filter(function (n, k, a) { return n && n.length > 1 && a.indexOf(n) === k; })
-      .forEach(function (n) { step(function () { return findImdb(n, it.year || '', type, it.orig); }); });
+      .forEach(function (n) { step(function () { return findImdb(n, it.year || '', type, it.orig, D); }); });
     return chain.then(function (id) { if (id) it.imdb = id; return id; });
   }
   MV.imdbFor = imdbFor;
-  function findImdb(name, year, type, orig) {
+  function findImdb(name, year, type, orig, D) {
     var tv = type === 'series', ym = String(name || '').match(/[(\[]\s*((19|20)\d{2})\s*[)\]]/);
     if (ym && !year) year = ym[1];
     name = (MV.cleanTitle(name) || name).replace(/[(\[]\s*(19|20)\d{2}\s*[)\]]/g, ' ').replace(/\s{2,}/g, ' ').trim();
     return MV.cinemetaImdb(name, year, type).then(function (id) {
+      if (!id && D && !MV.tmdb) D.push('sin TMDB');
       if (id || !MV.tmdb) return id;
       var q = function (txt, lang) {
-        return MV.tmdb('/search/' + (tv ? 'tv' : 'movie'), '&language=' + lang + '&query=' + encodeURIComponent(txt) + (year ? (tv ? '&first_air_date_year=' : '&year=') + year : '')).then(function (r) {
+        return MV.tmdb('/search/' + (tv ? 'tv' : 'movie'), '&language=' + lang + '&query=' + encodeURIComponent(txt) + (year ? (tv ? '&first_air_date_year=' : '&year=') + year : '')).catch(function (e) { if (D) D.push('TMDB: ' + ((e && e.message) || 'sin respuesta')); throw e; }).then(function (r) {
+          if (D && !(r && r.results && r.results.length)) D.push('TMDB no encontró «' + txt + '»');
           var rs = (r && r.results) || [], n = MV.norm(txt);
           var m = rs.filter(function (x) { return [x.name, x.title, x.original_name, x.original_title].some(function (t) { return t && MV.norm(t) === n; }); })[0] || rs[0];
           return m ? MV.tmdb('/' + (tv ? 'tv' : 'movie') + '/' + m.id + '/external_ids', '').then(function (x) { return x && /^tt\d+/.test(x.imdb_id || '') ? x.imdb_id : null; }) : null;
@@ -3396,7 +3399,7 @@
       if (o.addon) {
         var addonT = new Promise(function (_, rej) { setTimeout(function () { rej(new Error('lento')); }, 25000); });
         Promise.race([o.addon().then(function (ad) {
-          if (!ad || !ad.id || done) { adMsg = 'No pude identificar este título para buscarlo en tus addons.'; return []; }
+          if (!ad || !ad.id || done) { var dg = (o.it && o.it._idDiag || []).filter(function (v, k, a) { return a.indexOf(v) === k; }).slice(0, 3).join(' · '); adMsg = 'No pude identificar este título para buscarlo en tus addons.' + (dg ? ' (' + dg + ')' : ''); return []; }
           MV._stTorrents = 0; MV._stTorSrc = []; MV._stDiag = {};
           return MV.stremioStreams(ad.type, ad.id).then(function (st) {
             st = (st || []).filter(function (x) { return x.url; });
