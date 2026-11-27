@@ -667,7 +667,7 @@ setInterval(() => { if (STATE.phase !== 'menu' && STATE.phase !== 'result') retu
     if (STATE.phase === 'result' && now.a && !pv.a) showMenu(); gpPrev[k] = now; }
   if (changed) drawMenu(); }, 60);
 requestAnimationFrame(loop);
-await previewTrack(); $('load').classList.add('hide'); showMenu();
+try { await previewTrack(); $('load').classList.add('hide'); showMenu(); } catch (e) { $('load').textContent = 'No se pudo preparar la pista: ' + ((e && e.message) || e) + '. Revisa tu conexión y vuelve a abrir el juego.'; }
 // prueba rápida: simular segundos sin dibujar (la máquina maneja todos)
 function sim(sec, h = 1 / 60) { STATE.phase = 'race'; let air = 0, hmax = 0; for (let i = 0; i < sec / h; i++) { for (const c of RACERS) { aiDrive(c, h); physics(c, h); if (c.air) air += h; hmax = Math.max(hmax, c.h); } collide(); tickItems(h, i * h); STATE.raceT += h; } return { air: +air.toFixed(1), hmax: +hmax.toFixed(1), r: RACERS.map((r) => [r.name, r.lap, r.s | 0, r.v.toFixed(1), r.done]) }; }
 window.MVRC = { STATE, RACERS, TR: () => TR, startRace, SEATS, endRace, useItem, sim, TRACKS };
