@@ -68,10 +68,13 @@ def main():
     if os.path.exists(os.path.join(OVR, 'bolos.html')):
         os.makedirs(os.path.join(out, 'bolos'), exist_ok=True)
         shutil.copy(os.path.join(OVR, 'bolos.html'), os.path.join(out, 'bolos', 'index.html'))
-    for game in ('futbol', 'voley', 'dardos', 'arco', 'boxeo', 'golf', 'beisbol', 'esqui', 'americano', 'baile', 'carrera', 'tenis-cancha'):
+    for game in ('futbol', 'voley', 'dardos', 'arco', 'boxeo', 'golf', 'beisbol', 'esqui', 'americano', 'baile', 'carrera', 'tenis-cancha', 'rc'):
         if os.path.exists(os.path.join(OVR, game + '.html')):
             os.makedirs(os.path.join(out, game), exist_ok=True)
             shutil.copy(os.path.join(OVR, game + '.html'), os.path.join(out, game, 'index.html'))
+    # Carreras RC: cielos y luz real (HDRI CC0 de Poly Haven)
+    if os.path.isdir(os.path.join(OVR, 'rchdr')):
+        shutil.copytree(os.path.join(OVR, 'rchdr'), os.path.join(out, 'rchdr'), dirs_exist_ok=True)
     if os.path.exists(os.path.join(OVR, 'tenis.html')):
         os.makedirs(os.path.join(out, 'tenis'), exist_ok=True)
         shutil.copy(os.path.join(OVR, 'tenis.html'), os.path.join(out, 'tenis', 'index.html'))

@@ -52,6 +52,24 @@ button{font:inherit;cursor:pointer}
 #dpad button{height:58px;border-radius:18px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.12);color:#fff;font:900 22px sans-serif}
 #dpad button.ok{background:#FF2EA8;border-color:#FF2EA8}
 #dpad button:active{transform:scale(.95);background:rgba(255,255,255,.3)}
+#rcpad{position:fixed;inset:0;z-index:8;display:none;background:linear-gradient(160deg,#1a1714,#0d0c0b);color:#fff;touch-action:none;font-family:'DM Sans',Manrope,sans-serif}
+#rcpad.on{display:block}
+#rcpad .hd{position:absolute;left:14px;right:14px;top:calc(10px + env(safe-area-inset-top));display:flex;gap:10px;align-items:center}
+#rcpad .hd b{flex:1;font:800 17px 'Bricolage Grotesque',sans-serif}
+#rcpad .hd button{height:38px;padding:0 14px;border-radius:12px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.1);color:#fff;font:700 13px sans-serif}
+#rcSteer{position:absolute;left:0;top:64px;bottom:0;width:46%;touch-action:none}
+#rcSteer .tr{position:absolute;left:8%;right:8%;top:50%;height:10px;margin-top:-5px;border-radius:9px;background:rgba(255,255,255,.12)}
+#rcSteer .kn{position:absolute;left:50%;top:50%;width:92px;height:92px;margin:-46px 0 0 -46px;border-radius:50%;background:rgba(255,105,0,.55);border:2px solid #FF6900}
+#rcSteer small{position:absolute;left:0;right:0;bottom:calc(12px + env(safe-area-inset-bottom));text-align:center;color:#A39C94;font:600 12px sans-serif}
+#rcBtns{position:absolute;right:12px;top:64px;bottom:calc(12px + env(safe-area-inset-bottom));width:52%;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr 1fr;gap:12px}
+#rcBtns button{border-radius:24px;border:2px solid rgba(255,255,255,.25);color:#fff;font:800 clamp(15px,4.5vmin,24px) sans-serif;touch-action:none}
+#rcBtns .g{background:#FF6900;grid-row:1/4;grid-column:2}
+#rcBtns .p{background:#FF2EA8}
+#rcBtns .b,#rcBtns .r{background:rgba(255,255,255,.1)}
+#rcBtns .b{grid-column:1}
+#rcBtns button.on{filter:brightness(1.35);transform:scale(.97)}
+#rcpad .rot{position:absolute;left:0;right:0;top:50%;text-align:center;color:#C9C2BA;font:700 14px sans-serif;display:none}
+@media (orientation:portrait){#rcpad .rot{display:block;top:auto;bottom:calc(40% + 8px)}#rcSteer{top:auto;height:40%;width:100%;bottom:0}#rcBtns{top:64px;bottom:auto;height:calc(60% - 120px);width:auto;left:12px}}
 </style>
 </head>
 <body>
@@ -63,6 +81,10 @@ button{font:inherit;cursor:pointer}
   <div class="row"><button class="btn" id="flip">Cambiar cámara</button><button class="btn" id="mandoOn">Usar como mando</button><button class="btn" id="songBtn">♪ Subir canción</button><input type="file" id="songFile" accept="audio/*" style="display:none"><button class="btn pri" id="pause">Pausa</button></div>
 </div>
 <div id="ph"><div id="phT">¡Celebra!</div><div id="phN"></div><img id="phImg" alt="Foto de celebración"><div id="phBtns" class="row"><button class="btn pri" id="phSave">Guardar</button><button class="btn" id="phShare">Compartir</button><button class="btn" id="phClose">Listo</button></div><button class="btn" id="phX" style="flex:none;width:200px">No tomar foto</button></div><div id="phFl"></div>
+<div id="rcpad"><div class="hd"><b>Mando de carreras RC</b><button id="rcTilt">Inclinar: no</button><button id="rcCam">Cámara</button></div>
+<div id="rcSteer"><div class="tr"></div><div class="kn" id="rcKn"></div><small>Desliza para girar</small></div>
+<div id="rcBtns"><button class="p" id="rcP">PODER</button><button class="g" id="rcG">ACELERAR</button><button class="b" id="rcB" style="grid-row:2">FRENO</button><button class="r" id="rcR" style="grid-column:1;grid-row:3">DERRAPE</button></div>
+<p class="rot">Gira el celular de lado para jugar más cómodo</p></div>
 <div id="mando"><div class="hd"><b>Mando MiVibra</b><button class="btn" id="tilt" style="flex:0 0 auto;padding:0 14px">Girar: no</button><button class="btn pri" id="mandoOff" style="flex:0 0 auto;padding:0 14px">Cámara</button></div>
   <div id="pad"><i id="padDot"></i><span>Toca para OK · desliza para lanzar,<br>patear o golpear (rápido = más fuerte)</span></div>
   <div id="dpad"><button data-k="Escape">❚❚</button><button data-k="ArrowUp">▲</button><button data-k="Backspace">↩</button><button data-k="ArrowLeft">◀</button><button data-k="Enter" class="ok">OK</button><button data-k="ArrowRight">▶</button><span></span><button data-k="ArrowDown">▼</button><span></span></div></div>
@@ -113,6 +135,9 @@ function onData(d) {
   if (!d) return;
   if (d.t === 'say') msg(d.text, d.ok);
   if (d.t === 'slot') { mySlot = d.n - 1; try { sessionStorage.setItem('mv-slot', mySlot); } catch (e) {} let b = document.getElementById('slotTag'); if (!b) { b = document.createElement('div'); b.id = 'slotTag'; b.style.cssText = 'position:fixed;right:12px;top:calc(70px + env(safe-area-inset-top));z-index:9;padding:8px 14px;border-radius:99px;font:800 16px Manrope,Inter,sans-serif;color:#fff;box-shadow:0 6px 16px rgba(0,0,0,.35)'; document.body.appendChild(b); } b.textContent = 'Jugador ' + d.n; b.style.background = d.color || '#FF6A3D'; msg((d.game ? d.game + ' · ' : '') + 'Eres el jugador ' + d.n + '. Mira el TV', true); }
+  if (d.t === 'slot') rcShow(/^Carreras RC/i.test(d.game || ''));
+  if (d.t === 'rcpad') rcShow(!!d.on);
+  if (d.t === 'buzz') { try { navigator.vibrate && navigator.vibrate(Math.min(200, d.ms || 20)); } catch (e) {} }
   if (d.t === 'full') msg('Ya hay 4 jugadores conectados', false);
   if (d.t === 'photo') photo(d);
 }
@@ -325,6 +350,26 @@ $('phSave').onclick = () => { const a = document.createElement('a'); a.href = $(
 $('phShare').onclick = async () => { try { const f = new File([lastPhoto], 'mivibra-celebracion.jpg', { type: 'image/jpeg' }); if (navigator.canShare && navigator.canShare({ files: [f] })) await navigator.share({ files: [f], title: 'MiVibra Movimiento' }); else $('phSave').click(); } catch (e) {} };
 document.addEventListener('visibilitychange', async () => { if (!document.hidden && wake === null) { try { wake = await navigator.wakeLock.request('screen'); } catch (e) {} } });
 if (preset) setTimeout(() => $('go').click(), 300);
+// ---- Mando de carreras RC (lo abre el TV cuando el juego es Carreras RC) ----
+const RC = { x: 0, g: 0, b: 0, p: 0, r: 0 }; let rcOn = false, rcTiltOn = false, rcLast = '', rcAt = 0;
+function rcShow(on) { if (on === rcOn) return; rcOn = on; $('rcpad').classList.toggle('on', on); mando = on; msend({ t: 'mando', on }); if (on) { try { screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(() => {}); } catch (e) {} } }
+function rcSend(force) { const o = { t: 'rc', x: +RC.x.toFixed(2), g: RC.g, b: RC.b, p: RC.p, r: RC.r }, k = JSON.stringify(o), now = performance.now(); if (force || k !== rcLast || now - rcAt > 250) { rcLast = k; rcAt = now; msend(o); } }
+setInterval(() => { if (rcOn) rcSend(); }, 50);
+(() => { const st = $('rcSteer'), kn = $('rcKn'); let id = null, x0 = 0;
+  st.addEventListener('pointerdown', (e) => { id = e.pointerId; st.setPointerCapture(id); x0 = e.clientX; });
+  st.addEventListener('pointermove', (e) => { if (e.pointerId !== id || rcTiltOn) return; RC.x = Math.max(-1, Math.min(1, (e.clientX - x0) / (st.clientWidth * 0.3))); kn.style.left = (50 + RC.x * 38) + '%'; });
+  const end = (e) => { if (e.pointerId !== id) return; id = null; if (!rcTiltOn) { RC.x = 0; kn.style.left = '50%'; } };
+  st.addEventListener('pointerup', end); st.addEventListener('pointercancel', end);
+  [['rcG', 'g'], ['rcB', 'b'], ['rcP', 'p'], ['rcR', 'r']].forEach(([id2, k]) => { const b = $(id2);
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); b.setPointerCapture(e.pointerId); RC[k] = 1; b.classList.add('on'); buzz(10); rcSend(true); });
+    const up = () => { RC[k] = 0; b.classList.remove('on'); rcSend(true); }; b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); });
+  $('rcCam').onclick = () => rcShow(false);
+  $('rcTilt').onclick = async () => { if (!rcTiltOn && window.DeviceOrientationEvent && DeviceOrientationEvent.requestPermission) { try { if ((await DeviceOrientationEvent.requestPermission()) !== 'granted') return; } catch (e) { return; } }
+    rcTiltOn = !rcTiltOn; $('rcTilt').textContent = 'Inclinar: ' + (rcTiltOn ? 'sí' : 'no'); if (!rcTiltOn) { RC.x = 0; kn.style.left = '50%'; } };
+  // de lado (horizontal): el giro sale de beta; de pie: de gamma
+  addEventListener('deviceorientation', (e) => { if (!rcOn || !rcTiltOn) return; const land = innerWidth > innerHeight, a = land ? (e.beta || 0) * ((screen.orientation && screen.orientation.angle === 270) ? -1 : 1) : (e.gamma || 0);
+    RC.x = Math.max(-1, Math.min(1, a / 30)); kn.style.left = (50 + RC.x * 38) + '%'; });
+})();
 </script>
 </body>
 </html>
