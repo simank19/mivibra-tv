@@ -19,6 +19,31 @@ def sub1(text, old, new, what):
     return text.replace(old, new, 1)
 
 
+def tienda(out):
+    """Tienda de juegos: copia las portadas y videos, y arma tienda.json con los archivos de cada juego (tamaño y huella)."""
+    import hashlib, json
+    src = os.path.join(OVR, 'tienda')
+    if not os.path.isdir(src):
+        return
+    shutil.copytree(src, os.path.join(out, 'tienda'), dirs_exist_ok=True, ignore=shutil.ignore_patterns('catalogo.json'))
+    cat = json.load(open(os.path.join(src, 'catalogo.json'), encoding='utf-8'))
+    for g in cat['juegos']:
+        files, total = [], 0
+        for rel in g.pop('archivos', []):
+            f = os.path.join(out, rel)
+            if not os.path.isfile(f):
+                sys.exit('tienda: falta %s para %s' % (rel, g['id']))
+            data = open(f, 'rb').read()
+            files.append({'p': rel, 's': len(data), 'h': hashlib.sha1(data).hexdigest()[:12]})
+            total += len(data)
+        g['archivos'] = files
+        g['tamano'] = total
+        # la versión cambia sola si cambia cualquier archivo (así sale "Actualizar")
+        g['huella'] = hashlib.sha1(''.join(x['h'] for x in files).encode()).hexdigest()[:12]
+    cat.pop('nota', None)
+    json.dump(cat, open(os.path.join(out, 'tienda.json'), 'w', encoding='utf-8'), ensure_ascii=False)
+
+
 def main():
     src, out = os.path.abspath(sys.argv[1]), os.path.abspath(sys.argv[2])
     if os.path.exists(out):
@@ -89,6 +114,7 @@ def main():
     shutil.copytree(os.path.join(OVR, 'addons3'), os.path.join(out, 'vendor', 'three-0.183.2', 'addons'), dirs_exist_ok=True)
     os.makedirs(os.path.join(out, 'camara'), exist_ok=True)
     shutil.copy(os.path.join(OVR, 'camara.html'), os.path.join(out, 'camara', 'index.html'))
+    tienda(out)
     open(os.path.join(out, 'index.html'), 'w').write('<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=muneco/"><title>MiVibra Movimiento</title>')
 
 

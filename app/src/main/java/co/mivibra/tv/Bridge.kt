@@ -63,6 +63,39 @@ class Bridge(private val a: MainActivity) {
 
     // ---------------- Red ----------------
 
+    // ---------------- Tienda de juegos ----------------
+    private val games = Executors.newFixedThreadPool(3)
+    private fun gameFile(rel: String): File? {
+        val root = File(a.filesDir, "games").canonicalFile
+        val f = File(root, rel.trimStart('/')).canonicalFile
+        return if (f.path.startsWith(root.path + File.separator)) f else null
+    }
+
+    /** Baja un archivo de un juego a la memoria de la app (games/<rel>). Responde el tamaño. */
+    @JavascriptInterface
+    fun gameGet(id: String, url: String, rel: String) {
+        games.execute {
+            try {
+                val f = gameFile(rel) ?: throw IllegalArgumentException("ruta no válida")
+                val code = Net.download(url, f)
+                if (code >= 400 || !f.exists()) reply(id, false, "HTTP $code") else reply(id, true, f.length())
+            } catch (e: Exception) { reply(id, false, e.message ?: "error") }
+        }
+    }
+
+    /** Borra un archivo de un juego (al desinstalar). */
+    @JavascriptInterface
+    fun gameDel(id: String, rel: String) {
+        games.execute {
+            try { val f = gameFile(rel); val ok = f != null && (!f.exists() || f.delete()); f?.parentFile?.let { if (it.list()?.isEmpty() == true) it.delete() }; reply(id, ok, null) }
+            catch (e: Exception) { reply(id, false, e.message ?: "error") }
+        }
+    }
+
+    /** Espacio libre en la memoria de la app (MB). */
+    @JavascriptInterface
+    fun gameFree(): Long = try { a.filesDir.usableSpace / 1048576 } catch (_: Exception) { -1 }
+
     /** mode = "text" devuelve el texto; mode = "file" lo guarda y devuelve una ruta para fetch() (listas grandes). */
     @JavascriptInterface
     fun httpGet(id: String, url: String, headersJson: String?, mode: String?) {

@@ -464,7 +464,7 @@ function readSrc(src) {
   if (src.startsWith('cel')) { const c = CEL[+src[3]]; return { x: c.x, g: c.g, b: c.b, p: c.p, r: c.r }; }
   return { x: 0, g: 0, b: 0, p: false, r: false };
 }
-function pollInputs() { for (const c of RACERS) if (c.human) { const i = readSrc(c.src); c.inp.x = i.x; c.inp.g = i.g; c.inp.b = i.b; c.inp.r = i.r; if (i.p && !c.inp.pPrev && STATE.phase === 'race') useItem(c); c.inp.pPrev = i.p; } }
+function pollInputs() { for (const c of RACERS) if (c.human) { if (window.__auto) { if (STATE.phase === 'race') aiDrive(c, 1 / 60); continue; } const i = readSrc(c.src); c.inp.x = i.x; c.inp.g = i.g; c.inp.b = i.b; c.inp.r = i.r; if (i.p && !c.inp.pPrev && STATE.phase === 'race') useItem(c); c.inp.pPrev = i.p; } }
 // controles táctiles
 (function touchUI() {
   const st = $('tSteer'), kn = $('tKnob'); let id = null, x0 = 0;
@@ -628,7 +628,11 @@ const menuCam = new THREE.PerspectiveCamera(50, 1, 0.1, 900);
 let last = performance.now();
 function loop(now) {
   requestAnimationFrame(loop); if (window.__hold) { last = now; return; }
-  const dt = Math.min(0.05, (now - last) / 1000); last = now; const t = now / 1000;
+  const dt = Math.min(0.05, (now - last) / 1000); last = now; frame(dt, now / 1000);
+}
+// un paso del juego (también lo usa la grabación del video de la tienda, con pasos fijos)
+let simT = 0;
+function frame(dt, t) {
   if (STATE.phase === 'menu' || STATE.phase === 'load') { syncSeats(); }
   if (!TR) return;
   if (STATE.phase === 'count') { STATE.t += dt; const n = 3 - Math.floor(STATE.t); $('big').textContent = n > 0 ? n : '¡YA!'; if (STATE.t >= 3 && !STATE.went) { STATE.went = true; STATE.phase = 'race'; for (const c of RACERS) if (c.human) sfxPlay(c, 'silbato', 0.6); setTimeout(() => { if ($('big').textContent === '¡YA!') $('big').textContent = ''; }, 700); }
@@ -670,7 +674,7 @@ requestAnimationFrame(loop);
 try { await previewTrack(); $('load').classList.add('hide'); showMenu(); } catch (e) { $('load').textContent = 'No se pudo preparar la pista: ' + ((e && e.message) || e) + '. Revisa tu conexión y vuelve a abrir el juego.'; }
 // prueba rápida: simular segundos sin dibujar (la máquina maneja todos)
 function sim(sec, h = 1 / 60) { STATE.phase = 'race'; let air = 0, hmax = 0; for (let i = 0; i < sec / h; i++) { for (const c of RACERS) { aiDrive(c, h); physics(c, h); if (c.air) air += h; hmax = Math.max(hmax, c.h); } collide(); tickItems(h, i * h); STATE.raceT += h; } return { air: +air.toFixed(1), hmax: +hmax.toFixed(1), r: RACERS.map((r) => [r.name, r.lap, r.s | 0, r.v.toFixed(1), r.done]) }; }
-window.MVRC = { STATE, RACERS, TR: () => TR, startRace, SEATS, endRace, useItem, sim, TRACKS };
+window.MVRC = { STATE, RACERS, TR: () => TR, startRace, SEATS, endRace, useItem, sim, TRACKS, tick: (dt) => { simT += dt; frame(dt, simT); }, R };
 </script>
 </body>
 </html>

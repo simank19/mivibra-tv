@@ -1,0 +1,17 @@
+{
+  "nota": "Catálogo de la Tienda de juegos de MiVibra. Al publicar, avatarpack.py agrega a cada juego sus archivos (tamaño y huella) y lo deja en tienda.json. Los juegos que ya estaban siguen fijos en MiVibra Movimiento; los de aquí aparecen ahí al descargarlos. Las expansiones (tipo dlc) llevan 'de' = id del juego.",
+  "juegos": [
+    {
+      "id": "rc", "tipo": "juego", "nombre": "Carreras RC", "categoria": "Carreras", "version": "1.0",
+      "corto": "Carros a control remoto con poderes y trampas",
+      "descripcion": "Monster trucks, motos, coches tipo Hot Wheels y buggies corriendo en una cantera, un parque con rizo y un puente urbano. Cajas de poder con misiles, escudo, nitro, pulso eléctrico, súper salto, aceite y clavos. Contra la máquina o hasta 4 jugadores en pantalla dividida.",
+      "jugadores": "1 a 4", "controles": ["cel", "bt", "rem", "tac"], "ruta": "rc/",
+      "portada": "tienda/rc/portada.jpg", "video": "tienda/rc/demo.mp4", "fotos": ["tienda/rc/foto1.jpg", "tienda/rc/foto2.jpg"],
+      "novedades": "Primera versión: 4 vehículos y 3 pistas.",
+      "archivos": ["rc/index.html", "rcveh.js", "sfx.js", "mano.js",
+        "rchdr/quarry_01_1k.hdr", "rchdr/spruit_sunrise_1k.hdr", "rchdr/pedestrian_overpass_1k.hdr",
+        "vendor/three-0.183.2/three.module.min.js", "vendor/three-0.183.2/three.core.min.js",
+        "vendor/three-0.183.2/addons/loaders/RGBELoader.js", "vendor/three-0.183.2/addons/objects/GroundedSkybox.js", "vendor/three-0.183.2/addons/geometries/RoundedBoxGeometry.js"]
+    }
+  ]
+}

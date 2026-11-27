@@ -144,6 +144,7 @@
       ['home', 'Inicio', IC.home], ['live', 'En vivo', IC.live],
       ['movies', 'Películas', IC.movie], ['series', 'Series', IC.series], ['platforms', 'Plataformas', IC.platforms], ['anime', 'Anime', IC.anime], ['kdrama', 'K-Drama', IC.kdrama], ['novelas', 'Novelas', IC.novela], ['infantil', 'Infantil', IC.kids],
       ['docs', 'Documentales', IC.doc],
+      ['tienda', 'Tienda', IC.games || IC.play],
       ['settings', 'Ajustes', IC.settings]
     ];
   }

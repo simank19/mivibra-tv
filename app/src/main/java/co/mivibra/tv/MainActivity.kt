@@ -67,6 +67,7 @@ class MainActivity : ComponentActivity() {
             .addPathHandler("/logo/", LogoFiles(this))
             .addPathHandler("/books/", WebViewAssetLoader.InternalStoragePathHandler(this, File(cacheDir, "books").apply { mkdirs() }))
             .addPathHandler("/thumbs/", WebViewAssetLoader.InternalStoragePathHandler(this, File(cacheDir, "thumbs").apply { mkdirs() }))
+            .addPathHandler("/games/", GameFiles(File(filesDir, "games").apply { mkdirs() }))
             .addPathHandler("/photos/", WebViewAssetLoader.InternalStoragePathHandler(this, File(filesDir, "photos").apply { mkdirs() }))
             .build()
 

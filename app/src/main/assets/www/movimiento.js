@@ -10,6 +10,7 @@
   if (!MV || !MV.VIEWS) return;
   var ORIGIN = 'https://simank19.github.io';
   var BASE = ORIGIN + '/mivibra-tv/movimiento/';
+  var LOCAL_ORIGIN = 'https://appassets.androidplatform.net';   // juegos descargados de la Tienda
   var PART = 900 * 1024;   // cada trozo queda bajo el límite de 1 MB de un documento de Firestore
   var esc = MV.esc || function (s) { return String(s); };
 
@@ -81,6 +82,7 @@
 
   // ---------- Pantalla completa con el editor o un juego ----------
   var box = null;
+  MV.mvOpen = function (url) { openFrame(url); };
   MV.mvFrame = {
     open: function () { return !!(box && box.isConnected); },
     close: function () { if (box) { box.remove(); box = null; } document.documentElement.classList.remove('mvplaying'); loadMeta().then(function () { if (MV.viewName() === 'movimiento') MV.rerender(); }); MV.focusFirst && MV.focusFirst(); }
@@ -89,7 +91,9 @@
     if (box) box.remove();
     box = document.createElement('div');
     box.className = 'mvframe';
-    box.innerHTML = '<iframe src="' + BASE + path + (MV.device && MV.device.tv ? '?q=0' : '') + '" allow="autoplay; fullscreen; gamepad; camera" allowfullscreen></iframe>' +
+    var src = /^https?:/.test(path) ? path : BASE + path, tvq = MV.device && MV.device.tv ? 'q=0' : '';
+    if (tvq) src += (src.indexOf('?') < 0 ? '?' : '&') + tvq;
+    box.innerHTML = '<iframe src="' + src + '" allow="autoplay; fullscreen; gamepad; camera" allowfullscreen></iframe>' +
       '<button class="mvframe-x f" data-act="mvClose" aria-label="Volver a MiVibra"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M15 6l-6 6 6 6"/></svg></button>';
     document.body.appendChild(box);
     document.documentElement.classList.add('mvplaying');   // la app de atrás deja de dibujarse mientras se juega
@@ -97,10 +101,10 @@
     f.onload = function () { try { f.focus(); f.contentWindow.focus(); } catch (e) {} };
   }
   window.addEventListener('message', function (e) {
-    if (e.origin !== ORIGIN || !box) return;
+    if ((e.origin !== ORIGIN && e.origin !== LOCAL_ORIGIN) || !box) return;
     var f = box.querySelector('iframe'), d = e.data || {};
     if (!f || e.source !== f.contentWindow || typeof d !== 'object') return;
-    var reply = function (m, tr) { try { f.contentWindow.postMessage(m, ORIGIN, tr || []); } catch (x) {} };
+    var reply = function (m, tr) { try { f.contentWindow.postMessage(m, e.origin, tr || []); } catch (x) {} };
     if (d.mv === 'avatar-save' && d.vrm) {
       saveAvatar(d.vrm, d.name).then(function () {
         reply({ mv: 'avatar-saved', ok: true }); if (MV.ach && MV.ach.add) try { MV.ach.add('avatar'); } catch (x) {}
@@ -119,13 +123,14 @@
         '<div class="mvm-txt"><small>JUEGA CON TU CUERPO</small><h2>Deportes con tu avatar</h2>' +
         '<p class="muted">Crea tu avatar en 3D y compite en estadios llenos. El celular hace de cámara (el video nunca sale del teléfono) o de mando; también puedes jugar con la pantalla táctil o el control.</p>' +
         '<div class="btns"><button class="btn f" data-act="mvPlay" data-arg="baile/" data-autofocus>Bailar</button>' +
-        '<button class="btn f" data-act="mvPlay" data-arg="rc/">Carreras RC</button>' +
         '<button class="btn f" data-act="mvPlay" data-arg="carrera/">Carrera loca</button>' +
         '<button class="btn f" data-act="mvPlay" data-arg="bolos/">Jugar bolos</button>' +
         '<button class="btn ghost f" data-act="mvEditor">' + (m ? 'Editar mi avatar' : 'Crear mi avatar') + '</button></div>' +
         '<p class="mvm-st">' + (m ? 'Tu avatar <b>' + esc(m.name) + '</b> está guardado en tu cuenta · ' + when : signed ? 'Aún no has creado tu avatar: mientras tanto corres con uno de ejemplo.' : 'Inicia sesión en MiVibra para que tu avatar te siga a todos tus equipos.') + '</p></div>' +
       '</div>' +
-      '<div class="mvm-grid">' + [['Carreras RC', 'Nuevo · celular o control', 1, 'rc/'], ['Baile', 'Nuevo · tus canciones', 1, 'baile/'], ['Carrera loca', 'Nuevo · poderes y trampas', 1, 'carrera/'], ['Tiro con arco', 'Nuevo · con viento', 1, 'arco/'], ['Boxeo', 'Nuevo · 3 asaltos', 1, 'boxeo/'], ['200 m con vallas', 'Hasta 4 corredores', 1, 'vallas/'], ['100 m planos', 'Hasta 4 corredores', 1, 'planos/'], ['Salto largo', '3 intentos', 1, 'salto/'], ['Fútbol', 'Penales en el estadio', 1, 'futbol/'], ['Fútbol americano', 'Nuevo · reto del mariscal', 1, 'americano/'], ['Béisbol', 'Nuevo · derby de batazos', 1, 'beisbol/'], ['Tenis', 'Nuevo · en cancha', 1, 'tenis-cancha/'], ['Tenis de mesa', 'Derecha y revés', 1, 'tenis/'], ['Voleibol de playa', '2 contra 2', 1, 'voley/'], ['Bolos', 'Contra MiVibra o hasta 4', 1, 'bolos/'], ['Golfito', 'Nuevo · 5 mundos, por turnos', 1, 'golf/'], ['Dardos', 'Nuevo · 5 rondas', 1, 'dardos/'], ['Esquí', 'Nuevo · slalom', 1, 'esqui/']].map(function (g) {
+      '<div class="mvm-grid">' + (MV.tienda ? MV.tienda.installedGames().map(function (g) { var n = MV.tienda.dlcOf(g.id);
+        return '<button class="mvm-card glass f" data-act="tdPlay" data-arg="' + esc(g.id) + '"><b>' + esc(g.nombre) + '</b><span>De la Tienda' + (n ? ' · ' + n + (n === 1 ? ' expansión' : ' expansiones') : '') + '</span></button>'; }).join('') : '') +
+        '<button class="mvm-card glass f" data-act="nav" data-arg="tienda"><b>Tienda de juegos</b><span>Descarga juegos nuevos gratis</span></button>' + [['Baile', 'Nuevo · tus canciones', 1, 'baile/'], ['Carrera loca', 'Nuevo · poderes y trampas', 1, 'carrera/'], ['Tiro con arco', 'Nuevo · con viento', 1, 'arco/'], ['Boxeo', 'Nuevo · 3 asaltos', 1, 'boxeo/'], ['200 m con vallas', 'Hasta 4 corredores', 1, 'vallas/'], ['100 m planos', 'Hasta 4 corredores', 1, 'planos/'], ['Salto largo', '3 intentos', 1, 'salto/'], ['Fútbol', 'Penales en el estadio', 1, 'futbol/'], ['Fútbol americano', 'Nuevo · reto del mariscal', 1, 'americano/'], ['Béisbol', 'Nuevo · derby de batazos', 1, 'beisbol/'], ['Tenis', 'Nuevo · en cancha', 1, 'tenis-cancha/'], ['Tenis de mesa', 'Derecha y revés', 1, 'tenis/'], ['Voleibol de playa', '2 contra 2', 1, 'voley/'], ['Bolos', 'Contra MiVibra o hasta 4', 1, 'bolos/'], ['Golfito', 'Nuevo · 5 mundos, por turnos', 1, 'golf/'], ['Dardos', 'Nuevo · 5 rondas', 1, 'dardos/'], ['Esquí', 'Nuevo · slalom', 1, 'esqui/']].map(function (g) {
         return '<button class="mvm-card glass f' + (g[2] ? '' : ' soon') + '" data-act="' + (g[2] ? 'mvPlay' : 'mvSoon') + '" data-arg="' + (g[3] || 'vallas/') + '"><b>' + g[0] + '</b><span>' + g[1] + '</span></button>';
       }).join('') + '</div>';
   };
