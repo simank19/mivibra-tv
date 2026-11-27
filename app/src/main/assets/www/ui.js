@@ -3010,12 +3010,20 @@
    *  los doramas y lo que en tu lista viene con nombre en español se buscan además en TMDB (en español). */
   /** IMDb de un título: el que ya trae, o por su ficha de TMDB (la de la lista o la que se aprendió), o por el nombre. */
   function imdbFor(it, type, name) {
-    var im = (it._meta && it._meta.imdb) || it.imdb || '';
-    if (/^tt\d+/.test(im)) return Promise.resolve(im);
-    var tid = String((it._meta && it._meta.tmdbId) || it.ltid || it.tid || '').replace(/^[a-z]+:/, '');
-    var tv = type === 'series';
-    var byTid = tid && MV.tmdb ? MV.tmdb('/' + (tv ? 'tv' : 'movie') + '/' + tid + '/external_ids', '').then(function (x) { return x && /^tt\d+/.test(x.imdb_id || '') ? x.imdb_id : null; }).catch(function () { return null; }) : Promise.resolve(null);
-    return byTid.then(function (id) { return id || findImdb(name || MV.cleanTitle(it.name) || it.name, it.year || '', type, it.orig); }).then(function (id) { if (id) it.imdb = id; return id; });
+    var tv = type === 'series', m0 = it._meta || {}, chain = Promise.resolve(null);
+    var step = function (f) { chain = chain.then(function (id) { return id || Promise.resolve().then(f).catch(function () { return null; }); }); };
+    var byTid = function (t) { t = String(t || '').replace(/^[a-z]+:/, ''); if (!/^\d+$/.test(t) || !MV.tmdb) return null; return MV.tmdb('/' + (tv ? 'tv' : 'movie') + '/' + t + '/external_ids', '').then(function (x) { return x && /^tt\d+/.test(x.imdb_id || '') ? x.imdb_id : null; }); };
+    var im = m0.imdb || it.imdb || '';
+    step(function () { return /^tt\d+/.test(im) ? im : null; });
+    // 1) por la ficha de TMDB (la que se ve en pantalla, la que trae la lista o la que se aprendió)
+    [m0.tmdbId, it.ltid, it.tid].filter(function (t, k, a) { return t && a.indexOf(t) === k; }).forEach(function (t) { step(function () { return byTid(t); }); });
+    // 2) pidiendo la ficha ahora (trae el IMDb)
+    step(function () { return MV.meta ? MV.meta(it).then(function (m) { if (!m) return null; if (!it._meta) it._meta = m; return /^tt\d+/.test(m.imdb || '') ? m.imdb : byTid(m.tmdbId); }) : null; });
+    // 3) por el nombre: el de la lista, el de la ficha, el original y sin el subtítulo ("John Carter: Entre dos mundos" → "John Carter")
+    var n0 = name || MV.cleanTitle(it.name) || it.name;
+    [n0, (it._meta && it._meta.title) || '', it.orig || '', String(n0).split(/\s*[:\-–]\s+/)[0]].filter(function (n, k, a) { return n && n.length > 1 && a.indexOf(n) === k; })
+      .forEach(function (n) { step(function () { return findImdb(n, it.year || '', type, it.orig); }); });
+    return chain.then(function (id) { if (id) it.imdb = id; return id; });
   }
   MV.imdbFor = imdbFor;
   function findImdb(name, year, type, orig) {
@@ -3283,7 +3291,7 @@
     var WHY = {};
     function xtWhy(i, url, code) {
       var u = MV.xtFresh ? MV.xtFresh(url) : url, m = /^(https?:\/\/[^\/]+)\/(?:movie|series|live)\/([^\/]+)\/([^\/]+)\//i.exec(u); if (!m) return;
-      var k = m[1] + '|' + m[2];
+      var k = m[1] + '|' + m[2], k0 = k.toLowerCase();
       var p = WHY[k] || (WHY[k] = (MV.getSmallJSON || MV.getJSON)(m[1] + '/player_api.php?username=' + m[2] + '&password=' + m[3]).catch(function () { return null; }));
       p.then(function (j) {
         var ui = j && j.user_info, msg;
@@ -3292,7 +3300,21 @@
         else if (ui.status && !/^active$/i.test(ui.status)) msg = 'La cuenta está ' + ({ Expired: 'vencida', Banned: 'bloqueada', Disabled: 'desactivada' }[ui.status] || ui.status);
         else if (ui.exp_date && +ui.exp_date * 1000 < Date.now()) msg = 'La cuenta venció el ' + new Date(+ui.exp_date * 1000).toLocaleDateString('es-CO');
         else if (+ui.max_connections && +ui.active_cons >= +ui.max_connections) msg = 'La cuenta está en uso (' + ui.active_cons + ' de ' + ui.max_connections + ' conexiones): cierra la otra pantalla';
-        else msg = 'La cuenta está activa pero el servidor rechazó este video (' + code + '): puede que ya no lo tengan';
+        else {
+          // activa: se prueba como reproductor conocido y por la dirección que da el servidor (a veces cambió)
+          var si = j.server_info || {}, alt = si.url ? ((si.server_protocol || 'http') + '://' + si.url + ((si.server_protocol === 'https' ? si.https_port : si.port) ? ':' + (si.server_protocol === 'https' ? si.https_port : si.port) : '')) : '';
+          var tries = [], uas = ['IPTVSmartersPro', 'VLC/3.0.20 LibVLC/3.0.20', 'okhttp/4.12.0'];
+          uas.forEach(function (ua) { tries.push({ url: u, ua: ua }); }); if (alt && alt.toLowerCase() !== m[1].toLowerCase()) { tries.push({ url: alt + u.slice(m[1].length), ua: '' }); tries.push({ url: alt + u.slice(m[1].length), ua: uas[0] }); }
+          status(i, '… La cuenta está activa: probando otra forma de abrirlo', '#ffd166');
+          (function next(k) {
+            if (k >= tries.length) { status(i, '✕ ' + esc('La cuenta está activa pero el servidor rechazó este video (' + code + '): puede que ya no lo tengan'), '#ff6b6b', true); return; }
+            MV.call('probe', [JSON.stringify([tries[k]])]).then(function (res) { var r = res && res[0];
+              if (r && r.ok) { var x = SRC[i]; x.url = tries[k].url; x.ua = tries[k].ua; x.ok = true; x.ms = r.ms; try { var U = MV.load('xtStreamUa', {}) || {}; U[k0] = { ua: tries[k].ua, base: tries[k].url === u ? '' : alt }; MV.save('xtStreamUa', U); } catch (e) {}
+                var rr = document.getElementById('spR' + i); if (rr) rr.style.opacity = 1; status(i, '✓ Funciona · ' + (r.ms / 1000).toFixed(1) + ' s', '#3ecf8e'); if (best < 0) best = i; banner(); }
+              else next(k + 1); }).catch(function () { next(k + 1); });
+          })(0);
+          return;
+        }
         status(i, '✕ ' + esc(msg), '#ff6b6b', true);
       });
     }
@@ -3304,8 +3326,11 @@
     }
     function add(list) {
       var box = document.getElementById('spList'); if (!box) return;
+      var U = MV.load('xtStreamUa', {}) || {};
       list.forEach(function (x) {
         if (!x.url || SRC.some(function (y) { return y.url === x.url; })) return;
+        var mm = /^(https?:\/\/[^\/]+)\/(?:movie|series|live)\/([^\/]+)\//i.exec(x.url), lk = mm && U[(mm[1] + '|' + mm[2]).toLowerCase()];
+        if (lk) { if (lk.ua && !x.ua) x.ua = lk.ua; if (lk.base) x.url = lk.base + x.url.slice(mm[1].length); }
         SRC.push(x); box.insertAdjacentHTML('beforeend', row(x, SRC.length - 1));
       });
       pump();

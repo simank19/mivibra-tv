@@ -2302,7 +2302,8 @@
     var key = (P.tmdbKey || '').trim();
     var bearer = key.indexOf('eyJ') === 0;
     var url = 'https://api.themoviedb.org/3' + path + '?language=es-ES' + (params || '') + (bearer ? '' : '&api_key=' + encodeURIComponent(key));
-    return MV.getJSON(url, bearer ? { Authorization: 'Bearer ' + key, Accept: 'application/json' } : null);
+    // vía rápida (no espera a que bajen las listas ni a otros pedidos grandes): así la ficha no se queda en "sin ficha"
+    return (MV.getSmallJSON || MV.getJSON)(url, bearer ? { Authorization: 'Bearer ' + key, Accept: 'application/json' } : null);
   }
   var IMG = 'https://image.tmdb.org/t/p/';
   MV.tmdb = tmdb; MV.TMDB_IMG = IMG;
