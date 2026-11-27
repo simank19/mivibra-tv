@@ -25,9 +25,10 @@ class Bridge(private val a: MainActivity) {
     /** Descargas largas (MEGA, colecciones) aparte: así no traban la carga de listas ni el resto de la app. */
     private val dl = Executors.newFixedThreadPool(2)
     /** Pedidos a internet (addons, listas, fichas): muchos a la vez, para que uno lento no haga esperar a los demás. */
-    // Pedidos chicos (addons, fichas, cuentas): cada uno en su propio hilo (hasta 48 a la vez), así un addon lento
+    // Pedidos chicos (addons, fichas, cuentas): cada uno en su propio hilo (hasta 32 a la vez), así un addon lento
     // no deja en fila a los demás (antes con 12 hilos los addons lentos tapaban todo y "no respondía" nadie)
-    private val net = java.util.concurrent.ThreadPoolExecutor(8, 48, 30L, java.util.concurrent.TimeUnit.SECONDS, java.util.concurrent.SynchronousQueue()).also { it.rejectedExecutionHandler = java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy() }
+    // (nunca en el hilo que llama: eso congelaba la app mientras se buscaba de dónde reproducir)
+    private val net = java.util.concurrent.ThreadPoolExecutor(32, 32, 30L, java.util.concurrent.TimeUnit.SECONDS, java.util.concurrent.LinkedBlockingQueue()).also { it.allowCoreThreadTimeOut(true) }
     // Pedidos de texto (fichas de TMDB, APIs): aparte de las descargas grandes de listas, para que no esperen detrás de ellas (en TV la ficha no llegaba)
     private val api = Executors.newFixedThreadPool(6)
 
