@@ -46,6 +46,23 @@ class MainActivity : ComponentActivity() {
     }
 
     @SuppressLint("SetJavaScriptEnabled")
+    /** Cierres que no son de Java (librerías nativas como Telegram, o Android cerrando la app): Android 11+ guarda el motivo.
+     *  Se deja en crash.txt para mostrarlo con el reporte de siempre, junto con el último paso de Telegram. */
+    private fun nativeExit() {
+        if (android.os.Build.VERSION.SDK_INT < 30) return
+        val am = getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager
+        val e = am.getHistoricalProcessExitReasons(packageName, 0, 1).firstOrNull() ?: return
+        val sp = getSharedPreferences("mv", MODE_PRIVATE)
+        if (e.timestamp <= sp.getLong("exitSeen", 0L)) return
+        sp.edit().putLong("exitSeen", e.timestamp).apply()
+        if (e.reason != android.app.ApplicationExitInfo.REASON_CRASH_NATIVE && e.reason != android.app.ApplicationExitInfo.REASON_ANR) return
+        if (System.currentTimeMillis() - e.timestamp > 3600_000L || File(filesDir, "crash.txt").exists()) return
+        val step = try { File(filesDir, "tdlib/step.txt").takeIf { it.exists() }?.readText() } catch (_: Exception) { null }
+        File(filesDir, "crash.txt").writeText("Versión " + BuildConfig.VERSION_NAME + " · " + android.os.Build.MODEL + " · Android " + android.os.Build.VERSION.RELEASE +
+            "\n" + (if (e.reason == android.app.ApplicationExitInfo.REASON_ANR) "La app dejó de responder" else "Cierre en código nativo") + ": " + (e.description ?: "") +
+            (if (step != null) "\nTelegram: $step" else "") + "\nprocesos ABI: " + android.os.Build.SUPPORTED_ABIS.joinToString(",") + " · 64 bits: " + android.os.Process.is64Bit())
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
@@ -100,6 +117,7 @@ class MainActivity : ComponentActivity() {
                 // Si la vez anterior Android cerró la página por falta de memoria, la app arranca en modo liviano
                 val gone = getSharedPreferences("mv", MODE_PRIVATE).getLong("rendererGone", 0L)
                 if (System.currentTimeMillis() - gone < 6 * 3600_000L) web.evaluateJavascript("window.MV&&(MV.lowMem=true)", null)
+                try { nativeExit() } catch (_: Throwable) {}
                 try { val cf = File(filesDir, "crash.txt"); if (cf.exists()) { val txt = cf.readText(); cf.delete(); web.evaluateJavascript("window.MV&&MV.showCrash&&MV.showCrash(" + org.json.JSONObject.quote(txt) + ")", null) } } catch (_: Exception) {}
                 val list = queue.toList()
                 queue.clear()

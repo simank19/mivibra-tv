@@ -190,7 +190,7 @@ class Bridge(private val a: MainActivity) {
     // ---------- Telegram (Cursos y Mi Telegram) ----------
     private val tg = Executors.newFixedThreadPool(3)
     private fun tgRun(id: String, f: () -> Any?) { tg.execute { try { reply(id, true, f()) } catch (e: Throwable) { reply(id, false, e.message ?: e.javaClass.simpleName) } } }
-    @JavascriptInterface fun tgState(): String = Tg.status().toString()
+    @JavascriptInterface fun tgState(): String = try { Tg.status().toString() } catch (e: Throwable) { JSONObject().put("state", "error").put("info", JSONObject().put("message", e.message ?: "Telegram no está disponible")).toString() }
     @JavascriptInterface fun tgStart(id: String, apiId: Int, apiHash: String) = tgRun(id) { Tg.start(a, apiId, apiHash) { p -> progress(id, p) } }
     @JavascriptInterface fun tgPhone(id: String, phone: String) = tgRun(id) { Tg.phone(phone); true }
     @JavascriptInterface fun tgCode(id: String, code: String) = tgRun(id) { Tg.code(code); true }

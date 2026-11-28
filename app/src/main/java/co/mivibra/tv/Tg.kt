@@ -35,8 +35,14 @@ object Tg {
     private lateinit var app: Context
     private val pool = Executors.newFixedThreadPool(4)
 
-    private fun abi(): String = Build.SUPPORTED_ABIS.firstOrNull { it in listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86") } ?: "armeabi-v7a"
-    private fun libFile(c: Context) = File(c.filesDir, "tdlib/$VER/libtdjni.so")
+    /** La librería tiene que ser de los mismos bits que la app (muchos TV box tienen CPU de 64 bits pero corren la app en 32) */
+    private fun abi(): String {
+        val list = if (android.os.Process.is64Bit()) Build.SUPPORTED_64_BIT_ABIS else Build.SUPPORTED_32_BIT_ABIS
+        return list.firstOrNull { it in listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86") } ?: if (android.os.Process.is64Bit()) "arm64-v8a" else "armeabi-v7a"
+    }
+    private fun libFile(c: Context) = File(c.filesDir, "tdlib/$VER/" + abi() + "/libtdjni.so")
+    /** Último paso del arranque, para el reporte si la app se cierra en la parte nativa */
+    private fun step(c: Context, s: String) { try { File(c.filesDir, "tdlib").mkdirs(); File(c.filesDir, "tdlib/step.txt").writeText(s + " · " + abi() + " · " + java.util.Date()) } catch (_: Exception) {} }
     fun libReady(c: Context) = libFile(c).isFile
 
     /** Baja (si hace falta) y carga la librería. tick(0..100) mientras descarga. */
@@ -54,9 +60,13 @@ object Tg {
             if (!tmp.renameTo(f)) throw IllegalStateException("No se pudo guardar el componente de Telegram")
             // versiones viejas de la librería: se borran
             File(c.filesDir, "tdlib").listFiles()?.forEach { if (it.isDirectory && it.name != VER && it.name != "db" && it.name != "files") it.deleteRecursively() }
+            File(c.filesDir, "tdlib/$VER/libtdjni.so").delete()   // la de antes (sin carpeta por tipo de procesador)
         }
+        step(c, "cargando librería")
         System.load(f.absolutePath)
+        step(c, "librería cargada")
         try { Client.execute(TdApi.SetLogVerbosityLevel(1)) } catch (_: Throwable) {}
+        step(c, "lista")
         loaded = true
     }
 
@@ -73,12 +83,12 @@ object Tg {
         when (a) {
             is TdApi.AuthorizationStateWaitTdlibParameters -> {
                 val base = File(app.filesDir, "tdlib")
-                client?.send(TdApi.SetTdlibParameters(false, File(base, "db").absolutePath, File(app.cacheDir, "tgfiles").absolutePath, null,
+                client?.send(TdApi.SetTdlibParameters(false, File(base, "db").absolutePath, File(app.cacheDir, "tgfiles").absolutePath, ByteArray(0),
                     true, true, true, false, apiId, apiHash, "es", Build.MANUFACTURER + " " + Build.MODEL, "Android " + Build.VERSION.RELEASE, BuildConfig.VERSION_NAME)) { r ->
                     if (r is TdApi.Error) setState("error", JSONObject().put("message", r.message))
                 }
             }
-            is TdApi.AuthorizationStateWaitPhoneNumber -> setState("phone")
+            is TdApi.AuthorizationStateWaitPhoneNumber -> { setState("phone"); step(app, "pide número") }
             is TdApi.AuthorizationStateWaitCode -> setState("code", JSONObject().put("phone", a.codeInfo.phoneNumber).put("type", a.codeInfo.type.javaClass.simpleName))
             is TdApi.AuthorizationStateWaitPassword -> setState("password", JSONObject().put("hint", a.passwordHint ?: ""))
             is TdApi.AuthorizationStateReady -> { setState("ready"); cleanCache() }
@@ -94,7 +104,7 @@ object Tg {
         if (id <= 0 || hash.isBlank()) throw IllegalStateException("Falta configurar Telegram (api_id y api_hash) en la compilación de la app")
         apiId = id; apiHash = hash
         ensureLib(c, tick)
-        if (client == null) { setState("starting"); client = Client.create(handler, null, null) }
+        if (client == null) { setState("starting"); step(c, "creando cliente"); client = Client.create(handler, null, null); step(c, "cliente creado") }
         for (i in 0 until 100) { if (state != "starting" && state != "off") break; Thread.sleep(100) }
         return status()
     }
