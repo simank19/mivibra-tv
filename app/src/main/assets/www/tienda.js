@@ -303,7 +303,12 @@
       // .bin con su .cue: se publica solo el .cue (los .bin sueltos de PlayStation no abren solos)
       var cues = {}; files.forEach(function (f) { if (/\.cue$/i.test(f.file || '')) cues[String(f.file).replace(/\.cue$/i, '').toLowerCase()] = 1; });
       files = files.filter(function (f) { return !(/\.bin$/i.test(f.file || '') && cues[String(f.file).replace(/\.bin$/i, '').replace(/ \(track \d+\)$/i, '').toLowerCase()]); });
-      if (!files.length) throw new Error('No encontré juegos de ' + x.name + ' en esa carpeta (¿está compartida como pública?)');
+      if (!files.length) {
+        var seen = MV.cloudSeen ? MV.cloudSeen() : [];
+        if (seen.private) throw new Error('Google Drive pide iniciar sesión: comparte la carpeta como «Cualquier persona con el enlace» y vuelve a intentar.');
+        if (seen.length) throw new Error('La carpeta tiene ' + seen.length + ' elementos pero ninguno es un juego de ' + x.name + ' (' + exts.join(', ') + '). Por ejemplo: ' + seen.slice(0, 4).join(', '));
+        throw new Error('No pude leer nada en esa carpeta. Revisa que el enlace sea de la carpeta (drive.google.com/drive/folders/…) y que esté compartida como «Cualquier persona con el enlace».');
+      }
       var have = {}; extraRaw().forEach(function (g) { have[g.url] = 1; });
       files = files.filter(function (f) { return !have[f.url]; });
       if (!files.length) throw new Error('Todos los juegos de esa carpeta ya están en la Tienda');

@@ -84,7 +84,12 @@
     msg('Leyendo la carpeta…');
     MV.cloudBooks(url).then(function (files) {
       files = (files || []).filter(function (f) { return f.url; });
-      if (!files.length) throw new Error('No encontré libros en esa carpeta (¿está compartida como pública?)');
+      if (!files.length) {
+        var seen = MV.cloudSeen ? MV.cloudSeen() : [];
+        if (seen.private) throw new Error('Google Drive pide iniciar sesión: comparte la carpeta como «Cualquier persona con el enlace» y vuelve a intentar.');
+        if (seen.length) throw new Error('La carpeta tiene ' + seen.length + ' elementos pero ninguno es un libro (PDF, EPUB, CBZ, CBR) ni un comprimido (.zip, .rar, .7z). Por ejemplo: ' + seen.slice(0, 4).join(', '));
+        throw new Error('No pude leer nada en esa carpeta. Revisa que el enlace sea de la carpeta (drive.google.com/drive/folders/…) y que esté compartida como «Cualquier persona con el enlace».');
+      }
       // Los comprimidos (.zip, .rar, .7z) se abren para ver qué libros traen; cada libro se publica por separado
       var packs = files.filter(function (f) { return f.pack; }), loose = files.filter(function (f) { return !f.pack; }), pi = 0;
       function nextPack() {

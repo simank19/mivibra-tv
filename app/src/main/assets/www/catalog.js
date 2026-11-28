@@ -1250,9 +1250,11 @@
       }).catch(function () { out.push({ url: driveFile(id), title: 'Libro', path: path }); return out; });
     }
     return MV.getText('https://drive.google.com/embeddedfolderview?id=' + id, UA_WEB).then(function (h) {
+      if (!depth) SEEN.pages = (SEEN.pages || 0) + 1;
+      if (/accounts\.google\.com\/(ServiceLogin|v3\/signin)/i.test(h) && !/flip-entry/.test(h)) SEEN.private = true;
       var re = /<a href="([^"]+)"[^>]*>[\s\S]*?<div class="flip-entry-title">([^<]+)<\/div>/g, m, subs = [];
       while ((m = re.exec(h))) {
-        var href = m[1].replace(/&amp;/g, '&'), name = m[2].replace(/&amp;/g, '&').trim();
+        var href = m[1].replace(/&amp;/g, '&'), name = m[2].replace(/&amp;/g, '&').trim(); SEEN.push(name);
         if (/\/folders\//.test(href)) { if (depth < 3) subs.push({ u: href, p: (path ? path + ' / ' : '') + name }); }
         else if (WANT.test(name)) { var fid = driveId(href); if (fid) out.push({ url: driveFile(fid), file: name, title: fileTitle(name), fmt: fmtOf(name), pack: PACKX.test(name), path: path }); }
       }
@@ -1281,7 +1283,11 @@
       }).then(function () { return out; });
     });
   }
+  var SEEN = [];
+  /** Lo que se vio en la última carpeta leída (para explicar por qué no salió nada). */
+  MV.cloudSeen = function () { return SEEN; };
   function cloudBooks(u) {
+    SEEN = [];
     return /mega(\.co)?\.nz\//i.test(u) ? megaBooks(u) : /mediafire\.com\//i.test(u) ? mfBooks(u) : driveBooks(u);
   }
   MV.cloudBooks = cloudBooks;   // la Librería la usa para publicar una carpeta entera
