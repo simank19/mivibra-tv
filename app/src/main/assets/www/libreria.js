@@ -19,7 +19,7 @@
     if (/dropbox\.com\//.test(p)) return p.replace(/[?&](dl|raw)=\d/, '') + (p.indexOf('?') < 0 ? '?' : '&') + 'raw=1';
     return p;
   }
-  function item(b) { return { key: 'lib:' + b.id, name: b.nombre, url: b.url, kind: b.tipo || 'libro', type: 'book', group: 'Librería MiVibra', poster: img(b.portada), author: b.autor || '', fromStore: 1 }; }
+  function item(b) { return { key: 'lib:' + b.id, name: b.nombre, url: b.entry ? '' : b.url, entry: b.entry || undefined, packUrl: b.entry ? b.url : undefined, kind: b.tipo || 'libro', type: 'book', group: 'Librería MiVibra', poster: img(b.portada), author: b.autor || '', fromStore: 1 }; }
   /** Los que el usuario guardó: aparecen en Lectura como cualquier otro libro. */
   MV.libreriaSaved = function () { var s = saved(); return raw().filter(function (b) { return s[b.id]; }).map(item); };
 
@@ -83,10 +83,25 @@
     fdBusy = true; var go = document.getElementById('lbfd-go'); if (go) go.disabled = true;
     msg('Leyendo la carpeta…');
     MV.cloudBooks(url).then(function (files) {
-      files = (files || []).filter(function (f) { return f.url && !f.pack; });
+      files = (files || []).filter(function (f) { return f.url; });
       if (!files.length) throw new Error('No encontré libros en esa carpeta (¿está compartida como pública?)');
-      var have = {}; raw().forEach(function (b) { have[b.url] = 1; });
-      files = files.filter(function (f) { return !have[f.url]; });
+      // Los comprimidos (.zip, .rar, .7z) se abren para ver qué libros traen; cada libro se publica por separado
+      var packs = files.filter(function (f) { return f.pack; }), loose = files.filter(function (f) { return !f.pack; }), pi = 0;
+      function nextPack() {
+        var pk = packs[pi++]; if (!pk) return Promise.resolve();
+        if (!(window.Android && window.Android.bookPack)) throw new Error('Para abrir los comprimidos publica la carpeta desde la app instalada (TV, celular o PC)');
+        msg('Abriendo ' + (pk.file || pk.title) + ' (' + pi + ' de ' + packs.length + ')…');
+        var src = MV.bookSrc ? MV.bookSrc({ url: pk.url }) : Promise.resolve(pk.url);
+        return src.then(function (u) { return MV.call('bookPack', [JSON.stringify({ url: u })], function (p) { if (p >= 0) msg('Abriendo ' + (pk.file || pk.title) + ': ' + p + '%'); }); }).then(function (d) {
+          (d.entries || []).forEach(function (e) { if (/\.(pdf|epub|cbz|cbr|cb7)$/i.test(e.name)) loose.push({ url: pk.url, entry: e.name, title: String(e.name).split('/').pop(), path: (pk.path ? pk.path + ' / ' : '') + (pk.title || '') }); });
+        }).catch(function (e) { msg('No pude abrir ' + (pk.file || pk.title) + ': ' + (e.message || '')); }).then(nextPack);
+      }
+      return nextPack().then(function () { return loose; });
+    }).then(function (files) {
+      if (!files.length) throw new Error('No encontré libros en esa carpeta ni dentro de sus comprimidos');
+      var have = {}; raw().forEach(function (b) { have[b.url + '|' + (b.entry || '')] = 1; });
+      files = files.filter(function (f) { return !have[f.url + '|' + (f.entry || '')]; });
+      if (files.length > 600) { msg('Son ' + files.length + ' libros: publico los primeros 600 y luego vuelves a publicar la carpeta para el resto.'); files = files.slice(0, 600); }
       if (!files.length) throw new Error('Todos los libros de esa carpeta ya están en la Librería');
       var out = [], i = 0, done = 0, stamp = Date.now();
       var fm = MV.bookShelf && MV.bookShelf.fetchMeta;
@@ -94,11 +109,11 @@
         var f = files[i++]; if (!f) return Promise.resolve();
         var title = String(f.title || 'Libro').replace(/\.(pdf|epub|cbz|cbr|cb7|mobi|azw3?)$/i, '').replace(/_+/g, ' ').trim();
         var m0 = title.split(/\s+[-–—]\s+/), name = m0[0], auth = m0.length > 1 ? m0.slice(1).join(' ') : '';
-        var meta = fm ? fm({ key: 'libpub:' + f.url, name: title }).catch(function () { return {}; }) : Promise.resolve({});
+        var meta = fm ? fm({ key: 'libpub:' + f.url + (f.entry || ''), name: title }).catch(function () { return {}; }) : Promise.resolve({});
         return meta.then(function (m) {
           m = m || {};
           var grp = String(f.path || '').split(' / ').pop();
-          out.push({ id: 'l-' + (stamp + out.length).toString(36), tipo: fdKind, nombre: name, autor: m.a || auth, url: f.url, portada: m.c || '', descripcion: String(m.d || '').slice(0, 450),
+          out.push({ id: 'l-' + (stamp + out.length).toString(36), tipo: fdKind, nombre: name, autor: m.a || auth, url: f.url, entry: f.entry || undefined, portada: m.c || '', descripcion: String(m.d || '').slice(0, 300),
             categoria: cat || grp || (m.g && m.g[0]) || '', paginas: '', idioma: '', creditos: cred, fecha: new Date().toISOString().slice(0, 10), at: Date.now() });
           done++; msg('Buscando información: ' + done + ' de ' + files.length + '…');
         }).then(one);

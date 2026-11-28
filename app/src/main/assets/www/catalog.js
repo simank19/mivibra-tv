@@ -1228,13 +1228,13 @@
     return out;
   }
   // ---------- MEGA, MediaFire y Google Drive (carpetas y archivos públicos) ----------
-  var BOOKISH = /\.(pdf|epub|cbz|cbr|cb7|zip|rar|7z)$/i, PACKX = /\.(zip|rar|7z)$/i;
+  var BOOKISH = /\.(pdf|epub|cbz|cbr|cb7|zip|rar|7z)$/i, PACKX = /\.(zip|rar|7z)$/i, WANT = BOOKISH;
   function isCloud(u) { return /mega(\.co)?\.nz\/|mediafire\.com\/|drive\.google\.com\/|docs\.google\.com\//i.test(u); }
   MV.cloudBook = isCloud;
   function megaBooks(u) {
     if (!MV.native) return Promise.reject(new Error('MEGA funciona en la app instalada'));
     return MV.call('megaList', [u]).then(function (arr) {
-      return (arr || []).filter(function (f) { return BOOKISH.test(f.name || ''); }).map(function (f) { return { url: f.url, title: fileTitle(f.name), fmt: fmtOf(f.name), pack: PACKX.test(f.name), path: f.path || '' }; });
+      return (arr || []).filter(function (f) { return WANT.test(f.name || ''); }).map(function (f) { return { url: f.url, file: f.name, title: fileTitle(f.name), fmt: fmtOf(f.name), pack: PACKX.test(f.name), path: f.path || '' }; });
     });
   }
   function driveId(u) { var m = String(u).match(/\/(?:file\/d|folders)\/([\w-]{10,})/) || String(u).match(/[?&]id=([\w-]{10,})/); return m ? m[1] : ''; }
@@ -1254,7 +1254,7 @@
       while ((m = re.exec(h))) {
         var href = m[1].replace(/&amp;/g, '&'), name = m[2].replace(/&amp;/g, '&').trim();
         if (/\/folders\//.test(href)) { if (depth < 3) subs.push({ u: href, p: (path ? path + ' / ' : '') + name }); }
-        else if (BOOKISH.test(name)) { var fid = driveId(href); if (fid) out.push({ url: driveFile(fid), title: fileTitle(name), fmt: fmtOf(name), pack: PACKX.test(name), path: path }); }
+        else if (WANT.test(name)) { var fid = driveId(href); if (fid) out.push({ url: driveFile(fid), file: name, title: fileTitle(name), fmt: fmtOf(name), pack: PACKX.test(name), path: path }); }
       }
       return subs.reduce(function (pr, sb) { return pr.then(function () { return driveBooks(sb.u, sb.p, depth + 1, out); }); }, Promise.resolve()).then(function () { return out; });
     });
@@ -1269,7 +1269,7 @@
     var files = function (chunk) {
       return api('files', chunk).then(function (j) {
         var c = (j.response || {}).folder_content || {};
-        (c.files || []).forEach(function (f) { if (BOOKISH.test(f.filename || '')) out.push({ url: 'https://www.mediafire.com/file/' + f.quickkey + '/' + encodeURIComponent(f.filename) + '/file', title: fileTitle(f.filename), fmt: fmtOf(f.filename), pack: PACKX.test(f.filename), path: path }); });
+        (c.files || []).forEach(function (f) { if (WANT.test(f.filename || '')) out.push({ url: 'https://www.mediafire.com/file/' + f.quickkey + '/' + encodeURIComponent(f.filename) + '/file', file: f.filename, title: fileTitle(f.filename), fmt: fmtOf(f.filename), pack: PACKX.test(f.filename), path: path }); });
         if (c.more_chunks === 'yes' && chunk < 20) return files(chunk + 1);
       });
     };
@@ -1285,6 +1285,8 @@
     return /mega(\.co)?\.nz\//i.test(u) ? megaBooks(u) : /mediafire\.com\//i.test(u) ? mfBooks(u) : driveBooks(u);
   }
   MV.cloudBooks = cloudBooks;   // la Librería la usa para publicar una carpeta entera
+  /** Archivos de una carpeta de Drive, MEGA o MediaFire que cumplan re (la Tienda la usa para carpetas de ROMs). */
+  MV.cloudFiles = function (u, re) { var prev = WANT; WANT = re; var done = function () { WANT = prev; }; return cloudBooks(u).then(function (r) { done(); return r; }, function (e) { done(); throw e; }); };
   function buildFromBookLinks(list) {
     var hdr = list.user ? { Authorization: 'Basic ' + btoa(unescape(encodeURIComponent(list.user + ':' + (list.pass || '')))), Accept: 'application/atom+xml,application/opds+json,application/json,text/html,*/*' } : { Accept: 'application/atom+xml,application/opds+json,application/json,text/html,*/*' };
     var out = [], seen = {};

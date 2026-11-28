@@ -407,7 +407,7 @@ const ASYNC = {
       };
       const fetchTo = async (dest) => {
         fs.mkdirSync(path.dirname(dest), { recursive: true });
-        if (mega.parse(o.url)) { await mega.download(o.url, dest, (p) => progress(id, p)); return; }
+        if (/^mega:/.test(o.url) || mega.parse(o.url)) { await mega.download(o.url, dest, (p) => progress(id, p)); return; }
         const code = await net.download(direct(o.url), dest, {}, (p) => progress(id, p), true);
         if (code >= 400) throw new Error('Error ' + code + ' al descargar');
         // Google Drive con archivos grandes: primero responde un aviso con un formulario; se sigue

@@ -165,7 +165,7 @@
     var all = allCat(), games = all.filter(function (g) { return g.tipo !== 'dlc'; });
     var ups = updates(), mine = games.filter(installed);
     var tabs = [['tienda', 'Tienda'], ['mios', 'Mis juegos' + (mine.length ? ' · ' + mine.length : '')], ['upd', 'Actualizaciones' + (ups.length ? ' · ' + ups.length : '')]];
-    var head = MV.topHtml('Tienda de juegos', (isAdmin() ? '<button class="btn f sm" data-act="tdNew" style="margin:0 12px 0 0">Cargar juego</button>' : '') + '<span class="muted">Todos gratis · al descargarlos pasan a MiVibra Movimiento</span>') +
+    var head = MV.topHtml('Tienda de juegos', (isAdmin() ? '<button class="btn f sm" data-act="tdNew" style="margin:0 8px 0 0">Cargar juego</button><button class="btn ghost f sm" data-act="tdRomDir" style="margin:0 12px 0 0">Carpeta de ROMs</button>' : '') + '<span class="muted">Todos gratis · al descargarlos pasan a MiVibra Movimiento</span>') +
       '<div class="chips" style="margin-bottom:16px">' + tabs.map(function (t) { return '<button class="chip f' + (tab === t[0] ? ' on' : '') + '" data-act="tdTab" data-arg="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>';
     if (!CAT && !games.length) return head + '<p class="muted">Cargando la tienda…</p>';
     if (tab === 'mios') return head + (mine.length ? '<div class="td-grid">' + mine.map(card).join('') + '</div>' + '<p class="muted" style="margin-top:14px">Para quitar un juego y liberar espacio, ábrelo y elige Desinstalar.</p>' : '<p class="muted">Aún no has descargado juegos de la tienda.</p>');
@@ -186,7 +186,8 @@
 
   function detail(g) {
     var dlcs = allCat().filter(function (d) { return d.tipo === 'dlc' && d.de === g.id; });
-    var shots = (g.fotos || []).slice(0, 3).map(function (f) { return '<img src="' + esc(media(f)) + '" alt="" loading="lazy">'; }).join('');
+    var fotos = g.fotos && g.fotos.length ? g.fotos : g.formato === 'rom' && /\/Named_Boxarts\//.test(g.portada || '') ? [g.portada.replace('/Named_Boxarts/', '/Named_Snaps/'), g.portada.replace('/Named_Boxarts/', '/Named_Titles/')] : [];
+    var shots = fotos.slice(0, 3).map(function (f) { return '<img src="' + esc(media(f)) + '" alt="" loading="lazy">'; }).join('');
     MV.modal('<div class="td-det">' +
       '<div class="td-det-media' + (g.formato === 'rom' ? ' td-box' : '') + '">' + (g.video ? '<video src="' + esc(media(g.video)) + '" poster="' + esc(media(g.portada)) + '" autoplay muted loop playsinline controls></video>' : '<img src="' + esc(media(g.portada)) + '" alt="">') + (shots ? '<div class="td-shots">' + shots + '</div>' : '') + '</div>' +
       '<div class="td-det-txt"><h2>' + esc(g.nombre) + '</h2><p class="muted">' + esc(g.descripcion || '') + '</p>' +
@@ -220,8 +221,7 @@
     return Promise.all([cov, meta]).then(function (res) {
       var c = res[0], m = res[1] || {};
       if (c && c.n) { if (!g.portada) g.portada = boxart(x, c.n);
-        var shot = function (k) { return 'https://thumbnails.libretro.com/' + encodeURIComponent(x.thumbs) + '/' + k + '/' + encodeURIComponent(c.n.replace(/[&*\/:`<>?\\|"]/g, '_')) + '.png'; };
-        if (!g.fotos || !g.fotos.length) g.fotos = [shot('Named_Snaps'), shot('Named_Titles')]; }
+}
       if (!m.none) {
         if (!g.descripcion && m.desc) g.descripcion = m.desc;
         if (!g.corto) g.corto = [x.name, m.year, m.genre].filter(Boolean).join(' · ');
@@ -278,9 +278,60 @@
     MV.closeModal(true); publish(list, (g.id ? 'Cambios publicados: ' : 'Publicado en la Tienda: ') + out.nombre);
   }
 
+  // ---------- Publicar una carpeta de ROMs (Drive, MEGA o MediaFire): cada juego con su carátula e información ----------
+  var RD = { sys: '', busy: false };
+  function romDirForm() {
+    MV.modal('<h2>Carpeta de ROMs</h2><p class="muted">Pega el enlace de una carpeta compartida como pública. MiVibra trae todas las ROMs de adentro (también las comprimidas en .zip, .7z o .rar y las de las subcarpetas) y busca sola la carátula y la información de cada juego.</p>' +
+      '<h4 style="margin:10px 0 6px">Consola</h4><div class="chips" style="flex-wrap:wrap;overflow:visible">' + sysList().map(function (x) { return '<button class="chip f' + (RD.sys === x.id ? ' on' : '') + '" data-act="tdRdSys" data-arg="' + x.id + '">' + x.name + '</button>'; }).join('') + '</div>' +
+      '<label class="muted" style="display:block;margin:10px 0 4px;font-size:13px">Enlace de la carpeta</label><input class="in f" id="tdrd-url" placeholder="https://drive.google.com/drive/folders/…">' +
+      '<label class="muted" style="display:block;margin:10px 0 4px;font-size:13px">Créditos y licencia</label><input class="in f" id="tdrd-cred" placeholder="Ej: Homebrew con permiso del autor">' +
+      '<p id="tdrd-msg" class="muted" style="min-height:22px;margin:12px 0 0"></p>' +
+      '<div class="btns"><button class="btn f" data-act="tdRdGo" id="tdrd-go">Buscar juegos y publicar</button><button class="btn ghost f" data-act="closeModal">Cancelar</button></div>');
+  }
+  function romDirGo() {
+    if (RD.busy) return;
+    var msg = function (t) { var e = document.getElementById('tdrd-msg'); if (e) e.textContent = t; }, v = function (id) { var e = document.getElementById(id); return e ? e.value.trim() : ''; };
+    var url = v('tdrd-url'), cred = v('tdrd-cred'), x = sysOf(RD.sys);
+    if (!x) return msg('Elige la consola de los juegos.');
+    if (!/^https?:\/\//.test(url)) return msg('Pega el enlace de la carpeta (empieza por https://).');
+    if (!MV.cloudFiles) return msg('Actualiza la app para usar esta opción.');
+    var exts = (x.exts || []).concat(['zip', '7z', 'rar']).filter(function (e, i, a) { return a.indexOf(e) === i; });
+    var re = new RegExp('\\.(' + exts.join('|') + ')$', 'i');
+    RD.busy = true; var go = document.getElementById('tdrd-go'); if (go) go.disabled = true; msg('Leyendo la carpeta…');
+    MV.cloudFiles(url, re).then(function (files) {
+      files = (files || []).filter(function (f) { return f.url; });
+      // .bin con su .cue: se publica solo el .cue (los .bin sueltos de PlayStation no abren solos)
+      var cues = {}; files.forEach(function (f) { if (/\.cue$/i.test(f.file || '')) cues[String(f.file).replace(/\.cue$/i, '').toLowerCase()] = 1; });
+      files = files.filter(function (f) { return !(/\.bin$/i.test(f.file || '') && cues[String(f.file).replace(/\.bin$/i, '').replace(/ \(track \d+\)$/i, '').toLowerCase()]); });
+      if (!files.length) throw new Error('No encontré juegos de ' + x.name + ' en esa carpeta (¿está compartida como pública?)');
+      var have = {}; extraRaw().forEach(function (g) { have[g.url] = 1; });
+      files = files.filter(function (f) { return !have[f.url]; });
+      if (!files.length) throw new Error('Todos los juegos de esa carpeta ya están en la Tienda');
+      if (files.length > 400) { msg('Son ' + files.length + ' juegos: publico los primeros 400 y luego vuelves a publicar la carpeta para el resto.'); files = files.slice(0, 400); }
+      var out = [], i = 0, done = 0, stamp = Date.now();
+      function one() {
+        var f = files[i++]; if (!f) return Promise.resolve();
+        var file = f.file || f.title, name = (MV.cleanRomName ? MV.cleanRomName(file) : file.replace(/\.[^.]+$/, '')) || file;
+        var g = { id: 'u-' + (stamp + out.length * 7 + i).toString(36), formato: 'rom', sistema: x.id, nombre: name, url: f.url, archivo: file, portada: '', fotos: [], corto: '', descripcion: '', categoria: '', jugadores: '', controles: ['rem', 'bt', 'cel'], version: '1.0', tamano: 0, novedades: '', creditos: cred, destacado: false, fecha: new Date().toISOString().slice(0, 10), at: Date.now() };
+        return romInfo(g).catch(function () { return g; }).then(function (r) {
+          r.descripcion = String(r.descripcion || '').slice(0, 300); if (/Named_Boxarts/.test(r.portada || '')) { r.nombre = r.nombre || name; }
+          out.push(r); done++; msg('Buscando carátulas e información: ' + done + ' de ' + files.length + '…');
+        }).then(one);
+      }
+      return Promise.all([one(), one()]).then(function () { return out; });
+    }).then(function (out) {
+      var list = out.concat(extraRaw());
+      if (JSON.stringify(list).length > 600000) throw new Error('Son demasiados juegos para guardarlos juntos. Publica carpetas más pequeñas.');
+      RD.busy = false; MV.closeModal(true); publish(list, out.length + (out.length === 1 ? ' juego publicado' : ' juegos publicados') + ' en la Tienda');
+    }).catch(function (e) { RD.busy = false; if (go) go.disabled = false; msg(e.message || 'No se pudo leer la carpeta'); });
+  }
+
   Object.assign(MV.ACT, {
     tdTab: function (t) { tab = t; MV.rerender(); },
     tdNew: function () { form(null); },
+    tdRomDir: function () { romDirForm(); },
+    tdRdSys: function (k, el) { RD.sys = k; var p = el && el.parentNode; if (p) [].forEach.call(p.children, function (c) { c.classList.toggle('on', c === el); }); },
+    tdRdGo: function () { romDirGo(); },
     tdEdit: function (id) { var g = extraRaw().filter(function (x) { return x.id === id; })[0]; if (g) { MV.closeModal(true); form(g); } },
     tdRemove: function (id) {
       var g = byId(id); if (!g) return;

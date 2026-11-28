@@ -102,7 +102,7 @@ class Bridge(private val a: MainActivity) {
     }
     private fun storeFetch(id: String, url: String, dest: File) {
         dest.parentFile?.mkdirs()
-        if (Mega.parse(url) != null) { Mega.download(url, dest) { progress(id, it) }; return }
+        if (url.startsWith("mega:") || Mega.parse(url) != null) { Mega.download(url, dest) { progress(id, it) }; return }
         val code = Net.download(directUrl(url), dest, emptyMap(), decompress = true) { progress(id, it) }
         if (code >= 400 || !dest.isFile) throw IllegalStateException("Error $code al descargar")
         // Google Drive con archivos grandes responde primero un aviso ("no se pudo analizar en busca de virus"): se sigue su formulario
