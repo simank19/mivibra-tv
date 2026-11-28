@@ -36,7 +36,8 @@
     return f === 'web' && !zipUrl(g.url);
   }
   function extra() { return extraRaw().map(function (x) { return Object.assign({ tipo: 'juego' }, x, { ext: 1, huella: 'x' + hash(x.url + '|' + (x.version || '')) }); }).filter(function (g) { return isAdmin() || avail(g); }); }
-  function allCat() { return (CAT || MV.load('tiendaCat', []) || []).concat(extra()); }
+  function hiddenIds() { var c = MV.acct && MV.acct.config; if (c && c.tiendaOcultos) { MV.save('tiendaOcultos', c.tiendaOcultos); return c.tiendaOcultos; } return MV.load('tiendaOcultos', []) || []; }
+  function allCat() { var hid = hiddenIds(); return (CAT || MV.load('tiendaCat', []) || []).filter(function (g) { g._oculto = hid.indexOf(g.id) >= 0; return !g._oculto || isAdmin(); }).concat(extra()); }
   var CAT = null, catP = null, busy = {}, tab = 'tienda', catSel = 'Todos';
 
   function load(force) {
@@ -113,9 +114,11 @@
     if (f === 'web' && (!HAS || DESK)) { ST.inst[g.id] = { ext: 1, formato: f, remote: true, huella: g.huella, at: Date.now(), tipo: 'juego' }; save(); MV.toast('Listo: ' + g.nombre + ' ya está en MiVibra Movimiento', 3500); paint(g); refresh(); return Promise.resolve(); }
     if (!HAS) { MV.toast('Este juego se descarga en la app de MiVibra (TV, celular o PC)', 4000); return Promise.resolve(); }
     busy[g.id] = 0; paint(g);
-    return MV.call('storeGet', [JSON.stringify({ kind: f, url: g.url, gid: g.id, name: g.archivo || g.nombre })], function (p) { if (p >= 0) { busy[g.id] = Math.min(99, p); paint(g); } }).then(function (r) {
+    var src = /mediafire\.com\//i.test(g.url) && MV.bookSrc ? MV.bookSrc({ url: g.url }) : Promise.resolve(g.url);
+    return src.then(function (u) { return MV.call('storeGet', [JSON.stringify({ kind: f, url: u, gid: g.id, name: g.archivo || g.nombre })], function (p) { if (p >= 0) { busy[g.id] = Math.min(99, p); paint(g); } }); }).then(function (r) {
       r = r || {}; delete busy[g.id];
       ST.inst[g.id] = { ext: 1, formato: f, huella: g.huella, version: g.version, ruta: r.ruta || '', path: r.path || '', at: Date.now(), tipo: 'juego' }; save();
+      if (f === 'rom' && g.sistema && r.path && MV.S && MV.S.prefs) { MV.S.prefs.romSystem = MV.S.prefs.romSystem || {}; MV.S.prefs.romSystem[r.path] = g.sistema; if (MV.savePrefs) MV.savePrefs(); }
       if (f === 'rom' && MV.ACT.scanRoms) setTimeout(function () { MV.ACT.scanRoms(); }, 300);
       MV.toast(f === 'apk' ? 'Sigue los pasos del instalador de Android para ' + g.nombre : 'Listo: ' + g.nombre + ' ya está en MiVibra Movimiento' + (f === 'rom' ? ' y en tus juegos de consolas' : ''), 4500);
       paint(g); refresh();
@@ -124,7 +127,7 @@
   function playExt(g) {
     var i = ST.inst[g.id] || {};
     if (g.formato === 'web') { var url = i.ruta ? LOCAL + i.ruta : media(g.url); if (MV.mvOpen) MV.mvOpen(url); else location.href = url; return; }
-    if (g.formato === 'rom') { var n = (g.archivo || i.path || '').split(/[\\/]/).pop(); MV.playRom({ path: i.path, name: g.nombre, ext: (n.split('.').pop() || '').toLowerCase() }); return; }
+    if (g.formato === 'rom') { var n = (g.archivo || i.path || '').split(/[\\/]/).pop(); MV.playRom({ path: i.path, name: n || g.nombre, ext: (n.split('.').pop() || '').toLowerCase() }); return; }
     if (g.formato === 'pc') { if (!(A && A.storeOpen && A.storeOpen(i.path))) MV.toast('No se pudo abrir ' + g.nombre); return; }
     MV.toast(g.nombre + ' está instalada en Android: ábrela desde Juegos › Android', 4000);
   }
@@ -148,9 +151,9 @@
     return '';
   }
   function card(g) {
-    return '<div class="td-card glass"><button class="td-img f" data-act="tdOpen" data-arg="' + esc(g.id) + '" aria-label="' + esc(g.nombre) + '">' +
+    return '<div class="td-card glass' + (g.formato === 'rom' ? ' td-box' : '') + '"><button class="td-img f" data-act="tdOpen" data-arg="' + esc(g.id) + '" aria-label="' + esc(g.nombre) + '">' +
       (g.portada ? '<img src="' + esc(media(g.portada)) + '" alt="" loading="lazy">' : '') + badge(g) + '</button>' +
-      '<div class="td-body"><b>' + esc(g.nombre) + '</b><span class="muted">' + esc((g.formato ? FMT[g.formato] + (g.ext && isAdmin() && !avail(g) ? ' · no disponible aquí' : '') + ' · ' : '') + (g.corto || g.categoria || '')) + '</span><div id="tdB-' + esc(g.id) + '">' + btnHtml(g) + '</div></div></div>';
+      '<div class="td-body">' + (isAdmin() ? '<button class="td-del f" data-act="tdRemove" data-arg="' + esc(g.id) + '" aria-label="Eliminar de la Tienda" title="Eliminar de la Tienda">✕</button>' : '') + '<b>' + esc(g.nombre) + (g._oculto ? ' <small class="muted">(oculto)</small>' : '') + '</b><span class="muted">' + esc((g.formato ? FMT[g.formato] + (g.ext && isAdmin() && !avail(g) ? ' · no disponible aquí' : '') + ' · ' : '') + (g.corto || g.categoria || '')) + '</span><div id="tdB-' + esc(g.id) + '">' + btnHtml(g) + '</div></div></div>';
   }
   function paint(g) {
     var el = document.getElementById('tdB-' + g.id); if (el) el.innerHTML = btnHtml(g);
@@ -185,7 +188,7 @@
     var dlcs = allCat().filter(function (d) { return d.tipo === 'dlc' && d.de === g.id; });
     var shots = (g.fotos || []).slice(0, 3).map(function (f) { return '<img src="' + esc(media(f)) + '" alt="" loading="lazy">'; }).join('');
     MV.modal('<div class="td-det">' +
-      '<div class="td-det-media">' + (g.video ? '<video src="' + esc(media(g.video)) + '" poster="' + esc(media(g.portada)) + '" autoplay muted loop playsinline controls></video>' : '<img src="' + esc(media(g.portada)) + '" alt="">') + (shots ? '<div class="td-shots">' + shots + '</div>' : '') + '</div>' +
+      '<div class="td-det-media' + (g.formato === 'rom' ? ' td-box' : '') + '">' + (g.video ? '<video src="' + esc(media(g.video)) + '" poster="' + esc(media(g.portada)) + '" autoplay muted loop playsinline controls></video>' : '<img src="' + esc(media(g.portada)) + '" alt="">') + (shots ? '<div class="td-shots">' + shots + '</div>' : '') + '</div>' +
       '<div class="td-det-txt"><h2>' + esc(g.nombre) + '</h2><p class="muted">' + esc(g.descripcion || '') + '</p>' +
       '<div class="btns"><span id="tdM-' + esc(g.id) + '">' + btnHtml(g, true) + '</span>' +
       (installed(g) && NATIVE && ST.inst[g.id].remote ? '<button class="btn ghost f" data-act="tdGet" data-arg="' + esc(g.id) + '">Guardar para jugar sin internet' + (g.tamano ? ' · ' + mb(g.tamano) : '') + '</button>' : '') +
@@ -194,7 +197,7 @@
       (dlcs.length ? '<h4>Expansiones</h4>' + dlcs.map(function (d) { return '<div class="td-dlc"><div><b>' + esc(d.nombre) + '</b><br><span class="muted">' + esc(d.corto || '') + (d.tamano ? ' · ' + mb(d.tamano) : '') + '</span></div><span id="tdB-' + esc(d.id) + '">' + (installed(g) ? btnHtml(d) : '<span class="muted">Primero descarga el juego</span>') + '</span></div>'; }).join('') : '') +
       '<div class="td-facts">' + [['Formato', g.formato ? FMT[g.formato] : ''], ['Jugadores', g.jugadores], ['Tamaño', mb(g.tamano)], ['Versión', g.version], ['Precio', 'Gratis'], ['Novedades', g.novedades]].filter(function (x) { return x[1]; }).map(function (x) { return '<div><span class="muted">' + x[0] + '</span><b>' + esc(x[1]) + '</b></div>'; }).join('') + '</div>' +
       (g.creditos ? '<p class="muted" style="font-size:13px;margin:0">' + esc(g.creditos) + '</p>' : '') +
-      (g.ext && isAdmin() ? '<div class="btns"><button class="btn ghost f" data-act="tdEdit" data-arg="' + esc(g.id) + '">Editar</button><button class="btn ghost f" data-act="tdRemove" data-arg="' + esc(g.id) + '">Quitar de la Tienda</button></div>' : '') +
+      (isAdmin() ? '<div class="btns">' + (g.ext ? '<button class="btn ghost f" data-act="tdEdit" data-arg="' + esc(g.id) + '">Editar</button>' : '') + '<button class="btn ghost f" data-act="tdRemove" data-arg="' + esc(g.id) + '">' + (g.ext ? 'Eliminar de la Tienda' : g._oculto ? 'Volver a mostrar' : 'Ocultar de la Tienda') + '</button></div>' : '') +
       '<div class="btns"><button class="btn ghost f" data-act="closeModal">Cerrar</button></div></div></div>', { wide: true });
   }
 
@@ -204,6 +207,33 @@
     ['portada', 'Enlace de la portada (imagen)', 'Imagen 16:9 · Drive o enlace directo'], ['video', 'Enlace del video corto (opcional)', '.mp4 de unos segundos'], ['fotos', 'Enlaces de fotos (opcional, separados por coma)', ''],
     ['corto', 'Frase corta', 'Ej: Plataformas clásico para 2 jugadores'], ['descripcion', 'Descripción', ''], ['categoria', 'Categoría', 'Ej: Carreras, Deportes, Aventura'], ['jugadores', 'Jugadores', 'Ej: 1 a 4'],
     ['version', 'Versión', '1.0'], ['tamanoMb', 'Tamaño en MB (opcional)', ''], ['novedades', 'Novedades de esta versión', ''], ['creditos', 'Créditos y licencia', 'Autor y licencia del juego']];
+  var ROM_SKIP = ['video', 'fotos', 'corto', 'descripcion', 'categoria', 'jugadores', 'tamanoMb', 'novedades', 'creditos'];
+  function sysList() { return ((window.MVD && MVD.SYSTEMS) || []).filter(function (x) { return x.thumbs && !x.port; }); }
+  function sysOf(id) { return sysList().filter(function (x) { return x.id === id; })[0]; }
+  function boxart(x, n) { return 'https://thumbnails.libretro.com/' + encodeURIComponent(x.thumbs) + '/' + 'Named_Boxarts/' + encodeURIComponent(n.replace(/[&*\/:`<>?\\|"]/g, '_')) + '.png'; }
+  /** Carátula, fotos y ficha (Wikipedia/Wikidata) de una ROM, como en Juegos. */
+  function romInfo(g) {
+    var x = sysOf(g.sistema); if (!x) return Promise.resolve(g);
+    var r = { path: 'tienda:' + (g.id || g.nombre), name: g.archivo || g.nombre };
+    var cov = MV.findCover ? MV.findCover(r, x, g.nombre).catch(function () { return null; }) : Promise.resolve(null);
+    var meta = MV.scrapeGame ? MV.scrapeGame(Object.assign({}, r, { name: g.nombre }), x, true).catch(function () { return null; }) : Promise.resolve(null);
+    return Promise.all([cov, meta]).then(function (res) {
+      var c = res[0], m = res[1] || {};
+      if (c && c.n) { if (!g.portada) g.portada = boxart(x, c.n);
+        var shot = function (k) { return 'https://thumbnails.libretro.com/' + encodeURIComponent(x.thumbs) + '/' + k + '/' + encodeURIComponent(c.n.replace(/[&*\/:`<>?\\|"]/g, '_')) + '.png'; };
+        if (!g.fotos || !g.fotos.length) g.fotos = [shot('Named_Snaps'), shot('Named_Titles')]; }
+      if (!m.none) {
+        if (!g.descripcion && m.desc) g.descripcion = m.desc;
+        if (!g.corto) g.corto = [x.name, m.year, m.genre].filter(Boolean).join(' · ');
+        if (!g.categoria && m.genre) g.categoria = cap1(String(m.genre).split(',')[0]);
+        if (!g.creditos && (m.dev || m.pub)) g.creditos = [m.dev ? 'Desarrollo: ' + m.dev : '', m.pub ? 'Editor: ' + m.pub : ''].filter(Boolean).join(' · ');
+        if (!g.jugadores && m.modes) g.jugadores = m.modes;
+      }
+      if (!g.corto) g.corto = x.name;
+      return g;
+    });
+  }
+  function cap1(t) { t = String(t || '').trim(); return t.charAt(0).toUpperCase() + t.slice(1); }
   function readForm() { FIELDS.forEach(function (f) { var el = document.getElementById('tdf-' + f[0]); if (el) F[f[0]] = el.value.trim(); }); var d = document.getElementById('tdf-dest'); if (d) F.destacado = d.checked; }
   function form(g) {
     if (g !== undefined) F = g ? JSON.parse(JSON.stringify(g)) : { formato: 'web', controles: ['rem', 'tac'], jugadores: '1', version: '1.0' };
@@ -212,7 +242,9 @@
     MV.modal('<h2>' + (F.id ? 'Editar juego' : 'Cargar juego a la Tienda') + '</h2><p class="muted">Lo verán todos los usuarios. Comparte el archivo como público (cualquiera con el enlace).</p>' +
       '<h4 style="margin:6px 0">Formato</h4><div class="chips">' + Object.keys(FMT).map(function (k) { return ch('tdFmt', k, FMT[k], F.formato === k); }).join('') + '</div>' +
       '<p class="muted" style="font-size:13px">' + ({ web: 'Un .zip con index.html adentro (o el enlace a la página del juego). Se juega dentro de MiVibra y pasa a MiVibra Movimiento.', rom: 'La ROM (.sfc, .gba, .zip, .7z…): se baja a tus juegos de consolas y se abre con los emuladores.', apk: 'La APK: se baja y Android pide instalarla. Solo en TV y celulares Android.', pc: 'Un .exe o un .zip/.7z con el juego: solo en MiVibra para PC.' })[F.formato] + '</p>' +
-      FIELDS.map(function (f) { if (f[0] === 'archivo' && F.formato !== 'rom' && F.formato !== 'pc') return ''; var v = esc(F[f[0]] || '');
+      (F.formato === 'rom' ? '<h4 style="margin:10px 0 6px">Consola</h4><div class="chips" style="flex-wrap:wrap;overflow:visible">' + sysList().map(function (x) { return ch('tdSys', x.id, x.name, F.sistema === x.id); }).join('') + '</div>' +
+        '<p class="muted" style="font-size:13px">Solo escribe el nombre del juego: la carátula, las fotos, la descripción, el año y el género se buscan solos al publicar.</p>' : '') +
+      FIELDS.map(function (f) { if (f[0] === 'archivo' && F.formato !== 'rom' && F.formato !== 'pc') return ''; if (F.formato === 'rom' && ROM_SKIP.indexOf(f[0]) >= 0) return ''; var v = esc(F[f[0]] || '');
         return '<label class="muted" style="display:block;margin:10px 0 4px;font-size:13px">' + f[1] + '</label>' + (f[0] === 'descripcion' ? '<textarea class="in f" id="tdf-' + f[0] + '" rows="3" placeholder="' + esc(f[2]) + '">' + v + '</textarea>' : '<input class="in f" id="tdf-' + f[0] + '" value="' + v + '" placeholder="' + esc(f[2]) + '">'); }).join('') +
       '<h4 style="margin:12px 0 6px">Cómo se juega</h4><div class="chips">' + Object.keys(CTRL).map(function (k) { return ch('tdCtl', k, CTRL[k], (F.controles || []).indexOf(k) >= 0); }).join('') + '</div>' +
       '<label style="display:flex;gap:10px;align-items:center;margin:14px 0"><input type="checkbox" id="tdf-dest"' + (F.destacado ? ' checked' : '') + '> Destacarlo al abrir la Tienda</label>' +
@@ -237,6 +269,12 @@
       corto: g.corto || '', descripcion: g.descripcion || '', categoria: g.categoria || '', jugadores: g.jugadores || '', controles: g.controles || [], version: g.version || '1.0',
       tamano: g.tamanoMb ? Math.round(parseFloat(g.tamanoMb) * 1048576) || 0 : 0, novedades: g.novedades || '', creditos: g.creditos || '', destacado: !!g.destacado, fecha: g.fecha || new Date().toISOString().slice(0, 10), at: Date.now() };
     var list = extraRaw().filter(function (x) { return x.id !== out.id; }); list.unshift(out);
+    if (out.formato === 'rom') {
+      out.sistema = g.sistema || '';
+      if (!out.sistema) return MV.toast('Elige la consola del juego', 3500);
+      var btn = document.querySelector('[data-act="tdSave"]'); if (btn) { btn.disabled = true; btn.textContent = 'Buscando carátula e información…'; }
+      return romInfo(out).then(function (o) { MV.closeModal(true); list[0] = o; publish(list, (g.id ? 'Cambios publicados: ' : 'Publicado en la Tienda: ') + o.nombre + (o.portada ? '' : ' (no encontré la carátula; puedes poner una a mano)')); });
+    }
     MV.closeModal(true); publish(list, (g.id ? 'Cambios publicados: ' : 'Publicado en la Tienda: ') + out.nombre);
   }
 
@@ -244,8 +282,19 @@
     tdTab: function (t) { tab = t; MV.rerender(); },
     tdNew: function () { form(null); },
     tdEdit: function (id) { var g = extraRaw().filter(function (x) { return x.id === id; })[0]; if (g) { MV.closeModal(true); form(g); } },
-    tdRemove: function (id) { var g = byId(id); if (!g) return; MV.confirm('¿Quitar ' + g.nombre + ' de la Tienda?', 'Deja de aparecer para todos. A quien ya lo descargó le sigue funcionando.', 'Quitar').then(function (ok) { if (ok) { MV.closeModal(true); publish(extraRaw().filter(function (x) { return x.id !== id; }), g.nombre + ' se quitó de la Tienda'); } }); },
+    tdRemove: function (id) {
+      var g = byId(id); if (!g) return;
+      if (!g.ext) {   // juegos de MiVibra: se ocultan para todos (se pueden volver a mostrar)
+        var hid = hiddenIds().slice(), on = hid.indexOf(id) >= 0;
+        return MV.confirm((on ? '¿Volver a mostrar ' : '¿Ocultar ') + g.nombre + ' en la Tienda?', on ? 'Aparece otra vez para todos.' : 'Deja de aparecer para todos. A quien ya lo descargó le sigue funcionando.', on ? 'Mostrar' : 'Ocultar').then(function (ok) {
+          if (!ok) return; MV.closeModal(true); if (on) hid.splice(hid.indexOf(id), 1); else hid.push(id);
+          MV.acct.push({ tiendaOcultos: hid }).then(function () { if (MV.acct.pushError) return; if (MV.acct.config) MV.acct.config.tiendaOcultos = hid; MV.save('tiendaOcultos', hid); MV.toast(g.nombre + (on ? ' vuelve a aparecer en la Tienda' : ' quedó oculto para todos'), 3500); MV.rerender(); });
+        });
+      }
+      MV.confirm('¿Eliminar ' + g.nombre + ' de la Tienda?', 'Deja de aparecer para todos. A quien ya lo descargó le sigue funcionando.', 'Eliminar').then(function (ok) { if (ok) { MV.closeModal(true); publish(extraRaw().filter(function (x) { return x.id !== id; }), g.nombre + ' se eliminó de la Tienda'); } });
+    },
     tdFmt: function (k) { readForm(); F.formato = k; MV.closeModal(true); form(); },
+    tdSys: function (k) { readForm(); F.sistema = k; MV.closeModal(true); form(); },
     tdCtl: function (k, el) { var c = F.controles || (F.controles = []), i = c.indexOf(k); if (i >= 0) c.splice(i, 1); else c.push(k); if (el) el.classList.toggle('on', i < 0); },
     tdSave: function () { saveForm(); },
     tdCat: function (c) { catSel = c; MV.rerender(); },
@@ -266,11 +315,11 @@
     '.td-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px}' +
     '.td-card{border-radius:22px;overflow:hidden;display:flex;flex-direction:column}' +
     '.td-img{position:relative;display:block;width:100%;aspect-ratio:16/10;padding:0;border:0;background:rgba(255,255,255,.05);cursor:pointer;border-radius:0}' +
-    '.td-img img{width:100%;height:100%;object-fit:cover;display:block}' +
+    '.td-img img{width:100%;height:100%;object-fit:cover;display:block}.td-box .td-img img,.td-box.td-det-media>img{object-fit:contain;background:rgba(0,0,0,.25)}' +
     '.td-img:focus{outline:3px solid var(--accent);outline-offset:-3px}' +
     '.td-tag{position:absolute;left:10px;top:10px;padding:3px 10px;border-radius:999px;font:800 11px var(--ui);font-style:normal;letter-spacing:.04em}' +
     '.td-tag.nw{background:var(--accent);color:var(--on-accent)}.td-tag.ok{background:rgba(52,211,153,.22);color:#7CFF9D}.td-tag.up{background:rgba(47,125,246,.25);color:#9CC2FF}' +
-    '.td-body{padding:12px 16px 16px;display:flex;flex-direction:column;gap:6px}.td-body b{font-size:17px}.td-body span{font-size:13px}' +
+    '.td-body{position:relative;padding:12px 16px 16px;display:flex;flex-direction:column;gap:6px}.td-del{position:absolute;right:12px;top:10px;width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--glass);color:var(--text);font-size:14px}.td-del:focus{outline:3px solid var(--accent)}.td-body b{padding-right:40px}.td-body b{font-size:17px}.td-body span{font-size:13px}' +
     '.btn.sm{height:38px;padding:0 16px;font-size:14px;margin-top:4px}' +
     '.td-prog{display:flex;flex-direction:column;gap:6px;margin-top:6px;min-width:150px}.td-prog span{font:700 13px var(--ui);opacity:.85}.td-prog i{display:block;height:8px;border-radius:9px;background:var(--accent);box-shadow:0 0 0 999px rgba(255,255,255,.08) inset}' +
     '.td-hero{display:grid;grid-template-columns:1.25fr 1fr;border-radius:28px;overflow:hidden}.td-hero-media{min-height:280px;background:#000}.td-hero-media video,.td-hero-media img{width:100%;height:100%;object-fit:cover;display:block}' +

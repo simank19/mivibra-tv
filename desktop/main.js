@@ -410,6 +410,16 @@ const ASYNC = {
         if (mega.parse(o.url)) { await mega.download(o.url, dest, (p) => progress(id, p)); return; }
         const code = await net.download(direct(o.url), dest, {}, (p) => progress(id, p), true);
         if (code >= 400) throw new Error('Error ' + code + ' al descargar');
+        // Google Drive con archivos grandes: primero responde un aviso con un formulario; se sigue
+        if (fs.statSync(dest).size < 600000) {
+          const h = fs.readFileSync(dest, 'utf8'), tag = (h.match(/<form[^>]*download-form[^>]*>/i) || [])[0];
+          const act = tag && (tag.match(/action="([^"]+)"/) || [])[1];
+          if (act) {
+            const q = (h.match(/<input[^>]*>/gi) || []).filter((t) => /hidden/i.test(t)).map((t) => { const n = (t.match(/name="([^"]+)"/) || [])[1]; const v = ((t.match(/value="([^"]*)"/) || [])[1] || '').replace(/&amp;/g, '&'); return n ? n + '=' + encodeURIComponent(v) : ''; }).filter(Boolean).join('&');
+            const next = act.replace(/&amp;/g, '&'); const c2 = await net.download(next + (next.includes('?') ? '&' : '?') + q, dest, {}, (p) => progress(id, p), true);
+            if (c2 >= 400) throw new Error('Error ' + c2 + ' al descargar de Google Drive');
+          }
+        }
         const head = fs.readFileSync(dest).subarray(0, 512).toString('latin1');
         if (fs.statSync(dest).size < 300000 && /<html|<!doctype/i.test(head)) throw new Error('El enlace abre una página y no el juego (¿está compartido como público?)');
       };

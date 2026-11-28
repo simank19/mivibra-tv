@@ -105,6 +105,26 @@ class Bridge(private val a: MainActivity) {
         if (Mega.parse(url) != null) { Mega.download(url, dest) { progress(id, it) }; return }
         val code = Net.download(directUrl(url), dest, emptyMap(), decompress = true) { progress(id, it) }
         if (code >= 400 || !dest.isFile) throw IllegalStateException("Error $code al descargar")
+        // Google Drive con archivos grandes responde primero un aviso ("no se pudo analizar en busca de virus"): se sigue su formulario
+        driveConfirm(dest)?.let { next ->
+            val c2 = Net.download(next, dest, emptyMap(), decompress = true) { progress(id, it) }
+            if (c2 >= 400 || !dest.isFile) throw IllegalStateException("Error $c2 al descargar de Google Drive")
+        }
+    }
+    private fun driveConfirm(f: File): String? {
+        if (!f.isFile || f.length() > 600_000) return null
+        val h = try { f.readText() } catch (_: Exception) { return null }
+        if (!h.contains("download-form", true) && !h.contains("uc-download-link", true)) return null
+        val tag = Regex("<form[^>]*download-form[^>]*>", RegexOption.IGNORE_CASE).find(h)?.value ?: return null
+        val action = Regex("action=\"([^\"]+)\"").find(tag)?.groupValues?.get(1)?.replace("&amp;", "&") ?: return null
+        val q = Regex("<input[^>]*>", RegexOption.IGNORE_CASE).findAll(h).mapNotNull { m ->
+            val t = m.value
+            if (!t.contains("hidden", true)) return@mapNotNull null
+            val n = Regex("name=\"([^\"]+)\"").find(t)?.groupValues?.get(1) ?: return@mapNotNull null
+            val v = Regex("value=\"([^\"]*)\"").find(t)?.groupValues?.get(1)?.replace("&amp;", "&") ?: ""
+            n + "=" + java.net.URLEncoder.encode(v, "UTF-8")
+        }.joinToString("&")
+        return action + (if (action.contains("?")) "&" else "?") + q
     }
     private fun isZip(f: File) = try { f.inputStream().use { val b = ByteArray(2); it.read(b) == 2 && b[0] == 'P'.code.toByte() && b[1] == 'K'.code.toByte() } } catch (_: Exception) { false }
     private fun isHtml(f: File) = try { f.inputStream().use { val b = ByteArray(512); val n = it.read(b); n > 0 && String(b, 0, n).contains("<html", true) || String(b, 0, maxOf(n, 0)).contains("<!doctype", true) } } catch (_: Exception) { false }
