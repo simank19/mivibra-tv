@@ -1284,6 +1284,7 @@
   function cloudBooks(u) {
     return /mega(\.co)?\.nz\//i.test(u) ? megaBooks(u) : /mediafire\.com\//i.test(u) ? mfBooks(u) : driveBooks(u);
   }
+  MV.cloudBooks = cloudBooks;   // la Librería la usa para publicar una carpeta entera
   function buildFromBookLinks(list) {
     var hdr = list.user ? { Authorization: 'Basic ' + btoa(unescape(encodeURIComponent(list.user + ':' + (list.pass || '')))), Accept: 'application/atom+xml,application/opds+json,application/json,text/html,*/*' } : { Accept: 'application/atom+xml,application/opds+json,application/json,text/html,*/*' };
     var out = [], seen = {};

@@ -30,9 +30,9 @@
     var all = raw(), cats = ['Todas'].concat(all.map(function (b) { return b.categoria; }).filter(function (c, i, a) { return c && a.indexOf(c) === i; }));
     if (cats.indexOf(cat) < 0) cat = 'Todas';
     var list = all.filter(function (b) { return cat === 'Todas' || b.categoria === cat; });
-    return MV.topHtml('Librería', (isAdmin() ? '<button class="btn f sm" data-act="lbNew" style="margin:0 12px 0 0">Publicar libro</button>' : '') + '<span class="muted">Libros gratis para leer en MiVibra</span>') +
+    return MV.topHtml('Librería', (isAdmin() ? '<button class="btn f sm" data-act="lbFolder" style="margin:0 8px 0 0">Publicar carpeta</button><button class="btn ghost f sm" data-act="lbNew" style="margin:0 12px 0 0">Publicar libro</button>' : '') + '<span class="muted">Libros gratis para leer en MiVibra</span>') +
       (cats.length > 2 ? '<div class="chips" style="margin-bottom:16px">' + cats.map(function (c) { return '<button class="chip f' + (cat === c ? ' on' : '') + '" data-act="lbCat" data-arg="' + esc(c) + '">' + esc(c) + '</button>'; }).join('') + '</div>' : '') +
-      (list.length ? '<div class="lb-grid">' + list.map(function (b) { return '<button class="lb-card f" data-act="lbOpen" data-arg="' + esc(b.id) + '">' + cover(b) + '<span>' + esc(b.autor || KIND[b.tipo] || '') + '</span></button>'; }).join('') + '</div>'
+      (list.length ? '<div class="lb-grid">' + list.map(function (b) { return '<div class="lb-wrap"><button class="lb-card f" data-act="lbOpen" data-arg="' + esc(b.id) + '">' + cover(b) + '<span>' + esc(b.autor || KIND[b.tipo] || '') + '</span></button>' + (isAdmin() ? '<button class="td-del lb-del f" data-act="lbRemove" data-arg="' + esc(b.id) + '" aria-label="Eliminar de la Librería">✕</button>' : '') + '</div>'; }).join('') + '</div>'
         : '<p class="muted">' + (isAdmin() ? 'Todavía no hay libros. Toca «Publicar libro» para agregar el primero: lo verán todos tus usuarios.' : 'Pronto habrá libros aquí.') + '</p>');
   };
 
@@ -63,7 +63,58 @@
     MV.acct.push({ librosExtra: list }).then(function () { if (MV.acct.pushError) return; if (MV.acct.config) MV.acct.config.librosExtra = list; MV.save('librosExtra', list); MV.toast(msg, 3500); MV.rerender(); });
   }
 
+  // ---------- Publicar una carpeta entera (Google Drive, MEGA o MediaFire): cada libro con su información buscada sola ----------
+  function folderForm() {
+    MV.modal('<h2>Publicar una carpeta</h2><p class="muted">Pega el enlace de una carpeta compartida como pública. MiVibra trae todos los libros de adentro (también de las subcarpetas) y busca solo la portada, el autor y la sinopsis de cada uno.</p>' +
+      '<label class="muted" style="display:block;margin:10px 0 4px;font-size:13px">Enlace de la carpeta</label><input class="in f" id="lbfd-url" placeholder="https://drive.google.com/drive/folders/…">' +
+      '<label class="muted" style="display:block;margin:10px 0 4px;font-size:13px">Categoría (opcional: si la dejas vacía se usa el nombre de cada subcarpeta)</label><input class="in f" id="lbfd-cat" placeholder="Ej: Clásicos de dominio público">' +
+      '<label class="muted" style="display:block;margin:10px 0 4px;font-size:13px">Créditos y licencia</label><input class="in f" id="lbfd-cred" value="Dominio público">' +
+      '<div class="chips" style="margin-top:10px">' + Object.keys(KIND).map(function (k) { return '<button class="chip f' + (k === 'libro' ? ' on' : '') + '" data-act="lbFdKind" data-arg="' + k + '">' + KIND[k] + '</button>'; }).join('') + '</div>' +
+      '<p id="lbfd-msg" class="muted" style="min-height:22px;margin:12px 0 0"></p>' +
+      '<div class="btns"><button class="btn f" data-act="lbFdGo" id="lbfd-go">Buscar libros y publicar</button><button class="btn ghost f" data-act="closeModal">Cancelar</button></div>');
+  }
+  var fdKind = 'libro', fdBusy = false;
+  function folderGo() {
+    if (fdBusy) return;
+    var v = function (id) { var e = document.getElementById(id); return e ? e.value.trim() : ''; }, msg = function (t) { var e = document.getElementById('lbfd-msg'); if (e) e.textContent = t; };
+    var url = v('lbfd-url'), cat = v('lbfd-cat'), cred = v('lbfd-cred');
+    if (!/^https?:\/\//.test(url)) return msg('Pega el enlace de la carpeta (empieza por https://).');
+    if (!MV.cloudBooks) return msg('Actualiza la app para usar esta opción.');
+    fdBusy = true; var go = document.getElementById('lbfd-go'); if (go) go.disabled = true;
+    msg('Leyendo la carpeta…');
+    MV.cloudBooks(url).then(function (files) {
+      files = (files || []).filter(function (f) { return f.url && !f.pack; });
+      if (!files.length) throw new Error('No encontré libros en esa carpeta (¿está compartida como pública?)');
+      var have = {}; raw().forEach(function (b) { have[b.url] = 1; });
+      files = files.filter(function (f) { return !have[f.url]; });
+      if (!files.length) throw new Error('Todos los libros de esa carpeta ya están en la Librería');
+      var out = [], i = 0, done = 0, stamp = Date.now();
+      var fm = MV.bookShelf && MV.bookShelf.fetchMeta;
+      function one() {
+        var f = files[i++]; if (!f) return Promise.resolve();
+        var title = String(f.title || 'Libro').replace(/\.(pdf|epub|cbz|cbr|cb7|mobi|azw3?)$/i, '').replace(/_+/g, ' ').trim();
+        var m0 = title.split(/\s+[-–—]\s+/), name = m0[0], auth = m0.length > 1 ? m0.slice(1).join(' ') : '';
+        var meta = fm ? fm({ key: 'libpub:' + f.url, name: title }).catch(function () { return {}; }) : Promise.resolve({});
+        return meta.then(function (m) {
+          m = m || {};
+          var grp = String(f.path || '').split(' / ').pop();
+          out.push({ id: 'l-' + (stamp + out.length).toString(36), tipo: fdKind, nombre: name, autor: m.a || auth, url: f.url, portada: m.c || '', descripcion: String(m.d || '').slice(0, 450),
+            categoria: cat || grp || (m.g && m.g[0]) || '', paginas: '', idioma: '', creditos: cred, fecha: new Date().toISOString().slice(0, 10), at: Date.now() });
+          done++; msg('Buscando información: ' + done + ' de ' + files.length + '…');
+        }).then(one);
+      }
+      return Promise.all([one(), one(), one()]).then(function () { return out; });
+    }).then(function (out) {
+      var list = out.concat(raw()), size = JSON.stringify(list).length;
+      if (size > 700000) throw new Error('Son demasiados libros para guardarlos juntos (' + list.length + '). Publica carpetas más pequeñas.');
+      fdBusy = false; MV.closeModal(true); publish(list, out.length + (out.length === 1 ? ' libro publicado' : ' libros publicados') + ' en la Librería');
+    }).catch(function (e) { fdBusy = false; if (go) go.disabled = false; msg(e.message || 'No se pudo leer la carpeta'); });
+  }
+
   Object.assign(MV.ACT, {
+    lbFolder: function () { fdKind = 'libro'; folderForm(); },
+    lbFdKind: function (k, el) { fdKind = k; var p = el && el.parentNode; if (p) [].forEach.call(p.children, function (c) { c.classList.toggle('on', c === el); }); },
+    lbFdGo: function () { folderGo(); },
     lbGo: function () { MV.go('libreria'); },
     lbCat: function (c) { cat = c; MV.rerender(); },
     lbOpen: function (id) { var b = byId(id); if (b) detail(b); },
@@ -72,7 +123,7 @@
     lbNew: function () { form(null); },
     lbEdit: function (id) { var b = byId(id); if (b) { MV.closeModal(true); form(b); } },
     lbKind: function (k) { readForm(); F.tipo = k; MV.closeModal(true); form(); },
-    lbRemove: function (id) { var b = byId(id); if (!b) return; MV.confirm('¿Quitar «' + b.nombre + '» de la Librería?', 'Deja de aparecer para todos.', 'Quitar').then(function (ok) { if (ok) { MV.closeModal(true); publish(raw().filter(function (x) { return x.id !== id; }), 'Se quitó de la Librería'); } }); },
+    lbRemove: function (id) { var b = byId(id); if (!b) return; MV.confirm('¿Eliminar «' + b.nombre + '» de la Librería?', 'Deja de aparecer para todos.', 'Eliminar').then(function (ok) { if (ok) { MV.closeModal(true); publish(raw().filter(function (x) { return x.id !== id; }), 'Se eliminó de la Librería'); } }); },
     lbSaveForm: function () {
       readForm(); var b = F;
       if (!b.nombre || !/^https?:\/\//.test(b.url || '')) return MV.toast('Escribe el título y un enlace que empiece por https://', 4000);
@@ -89,9 +140,10 @@
   var css = document.createElement('style');
   css.textContent =
     '.lb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:18px}' +
-    '.lb-card{display:flex;flex-direction:column;gap:8px;padding:0;border:0;background:none;color:inherit;text-align:left;cursor:pointer;font:inherit}' +
+    '.lb-wrap{position:relative}.lb-del{position:absolute;right:8px;top:8px;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:rgba(0,0,0,.55);color:#fff}' +
+    '.lb-card{width:100%;display:flex;flex-direction:column;gap:8px;padding:0;border:0;background:none;color:inherit;text-align:left;cursor:pointer;font:inherit}' +
     '.lb-card>span{font-size:13px;opacity:.7;padding:0 4px}' +
-    '.lb-cover{position:relative;aspect-ratio:2/3;border-radius:14px;overflow:hidden;background:linear-gradient(160deg,var(--glass),rgba(255,255,255,.02));border:1px solid var(--line);display:flex;align-items:flex-end;padding:12px}' +
+    '.lb-cover{position:relative;width:100%;aspect-ratio:2/3;border-radius:14px;overflow:hidden;background:linear-gradient(160deg,var(--glass),rgba(255,255,255,.02));border:1px solid var(--line);display:flex;align-items:flex-end;padding:12px}' +
     '.lb-cover b{font-size:15px;line-height:1.2}.lb-cover img{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover}' +
     '.lb-card:focus .lb-cover{outline:3px solid var(--accent);outline-offset:2px}' +
     '.lb-det{grid-template-columns:minmax(0,260px) 1fr!important}.lb-det .lb-cover{width:100%}' +

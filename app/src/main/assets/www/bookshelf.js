@@ -257,6 +257,7 @@
   }
   /** Tarjetas de libros sin portada: se busca en segundo plano (de a dos) y se pone apenas llega. */
   var WQ = [], WBUSY = 0, WSEEN = {};
+  api.fetchMeta = fetchMeta;
   api.coverOf = function (b) { return cover(b); };
   api.metaOf = function (b) { return metaOf(b); };
   api.want = function (b) {
