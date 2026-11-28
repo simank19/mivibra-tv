@@ -70,8 +70,7 @@ object Books {
                 o.optString("ua").takeIf { it.isNotBlank() }?.let { h["User-Agent"] = it }
                 o.optString("ref").takeIf { it.isNotBlank() }?.let { h["Referer"] = it }
                 o.optString("auth").takeIf { it.isNotBlank() }?.let { h["Authorization"] = it }
-                val code = Net.download(src, f, h) { tick(it) }
-                if (code >= 400) { f.delete(); throw IllegalStateException("El servidor respondió con error $code") }
+                Fetch.get(src, f, h, decompress = false, tick = tick)
             }
             f
         } else File(src)
@@ -138,14 +137,13 @@ object Books {
         listOf("zip", "rar", "7z").map { File(d, "$key.$it") }.firstOrNull { it.isFile && it.length() > 0 }?.let { it.setLastModified(System.currentTimeMillis()); return it }
         val f = File(d, "$key.bin")
         when {
-            src.startsWith("mega:") || Mega.parse(src) != null -> Mega.download(src, f, tick)
-            src.startsWith("http") -> {
+            src.startsWith("mega:") || src.startsWith("http") -> {
                 val h = HashMap<String, String>()
                 o.optString("ua").takeIf { it.isNotBlank() }?.let { h["User-Agent"] = it }
                 o.optString("ref").takeIf { it.isNotBlank() }?.let { h["Referer"] = it }
                 o.optString("auth").takeIf { it.isNotBlank() }?.let { h["Authorization"] = it }
-                val code = Net.download(src, f, h) { tick(it) }
-                if (code >= 400) { f.delete(); throw IllegalStateException("El servidor respondió con error $code") }
+                // Drive (aviso de archivo grande), MediaFire, Dropbox…: se sigue hasta el archivo de verdad
+                Fetch.get(src, f, h, decompress = false, tick = tick)
             }
             else -> File(src).copyTo(f, true)
         }

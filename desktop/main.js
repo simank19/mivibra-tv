@@ -10,6 +10,7 @@ const { spawn } = require('child_process');
 
 const net = require('./lib/net');
 const mega = require('./lib/mega');
+const fetcher = require('./lib/fetch');
 const server = require('./lib/server');
 const epg = require('./lib/epg');
 const stalker = require('./lib/stalker');
@@ -399,31 +400,21 @@ const ASYNC = {
     try {
       const o = JSON.parse(json), gid = String(o.gid || 'juego').replace(/[^\w-]/g, '_');
       const name = String(o.name || gid).replace(/[\\/:*?"<>|]/g, '_').slice(-120);
-      const direct = (u) => {
-        let m = u.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:export=download&)?id=)([\w-]{10,})/); if (m) return 'https://drive.usercontent.google.com/download?id=' + m[1] + '&export=download&confirm=t';
-        if (/dropbox\.com\//.test(u)) { u = u.replace(/[?&]dl=0/, ''); return u + (u.includes('?') ? '&' : '?') + 'dl=1'; }
-        m = u.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/(.+)$/); if (m) return 'https://raw.githubusercontent.com/' + m[1] + '/' + m[2] + '/' + m[3];
-        return u;
-      };
-      const fetchTo = async (dest) => {
-        fs.mkdirSync(path.dirname(dest), { recursive: true });
-        if (/^mega:/.test(o.url) || mega.parse(o.url)) { await mega.download(o.url, dest, (p) => progress(id, p)); return; }
-        const code = await net.download(direct(o.url), dest, {}, (p) => progress(id, p), true);
-        if (code >= 400) throw new Error('Error ' + code + ' al descargar');
-        // Google Drive con archivos grandes: primero responde un aviso con un formulario; se sigue
-        if (fs.statSync(dest).size < 600000) {
-          const h = fs.readFileSync(dest, 'utf8'), tag = (h.match(/<form[^>]*download-form[^>]*>/i) || [])[0];
-          const act = tag && (tag.match(/action="([^"]+)"/) || [])[1];
-          if (act) {
-            const q = (h.match(/<input[^>]*>/gi) || []).filter((t) => /hidden/i.test(t)).map((t) => { const n = (t.match(/name="([^"]+)"/) || [])[1]; const v = ((t.match(/value="([^"]*)"/) || [])[1] || '').replace(/&amp;/g, '&'); return n ? n + '=' + encodeURIComponent(v) : ''; }).filter(Boolean).join('&');
-            const next = act.replace(/&amp;/g, '&'); const c2 = await net.download(next + (next.includes('?') ? '&' : '?') + q, dest, {}, (p) => progress(id, p), true);
-            if (c2 >= 400) throw new Error('Error ' + c2 + ' al descargar de Google Drive');
-          }
-        }
-        const head = fs.readFileSync(dest).subarray(0, 512).toString('latin1');
-        if (fs.statSync(dest).size < 300000 && /<html|<!doctype/i.test(head)) throw new Error('El enlace abre una página y no el juego (¿está compartido como público?)');
-      };
-      if (o.kind === 'rom') { const dest = path.join(DATA, 'roms', name); await fetchTo(dest); return reply(id, true, { path: dest, size: fs.statSync(dest).size }); }
+      const fetchTo = (dest) => fetcher.get(o.url, dest, { progress: (p) => progress(id, p) });
+      if (o.kind === 'rom') {
+        const dest = path.join(DATA, 'roms', name); await fetchTo(dest);
+        const hd = Buffer.alloc(4), fd0 = fs.openSync(dest, 'r'); fs.readSync(fd0, hd, 0, 4, 0); fs.closeSync(fd0);
+        const ak = hd.toString('latin1', 0, 4) === 'Rar!' ? 'rar' : hd.toString('latin1', 0, 2) === '7z' ? '7z' : '';
+        if (!ak) return reply(id, true, { path: dest, size: fs.statSync(dest).size });
+        // ROM en .rar/.7z (los emuladores no los leen): se saca a una carpeta y se elige el archivo principal
+        const out = path.join(DATA, 'roms', name.replace(/\.[^.]+$/, '') || gid), arc = dest + '.' + ak;
+        try { fs.rmSync(out, { recursive: true, force: true }); } catch (e) {}
+        fs.renameSync(dest, arc); await archives.extractAll(arc, out, (p) => progress(id, p)); try { fs.unlinkSync(arc); } catch (e) {}
+        const files = []; (function walk(d) { for (const n of fs.readdirSync(d, { withFileTypes: true })) { const f = path.join(d, n.name); if (n.isDirectory()) walk(f); else files.push({ f, s: fs.statSync(f).size }); } })(out);
+        const pick = ['m3u', 'cue', 'chd', 'pbp', 'iso', 'gdi', 'cso'].map((e) => files.filter((x) => x.f.toLowerCase().endsWith('.' + e)).sort((a, b) => a.f.localeCompare(b.f))[0]).find(Boolean) || files.sort((a, b) => b.s - a.s)[0];
+        if (!pick) throw new Error('El comprimido no trae el juego');
+        return reply(id, true, { path: pick.f, size: files.reduce((t, x) => t + x.s, 0) });
+      }
       if (o.kind !== 'pc') return reply(id, false, 'Este formato se instala en la app de Android o el TV');
       const dir = path.join(DATA, 'pcgames', gid); try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) {}
       const file = path.join(dir, name); await fetchTo(file);
@@ -457,8 +448,7 @@ const ASYNC = {
         if (/^mega:/.test(src) || mega.parse(src)) await mega.download(src, tmp, (p) => progress(id, p));
         else if (/^https?:/i.test(src)) {
           const h = {}; if (o.ua) h['User-Agent'] = o.ua; if (o.ref) h.Referer = o.ref; if (o.auth) h.Authorization = o.auth;
-          const code = await net.download(src, tmp, h, (p) => progress(id, p), false);
-          if (code >= 400) throw new Error('El servidor respondió con error ' + code);
+          await fetcher.get(src, tmp, { headers: h, decompress: false, progress: (p) => progress(id, p) });
         } else fs.copyFileSync(src, tmp);
         const head = Buffer.alloc(4); const fd = fs.openSync(tmp, 'r'); fs.readSync(fd, head, 0, 4, 0); fs.closeSync(fd);
         const kind = head.toString('latin1', 0, 3) === 'Rar' ? 'rar' : head.toString('latin1', 0, 2) === '7z' ? '7z' : head.toString('latin1', 0, 2) === 'PK' ? 'zip' : '';
@@ -490,8 +480,7 @@ const ASYNC = {
       } else if (/^https?:/i.test(src)) {
         file = path.join(BOOKS, key + '.bin');
         const h = {}; if (o.ua) h['User-Agent'] = o.ua; if (o.ref) h.Referer = o.ref; if (o.auth) h.Authorization = o.auth;
-        const code = await net.download(src, file, h, (p) => progress(id, p), false);
-        if (code >= 400) return reply(id, false, 'El servidor respondió con error ' + code);
+        try { await fetcher.get(src, file, { headers: h, decompress: false, progress: (p) => progress(id, p) }); } catch (e) { return reply(id, false, e.message); }
       } else file = src;
       const head = Buffer.alloc(8); const fd = fs.openSync(file, 'r'); fs.readSync(fd, head, 0, 8, 0); fs.closeSync(fd);
       let kind = head.toString('latin1', 0, 4) === '%PDF' ? 'pdf' : head.toString('latin1', 0, 3) === 'Rar' ? 'rar' : head.toString('latin1', 0, 2) === '7z' ? '7z' : head.toString('latin1', 0, 2) === 'PK' ? 'zip' : '';

@@ -94,37 +94,25 @@ class Bridge(private val a: MainActivity) {
 
     // ---------- Juegos que el superadministrador carga a la Tienda por enlace ----------
     /** Enlace de "ver" → enlace de descarga (Google Drive, Dropbox, GitHub). MEGA se descarga y descifra aparte. */
-    private fun directUrl(u: String): String {
-        Regex("drive\\.google\\.com/(?:file/d/|open\\?id=|uc\\?(?:export=download&)?id=)([\\w-]{10,})").find(u)?.let { return "https://drive.usercontent.google.com/download?id=" + it.groupValues[1] + "&export=download&confirm=t" }
-        if (u.contains("dropbox.com/")) return u.replace(Regex("[?&]dl=0"), "").let { it + (if (it.contains("?")) "&" else "?") + "dl=1" }
-        Regex("^https://github\\.com/([^/]+)/([^/]+)/blob/(.+)$").find(u)?.let { return "https://raw.githubusercontent.com/" + it.groupValues[1] + "/" + it.groupValues[2] + "/" + it.groupValues[3] }
-        return u
-    }
-    private fun storeFetch(id: String, url: String, dest: File) {
-        dest.parentFile?.mkdirs()
-        if (url.startsWith("mega:") || Mega.parse(url) != null) { Mega.download(url, dest) { progress(id, it) }; return }
-        val code = Net.download(directUrl(url), dest, emptyMap(), decompress = true) { progress(id, it) }
-        if (code >= 400 || !dest.isFile) throw IllegalStateException("Error $code al descargar")
-        // Google Drive con archivos grandes responde primero un aviso ("no se pudo analizar en busca de virus"): se sigue su formulario
-        driveConfirm(dest)?.let { next ->
-            val c2 = Net.download(next, dest, emptyMap(), decompress = true) { progress(id, it) }
-            if (c2 >= 400 || !dest.isFile) throw IllegalStateException("Error $c2 al descargar de Google Drive")
-        }
-    }
-    private fun driveConfirm(f: File): String? {
-        if (!f.isFile || f.length() > 600_000) return null
-        val h = try { f.readText() } catch (_: Exception) { return null }
-        if (!h.contains("download-form", true) && !h.contains("uc-download-link", true)) return null
-        val tag = Regex("<form[^>]*download-form[^>]*>", RegexOption.IGNORE_CASE).find(h)?.value ?: return null
-        val action = Regex("action=\"([^\"]+)\"").find(tag)?.groupValues?.get(1)?.replace("&amp;", "&") ?: return null
-        val q = Regex("<input[^>]*>", RegexOption.IGNORE_CASE).findAll(h).mapNotNull { m ->
-            val t = m.value
-            if (!t.contains("hidden", true)) return@mapNotNull null
-            val n = Regex("name=\"([^\"]+)\"").find(t)?.groupValues?.get(1) ?: return@mapNotNull null
-            val v = Regex("value=\"([^\"]*)\"").find(t)?.groupValues?.get(1)?.replace("&amp;", "&") ?: ""
-            n + "=" + java.net.URLEncoder.encode(v, "UTF-8")
-        }.joinToString("&")
-        return action + (if (action.contains("?")) "&" else "?") + q
+    private fun storeFetch(id: String, url: String, dest: File, allowHtml: Boolean = false) =
+        Fetch.get(url, dest, allowHtml = allowHtml) { progress(id, it) }
+    /** .rar (también RAR 5) o .7z, por su firma */
+    private fun arcKind(f: File): String? = try { f.inputStream().use { val b = ByteArray(6); val n = it.read(b)
+        when {
+            n >= 4 && b[0] == 'R'.code.toByte() && b[1] == 'a'.code.toByte() && b[2] == 'r'.code.toByte() && b[3] == '!'.code.toByte() -> "rar"
+            n >= 2 && b[0] == '7'.code.toByte() && b[1] == 'z'.code.toByte() -> "7z"
+            else -> null
+        } } } catch (_: Exception) { null }
+    /** Saca todo el .rar/.7z a la carpeta (Archives reconoce el formato por la extensión) */
+    private fun unarc(f: File, kind: String, out: File) {
+        val named = File(f.parentFile, f.nameWithoutExtension + "." + kind)
+        if (named != f) { named.delete(); f.renameTo(named) }
+        try {
+            val names = Archives.list(named.path).map { it.first }.filter { !it.contains("__MACOSX") && !it.contains("..") }
+            if (names.isEmpty()) throw IllegalStateException("El comprimido está vacío")
+            // Se respeta la estructura de carpetas: cada archivo a su subcarpeta
+            names.groupBy { it.substringBeforeLast('/', "") }.forEach { (dir, list) -> Archives.extract(named.path, list.toSet(), if (dir.isEmpty()) out else File(out, dir)) }
+        } finally { named.delete() }
     }
     private fun isZip(f: File) = try { f.inputStream().use { val b = ByteArray(2); it.read(b) == 2 && b[0] == 'P'.code.toByte() && b[1] == 'K'.code.toByte() } } catch (_: Exception) { false }
     private fun isHtml(f: File) = try { f.inputStream().use { val b = ByteArray(512); val n = it.read(b); n > 0 && String(b, 0, n).contains("<html", true) || String(b, 0, maxOf(n, 0)).contains("<!doctype", true) } } catch (_: Exception) { false }
@@ -142,12 +130,14 @@ class Bridge(private val a: MainActivity) {
                 when (kind) {
                     "web" -> {
                         val tmp = File(File(a.cacheDir, "store").apply { mkdirs() }, "$gid.part")
-                        storeFetch(id, url, tmp)
+                        storeFetch(id, url, tmp, allowHtml = true)
                         val out = gameFile("x/$gid") ?: throw IllegalArgumentException("ruta no válida")
                         out.deleteRecursively(); out.mkdirs()
+                        val ak = arcKind(tmp)
                         if (isZip(tmp)) Cores.unzip(tmp, out)
+                        else if (ak != null) unarc(tmp, ak, out)
                         else if (isHtml(tmp)) tmp.copyTo(File(out, "index.html"), true)
-                        else throw IllegalStateException("El enlace no trae un .zip con el juego ni una página .html (¿está compartido como público?)")
+                        else throw IllegalStateException("El enlace no trae un .zip, .rar o .7z con el juego ni una página .html")
                         tmp.delete()
                         // index.html en la raíz o dentro de una carpeta del .zip
                         val idx = out.walkTopDown().maxDepth(3).filter { it.isFile && it.name.equals("index.html", true) }.minByOrNull { it.path.length }
@@ -160,8 +150,15 @@ class Bridge(private val a: MainActivity) {
                         val dir = a.getExternalFilesDir("roms") ?: File(a.filesDir, "roms")
                         val dest = File(dir, name)
                         storeFetch(id, url, dest)
-                        if (dest.length() < 300_000 && isHtml(dest)) { dest.delete(); throw IllegalStateException("El enlace abre una página y no el juego (¿está compartido como público?)") }
-                        reply(id, true, JSONObject().put("path", dest.absolutePath).put("size", dest.length()))
+                        val ak = arcKind(dest)
+                        if (ak == null) { reply(id, true, JSONObject().put("path", dest.absolutePath).put("size", dest.length())); return@execute }
+                        // ROM en .rar/.7z (los emuladores no los leen): se saca a una carpeta con su nombre y se elige el archivo principal
+                        val out = File(dir, dest.nameWithoutExtension.ifBlank { gid }); out.deleteRecursively(); out.mkdirs()
+                        unarc(dest, ak, out)
+                        val files = out.walkTopDown().filter { it.isFile }.toList()
+                        val main = listOf("m3u", "cue", "chd", "pbp", "iso", "gdi", "cso").firstNotNullOfOrNull { e -> files.filter { it.extension.equals(e, true) }.minByOrNull { it.name } }
+                            ?: files.maxByOrNull { it.length() } ?: throw IllegalStateException("El comprimido no trae el juego")
+                        reply(id, true, JSONObject().put("path", main.absolutePath).put("size", files.sumOf { it.length() }))
                     }
                     "apk" -> {
                         if (!Updater.canInstall(a)) { a.runOnUiThread { Updater.askPermission(a) }; reply(id, false, "Permite que MiVibra instale apps y vuelve a tocar Descargar"); return@execute }
@@ -189,6 +186,25 @@ class Bridge(private val a: MainActivity) {
             } catch (_: Exception) {}
         }
     }
+
+    // ---------- Telegram (Cursos y Mi Telegram) ----------
+    private val tg = Executors.newFixedThreadPool(3)
+    private fun tgRun(id: String, f: () -> Any?) { tg.execute { try { reply(id, true, f()) } catch (e: Throwable) { reply(id, false, e.message ?: e.javaClass.simpleName) } } }
+    @JavascriptInterface fun tgState(): String = Tg.status().toString()
+    @JavascriptInterface fun tgStart(id: String, apiId: Int, apiHash: String) = tgRun(id) { Tg.start(a, apiId, apiHash) { p -> progress(id, p) } }
+    @JavascriptInterface fun tgPhone(id: String, phone: String) = tgRun(id) { Tg.phone(phone); true }
+    @JavascriptInterface fun tgCode(id: String, code: String) = tgRun(id) { Tg.code(code); true }
+    @JavascriptInterface fun tgPassword(id: String, pw: String) = tgRun(id) { Tg.password(pw); true }
+    @JavascriptInterface fun tgLogout(id: String) = tgRun(id) { Tg.logout(); true }
+    @JavascriptInterface fun tgChats(id: String) = tgRun(id) { Tg.chats() }
+    @JavascriptInterface fun tgChatFiles(id: String, chatId: String, from: String, limit: Int, kind: String, query: String) = tgRun(id) { Tg.chatFiles(chatId.toLong(), from.toLongOrNull() ?: 0L, limit, kind, query) }
+    @JavascriptInterface fun tgSearch(id: String, query: String, offset: String, kind: String) = tgRun(id) { Tg.search(query, offset, kind) }
+    @JavascriptInterface fun tgPublic(id: String, username: String) = tgRun(id) { Tg.publicChat(username) }
+    @JavascriptInterface fun tgHistory(id: String, chatId: String, max: Int) = tgRun(id) { Tg.history(chatId.toLong(), max) }
+    @JavascriptInterface fun tgThumb(id: String, fileId: Int) = tgRun(id) { Tg.thumb(fileId) }
+    @JavascriptInterface fun tgFetch(id: String, fileId: Int) = tgRun(id) { Tg.fetchFile(fileId) { p -> progress(id, p) } }
+    /** Dirección local para que el reproductor vea el video mientras baja. */
+    @JavascriptInterface fun tgStreamUrl(fileId: Int, name: String): String = try { Tg.Stream.url(fileId, name) } catch (_: Throwable) { "" }
 
     /** Espacio libre en la memoria de la app (MB). */
     @JavascriptInterface
