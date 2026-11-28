@@ -145,7 +145,7 @@
   };
 
   /** Qué botón del menú se ilumina: la Guía es parte de En vivo y YouTube, Música, Radio, Navegador y Juegos de Utilidades. */
-  var UTILS = [['youtube', 'YouTube', 'yt', 'Videos, tendencias y búsqueda'], ['music', 'Música', 'music', 'Tu música y música libre'], ['radio', 'Radio', 'radio', 'Emisoras de Colombia y el mundo'], ['browser', 'Navegador', 'globe', 'Con bloqueador de anuncios'], ['games', 'Juegos', 'games', 'Consolas clásicas y ports'], ['books', 'Lectura', 'book', 'Mangas, cómics, libros y revistas']];
+  var UTILS = [['youtube', 'YouTube', 'yt', 'Videos, tendencias y búsqueda'], ['music', 'Música', 'music', 'Tu música y música libre'], ['radio', 'Radio', 'radio', 'Emisoras de Colombia y el mundo'], ['browser', 'Navegador', 'globe', 'Con bloqueador de anuncios'], ['games', 'Juegos', 'games', 'Consolas clásicas y ports'], ['books', 'Lectura', 'book', 'Mangas, cómics, libros y revistas'], ['cursos', 'Cursos', 'play', 'Cursos en video, con tu avance'], ['telegram', 'Mi Telegram', 'chat', 'Películas y series de tus canales']];
   function navOwner(name) {
     if (name === 'guide') return 'live';
     if (name === 'adult') return MV.adultOk() ? 'adult' : 'utils';

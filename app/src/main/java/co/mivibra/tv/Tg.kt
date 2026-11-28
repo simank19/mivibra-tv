@@ -193,6 +193,12 @@ object Tg {
     }
 
     /** Todo el historial de un canal (para armar un curso), del más viejo al más nuevo. Máximo 3000 mensajes. */
+    /** Un mensaje (lección de un curso) con su archivo; null si ya no está */
+    fun message(chatId: Long, msgId: Long): JSONObject? {
+        val m = try { call(TdApi.GetMessage(chatId, msgId), 30) as TdApi.Message } catch (_: Exception) { return null }
+        return item(m)
+    }
+
     fun history(chatId: Long, max: Int): JSONArray {
         try { call(TdApi.OpenChat(chatId), 15) } catch (_: Exception) {}
         val all = ArrayList<TdApi.Message>(); var from = 0L; var empty = 0

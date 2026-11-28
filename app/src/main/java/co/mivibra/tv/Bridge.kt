@@ -201,6 +201,7 @@ class Bridge(private val a: MainActivity) {
     @JavascriptInterface fun tgSearch(id: String, query: String, offset: String, kind: String) = tgRun(id) { Tg.search(query, offset, kind) }
     @JavascriptInterface fun tgPublic(id: String, username: String) = tgRun(id) { Tg.publicChat(username) }
     @JavascriptInterface fun tgHistory(id: String, chatId: String, max: Int) = tgRun(id) { Tg.history(chatId.toLong(), max) }
+    @JavascriptInterface fun tgMessage(id: String, chatId: String, msgId: String) = tgRun(id) { Tg.message(chatId.toLong(), msgId.toLong()) ?: JSONObject() }
     @JavascriptInterface fun tgThumb(id: String, fileId: Int) = tgRun(id) { Tg.thumb(fileId) }
     @JavascriptInterface fun tgFetch(id: String, fileId: Int) = tgRun(id) { Tg.fetchFile(fileId) { p -> progress(id, p) } }
     /** Dirección local para que el reproductor vea el video mientras baja. */
