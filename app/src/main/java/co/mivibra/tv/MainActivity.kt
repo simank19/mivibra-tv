@@ -51,7 +51,7 @@ class MainActivity : ComponentActivity() {
     private fun nativeExit() {
         if (android.os.Build.VERSION.SDK_INT < 30) return
         val am = getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager
-        val e = am.getHistoricalProcessExitReasons(packageName, 0, 1).firstOrNull() ?: return
+        val e = am.getHistoricalProcessExitReasons(packageName, 0, 5).firstOrNull { it.processName == packageName } ?: return
         val sp = getSharedPreferences("mv", MODE_PRIVATE)
         if (e.timestamp <= sp.getLong("exitSeen", 0L)) return
         sp.edit().putLong("exitSeen", e.timestamp).apply()

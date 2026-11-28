@@ -190,22 +190,25 @@ class Bridge(private val a: MainActivity) {
     // ---------- Telegram (Cursos y Mi Telegram) ----------
     private val tg = Executors.newFixedThreadPool(3)
     private fun tgRun(id: String, f: () -> Any?) { tg.execute { try { reply(id, true, f()) } catch (e: Throwable) { reply(id, false, e.message ?: e.javaClass.simpleName) } } }
-    @JavascriptInterface fun tgState(): String = try { Tg.status().toString() } catch (e: Throwable) { JSONObject().put("state", "error").put("info", JSONObject().put("message", e.message ?: "Telegram no está disponible")).toString() }
-    @JavascriptInterface fun tgStart(id: String, apiId: Int, apiHash: String) = tgRun(id) { Tg.start(a, apiId, apiHash) { p -> progress(id, p) } }
-    @JavascriptInterface fun tgPhone(id: String, phone: String) = tgRun(id) { Tg.phone(phone); true }
-    @JavascriptInterface fun tgCode(id: String, code: String) = tgRun(id) { Tg.code(code); true }
-    @JavascriptInterface fun tgPassword(id: String, pw: String) = tgRun(id) { Tg.password(pw); true }
-    @JavascriptInterface fun tgLogout(id: String) = tgRun(id) { Tg.logout(); true }
-    @JavascriptInterface fun tgChats(id: String) = tgRun(id) { Tg.chats() }
-    @JavascriptInterface fun tgChatFiles(id: String, chatId: String, from: String, limit: Int, kind: String, query: String) = tgRun(id) { Tg.chatFiles(chatId.toLong(), from.toLongOrNull() ?: 0L, limit, kind, query) }
-    @JavascriptInterface fun tgSearch(id: String, query: String, offset: String, kind: String) = tgRun(id) { Tg.search(query, offset, kind) }
-    @JavascriptInterface fun tgPublic(id: String, username: String) = tgRun(id) { Tg.publicChat(username) }
-    @JavascriptInterface fun tgHistory(id: String, chatId: String, max: Int) = tgRun(id) { Tg.history(chatId.toLong(), max) }
-    @JavascriptInterface fun tgMessage(id: String, chatId: String, msgId: String) = tgRun(id) { Tg.message(chatId.toLong(), msgId.toLong()) ?: JSONObject() }
-    @JavascriptInterface fun tgThumb(id: String, fileId: Int) = tgRun(id) { Tg.thumb(fileId) }
-    @JavascriptInterface fun tgFetch(id: String, fileId: Int) = tgRun(id) { Tg.fetchFile(fileId) { p -> progress(id, p) } }
-    /** Dirección local para que el reproductor vea el video mientras baja. */
-    @JavascriptInterface fun tgStreamUrl(fileId: Int, name: String): String = try { Tg.Stream.url(fileId, name) } catch (_: Throwable) { "" }
+    // Telegram corre en otro proceso (TgService): si su librería nativa falla, la app no se cierra
+    private fun tgc(id: String, m: String, vararg args: Any?, tick: Boolean = false) = tgRun(id) {
+        TgClient.call(a, m, JSONArray().apply { args.forEach { put(it) } }, tick = if (tick) ({ p: Int -> progress(id, p) }) else ({ _: Int -> }))
+    }
+    @JavascriptInterface fun tgState(): String = try { TgClient.state(a).toString() } catch (e: Throwable) { JSONObject().put("state", "error").put("info", JSONObject().put("message", e.message ?: "Telegram no está disponible")).toString() }
+    @JavascriptInterface fun tgStart(id: String, apiId: Int, apiHash: String) = tgc(id, "start", apiId, apiHash, tick = true)
+    @JavascriptInterface fun tgPhone(id: String, phone: String) = tgc(id, "phone", phone)
+    @JavascriptInterface fun tgCode(id: String, code: String) = tgc(id, "code", code)
+    @JavascriptInterface fun tgPassword(id: String, pw: String) = tgc(id, "password", pw)
+    @JavascriptInterface fun tgLogout(id: String) = tgc(id, "logout")
+    @JavascriptInterface fun tgChats(id: String) = tgc(id, "chats")
+    @JavascriptInterface fun tgChatFiles(id: String, chatId: String, from: String, limit: Int, kind: String, query: String) = tgc(id, "chatFiles", chatId, from, limit, kind, query)
+    @JavascriptInterface fun tgSearch(id: String, query: String, offset: String, kind: String) = tgc(id, "search", query, offset, kind)
+    @JavascriptInterface fun tgPublic(id: String, username: String) = tgc(id, "public", username)
+    @JavascriptInterface fun tgHistory(id: String, chatId: String, max: Int) = tgc(id, "history", chatId, max)
+    @JavascriptInterface fun tgMessage(id: String, chatId: String, msgId: String) = tgc(id, "message", chatId, msgId)
+    @JavascriptInterface fun tgThumb(id: String, fileId: Int) = tgc(id, "thumb", fileId)
+    @JavascriptInterface fun tgFetch(id: String, fileId: Int) = tgc(id, "fetch", fileId, tick = true)
+    @JavascriptInterface fun tgStreamUrl(fileId: Int, name: String): String = try { TgClient.call(a, "streamUrl", JSONArray().put(fileId).put(name), timeoutS = 10) as? String ?: "" } catch (_: Throwable) { "" }
 
     /** Espacio libre en la memoria de la app (MB). */
     @JavascriptInterface

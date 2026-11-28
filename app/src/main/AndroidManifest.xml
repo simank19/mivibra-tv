@@ -200,5 +200,7 @@
                 android:resource="@xml/file_paths" />
         </provider>
         <receiver android:name=".ReminderReceiver" android:exported="false" />
+        <!-- Telegram (TDLib) en su propio proceso: si falla, la app sigue abierta -->
+        <service android:name=".TgService" android:process=":tg" android:exported="false" />
     </application>
 </manifest>
