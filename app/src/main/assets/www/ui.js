@@ -20,7 +20,21 @@
     applySeason();
   };
   /** Tema de la celebración del día (Halloween, Amor y Amistad, Navidad…): colores y adornos. Se puede apagar en Ajustes › Temas. */
-  MV.season = function () { return P.autoTheme === false ? null : D.seasonFor(new Date()); };
+  // Con cuenta MiVibra el superadministrador decide el tema para todos (Ajustes › Apariencia): apagado, automático por fecha o uno fijo.
+  // Cada usuario puede ocultarlo en su equipo.
+  function seasonSet() {
+    if (!(MV.acct && MV.acct.managed && MV.acct.managed())) return { id: 'auto' };
+    var c = MV.acct.config; if (c) return c.season || { id: 'off' };
+    return MV.load('seasonAll', null) || { id: 'off' };
+  }
+  MV.season = function () {
+    if (P.autoTheme === false) return null;
+    var st = seasonSet();
+    if (st.id === 'off') return null;
+    if (st.id === 'auto') return D.seasonFor(new Date());
+    return D.SEASONS.filter(function (x) { return x.id === st.id; })[0] || null;
+  };
+  if (MV.on) MV.on('acct', function () { var c = MV.acct && MV.acct.config; if (c && c.season) MV.save('seasonAll', c.season); MV.applyLook(); });
   var VARS = ['--accent', '--accent-soft', '--accent-text', '--base', '--glow', '--glow2'];
   function hexA(hex, a) { var n = parseInt(hex.slice(1), 16); return 'rgba(' + (n >> 16 & 255) + ',' + (n >> 8 & 255) + ',' + (n & 255) + ',' + a + ')'; }
   function applySeason() {
@@ -801,9 +815,12 @@
     }
     var c0 = cont.find(function (c) { return c.dur > 0; }), it0 = c0 && MV.resolve(c0);
     // fotos al lado de deportes y la hora (estos dos más pequeños, uno encima del otro)
-    var phT = MV.photoTile && !MV.isKids() ? MV.photoTile() : '';
-    out += '<div class="vside"><div class="vtiles' + (phT ? ' wph' : '') + '">' + phT + (phT ? '<div class="vstack">' : '') + (MV.sportsMini ? MV.sportsMini() : '') + clockTile() + (phT ? '</div>' : '') + '</div>';
-    if (it0) {
+    var hw = hwGet();
+    var phT = hw.side.fotos && MV.photoTile && !MV.isKids() ? MV.photoTile() : '';
+    var spT = hw.side.deportes && MV.sportsMini ? MV.sportsMini() : '', ckT = hw.side.hora ? clockTile() : '';
+    out += '<div class="vside">' + (phT || spT || ckT ? '<div class="vtiles' + (phT ? ' wph' : '') + '">' + phT + (phT ? '<div class="vstack">' : '') + spT + ckT + (phT ? '</div>' : '') + '</div>' : '');
+    if (!hw.side.continuar) {}
+    else if (it0) {
       reg(it0);
       var pct = Math.max(0, Math.min(1, c0.pos / c0.dur)), left = Math.max(0, Math.round((c0.dur - c0.pos) / 60));
       // Portada del contenido: de fondo (difuminada) y en miniatura junto al título
@@ -819,29 +836,36 @@
         '<button class="vall f" data-act="nav" data-arg="movies">' + IC.movie + 'Elegir una película</button></section>';
     }
     out += homeWidgets() + '</div></div>';
-    out += '<div class="vchips chips" role="tablist" aria-label="Categorías">' + HCHIPS.map(function (c) {
-      return '<button class="chip f' + (homeChip === c[0] ? ' on' : '') + '" role="tab" aria-selected="' + (homeChip === c[0]) + '" data-act="homeChip" data-arg="' + c[0] + '" data-fid="hc-' + c[0] + '">' + c[1] + '</button>';
-    }).join('') + '<button class="chip f" data-act="nav" data-arg="utils">' + IC.grid + 'Todas las secciones</button></div>';
-    var ci = chipItems(homeChip, movies, series, anime, kd);
-    var cname = HCHIPS.find(function (c) { return c[0] === homeChip; });
-    out += ci.length ? row(homeChip === 'all' ? 'Sugerido para ti' : cname[1], ci.slice(0, 30), 'poster', '', homeChip === 'all' ? '' : homeChip) :
-      '<p class="muted" style="margin:4px 4px 22px">Todavía no hay ' + esc(cname[1].toLowerCase()) + ' en tus listas.</p>';
-    out += row('En vivo', coFirst(live).slice(0, 30), 'ch', live.length + ' canales', 'live');
-    out += row('Continuar viendo', cont.map(function (c) { return MV.resolve(c); }), 'wide');
-    // Lo que estás leyendo va en su propio carrusel (antes era un recuadro chico arriba)
-    var rd = (MV.readRecent ? MV.readRecent() : []).map(function (r) { return (S.bookByKey && S.bookByKey[r.key]) || (r.path ? { key: r.key, name: r.name, path: r.path, kind: r.kind, type: 'book', group: 'De tu equipo' } : null); })
-      .filter(function (b) { return b && bookPctOf(b) < 99 && !isRead(b); }).slice(0, 20);
-    if (rd.length && !MV.isKids()) out += '<section class="row"><h3>Seguir leyendo <small>' + rd.length + '</small></h3><div class="strip">' + rd.map(function (b) { return bookCard(b).replace('data-act="bookInfo"', 'data-act="openBook"'); }).join('') +
-      '<button class="btn ghost sm f" style="align-self:center;flex:0 0 auto" data-act="nav" data-arg="books">Toda la biblioteca</button></div></section>';
-    out += row('Favoritos', favs.slice(0, 30));
-    if (saved.length) out += row('Mi lista', saved.slice(0, 30));
-    var trendHave = (DISC.rows.trend || []).filter(function (t) { return t.have; });
-    if (trendHave.length) out += row('Tendencia esta semana', trendHave.slice(0, 20), 'poster', 'Lo más visto en el mundo que ya tienes', 'discover');
-    var pls = platformCounts();
-    out += platRow(pls);
-    var bks = visibleBooks();
-    if (bks.length) out += '<section class="row"><h3>Mangas y libros <small>' + bks.length + ' para leer</small></h3><div class="strip">' + bks.slice(0, 24).map(bookCard).join('') +
-      '<button class="btn ghost sm f" style="align-self:center;flex:0 0 auto" data-act="nav" data-arg="books">Ver todo</button></div></section>';
+    // Filas del Inicio en el orden y con las que elegiste en «Personalizar el Inicio»
+    var ROWS = {
+      suggest: function () {
+        var o = '<div class="vchips chips" role="tablist" aria-label="Categorías">' + HCHIPS.map(function (c) {
+          return '<button class="chip f' + (homeChip === c[0] ? ' on' : '') + '" role="tab" aria-selected="' + (homeChip === c[0]) + '" data-act="homeChip" data-arg="' + c[0] + '" data-fid="hc-' + c[0] + '">' + c[1] + '</button>';
+        }).join('') + '<button class="chip f" data-act="nav" data-arg="utils">' + IC.grid + 'Todas las secciones</button></div>';
+        var ci = chipItems(homeChip, movies, series, anime, kd);
+        var cname = HCHIPS.find(function (c) { return c[0] === homeChip; });
+        return o + (ci.length ? row(homeChip === 'all' ? 'Sugerido para ti' : cname[1], ci.slice(0, 30), 'poster', '', homeChip === 'all' ? '' : homeChip) :
+          '<p class="muted" style="margin:4px 4px 22px">Todavía no hay ' + esc(cname[1].toLowerCase()) + ' en tus listas.</p>');
+      },
+      live: function () { return row('En vivo', coFirst(live).slice(0, 30), 'ch', live.length + ' canales', 'live'); },
+      cont: function () { return row('Continuar viendo', cont.map(function (c) { return MV.resolve(c); }), 'wide'); },
+      reading: function () {
+        var rd = (MV.readRecent ? MV.readRecent() : []).map(function (r) { return (S.bookByKey && S.bookByKey[r.key]) || (r.path ? { key: r.key, name: r.name, path: r.path, kind: r.kind, type: 'book', group: 'De tu equipo' } : null); })
+          .filter(function (b) { return b && bookPctOf(b) < 99 && !isRead(b); }).slice(0, 20);
+        return rd.length && !MV.isKids() ? '<section class="row"><h3>Seguir leyendo <small>' + rd.length + '</small></h3><div class="strip">' + rd.map(function (b) { return bookCard(b).replace('data-act="bookInfo"', 'data-act="openBook"'); }).join('') +
+          '<button class="btn ghost sm f" style="align-self:center;flex:0 0 auto" data-act="nav" data-arg="books">Toda la biblioteca</button></div></section>' : '';
+      },
+      favs: function () { return row('Favoritos', favs.slice(0, 30)); },
+      mylist: function () { return saved.length ? row('Mi lista', saved.slice(0, 30)) : ''; },
+      trend: function () { var th = (DISC.rows.trend || []).filter(function (t) { return t.have; }); return th.length ? row('Tendencia esta semana', th.slice(0, 20), 'poster', 'Lo más visto en el mundo que ya tienes', 'discover') : ''; },
+      platforms: function () { return platRow(platformCounts()); },
+      books: function () {
+        var bks = visibleBooks();
+        return bks.length ? '<section class="row"><h3>Mangas y libros <small>' + bks.length + ' para leer</small></h3><div class="strip">' + bks.slice(0, 24).map(bookCard).join('') +
+          '<button class="btn ghost sm f" style="align-self:center;flex:0 0 auto" data-act="nav" data-arg="books">Ver todo</button></div></section>' : '';
+      }
+    };
+    hw.rows.forEach(function (r) { if (r.on && ROWS[r.id]) out += ROWS[r.id](); });
     return out;
   }
 
@@ -882,18 +906,127 @@
   function headMode() { var h = document.getElementById('hdrNow'); document.body.classList.toggle('np-inhead', !!(h && !h.hidden && window.innerWidth > 760)); }
   window.addEventListener('resize', headMode);
   MV.headMode = headMode;
+  // ---------- Personalizar el Inicio: widgets (mostrar, orden, tamaño, nuevos) y filas ----------
+  var HWI = {
+    edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>',
+    cal: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
+    quote: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h4v4c0 3-2 5-4 6M15 7h4v4c0 3-2 5-4 6"/></svg>',
+    timer: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/></svg>',
+    bag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8h14l-1 12H6z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>',
+    photo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg>',
+    run: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="14" cy="4" r="2"/><path d="M6 21l3-6 3 2 1 4M8 11l3-4 4 2 2 3h3M11 7l-1 6"/></svg>'
+  };
+  // Widgets que se pueden agregar
+  var HW_ALL = {
+    browser: ['Navegador', 'Google, YouTube y más'], books: ['Lectura', 'Lo que estás leyendo'], music: ['Música y radio', 'Lo que suena'], support: ['Soporte', 'Actualizar y optimizar'],
+    calendar: ['Calendario', 'El mes y la fecha de hoy'], quote: ['Frase del día', 'Un refrán distinto cada día'], countdown: ['Cuenta regresiva', 'Días para una fecha especial'],
+    games: ['Juegos', 'Consolas y juegos'], tienda: ['Tienda de juegos', 'Juegos gratis'], libreria: ['Librería', 'Libros gratis'], movimiento: ['MiVibra Movimiento', 'Juega con tu cuerpo'],
+    photos: ['Fotos', 'Tus álbumes'], radio: ['Radio', 'Emisoras'], youtube: ['YouTube', 'Videos y tendencias']
+  };
+  var HW_ROWS = { suggest: 'Sugerido para ti', live: 'En vivo', cont: 'Continuar viendo', reading: 'Seguir leyendo', favs: 'Favoritos', mylist: 'Mi lista', trend: 'Tendencia esta semana', platforms: 'Plataformas', books: 'Mangas y libros' };
+  var HW_SIDE = { fotos: 'Marco de fotos', deportes: 'Deportes', hora: 'Hora y clima', continuar: 'Continuar viendo (recuadro)' };
+  function hwDefault() {
+    var y = new Date().getFullYear(), xm = new Date(y, 11, 24) < new Date() ? y + 1 : y;
+    return { side: { fotos: true, deportes: true, hora: true, continuar: true }, tiles: ['browser', 'books', 'music', 'support'].map(function (id) { return { id: id, size: 's' }; }),
+      rows: Object.keys(HW_ROWS).map(function (id) { return { id: id, on: true }; }), countdown: { t: 'Navidad', d: xm + '-12-24' } };
+  }
+  function hwGet() {
+    var h = MV.load('homeW', null), d = hwDefault(); if (!h) return d;
+    h.side = Object.assign({}, d.side, h.side || {}); h.tiles = (h.tiles || d.tiles).filter(function (t) { return HW_ALL[t.id]; }); h.countdown = h.countdown || d.countdown;
+    var have = {}; h.rows = (h.rows || []).filter(function (r) { if (!HW_ROWS[r.id] || have[r.id]) return false; have[r.id] = 1; return true; });
+    d.rows.forEach(function (r) { if (!have[r.id]) h.rows.push(r); });   // filas nuevas de futuras versiones
+    return h;
+  }
+  function hwSave(h) { MV.save('homeW', h); }
+  var QUOTES = ['Al que madruga, Dios lo ayuda.', 'Poco a poco se va lejos.', 'No hay mal que por bien no venga.', 'El que persevera alcanza.', 'Más vale tarde que nunca.', 'Camarón que se duerme se lo lleva la corriente.',
+    'A mal tiempo, buena cara.', 'Querer es poder.', 'El saber no ocupa lugar.', 'De tal palo, tal astilla.', 'Haz bien y no mires a quién.', 'La unión hace la fuerza.', 'Más vale prevenir que lamentar.',
+    'Paso a paso se llega lejos.', 'Dime con quién andas y te diré quién eres.', 'Agua que no has de beber, déjala correr.', 'El tiempo es oro.', 'Gota a gota se llena el vaso.', 'En la variedad está el gusto.',
+    'Hoy por ti, mañana por mí.', 'No dejes para mañana lo que puedas hacer hoy.', 'Cada día trae su afán.', 'Donde hay alegría, hay vida.', 'Las cosas claras y el chocolate espeso.', 'El que no arriesga no gana.',
+    'Cría fama y échate a dormir.', 'Lo bueno se hace esperar.', 'Con paciencia se gana el cielo.', 'Hablando se entiende la gente.', 'Una sonrisa abre muchas puertas.'];
+  function hwTile(t) {
+    var sz = t.size || 's', cls = 'wgc f wg-' + sz, d = new Date(), title, sub, icon, act = 'hwOpen', arg = t.id, big = '';
+    if (t.id === 'calendar') {
+      icon = HWI.cal; title = cap(d.toLocaleDateString('es-CO', { weekday: 'long' })); sub = d.toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
+      if (sz !== 's') {
+        var f = new Date(d.getFullYear(), d.getMonth(), 1), off = (f.getDay() + 6) % 7, n = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate(), cells = '';
+        ['L', 'M', 'M', 'J', 'V', 'S', 'D'].forEach(function (x) { cells += '<i class="h">' + x + '</i>'; });
+        for (var k = 0; k < off; k++) cells += '<i></i>';
+        for (var q = 1; q <= n; q++) cells += '<i' + (q === d.getDate() ? ' class="on"' : '') + '>' + q + '</i>';
+        big = '<span class="wgcal">' + cells + '</span>';
+      }
+      act = 'hwNoop';
+    } else if (t.id === 'quote') {
+      var day = Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 864e5); icon = HWI.quote; title = 'Frase del día'; sub = QUOTES[day % QUOTES.length]; act = 'hwNoop';
+    } else if (t.id === 'countdown') {
+      var c = hwGet().countdown, to = new Date(c.d + 'T00:00:00'), left = Math.ceil((to - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 864e5);
+      icon = HWI.timer; title = left > 0 ? (left === 1 ? 'Falta 1 día' : 'Faltan ' + left + ' días') : left === 0 ? '¡Es hoy!' : 'Ya pasó'; sub = 'para ' + (c.t || 'la fecha'); act = 'homeEdit';
+    } else {
+      var m = { games: [IC.games, 'consoleOpen', ''], tienda: [HWI.bag, 'hwOpen', 'tienda'], libreria: [IC.book, 'hwOpen', 'libreria'], movimiento: [HWI.run, 'hwOpen', 'movimiento'], photos: [HWI.photo, 'hwOpen', 'photos'], radio: [IC.radio, 'nav', 'radio'], youtube: [IC.yt, 'nav', 'youtube'] }[t.id] || [IC.grid, 'hwNoop', ''];
+      icon = m[0]; act = m[1]; arg = m[2]; title = HW_ALL[t.id][0]; sub = HW_ALL[t.id][1];
+    }
+    return '<button class="' + cls + (big ? ' wg-big' : '') + '" data-act="' + act + '"' + (arg ? ' data-arg="' + esc(arg) + '"' : '') + '><span class="wgi">' + icon + '</span><span class="tx"><b>' + esc(title) + '</b><small>' + esc(sub) + '</small></span>' + big + '</button>';
+  }
+  function hwEditor() {
+    var h = hwGet(), tog = function (on, act, arg) { return '<button class="toggle f' + (on ? ' on' : '') + '" data-act="' + act + '" data-arg="' + arg + '" aria-label="Mostrar u ocultar"></button>'; };
+    var mv = function (kind, i, n) { return '<button class="hwb f" data-act="hwMove" data-arg="' + kind + ':' + i + ':-1"' + (i ? '' : ' disabled') + ' aria-label="Subir">▲</button><button class="hwb f" data-act="hwMove" data-arg="' + kind + ':' + i + ':1"' + (i < n - 1 ? '' : ' disabled') + ' aria-label="Bajar">▼</button>'; };
+    var avail = Object.keys(HW_ALL).filter(function (id) { return !h.tiles.some(function (t) { return t.id === id; }); });
+    return '<h2>Personalizar el Inicio</h2><p class="muted">Elige qué ver, en qué orden y de qué tamaño. Se guarda en este equipo.</p>' +
+      '<h4 class="hwh">Widgets</h4>' + h.tiles.map(function (t, i) {
+        return '<div class="hwrow"><b>' + esc(HW_ALL[t.id][0]) + '</b><span class="chips hwsz">' + [['s', 'Pequeño'], ['m', 'Mediano'], ['l', 'Grande']].map(function (z) { return '<button class="chip f' + ((t.size || 's') === z[0] ? ' on' : '') + '" data-act="hwSize" data-arg="' + i + ':' + z[0] + '">' + z[1] + '</button>'; }).join('') + '</span>' +
+          mv('tiles', i, h.tiles.length) + '<button class="hwb f" data-act="hwDel" data-arg="' + i + '" aria-label="Quitar">✕</button></div>';
+      }).join('') +
+      (avail.length ? '<h4 class="hwh">Agregar widget</h4><div class="chips">' + avail.map(function (id) { return '<button class="chip f" data-act="hwAdd" data-arg="' + id + '">+ ' + esc(HW_ALL[id][0]) + '</button>'; }).join('') + '</div>' : '') +
+      (h.tiles.some(function (t) { return t.id === 'countdown'; }) ? '<h4 class="hwh">Cuenta regresiva</h4><div class="hwrow"><input class="in f" id="hwCdT" value="' + esc(h.countdown.t) + '" placeholder="Ej: Navidad, mi cumpleaños"><input class="in f" id="hwCdD" type="date" value="' + esc(h.countdown.d) + '"><button class="btn sm f" data-act="hwCd">Guardar</button></div>' : '') +
+      '<h4 class="hwh">Recuadros de arriba</h4>' + Object.keys(HW_SIDE).map(function (k) { return '<div class="hwrow"><b>' + HW_SIDE[k] + '</b>' + tog(h.side[k], 'hwSide', k) + '</div>'; }).join('') +
+      '<h4 class="hwh">Filas</h4>' + h.rows.map(function (r, i) { return '<div class="hwrow"><b>' + esc(HW_ROWS[r.id]) + '</b>' + mv('rows', i, h.rows.length) + tog(r.on, 'hwRow', i) + '</div>'; }).join('') +
+      '<div class="btns" style="margin-top:16px"><button class="btn f" data-act="hwDone">Listo</button><button class="btn ghost f" data-act="hwReset">Como venía</button></div>';
+  }
+  function hwRedraw(focus) {
+    var d = document.querySelector('#modal .dialog') || document.querySelector('.dialog'); if (!d) return;
+    var y = d.scrollTop; d.innerHTML = hwEditor(); d.scrollTop = y;
+    var el = focus && d.querySelector('[data-act="' + focus[0] + '"][data-arg="' + focus[1] + '"]'); if (el && !el.disabled) el.focus({ preventScroll: true }); else { var f = d.querySelector('.f'); if (f) f.focus({ preventScroll: true }); }
+  }
+  function hwChange(fn, focus) { var h = hwGet(); fn(h); hwSave(h); hwRedraw(focus); }
+  var HW_ACT = ({
+    homeEdit: function () { MV.modal(hwEditor(), { onOpen: function (d) { d.style.maxWidth = '780px'; d.style.width = 'min(780px, 94vw)'; }, onClose: function () { if (view.name === 'home') MV.rerender(); } }); },
+    hwDone: function () { MV.closeModal(); },
+    hwNoop: function () {},
+    hwOpen: function (v) { if (VIEWS[v] || (MV.VIEWS && MV.VIEWS[v])) MV.go(v); },
+    hwSize: function (a) { var p = a.split(':'); hwChange(function (h) { h.tiles[+p[0]].size = p[1]; }, ['hwSize', a]); },
+    hwDel: function (i) { hwChange(function (h) { h.tiles.splice(+i, 1); }); },
+    hwAdd: function (id) { hwChange(function (h) { h.tiles.push({ id: id, size: id === 'calendar' || id === 'quote' ? 'm' : 's' }); }); },
+    hwMove: function (a) { var p = a.split(':'), k = p[0], i = +p[1], d = +p[2]; hwChange(function (h) { var L = h[k], j = i + d; if (j < 0 || j >= L.length) return; var t = L[i]; L[i] = L[j]; L[j] = t; }, ['hwMove', k + ':' + (i + d) + ':' + d]); },
+    hwSide: function (k) { hwChange(function (h) { h.side[k] = !h.side[k]; }, ['hwSide', k]); },
+    hwRow: function (i) { hwChange(function (h) { h.rows[+i].on = !h.rows[+i].on; }, ['hwRow', i]); },
+    hwCd: function () { var t = document.getElementById('hwCdT'), d = document.getElementById('hwCdD'); hwChange(function (h) { h.countdown = { t: (t && t.value.trim()) || 'la fecha', d: (d && d.value) || h.countdown.d }; }); MV.toast('Cuenta regresiva guardada', 2000); },
+    hwReset: function () { MV.save('homeW', null); hwRedraw(); MV.toast('El Inicio quedó como venía', 2000); }
+  });
+  (function () {
+    var st = document.createElement('style');
+    st.textContent = '.wgc.wg-m{grid-column:span 2}.wgc.wg-l{grid-column:1/-1;height:auto;min-height:86px;padding:12px 14px}.wgc.wg-l b{font-size:17px}.wgc.wg-m small,.wgc.wg-l small{white-space:normal}' +
+      '.wgc.wg-big{flex-wrap:wrap;height:auto;padding:12px}.wgcal{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;width:100%;margin-top:8px;font-size:12px;text-align:center}.wgcal i{font-style:normal;padding:3px 0;border-radius:8px;opacity:.85}.wgcal i.h{opacity:.55;font-weight:700}.wgcal i.on{background:var(--accent);color:var(--on-accent,#000);opacity:1;font-weight:800}' +
+      '.wg-edit{opacity:.8}.hwh{margin:16px 0 6px;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-text,var(--accent))}' +
+      '.hwrow{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:14px;background:var(--glass);border:1px solid var(--line);margin-bottom:6px;flex-wrap:wrap}.hwrow>b{flex:1;min-width:120px;font-size:15px}.hwrow .in{flex:1;min-width:140px}' +
+      '.hwsz{margin:0}.hwsz .chip{padding:4px 10px;font-size:12px}.hwb{width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:var(--glass);color:var(--text)}.hwb[disabled]{opacity:.3}';
+    document.head.appendChild(st);
+  })();
   function homeWidgets() {
     if (MV.isKids()) return '';
     var rr = MV.readRecent ? MV.readRecent() : [], last = rr[0], lb = last && ((S.bookByKey && S.bookByKey[last.key]) || last);
     if (lb) MV.reg[lb.key] = lb;
     var upd = MV.pendingUpdate, diag = A && A.openDiag && !(MV.device && MV.device.webtv);
-    return '<div class="wgrid">' +
-      wgTile('', IC.globe, 'Navegador', 'Google, YouTube y más', 'nav', 'browser') +
-      wgTile('', IC.book, 'Lectura', lb ? 'Leyendo: ' + (lb.name || '') : 'Mangas, cómics y libros', 'nav', 'books') +
-      musicWidget() +
-      (upd ? wgTile('', IC.download, 'Actualizar', 'Versión ' + upd.version + ' lista', 'showUpdate') :
-        diag ? wgTile('', IC.refresh, 'Soporte', MV.device && MV.device.desktop ? 'Soporte MiVibra PC' : 'Optimizar el equipo', 'openDiag') : wgTile('', IC.download, 'Soporte', 'Buscar actualizaciones', 'showUpdate')) +
-      '</div>';
+    var hw = hwGet();
+    return '<div class="wgrid">' + hw.tiles.map(function (t) {
+      var sz = ' wg-' + (t.size || 's'), x = function (h) { return h.replace('class="wgc f"', 'class="wgc f' + sz + '"'); };
+      switch (t.id) {
+        case 'browser': return x(wgTile('', IC.globe, 'Navegador', 'Google, YouTube y más', 'nav', 'browser'));
+        case 'books': return x(wgTile('', IC.book, 'Lectura', lb ? 'Leyendo: ' + (lb.name || '') : 'Mangas, cómics y libros', 'nav', 'books'));
+        case 'music': return x(musicWidget());
+        case 'support': return x(upd ? wgTile('', IC.download, 'Actualizar', 'Versión ' + upd.version + ' lista', 'showUpdate') :
+          diag ? wgTile('', IC.refresh, 'Soporte', MV.device && MV.device.desktop ? 'Soporte MiVibra PC' : 'Optimizar el equipo', 'openDiag') : wgTile('', IC.download, 'Soporte', 'Buscar actualizaciones', 'showUpdate'));
+        default: return hwTile(t);
+      }
+    }).join('') + '<button class="wgc f wg-s wg-edit" data-act="homeEdit"><span class="wgi">' + HWI.edit + '</span><span class="tx"><b>Personalizar</b><small>Widgets del Inicio</small></span></button></div>';
   }
   // Píldora que se desliza: la orilla de adelante sale primero y la de atrás la alcanza
   var pillLast = {};
@@ -2746,15 +2879,17 @@
     }).join('') + '<div class="btns" style="margin-top:12px"><button class="btn f" data-act="go" data-arg="profileEdit">' + IC.plus + 'Nuevo perfil</button></div></div>';
   };
   SETTINGS.look = function () {
-    var ss = D.seasonFor(new Date());
+    var ss = MV.season();
     var im = P.introMode || 'daily';
     return '<div class="panel glass"><h2>Intro de bienvenida</h2><p class="muted">La animación con el logo, las secciones y las consolas al abrir la app. Se salta con OK.</p>' +
       '<div class="chips">' + [['always', 'Siempre'], ['daily', 'Una vez al día'], ['never', 'Nunca']].map(function (o) { return '<button class="chip f' + (im === o[0] ? ' on' : '') + '" data-act="introMode" data-arg="' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div>' +
       '<div class="line"><div class="t"><b>Sonido de la intro</b><span>Banda sonora sintetizada</span></div><button class="toggle f' + (P.introSound !== false ? ' on' : '') + '" data-act="introSound"></button></div>' +
       '<div class="btns"><button class="btn sm f" data-act="introNow">Ver la intro ahora</button></div></div>' +
       '<div class="panel glass"><h2>Tutorial</h2><div class="line"><div class="t"><b>Volver a ver el tutorial</b><span>Explica de nuevo cada botón la próxima vez que entres a cada sección</span></div><button class="btn sm f" data-act="tourAgain">Ver de nuevo</button></div></div>' +
+      (MV.acct.isAdmin() ? '<div class="panel glass"><h2>Tema de temporada para todos</h2><p class="muted">Lo ven todos tus usuarios en el TV, el celular y el PC. Solo tú lo cambias.</p><div class="chips">' +
+        [['off', 'Apagado'], ['auto', 'Automático por fecha']].concat(D.SEASONS.map(function (x) { return [x.id, x.deco[0] + ' ' + x.name]; })).map(function (o) { return '<button class="chip f' + (seasonSet().id === o[0] ? ' on' : '') + '" data-act="seasonAll" data-arg="' + o[0] + '">' + esc(o[1]) + '</button>'; }).join('') + '</div></div>' : '') +
       '<div class="panel glass"><h2>Temas por celebración</h2>' +
-      '<div class="line"><div class="t"><b>Cambiar el tema solo en fechas especiales</b><span>Halloween, Navidad, Amor y Amistad, Día de la Madre, del Padre, del Niño, 20 de julio, Año Nuevo…' + (ss ? ' Hoy: ' + esc(ss.name) + ' ' + ss.deco[0] : '') + '</span></div><button class="toggle f' + (P.autoTheme !== false ? ' on' : '') + '" data-act="prefToggle" data-arg="autoTheme"></button></div></div>' +
+      '<div class="line"><div class="t"><b>' + (MV.acct.managed && MV.acct.managed() ? 'Mostrar los temas de temporada de MiVibra' : 'Cambiar el tema solo en fechas especiales') + '</b><span>' + (MV.acct.managed && MV.acct.managed() ? 'Navidad, Halloween, Amor y Amistad, fútbol, vacaciones… cuando MiVibra los active.' : 'Halloween, Navidad, Amor y Amistad, Día de la Madre, del Padre, del Niño, 20 de julio, Año Nuevo…') + (ss ? ' Ahora: ' + esc(ss.name) + ' ' + ss.deco[0] : '') + '</span></div><button class="toggle f' + (P.autoTheme !== false ? ' on' : '') + '" data-act="prefToggle" data-arg="autoTheme"></button></div></div>' +
       '<div class="panel glass"><h2>Tema</h2>' + (ss && P.autoTheme !== false ? '<p class="muted">Ahora se ve el tema de ' + esc(ss.name) + '; el que elijas aquí vuelve cuando termine la celebración.</p>' : '') + '<div class="themes">' + D.THEMES.map(function (t) {
       return '<button class="theme f' + ((P.theme || 'gris') === t.id ? ' on' : '') + '" data-act="theme" data-arg="' + t.id + '"><i style="background:linear-gradient(135deg,' + t.a + ',' + t.b + ')"></i>' + t.name + '</button>';
     }).join('') + '</div><div class="line"><div class="t"><b>Diseño del Inicio</b><span>Vidrio: saludo, canal en vivo grande y categorías · Tarjetas: las 8 categorías de colores</span></div><div class="seg">' +
@@ -4352,6 +4487,11 @@
     // Ajustes
     setTab: function (t) { setTab = t; MV.rerender(); var s = SETTINGS[t]; if (s && s.after) s.after(); },
     theme: function (t) { P.theme = t; MV.savePrefs(); MV.rerender(); },
+    seasonAll: function (id) {
+      var v = { id: id, at: Date.now() };
+      MV.acct.push({ season: v }).then(function () { if (MV.acct.pushError) return; if (MV.acct.config) MV.acct.config.season = v; MV.save('seasonAll', v); MV.applyLook(); MV.rerender();
+        var x = D.SEASONS.filter(function (s) { return s.id === id; })[0]; MV.toast(id === 'off' ? 'Tema de temporada apagado para todos' : id === 'auto' ? 'Los temas cambian solos según la fecha' : 'Tema de ' + x.name + ' activado para todos', 3500); });
+    },
     glass: function (g) { P.glass = g; MV.savePrefs(); MV.rerender(); },
     introMode: function (m) { P.introMode = m; MV.savePrefs(); MV.rerender(); },
     introSound: function (_, el) { P.introSound = P.introSound === false; MV.savePrefs(); if (el) el.classList.toggle('on', P.introSound !== false); },
@@ -4743,7 +4883,7 @@
   ACT.adultGroup = function (g) { ADG = g || ''; limits['adult-live'] = limits['adult-vod'] = 60; MV.rerender(); };
   ACT.adultSort = function (v) { ADS = v || ''; MV.rerender(); };
   ACT.adultClear = function () { ADQ = ''; ADT = 'all'; ADG = ''; ADS = ''; MV.rerender(); };
-  Object.assign(ACT, UL_ACTS);
+  Object.assign(ACT, UL_ACTS, HW_ACT);
   MV.ACT = ACT;
   // Búsqueda por voz con el botón del control: en Juegos busca juegos, en lo demás busca películas, series y canales
   MV.voiceSearch = function (q) {
@@ -5721,7 +5861,7 @@
   function visibleBooks() {
     var kids = MV.isKids && MV.isKids(), have = {};
     (S.books || []).forEach(function (b) { have[b.key] = 1; });
-    var mine = myBooks().filter(function (b) { if (have[b.key]) return false; MV.reg[b.key] = b; return true; });
+    var mine = myBooks().concat(MV.libreriaSaved ? MV.libreriaSaved() : []).filter(function (b) { if (have[b.key]) return false; have[b.key] = 1; MV.reg[b.key] = b; return true; });
     var hid = bookHidden(), packs = packStore(), packed = packBooks();
     return (S.books || []).filter(function (b) { return !(b.kind === 'pack' && packs[b.key]); }).concat(mine, packed).filter(function (b) { return !hid[b.key]; }).filter(function (b) { var a = BOOK_ADULT.test((b.group || '') + ' ' + b.name); return !a && (!kids || b.kind === 'comic' || b.kind === 'manga'); });
   }
@@ -5751,7 +5891,7 @@
     // Categorías: las de tus listas/páginas; si todo viene de una sola, los géneros de los libros
     var gens = {}; if (gnames.length <= 1) all.forEach(function (b) { if (BOOKF === 'all' || b.kind === BOOKF) bookGenres(b).forEach(function (g) { gens[g] = (gens[g] || 0) + 1; }); });
     var gennames = Object.keys(gens).filter(function (g) { return gens[g] >= 2; }).sort(function (a, b) { return gens[b] - gens[a]; }).slice(0, 30);
-    var html = top('Lectura', '<button class="pill f" data-act="bookAdd">' + IC.plus + 'Agregar libros</button>') +
+    var html = top('Lectura', '<button class="pill f" data-act="lbGo">' + IC.book + 'Librería</button><button class="pill f" data-act="bookAdd">' + IC.plus + 'Agregar libros</button>') +
       (all.length ? '<div class="booksearch"><input class="in f" id="bookQ" placeholder="' + (webs.length ? 'Buscar libro (también en tus páginas)…' : 'Buscar título o autor…') + '" value="' + esc(BOOKQ) + '" autocomplete="off" enterkeyhint="search"></div>' +
         '<div class="chips scrollx">' + tabs.map(function (t) { return '<button class="chip f' + (BOOKF === t[0] ? ' on' : '') + '" data-act="bookTab" data-arg="' + t[0] + '">' + t[1] + ' <small>' + (t[2] || 0) + '</small></button>'; }).join('') + '</div>' +
         (gnames.length > 1 ? '<div class="chips scrollx"><button class="chip f' + (!BOOKG ? ' on' : '') + '" data-act="bookGroup" data-arg="">Todas las categorías</button>' + gnames.slice(0, 80).map(function (g) { return '<button class="chip f' + (BOOKG === g ? ' on' : '') + '" data-act="bookGroup" data-arg="' + esc(g) + '">' + esc(g.replace(/^[^·]+·\s*/, '') || g) + ' <small>' + groups[g] + '</small></button>'; }).join('') + '</div>'

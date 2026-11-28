@@ -92,6 +92,84 @@ class Bridge(private val a: MainActivity) {
         }
     }
 
+    // ---------- Juegos que el superadministrador carga a la Tienda por enlace ----------
+    /** Enlace de "ver" → enlace de descarga (Google Drive, Dropbox, GitHub). MEGA se descarga y descifra aparte. */
+    private fun directUrl(u: String): String {
+        Regex("drive\\.google\\.com/(?:file/d/|open\\?id=|uc\\?(?:export=download&)?id=)([\\w-]{10,})").find(u)?.let { return "https://drive.usercontent.google.com/download?id=" + it.groupValues[1] + "&export=download&confirm=t" }
+        if (u.contains("dropbox.com/")) return u.replace(Regex("[?&]dl=0"), "").let { it + (if (it.contains("?")) "&" else "?") + "dl=1" }
+        Regex("^https://github\\.com/([^/]+)/([^/]+)/blob/(.+)$").find(u)?.let { return "https://raw.githubusercontent.com/" + it.groupValues[1] + "/" + it.groupValues[2] + "/" + it.groupValues[3] }
+        return u
+    }
+    private fun storeFetch(id: String, url: String, dest: File) {
+        dest.parentFile?.mkdirs()
+        if (Mega.parse(url) != null) { Mega.download(url, dest) { progress(id, it) }; return }
+        val code = Net.download(directUrl(url), dest, emptyMap(), decompress = true) { progress(id, it) }
+        if (code >= 400 || !dest.isFile) throw IllegalStateException("Error $code al descargar")
+    }
+    private fun isZip(f: File) = try { f.inputStream().use { val b = ByteArray(2); it.read(b) == 2 && b[0] == 'P'.code.toByte() && b[1] == 'K'.code.toByte() } } catch (_: Exception) { false }
+    private fun isHtml(f: File) = try { f.inputStream().use { val b = ByteArray(512); val n = it.read(b); n > 0 && String(b, 0, n).contains("<html", true) || String(b, 0, maxOf(n, 0)).contains("<!doctype", true) } } catch (_: Exception) { false }
+
+    /** json: {kind: web|rom|apk, url, gid, name}. web: .zip (o página .html) a games/x/<gid>/ y responde {ruta};
+     *  rom: a la carpeta de juegos de consolas y responde {path}; apk: abre el instalador de Android. */
+    @JavascriptInterface
+    fun storeGet(id: String, json: String) {
+        games.execute {
+            try {
+                val o = JSONObject(json)
+                val kind = o.getString("kind"); val url = o.getString("url")
+                val gid = o.getString("gid").replace(Regex("[^\\w-]"), "_")
+                val name = o.optString("name").ifBlank { gid }.replace(Regex("[\\\\/:*?\"<>|]"), "_").takeLast(120)
+                when (kind) {
+                    "web" -> {
+                        val tmp = File(File(a.cacheDir, "store").apply { mkdirs() }, "$gid.part")
+                        storeFetch(id, url, tmp)
+                        val out = gameFile("x/$gid") ?: throw IllegalArgumentException("ruta no válida")
+                        out.deleteRecursively(); out.mkdirs()
+                        if (isZip(tmp)) Cores.unzip(tmp, out)
+                        else if (isHtml(tmp)) tmp.copyTo(File(out, "index.html"), true)
+                        else throw IllegalStateException("El enlace no trae un .zip con el juego ni una página .html (¿está compartido como público?)")
+                        tmp.delete()
+                        // index.html en la raíz o dentro de una carpeta del .zip
+                        val idx = out.walkTopDown().maxDepth(3).filter { it.isFile && it.name.equals("index.html", true) }.minByOrNull { it.path.length }
+                            ?: out.walkTopDown().maxDepth(3).filter { it.isFile && it.extension.lowercase() in listOf("html", "htm") }.minByOrNull { it.path.length }
+                            ?: throw IllegalStateException("El .zip no trae un index.html")
+                        val rel = idx.canonicalPath.removePrefix(File(a.filesDir, "games").canonicalPath + File.separator).replace(File.separatorChar, '/')
+                        reply(id, true, JSONObject().put("ruta", rel).put("size", out.walkTopDown().filter { it.isFile }.sumOf { it.length() }))
+                    }
+                    "rom" -> {
+                        val dir = a.getExternalFilesDir("roms") ?: File(a.filesDir, "roms")
+                        val dest = File(dir, name)
+                        storeFetch(id, url, dest)
+                        if (dest.length() < 300_000 && isHtml(dest)) { dest.delete(); throw IllegalStateException("El enlace abre una página y no el juego (¿está compartido como público?)") }
+                        reply(id, true, JSONObject().put("path", dest.absolutePath).put("size", dest.length()))
+                    }
+                    "apk" -> {
+                        if (!Updater.canInstall(a)) { a.runOnUiThread { Updater.askPermission(a) }; reply(id, false, "Permite que MiVibra instale apps y vuelve a tocar Descargar"); return@execute }
+                        val f = File(File(a.cacheDir, "updates").apply { mkdirs() }, "tienda-$gid.apk")
+                        storeFetch(id, url, f)
+                        if (!isZip(f)) { f.delete(); throw IllegalStateException("El enlace no trae una APK (¿está compartido como público?)") }
+                        a.runOnUiThread {
+                            try { Updater.install(a, f); reply(id, true, JSONObject().put("installing", true)) }
+                            catch (e: Exception) { reply(id, false, e.message ?: "No se pudo abrir el instalador") }
+                        }
+                    }
+                    else -> reply(id, false, "Este formato se instala en MiVibra para PC")
+                }
+            } catch (e: Exception) { reply(id, false, e.message ?: "No se pudo descargar") }
+        }
+    }
+
+    /** Quita un juego cargado a la Tienda: web borra games/x/<gid>; rom borra el archivo (solo dentro de la carpeta de la app). */
+    @JavascriptInterface
+    fun storeDel(gid: String, path: String?) {
+        games.execute {
+            try {
+                gameFile("x/" + gid.replace(Regex("[^\\w-]"), "_"))?.deleteRecursively()
+                if (!path.isNullOrBlank()) deleteFile(path)
+            } catch (_: Exception) {}
+        }
+    }
+
     /** Espacio libre en la memoria de la app (MB). */
     @JavascriptInterface
     fun gameFree(): Long = try { a.filesDir.usableSpace / 1048576 } catch (_: Exception) { -1 }

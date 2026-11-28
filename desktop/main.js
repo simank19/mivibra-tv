@@ -394,6 +394,36 @@ const ASYNC = {
     catch (e) { reply(id, false, errMsg(e) || 'No se pudo sacar una imagen de este video'); }
   },
   /** Libros y mangas: descarga y deja listas las páginas (PDF, EPUB, CBZ, CBR, CB7). */
+  /** Juegos que el superadministrador carga a la Tienda por enlace. rom: a la carpeta de juegos; pc: a pcgames/<id> (se descomprime y se busca el .exe). */
+  async storeGet(id, json) {
+    try {
+      const o = JSON.parse(json), gid = String(o.gid || 'juego').replace(/[^\w-]/g, '_');
+      const name = String(o.name || gid).replace(/[\\/:*?"<>|]/g, '_').slice(-120);
+      const direct = (u) => {
+        let m = u.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:export=download&)?id=)([\w-]{10,})/); if (m) return 'https://drive.usercontent.google.com/download?id=' + m[1] + '&export=download&confirm=t';
+        if (/dropbox\.com\//.test(u)) { u = u.replace(/[?&]dl=0/, ''); return u + (u.includes('?') ? '&' : '?') + 'dl=1'; }
+        m = u.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/(.+)$/); if (m) return 'https://raw.githubusercontent.com/' + m[1] + '/' + m[2] + '/' + m[3];
+        return u;
+      };
+      const fetchTo = async (dest) => {
+        fs.mkdirSync(path.dirname(dest), { recursive: true });
+        if (mega.parse(o.url)) { await mega.download(o.url, dest, (p) => progress(id, p)); return; }
+        const code = await net.download(direct(o.url), dest, {}, (p) => progress(id, p), true);
+        if (code >= 400) throw new Error('Error ' + code + ' al descargar');
+        const head = fs.readFileSync(dest).subarray(0, 512).toString('latin1');
+        if (fs.statSync(dest).size < 300000 && /<html|<!doctype/i.test(head)) throw new Error('El enlace abre una página y no el juego (¿está compartido como público?)');
+      };
+      if (o.kind === 'rom') { const dest = path.join(DATA, 'roms', name); await fetchTo(dest); return reply(id, true, { path: dest, size: fs.statSync(dest).size }); }
+      if (o.kind !== 'pc') return reply(id, false, 'Este formato se instala en la app de Android o el TV');
+      const dir = path.join(DATA, 'pcgames', gid); try { fs.rmSync(dir, { recursive: true, force: true }); } catch (e) {}
+      const file = path.join(dir, name); await fetchTo(file);
+      if (archives.supported(file)) { await archives.extractAll(file, dir, (p) => progress(id, p)); try { fs.unlinkSync(file); } catch (e) {} }
+      const exes = []; (function walk(d, depth) { for (const n of fs.readdirSync(d, { withFileTypes: true })) { const f = path.join(d, n.name); if (n.isDirectory() && depth < 3) walk(f, depth + 1); else if (/\.exe$/i.test(n.name) && !/unins|setup|redist|vcredist|dxsetup|crash/i.test(n.name)) exes.push({ f, s: fs.statSync(f).size, depth }); } })(dir, 0);
+      exes.sort((a, b) => a.depth - b.depth || b.s - a.s);
+      if (!exes.length) throw new Error('No encontré un .exe dentro del juego');
+      reply(id, true, { path: exes[0].f });
+    } catch (e) { reply(id, false, errMsg(e)); }
+  },
   /** Foto de una carpeta de MEGA: se descarga y descifra una vez (caché de 300). */
   async megaPhoto(id, src) {
     try {
@@ -678,6 +708,9 @@ const SYNC = {
   fileUrl(p) { return romUrl(String(p || '')); },
   installedGames() { try { return JSON.stringify(pcgames.list()); } catch (e) { return '[]'; } },
   launchGame(json) { try { return pcgames.launch(JSON.parse(json)); } catch (e) { return false; } },
+  /** Abre (o quita) un juego de PC bajado de la Tienda: solo dentro de pcgames/. */
+  storeOpen(p) { const root = path.join(DATA, 'pcgames'); if (!path.resolve(p).toLowerCase().startsWith(root.toLowerCase())) return false; shell.openPath(p); return true; },
+  storeDel(gid, p) { try { fs.rmSync(path.join(DATA, 'pcgames', String(gid).replace(/[^\w-]/g, '_')), { recursive: true, force: true }); } catch (e) {} if (p && path.resolve(p).toLowerCase().startsWith(path.join(DATA, 'roms').toLowerCase())) { try { fs.unlinkSync(p); } catch (e) {} } return true; },
   canInstallUpdates() { return process.platform === 'win32'; },
   toast() {},
   keepAwake(on) { keepAwake(!!on); },

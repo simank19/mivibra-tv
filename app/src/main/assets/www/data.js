@@ -159,6 +159,14 @@
     { id: 'christmas', name: 'Navidad', greet: '¡Feliz Navidad!', deco: ['🎄', '⭐', '🎁', '❄️', '🕯️'], a: '#E8333F', text: '#FFB0B5', base: '#07120C', glow: 'rgba(232,51,63,.4)', glow2: 'rgba(20,140,70,.42)',
       when: function (d) { var y = d.getFullYear(); return within(d, new Date(y, 10, 28), new Date(y, 11, 30)); } }
   ];
+  // Temas que solo se activan a mano (el superadministrador los pone para todos)
+  D.SEASONS.push(
+    { id: 'futbol', name: 'Fiebre de fútbol', greet: '¡Vamos Colombia!', deco: ['⚽', '🏆', '🇨🇴', '🥅'], a: '#FCD116', text: '#FFE98A', base: '#07140B', glow: 'rgba(252,209,22,.38)', glow2: 'rgba(30,140,60,.4)', when: function () { return false; } },
+    { id: 'vacaciones', name: 'Vacaciones', greet: '¡Felices vacaciones!', deco: ['🏖️', '☀️', '🌴', '🍹'], a: '#22C7E0', text: '#A6EEF8', base: '#07161C', glow: 'rgba(34,199,224,.4)', glow2: 'rgba(255,180,60,.32)', when: function () { return false; } },
+    { id: 'pascua', name: 'Semana Santa', greet: 'Feliz Semana Santa', deco: ['🕊️', '🌿', '🕯️', '✨'], a: '#C9A86A', text: '#EBDDBE', base: '#14110B', glow: 'rgba(201,168,106,.38)', glow2: 'rgba(110,80,160,.32)', when: function () { return false; } },
+    { id: 'velitas', name: 'Día de las Velitas', greet: 'Feliz noche de velitas', deco: ['🕯️', '🏮', '✨', '⭐'], a: '#FFB23D', text: '#FFD9A0', base: '#120C06', glow: 'rgba(255,178,61,.45)', glow2: 'rgba(200,60,30,.35)', when: function () { return false; } },
+    { id: 'aniversario', name: 'Aniversario MiVibra', greet: '¡Gracias por estar con MiVibra!', deco: ['🎉', '🧡', '✨', '🎊'], a: '#FF6900', text: '#FFC08F', base: '#140A04', glow: 'rgba(255,105,0,.45)', glow2: 'rgba(255,40,90,.32)', when: function () { return false; } }
+  );
   D.seasonFor = function (d) { d = d || new Date(); for (var i = 0; i < D.SEASONS.length; i++) if (D.SEASONS[i].when(d)) return D.SEASONS[i]; return null; };
 
   D.THEMES = [
