@@ -145,6 +145,7 @@
       ((g.controles || []).length ? '<h4>Cómo se juega</h4><div class="td-ctrls">' + g.controles.map(function (c) { return '<span>' + esc(CTRL[c] || c) + '</span>'; }).join('') + '</div>' : '') +
       (dlcs.length ? '<h4>Expansiones</h4>' + dlcs.map(function (d) { return '<div class="td-dlc"><div><b>' + esc(d.nombre) + '</b><br><span class="muted">' + esc(d.corto || '') + (d.tamano ? ' · ' + mb(d.tamano) : '') + '</span></div><span id="tdB-' + esc(d.id) + '">' + (installed(g) ? btnHtml(d) : '<span class="muted">Primero descarga el juego</span>') + '</span></div>'; }).join('') : '') +
       '<div class="td-facts">' + [['Jugadores', g.jugadores], ['Tamaño', mb(g.tamano)], ['Versión', g.version], ['Precio', 'Gratis'], ['Novedades', g.novedades]].filter(function (x) { return x[1]; }).map(function (x) { return '<div><span class="muted">' + x[0] + '</span><b>' + esc(x[1]) + '</b></div>'; }).join('') + '</div>' +
+      (g.creditos ? '<p class="muted" style="font-size:13px;margin:0">' + esc(g.creditos) + '</p>' : '') +
       '<div class="btns"><button class="btn ghost f" data-act="closeModal">Cerrar</button></div></div></div>', { wide: true });
   }
 

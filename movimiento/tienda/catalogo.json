@@ -2,16 +2,95 @@
   "nota": "Catálogo de la Tienda de juegos de MiVibra. Al publicar, avatarpack.py agrega a cada juego sus archivos (tamaño y huella) y lo deja en tienda.json. Los juegos que ya estaban siguen fijos en MiVibra Movimiento; los de aquí aparecen ahí al descargarlos. Las expansiones (tipo dlc) llevan 'de' = id del juego.",
   "juegos": [
     {
-      "id": "rc", "tipo": "juego", "nombre": "Carreras RC", "categoria": "Carreras", "version": "1.0",
+      "id": "rc",
+      "tipo": "juego",
+      "nombre": "Carreras RC",
+      "categoria": "Carreras",
+      "version": "1.0",
       "corto": "Carros a control remoto con poderes y trampas",
       "descripcion": "Monster trucks, motos, coches tipo Hot Wheels y buggies corriendo en una cantera, un parque con rizo y un puente urbano. Cajas de poder con misiles, escudo, nitro, pulso eléctrico, súper salto, aceite y clavos. Contra la máquina o hasta 4 jugadores en pantalla dividida.",
-      "jugadores": "1 a 4", "controles": ["cel", "bt", "rem", "tac"], "ruta": "rc/",
-      "portada": "tienda/rc/portada.jpg", "video": "tienda/rc/demo.mp4", "fotos": ["tienda/rc/foto1.jpg", "tienda/rc/foto2.jpg"],
+      "jugadores": "1 a 4",
+      "controles": [
+        "cel",
+        "bt",
+        "rem",
+        "tac"
+      ],
+      "ruta": "rc/",
+      "portada": "tienda/rc/portada.jpg",
+      "video": "tienda/rc/demo.mp4",
+      "fotos": [
+        "tienda/rc/foto1.jpg",
+        "tienda/rc/foto2.jpg"
+      ],
       "novedades": "Primera versión: 4 vehículos y 3 pistas.",
-      "archivos": ["rc/index.html", "rcveh.js", "sfx.js", "mano.js",
-        "rchdr/quarry_01_1k.hdr", "rchdr/spruit_sunrise_1k.hdr", "rchdr/pedestrian_overpass_1k.hdr",
-        "vendor/three-0.183.2/three.module.min.js", "vendor/three-0.183.2/three.core.min.js",
-        "vendor/three-0.183.2/addons/loaders/RGBELoader.js", "vendor/three-0.183.2/addons/objects/GroundedSkybox.js", "vendor/three-0.183.2/addons/geometries/RoundedBoxGeometry.js"]
+      "archivos": [
+        "rc/index.html",
+        "rcveh.js",
+        "sfx.js",
+        "mano.js",
+        "rchdr/quarry_01_1k.hdr",
+        "rchdr/spruit_sunrise_1k.hdr",
+        "rchdr/pedestrian_overpass_1k.hdr",
+        "vendor/three-0.183.2/three.module.min.js",
+        "vendor/three-0.183.2/three.core.min.js",
+        "vendor/three-0.183.2/addons/loaders/RGBELoader.js",
+        "vendor/three-0.183.2/addons/objects/GroundedSkybox.js",
+        "vendor/three-0.183.2/addons/geometries/RoundedBoxGeometry.js"
+      ]
+    },
+    {
+      "id": "minigolf",
+      "tipo": "juego",
+      "nombre": "Minigolf",
+      "categoria": "Deportes",
+      "version": "1.0",
+      "destacado": true,
+      "corto": "20 hoyos en 3D que juegas con tu cuerpo",
+      "descripcion": "Minigolf en 3D con tu avatar: balancea los brazos como con un putter para pegarle a la bola e inclínate para apuntar. 20 hoyos con rampas, plataformas que giran, barras que se mueven, agua y un rizo. Contra MiVibra o hasta 4 jugadores por turnos.",
+      "jugadores": "1 a 4",
+      "controles": [
+        "cam",
+        "cel",
+        "rem",
+        "tac"
+      ],
+      "ruta": "minigolf/",
+      "portada": "tienda/minigolf/portada.jpg",
+      "video": "tienda/minigolf/demo.mp4",
+      "fotos": [
+        "tienda/minigolf/foto1.jpg",
+        "tienda/minigolf/foto2.jpg"
+      ],
+      "novedades": "Primera versión: 20 hoyos en 4 recorridos.",
+      "creditos": "Hoyos y física de la bola: Open Golf de Michael Gerdes (licencia MIT). Árboles: Nature Kit de Kenney (CC0).",
+      "archivos": [
+        "minigolf/index.html",
+        "mgscene.js",
+        "mgphys.js",
+        "mg/*.json",
+        "mg/m/*.json",
+        "juego.js",
+        "anim.js",
+        "avatar.js",
+        "cuerpo.js",
+        "espejo.js",
+        "estilo.js",
+        "fx.js",
+        "mano.js",
+        "playa.js",
+        "sfx.js",
+        "sonido.js",
+        "animaciones.json",
+        "patrocinadores.json",
+        "cuerpos/muneco.glb",
+        "sonidos/*",
+        "vendor/three-0.183.2/three.module.min.js",
+        "vendor/three-0.183.2/three.core.min.js",
+        "vendor/three-0.183.2/addons/loaders/GLTFLoader.js",
+        "vendor/three-0.183.2/addons/utils/BufferGeometryUtils.js",
+        "vendor/three-0.183.2/addons/utils/SkeletonUtils.js"
+      ]
     }
   ]
 }

@@ -29,7 +29,18 @@ def tienda(out):
     cat = json.load(open(os.path.join(src, 'catalogo.json'), encoding='utf-8'))
     for g in cat['juegos']:
         files, total = [], 0
+        rels = []
         for rel in g.pop('archivos', []):
+            # se permiten comodines (mg/*.json, sonidos/*) para no listar cada archivo a mano
+            if '*' in rel:
+                import glob
+                hits = sorted(os.path.relpath(x, out).replace(os.sep, '/') for x in glob.glob(os.path.join(out, rel)) if os.path.isfile(x))
+                if not hits:
+                    sys.exit('tienda: nada coincide con %s para %s' % (rel, g['id']))
+                rels += hits
+            else:
+                rels.append(rel)
+        for rel in dict.fromkeys(rels):
             f = os.path.join(out, rel)
             if not os.path.isfile(f):
                 sys.exit('tienda: falta %s para %s' % (rel, g['id']))
@@ -93,11 +104,14 @@ def main():
     if os.path.exists(os.path.join(OVR, 'bolos.html')):
         os.makedirs(os.path.join(out, 'bolos'), exist_ok=True)
         shutil.copy(os.path.join(OVR, 'bolos.html'), os.path.join(out, 'bolos', 'index.html'))
-    for game in ('futbol', 'voley', 'dardos', 'arco', 'boxeo', 'golf', 'beisbol', 'esqui', 'americano', 'baile', 'carrera', 'tenis-cancha', 'rc'):
+    for game in ('futbol', 'voley', 'dardos', 'arco', 'boxeo', 'golf', 'beisbol', 'esqui', 'americano', 'baile', 'carrera', 'tenis-cancha', 'rc', 'minigolf'):
         if os.path.exists(os.path.join(OVR, game + '.html')):
             os.makedirs(os.path.join(out, game), exist_ok=True)
             shutil.copy(os.path.join(OVR, game + '.html'), os.path.join(out, game, 'index.html'))
     # Carreras RC: cielos y luz real (HDRI CC0 de Poly Haven)
+    # Minigolf: hoyos de Open Golf (MIT) y modelos Kenney (CC0) convertidos a JSON
+    if os.path.isdir(os.path.join(OVR, 'mg')):
+        shutil.copytree(os.path.join(OVR, 'mg'), os.path.join(out, 'mg'), dirs_exist_ok=True)
     if os.path.isdir(os.path.join(OVR, 'rchdr')):
         shutil.copytree(os.path.join(OVR, 'rchdr'), os.path.join(out, 'rchdr'), dirs_exist_ok=True)
     if os.path.exists(os.path.join(OVR, 'tenis.html')):

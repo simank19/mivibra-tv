@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Minigolf · MiVibra Movimiento</title>
+</head>
+<body>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@2.0.4/dist/qrcode.js"></script>
+<script src="../mano.js"></script>
+<script type="importmap">{"imports":{"three":"../vendor/three-0.183.2/three.module.min.js","three/addons/":"../vendor/three-0.183.2/addons/"}}</script>
+<script type="module">
+import { startGame, THREE, E, clamp, lerp, rnd } from '../juego.js';
+import { loadHole, animateMovers } from '../mgscene.js';
+import { Phys, speedOf } from '../mgphys.js';
+
+// Minigolf: los 20 hoyos de Open Golf (MIT) con tu avatar. Juegas con el cuerpo (balanceas los brazos como con un putter
+// e inclinas el cuerpo para apuntar), con el celular, la pantalla táctil o el control. Por turnos, hasta 4 jugadores.
+// El hoyo vive en sus propias unidades (bola de 0,12) y se dibuja a escala K junto a los avatares (~1,2 m).
+const K = 0.5, BR = 0.12, DT = 1 / 120, MAXS = 8;
+const ORDER = [3, 2, 4, 1, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
+const COURSES = [
+  { id: 'a', name: 'Recorrido verde', sub: 'Hoyos 1 a 6 · para empezar', holes: [0, 1, 2, 3, 4, 5] },
+  { id: 'b', name: 'Recorrido del bosque', sub: 'Hoyos 7 a 13', holes: [6, 7, 8, 9, 10, 11, 12] },
+  { id: 'c', name: 'Recorrido de montaña', sub: 'Hoyos 14 a 20 · el más difícil', holes: [13, 14, 15, 16, 17, 18, 19] },
+  { id: 'all', name: 'Campeonato: los 20 hoyos', sub: '', holes: ORDER.map((_, i) => i) },
+];
+const BEST_KEY = 'mv-minigolf-mejor';
+const best = (() => { try { return JSON.parse(localStorage.getItem(BEST_KEY)) || {}; } catch (e) { return {}; } })();
+const G = { course: COURSES[0], ci: 0, H: null, ph: null, ball: null, turn: 0, np: 2, strokes: [[], [], [], []], phase: 'wait', aim: 0, base: 0, pow: 0, charging: false, t: 0, field: null, par: 3 };
+const holeNo = () => G.course.holes[G.ci];
+let ballM, dots, arrow, ring, skyM;
+
+// ---------- utilidades del hoyo ----------
+const dirOf = (a) => new THREE.Vector3(Math.sin(a), 0, Math.cos(a));
+const angOf = (v) => Math.atan2(v.x, v.z);
+const toW = (v) => v.clone().multiplyScalar(K);
+function zoneDir(p) {
+  for (const z of G.H.zones) { const e = z.e; if (Math.abs(p.x - e.p[0]) < e.s[0] && Math.abs(p.z - e.p[2]) < e.s[2]) {
+    if (z.e.th) return G.ph.hp.clone().sub(p).setY(0).normalize(); return new THREE.Vector3(1, 0, 0).applyQuaternion(new THREE.Quaternion().fromArray(e.q)).setY(0).normalize(); } }
+  return null;
+}
+// mapa de distancias por el recorrido (no en línea recta): para la máquina, el par y los metros al hoyo
+function buildField(H) {
+  // las plataformas y barras que se mueven cuentan como piso pero no como muro (un muro que se mueve no tapa el camino)
+  const meshes = [], walls = [], movs = (o) => { for (let p = o; p; p = p.parent) if (p.userData.mv) return true; return false; };
+  H.solids.forEach((s) => { if (!s.oob && !s.water) s.obj.traverse((o) => { if (o.isMesh) { meshes.push(o); if (!movs(o)) walls.push(o); } }); });
+  H.root.updateMatrixWorld(true);
+  const sides = new Map(); meshes.forEach((m) => { if (!sides.has(m.material)) { sides.set(m.material, m.material.side); m.material.side = THREE.DoubleSide; } });   // los muros de una sola cara también tapan
+  const box = new THREE.Box3(); meshes.forEach((m) => box.expandByObject(m));
+  const C = 0.5, nx = Math.ceil((box.max.x - box.min.x) / C) + 1, nz = Math.ceil((box.max.z - box.min.z) / C) + 1;
+  const h = new Float32Array(nx * nz).fill(NaN), rc = new THREE.Raycaster(), down = new THREE.Vector3(0, -1, 0);
+  for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
+    rc.set(new THREE.Vector3(box.min.x + i * C, box.max.y + 2, box.min.z + j * C), down); rc.far = box.max.y - box.min.y + 4;
+    const hit = rc.intersectObjects(meshes, false)[0]; if (hit && hit.face && hit.face.normal.clone().transformDirection(hit.object.matrixWorld).y > 0.5) h[i * nz + j] = hit.point.y;
+  }
+  const cell = (p) => [Math.round((p.x - box.min.x) / C), Math.round((p.z - box.min.z) / C)];
+  const ok = (i, j) => i >= 0 && j >= 0 && i < nx && j < nz && !isNaN(h[i * nz + j]);
+  const blocked = (i, j, i2, j2) => { const y = Math.min(h[i * nz + j], h[i2 * nz + j2]) + 0.12; const a = new THREE.Vector3(box.min.x + i * C, y, box.min.z + j * C), b = new THREE.Vector3(box.min.x + i2 * C, y, box.min.z + j2 * C);
+    const dir = b.clone().sub(a), L = dir.length(); rc.set(a, dir.normalize()); rc.far = L; return rc.intersectObjects(walls, false).some((x) => x.face && Math.abs(x.face.normal.clone().transformDirection(x.object.matrixWorld).y) < 0.5); };
+  const N8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]], memo = new Map();
+  const near = (p) => { let [ci, cj] = cell(p); if (ok(ci, cj)) return [ci, cj]; let bd = 1e9, bi = ci, bj = cj; for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) if (ok(i, j)) { const q = (i - ci) ** 2 + (j - cj) ** 2; if (q < bd) { bd = q; bi = i; bj = j; } } return [bi, bj]; };
+  function bfs(from) {
+    const d = new Float32Array(nx * nz).fill(Infinity), [hi, hj] = near(from), Q = [[hi, hj]]; d[hi * nz + hj] = 0;
+    while (Q.length) { Q.sort((a, b) => d[b[0] * nz + b[1]] - d[a[0] * nz + a[1]]); const [i, j] = Q.pop(), di = d[i * nz + j];
+      for (const [a, b] of N8) { const i2 = i + a, j2 = j + b; if (!ok(i2, j2)) continue; const dh = Math.abs(h[i2 * nz + j2] - h[i * nz + j]); if (dh > 0.6 * Math.hypot(a, b)) continue;
+        const nd = di + Math.hypot(a, b) * C + dh; if (nd >= d[i2 * nz + j2]) continue; const key = Math.min(i * nz + j, i2 * nz + j2) + ':' + Math.max(i * nz + j, i2 * nz + j2);
+        let bl = memo.get(key); if (bl === undefined) memo.set(key, (bl = blocked(i, j, i2, j2))); if (bl) continue; d[i2 * nz + j2] = nd; Q.push([i2, j2]); } }
+    return d;
+  }
+  // distancia al hoyo por el camino; si un rizo o un salto corta el mapa, en la parte de la salida vale "avanzar desde la salida"
+  const dH = bfs(H.cupPos), dS = bfs(new THREE.Vector3().fromArray(H.start.p));
+  const val = (k) => isFinite(dH[k]) ? dH[k] : isFinite(dS[k]) ? 500 - dS[k] : Infinity;
+  sides.forEach((v, m) => { m.side = v; });
+  return { at(p) { const [i, j] = cell(p); const v = ok(i, j) ? val(i * nz + j) : Infinity; if (!isFinite(v)) return p.distanceTo(H.cupPos) * 3 + 1000; return v + Math.hypot(p.x - (box.min.x + i * C), p.z - (box.min.z + j * C)); },
+    grad(p) { const [i, j] = cell(p); let best = null, bv = ok(i, j) ? val(i * nz + j) : Infinity; for (const [a, b] of N8) for (const s of [1, 2, 3]) { const i2 = i + a * s, j2 = j + b * s; if (!ok(i2, j2)) break; const v = val(i2 * nz + j2); if (v < bv) { bv = v; best = [a, b]; } } return best ? new THREE.Vector3(best[0], 0, best[1]).normalize() : null; } };
+}
+
+// ---------- Cargar un hoyo ----------
+async function setHole(c, n) {
+  if (G.H) { c.S.remove(G.H.root); G.H.root.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); }
+  G.phase = 'load'; G.ball = null;
+  const H = await loadHole('../mg/', n);
+  H.cupPos = new THREE.Vector3().fromArray(H.hole.p);
+  G.field = buildField(H);
+  H.root.scale.setScalar(K); c.S.add(H.root); H.root.updateMatrixWorld(true);
+  H.root.add(ballM, dots, arrow, ring);
+  G.H = H; G.ph = new Phys(H, BR);
+  const st = new THREE.Vector3().fromArray(H.start.p);
+  const dd = G.field.at(st); G.par = dd < 9 ? 2 : dd < 20 ? 3 : dd < 32 ? 4 : 5;
+  const box = new THREE.Box3().setFromObject(H.root); G.center = box.getCenter(new THREE.Vector3()); G.size = box.getSize(new THREE.Vector3()).length();
+  G.begin = H.begin ? toW(new THREE.Vector3().fromArray(H.begin.p)) : G.center.clone().add(new THREE.Vector3(G.size * 0.4, G.size * 0.35, G.size * 0.4));
+  return H;
+}
+
+const ctx = await startGame({
+  id: 'minigolf', title: 'Minigolf', kicker: 'MIVIBRA MOVIMIENTO · MINIGOLF 3D', loading: 'Armando los hoyos…', fov: 55, players: 4, maxPlayers: 4,
+  sub: '20 hoyos con rampas, plataformas que giran y agua. Por turnos: gana quien use menos golpes.', turns: true, startSound: 'aplausos', ambient: ['aplausos', 'aves'],
+  how: 'Balancea los brazos juntos como con un putter: más largo y rápido = más fuerza. Inclínate a los lados para apuntar.',
+  credit: 'Hoyos y física: Open Golf (MIT) · árboles: Kenney (CC0) · avatares MiVibra',
+  modes: [{ id: 'cpu', label: 'Contra MiVibra', icon: '▶' }, { id: 'two', label: '2 jugadores (por turnos)', icon: '⚔', two: true }, { id: 'three', label: '3 jugadores', icon: '3', two: true, n: 3 }, { id: 'four', label: '4 jugadores', icon: '4', two: true, n: 4 }],
+  orbit: { c: [0, 0, -3], r: 9, y: 5 },
+  floorY: () => G.footY || 0,
+  onSound(c) { c.amb('aves', 0.15); },
+  async scene(c) {
+    const S = c.S; E.lights(S, { ground: '#5aa04a', hemi: 1.4, sunI: 2.4 });
+    S.background = new THREE.Color('#cfe8fb');
+    skyM = new THREE.Mesh(new THREE.SphereGeometry(400, 24, 12), new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, uniforms: { a: { value: new THREE.Color('#3f8fe0') }, b: { value: new THREE.Color('#e4f2fc') } }, vertexShader: 'varying float h; void main(){ h = normalize(position).y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }', fragmentShader: 'uniform vec3 a; uniform vec3 b; varying float h; void main(){ gl_FragColor = vec4(mix(b, a, clamp(h * 2.2, 0., 1.)), 1.);\n#include <colorspace_fragment>\n}' }));
+    S.add(skyM); E.clouds(S, 8, 160, 40, E.seeded(5));
+    const gp = new THREE.Mesh(new THREE.CircleGeometry(220, 48), new THREE.MeshLambertMaterial({ color: '#5f9a35' })); gp.rotation.x = -Math.PI / 2; gp.position.y = -1.2; S.add(gp);
+    ballM = new THREE.Mesh(new THREE.IcosahedronGeometry(BR, 3), new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.35 }));
+    dots = new THREE.InstancedMesh(new THREE.SphereGeometry(0.05, 8, 6), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.85 }), 12); dots.frustumCulled = false;
+    const am = new THREE.MeshBasicMaterial({ color: '#7CFF4D', transparent: true, opacity: 0.9, depthTest: false });
+    arrow = new THREE.Group(); const sh = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 1), am); sh.rotation.x = -Math.PI / 2; sh.position.z = 0.5; const hd = new THREE.Mesh(new THREE.CircleGeometry(0.2, 3), am); hd.rotation.x = -Math.PI / 2; hd.rotation.z = Math.PI / 2; hd.position.z = 1.1;
+    arrow.add(sh, hd); arrow.userData = { sh, hd, am }; arrow.renderOrder = 9; sh.renderOrder = hd.renderOrder = 9;
+    ring = new THREE.Mesh(new THREE.RingGeometry(0.22, 0.3, 32), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.6, depthTest: false })); ring.rotation.x = -Math.PI / 2; ring.renderOrder = 8;
+    await setHole(c, ORDER[0]);
+    return { tick: (t) => { if (G.H) G.H.root.traverse((o) => { if (o.userData.flag) o.rotation.y = Math.sin(t * 2) * 0.15; }); } };
+  },
+  setup(c) { c.P.forEach((p, k) => { const pt = new THREE.Group(); const sh = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.62, 5), E.mat('#c9d1dc')); sh.position.y = -0.3; const hd = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.045, 0.14), E.mat('#2b2b45')); hd.position.y = -0.61; pt.add(sh, hd); c.hold(k, 'left', pt); }); },
+  async start(c, mode) {
+    G.np = { cpu: 2, two: 2, three: 3, four: 4 }[mode] || 2;
+    c.P.forEach((p, k) => { p.av.scene.visible = k < G.np; });
+    G.phase = 'menu2'; G.ball = null; const co = await pickCourse(c); if (!co) return c.menu();
+    G.course = co; G.ci = 0; G.strokes = [[], [], [], []]; startHole(c);
+  },
+  update(c, dt) {
+    G.t += dt; if (!G.H || G.phase === 'load') return;
+    animateMovers(G.H.movers, G.t); G.H.root.updateMatrixWorld(true); G.ph.updateDyn(dt);
+    if (!G.ball) return;
+    const k = G.turn, p = c.P[k];
+    if (G.phase === 'aim') {
+      if (p.cpu) { if (G.cpu && G.cpu.done) { G.aim = lerp(G.aim, G.cpu.aim, 0.08); G.pow = lerp(G.pow, G.cpu.pow, 0.06); G.cpuT -= dt;
+        if (G.cpu.at ? G.t >= G.cpu.at : G.cpuT <= 0 && Math.abs(G.aim - G.cpu.aim) < 0.02) { G.aim = G.cpu.aim; shoot(c, G.cpu.pow); } } else cpuThink(c); }
+      else if (c.camOf(k)) { const B = c.body(k); G.aim -= clamp(B.lean, -1, 1) * 0.7 * dt; const e = !G.lock ? (B.take('swing') || B.take('throw')) : null; if (e) { G.lock = true; setTimeout(() => (G.lock = false), 900); shoot(c, clamp(e.pow * 0.9, 0.06, 1)); } }
+      else { if (c.held.has('ArrowLeft')) G.aim += 0.8 * dt; if (c.held.has('ArrowRight')) G.aim -= 0.8 * dt; if (G.charging) { G.pow += dt * 0.6 * G.dir; if (G.pow >= 1) { G.pow = 1; G.dir = -1; } if (G.pow <= 0.03) { G.pow = 0.03; G.dir = 1; } } }
+      if (!p.cpu) c.ui.meter(G.pow, 'FUERZA', Math.round(G.pow * 100) + '%', (G.field.at(G.ball.p) * K).toFixed(1) + ' m al hoyo');
+      if ((G.pf = (G.pf || 0) + 1) % 3 === 0) preview(c);
+    } else { dots.count = 0; }
+    if (G.phase === 'roll') {
+      const n = Math.max(1, Math.round(dt / DT)); let hit = 0;
+      for (let i = 0; i < n; i++) { G.ph.step(G.ball, DT); hit = Math.max(hit, G.ball.hit || 0); if (G.ball.inHole || G.ball.oob || !G.ball.moving) break; }
+      G.rollT += dt; if (hit > 1.5) c.sfx.play('golpe', clamp(hit / 8, 0.15, 0.6));
+      const sp = G.ball.v.length(); if (sp > 6) { const q = toW(G.ball.p); c.FX.trail([q.x, q.y + 0.03, q.z], '#ffffff', 0.05); }
+      if (G.ball.inHole) holed(c); else if (G.ball.oob) out(c); else if (!G.ball.moving || G.rollT > 25) stopped(c);
+    }
+    placeBall(dt);
+  },
+  frame(c, dt) {
+    if (c.state !== 'play' || !G.H || !G.ball) return;
+    const k = G.turn, a = c.P[k].av.scene, d = dirOf(G.base + G.aim), sd = new THREE.Vector3().crossVectors(d, new THREE.Vector3(0, 1, 0)).normalize();
+    if (G.phase === 'aim' || G.phase === 'walk') { const bw = toW(G.ball.p), tgt = bw.clone().addScaledVector(sd, -0.4).addScaledVector(d, -0.04); tgt.y = K * (G.ball.p.y - BR);
+      const dd = a.position.distanceTo(tgt); a.position.lerp(tgt, 1 - Math.exp(-dt * 4)); let dr = Math.atan2(sd.x, sd.z) - a.rotation.y; dr = Math.atan2(Math.sin(dr), Math.cos(dr)); a.rotation.y += dr * 0.15; c.clip(k, dd > 0.25 ? 'Walk' : 'Idle'); G.footY = a.position.y; }
+    // los demás esperan fuera de cuadro
+    c.P.forEach((p, j) => { p.av.scene.visible = j === k; });
+  },
+  pose(c, k) {
+    if (k !== G.turn || c.state !== 'play' || !G.ball) return;
+    if (c.camOf(k) && G.phase === 'aim') { c.mirror(k, { arms: 1, spine: 0.6, head: 0.6 }); return; }
+    const shL = c.sh(k, 'left'), shR = c.sh(k, 'right'), mid = shL.clone().lerp(shR, 0.5), dir = dirOf(G.base + G.aim);
+    const sw = G.phase === 'aim' ? (G.charging || G.drag ? G.pow : 0.05) : G.phase === 'roll' ? -0.5 : 0;
+    const hands = mid.clone().addScaledVector(dir, -sw * 0.35).add(new THREE.Vector3(0, -0.38 + Math.abs(sw) * 0.1, 0)).add(c.at(k, 0, 0, 0.2).sub(c.at(k, 0, 0, 0)));
+    c.reach(k, 'left', hands, 1); c.reach(k, 'right', hands.clone().add(new THREE.Vector3(0, 0.06, 0)), 1); c.rot(k, 'spine', 0.4, 0, 0, 0.8);
+  },
+  camera(c) {
+    if (!G.H) return null;
+    if (G.phase === 'intro' || G.phase === 'load' || G.phase === 'menu2') return [G.begin, G.center, 1.2, 50];
+    if (!G.ball) return null;
+    const bw = toW(G.ball.p);
+    if (G.phase === 'roll' || G.phase === 'in') { const v = G.ball.v.clone().setY(0); if (v.length() > 0.5) G.camDir = (G.camDir || v.clone().normalize()).lerp(v.normalize(), 0.04).normalize();
+      const cd = G.camDir || dirOf(G.base + G.aim); return [bw.clone().addScaledVector(cd, -2.2).add(new THREE.Vector3(0, 1.5, 0)), bw, 2.5, 50]; }
+    const d = dirOf(G.base + G.aim), sd = new THREE.Vector3().crossVectors(d, new THREE.Vector3(0, 1, 0)).normalize(); G.camDir = d.clone();
+    return [bw.clone().addScaledVector(d, -2.9).addScaledVector(sd, 1.25).add(new THREE.Vector3(0, 2.7, 0)), bw.clone().addScaledVector(d, 3.2).addScaledVector(sd, 0.25), 3, 55];
+  },
+  key(c, key, ok) { if (G.phase !== 'aim' || c.P[G.turn].cpu) return; if (ok) { G.charging = true; G.pow = 0.03; G.dir = 1; } },
+  keyUp(c, key) { if ((key === 'Enter' || key === ' ') && G.charging) { G.charging = false; shoot(c, G.pow); } },
+  touch(c, t) {
+    if (G.phase !== 'aim' || c.P[G.turn].cpu) return;
+    if (t.s === 'down' && !t.mando) { G.drag = { x: t.x, y: t.y, a: G.aim }; }
+    else if (t.s === 'move' && G.drag) { G.pow = clamp((t.y - G.drag.y) * 2.2, 0, 1); G.aim = G.drag.a + clamp((t.x - G.drag.x) * 2, -1.2, 1.2); }
+    else if (t.s === 'up' && G.drag) { G.drag = null; if (G.pow > 0.04) shoot(c, G.pow); }
+    else if (t.s === 'swipe' && t.mando && t.dy < -0.04) { G.aim -= t.dx * 1.4; shoot(c, clamp(t.sp / 3, 0.06, 1)); }
+  },
+  photoSub: () => G.np ? [...Array(G.np).keys()].map(tot).join(' – ') + ' golpes' : '',
+});
+window.MG = { G, shoot: (p) => shoot(ctx, p), go: (ci) => { G.ci = ci; G.ball = null; return startHole(ctx); } };   // para pruebas y videos
+ctx.ui.touch([{ label: '◀', key: 'ArrowLeft' }, { label: '▶', key: 'ArrowRight' }]);
+
+// ---------- Turnos ----------
+function tot(k) { return G.strokes[k].reduce((a, b) => a + (b || 0), 0); }
+function hud(c) { const k = G.turn, n = G.strokes[k][G.ci] || 0;
+  let h = ''; for (let j = 0; j < G.np; j++) h += c.ui.pl(j, tot(j));
+  c.ui.score(h + `<span class="tag">Hoyo ${G.ci + 1}/${G.course.holes.length} · par ${G.par}</span><span class="tag">Juega ${c.P[k].name} · golpes ${n}</span>`); }
+function pickCourse(c) {
+  return new Promise((ok) => {
+    const items = COURSES.map((co) => ({ id: co.id, label: co.name + (best[co.id] ? ' · récord ' + best[co.id] : ''), icon: co.id === 'all' ? '🏆' : '⛳' }));
+    items.push({ id: 'back', label: 'Volver', icon: '↩' });
+    MVHand.menu({ kicker: 'MINIGOLF', title: 'Elige el recorrido', sub: 'Cada jugador juega el hoyo completo y luego el siguiente.', items, back: 'back', onPick: (id) => ok(id === 'back' ? null : COURSES.find((x) => x.id === id)) });
+  });
+}
+async function startHole(c) {
+  G.phase = 'load'; c.ui.meter(null); dots.count = 0; arrow.visible = ring.visible = false;
+  c.P.forEach((p) => { p.av.scene.visible = false; });
+  await setHole(c, ORDER[holeNo()]); G.turn = 0; G.phase = 'intro'; G.footY = K * (G.H.start.p[1]);
+  c.ui.big('Hoyo ' + (G.ci + 1), 'Par ' + G.par + ' · ' + c.P[0].name + ' empieza', 2200);
+  setTimeout(() => beginTurn(c), 2600);
+}
+function beginTurn(c) {
+  const k = G.turn, p = c.P[k]; G.strokes[k][G.ci] = 0; G.cpuHist = [];
+  const st = new THREE.Vector3().fromArray(G.H.start.p); st.y += BR;
+  G.ball = { p: st, v: new THREE.Vector3(), moving: false, last: st.clone() };
+  for (let i = 0; i < 40; i++) G.ph.step(G.ball, DT); G.ball.moving = false; G.ball.v.set(0, 0, 0); G.ball.last = G.ball.p.clone();
+  c.say(k, '¡Tu turno!', true);
+  if (G.np > 1) c.ui.big('Turno de ' + p.name, '', 1100); nextShot(c);
+  const d = dirOf(G.base), sd = new THREE.Vector3().crossVectors(d, new THREE.Vector3(0, 1, 0)).normalize();
+  p.av.scene.position.copy(toW(G.ball.p)).addScaledVector(sd, -0.4); p.av.scene.position.y = K * (G.ball.p.y - BR); p.av.scene.rotation.y = Math.atan2(sd.x, sd.z);
+}
+function baseDir() {
+  const p = G.ball.p, z = zoneDir(p), g = G.field.grad(p);
+  // mira hacia donde el camino baja al hoyo (o la dirección de la zona de cámara del hoyo)
+  return angOf(g || z || G.ph.hp.clone().sub(p).setY(0).normalize());
+}
+function nextShot(c) {
+  const k = G.turn, p = c.P[k]; G.phase = 'aim'; G.base = baseDir(); G.aim = 0; G.pow = p.cpu ? 0.25 : 0; G.charging = false; G.drag = null; G.cpu = null; hud(c);
+  if (p.cpu) { G.cpuT = rnd(0.8, 1.4); G.cpu = { done: false, i: 0, best: null }; }
+  else c.ui.cue(p.name + ': ' + (c.camOf(k) ? 'balancea los brazos como con un putter (inclínate para apuntar)' : c.TOUCH ? 'arrastra hacia abajo para la fuerza (a los lados apunta) y suelta' : '← → apuntar · mantén OK para la fuerza y suelta'), true, 3500);
+  c.ui.keys(p.cpu ? '' : '← → apuntar · mantén OK: fuerza · suelta: pegar');
+}
+function shoot(c, pow) {
+  if (G.phase !== 'aim') return; G.phase = 'roll'; G.rollT = 0; c.ui.meter(null); dots.count = 0; arrow.visible = ring.visible = false;
+  const k = G.turn; G.strokes[k][G.ci]++; hud(c); G.ball.last = G.ball.p.clone();
+  G.ball.v.copy(dirOf(G.base + G.aim)).multiplyScalar(speedOf(clamp(pow, 0.02, 1))); G.ball.moving = true; G.ball.slow = 0;
+  c.sfx.play('click'); c.sfx.play('swing', 0.4);
+  if (pow > 0.85) { const q = toW(G.ball.p); c.FX.pop(q.x, q.y + 1, q.z, '¡FIUU!', '#00E5FF', 0.5); }
+}
+function placeBall(dt) {
+  if (!G.ball) { ballM.visible = false; return; } ballM.visible = !G.ball.gone; ballM.position.copy(G.ball.p);
+  const v = G.ball.v, sp = v.length(); if (sp > 0.01) { const ax = new THREE.Vector3(v.z, 0, -v.x).normalize(); ballM.rotateOnWorldAxis(ax, sp * dt / BR); }
+  const show = G.phase === 'aim'; arrow.visible = ring.visible = show && !G.ball.gone;
+  if (show) { const L = 0.5 + G.pow * 3; arrow.position.copy(G.ball.p).add(new THREE.Vector3(0, -BR + 0.02, 0)); arrow.rotation.y = G.base + G.aim; arrow.userData.sh.scale.y = L; arrow.userData.sh.position.z = 0.25 + L / 2; arrow.userData.hd.position.z = 0.35 + L;
+    arrow.userData.am.color.setHSL(0.33 - G.pow * 0.33, 0.9, 0.55); ring.position.copy(G.ball.p).add(new THREE.Vector3(0, -BR + 0.015, 0)); }
+}
+// vista previa del tiro (sin las plataformas que se mueven); más corta en difícil
+function preview(c) {
+  const p = c.P[G.turn]; if (p.cpu) { dots.count = 0; return; }
+  const B = { p: G.ball.p.clone(), v: dirOf(G.base + G.aim).multiplyScalar(speedOf(Math.max(0.1, G.pow || 0.3))), moving: true, slow: 0 }, d = new THREE.Object3D();
+  const show = [12, 8, 4][c.lvl]; let n = 0;
+  for (let i = 0; i < 12 && n < show; i++) { for (let j = 0; j < 8; j++) { G.ph.step(B, DT, { preview: true }); if (!B.moving || B.inHole || B.oob) break; } d.position.copy(B.p).y -= BR * 0.6; d.scale.setScalar(1 - i / 16); d.updateMatrix(); dots.setMatrixAt(n++, d.matrix); if (!B.moving || B.inHole || B.oob) break; }
+  dots.count = n; dots.instanceMatrix.needsUpdate = true;
+}
+// la máquina prueba muchos tiros (pocos por cuadro para no trabar el TV) y escoge el que deja la bola más cerca por el camino.
+// En hoyos con barras o plataformas que se mueven, también prueba cuándo tirar (simula el movimiento real).
+function cpuThink(c) {
+  const C = G.cpu, MV = G.H.movers.length;
+  if (!C.list) { C.list = []; C.Tb = G.t + 2; const a0 = G.base, ag = G.field.grad(G.ball.p), as = [a0, a0 + 0.1, a0 - 0.1, a0 + 0.25, a0 - 0.25, a0 + 0.45, a0 - 0.45];
+    if (ag) as.push(angOf(ag)); as.push(angOf(G.ph.hp.clone().sub(G.ball.p).setY(0).normalize())); for (let i = 1; i < 12; i++) as.push(a0 + i * Math.PI / 6);
+    const waits = MV ? [0, 0.6, 1.2, 1.8, 2.4, 3.0, 3.6] : [0], use = MV ? as.filter((_, i) => i < 3 || i > 6) : as;
+    for (const w of waits) for (const a of use) for (let pw = 0.06; pw <= 0.95; pw += MV ? 0.12 : 0.07) C.list.push([a, pw, w]); }
+  const t0 = performance.now();
+  while (C.i < C.list.length && performance.now() - t0 < 7) { const [a, pw, w] = C.list[C.i++];
+    const B = { p: G.ball.p.clone(), v: dirOf(a).multiplyScalar(speedOf(pw)), moving: true, slow: 0 }; let t = 0, k = 0;
+    for (; t < (MV ? 7 : 10) && B.moving && !B.inHole && !B.oob; t += DT) { if (MV && k++ % 2 === 0) { animateMovers(G.H.movers, C.Tb + w + t); G.H.movers.forEach((o) => o.updateMatrixWorld(true)); G.ph.updateDyn(DT * 2); } G.ph.step(B, DT, { preview: !MV }); }
+    const sc = B.inHole ? -1 - (1 - pw) : B.oob ? 999 : G.field.at(B.p) + pw * 0.2; if (!C.best || sc < C.best[0]) C.best = [sc, a, pw, w]; }
+  if (MV) { animateMovers(G.H.movers, G.t); G.H.movers.forEach((o) => o.updateMatrixWorld(true)); G.ph.updateDyn(0); }
+  if (C.i >= C.list.length) { const err = 1.3 - c.lvlK(); C.done = true; C.aim = C.best[1] - G.base + rnd(-1, 1) * 0.1 * err; C.pow = clamp(C.best[2] * (1 + rnd(-1, 1) * 0.18 * err), 0.04, 1);
+    if (MV) { const L = G.H.movers[0].userData.mv.length || 4; C.at = C.Tb + C.best[3]; while (C.at < G.t + 0.6) C.at += L; } }
+}
+function stopped(c) { G.phase = 'wait'; G.ball.v.set(0, 0, 0); G.ball.moving = false; setTimeout(() => afterShot(c), 450); }
+function out(c) {
+  G.phase = 'wait'; G.ball.gone = true; const q = toW(G.ball.p); c.sfx.play('caida'); c.FX.pop(q.x, q.y + 1, q.z, G.ball.water ? '¡SPLASH!' : '¡AFUERA!', '#00E5FF', 0.7);
+  c.ui.cue('Vuelve a tirar desde donde estabas', false, 2000);
+  setTimeout(() => { G.ball.p.copy(G.ball.last); G.ball.v.set(0, 0, 0); G.ball.oob = false; G.ball.gone = false; G.ball.moving = false; afterShot(c); }, 1300);
+}
+function afterShot(c) { const k = G.turn;
+  // si la máquina se queda dando vueltas en el mismo sitio (rizos, saltos con barras), se rinde en ese hoyo
+  if (c.P[k].cpu) { const h = (G.cpuHist ||= []); h.push(G.field.at(G.ball.p)); if (h.length >= 3 && Math.max(...h.slice(-3)) - Math.min(...h.slice(-3)) < 1.2) { c.ui.cue('MiVibra no pudo con este hoyo · ' + MAXS + ' golpes'); G.strokes[k][G.ci] = MAXS; hud(c); return setTimeout(() => endTurn(c), 1200); } }
+  if (G.strokes[k][G.ci] >= MAXS) { c.ui.cue('Máximo de ' + MAXS + ' golpes en este hoyo'); G.strokes[k][G.ci] = MAXS + 1; hud(c); return setTimeout(() => endTurn(c), 900); }
+  G.phase = 'walk'; setTimeout(() => nextShot(c), 700); }
+function holed(c) {
+  G.phase = 'in'; G.ball.gone = true; const k = G.turn, n = G.strokes[k][G.ci], par = G.par, q = toW(G.ph.hp);
+  c.sfx.play('hoyo'); const word = n === 1 ? '¡HOYO EN UNO!' : n <= par - 2 ? '¡ÁGUILA!' : n < par ? '¡BIRDIE!' : n === par ? '¡PAR!' : '¡ADENTRO!';
+  c.FX.pop(q.x, q.y + 1.2, q.z, word, n <= par ? '#FFE600' : '#00E5FF', n === 1 ? 1.1 : 0.8); c.FX.confetti([q.x, q.y + 2, q.z], n < par, 1.5); c.FX.stars([q.x, q.y + 0.2, q.z], 7);
+  if (n === 1) { c.FX.slow(0.8, 0.3); c.FX.fireworks([q.x, q.y, q.z - 4], 5, 4, 5); c.FX.flash('#FFE600', 0.3); } c.crowd(n <= par ? 'ole' : 'aplausos');
+  if (!c.P[k].cpu) c.say(k, word, true);
+  setTimeout(() => endTurn(c), 2000);
+}
+function endTurn(c) {
+  G.ball = null;
+  if (G.turn < G.np - 1) { G.turn++; return beginTurn(c); }
+  if (G.ci < G.course.holes.length - 1) { G.ci++; return startHole(c); }
+  // fin del recorrido: todos aparecen junto al hoyo
+  const tots = [...Array(G.np).keys()].map(tot), m = Math.min(...tots), w = tots.indexOf(m), q = toW(G.ph.hp);
+  c.P.forEach((p, j) => { p.av.scene.visible = j < G.np; p.av.scene.position.set(q.x + (j - (G.np - 1) / 2) * 0.9, q.y, q.z + 1.2); }); G.footY = q.y;
+  if (!c.P[0].cpu || G.np === 2) { const mine = tots[0]; if (!best[G.course.id] || mine < best[G.course.id]) { best[G.course.id] = mine; try { localStorage.setItem(BEST_KEY, JSON.stringify(best)); } catch (e) {} } }
+  const tie = tots.filter((x) => x === m).length > 1;
+  c.end(w, tie ? '¡Empate!' : c.P[w].cpu ? 'Gana MiVibra' : '¡Gana ' + c.P[w].name + '!', tots.join(' – ') + ' golpes');
+}
+</script>
+</body>
+</html>
