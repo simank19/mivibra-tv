@@ -11,3 +11,4 @@ public class Probe {
         System.exit(0);
     }
 }
+// prueba sin loadLibrary estático

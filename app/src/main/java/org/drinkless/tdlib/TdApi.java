@@ -13,13 +13,8 @@ import java.lang.annotation.RetentionPolicy;
  * It has no inner classes, functions or public members.
  */
 public class TdApi {
-    static {
-        try {
-            System.loadLibrary("tdjni");
-        } catch (UnsatisfiedLinkError e) {
-            e.printStackTrace();
-        }
-    }
+    // MiVibra: la librería (libtdjni.so) se descarga aparte y la carga Tg.kt con System.load.
+    // Aquí no se carga: al cargarla, TDLib inicializa esta clase y un loadLibrary aquí la volvía a cargar (cierre por inicialización recursiva).
 
     private static final String GIT_COMMIT_HASH = "6d509061574d684117f74133056aa43df89022fc";
 

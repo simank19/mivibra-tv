@@ -13,13 +13,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * Main class for interaction with the TDLib.
  */
 public final class Client {
-    static {
-        try {
-            System.loadLibrary("tdjni");
-        } catch (UnsatisfiedLinkError e) {
-            e.printStackTrace();
-        }
-    }
+    // MiVibra: la librería (libtdjni.so) se descarga aparte y la carga Tg.kt con System.load.
+    // Aquí no se carga: al cargarla, TDLib inicializa esta clase y un loadLibrary aquí la volvía a cargar (cierre por inicialización recursiva).
 
     /**
      * Interface for handler for results of queries to TDLib and incoming updates from TDLib.
