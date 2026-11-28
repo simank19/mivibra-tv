@@ -77,7 +77,7 @@ class Bridge(private val a: MainActivity) {
         games.execute {
             try {
                 val f = gameFile(rel) ?: throw IllegalArgumentException("ruta no válida")
-                val code = Net.download(url, f)
+                val code = Net.download(url, f, decompress = true)   // GitHub manda los archivos comprimidos (gzip): se guardan ya descomprimidos
                 if (code >= 400 || !f.exists()) reply(id, false, "HTTP $code") else reply(id, true, f.length())
             } catch (e: Exception) { reply(id, false, e.message ?: "error") }
         }

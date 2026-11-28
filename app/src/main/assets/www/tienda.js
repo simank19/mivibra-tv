@@ -81,7 +81,7 @@
     var url = (local ? LOCAL : BASE) + g.ruta + (dl.length ? '?dlc=' + dl.join(',') : '');
     if (MV.mvOpen) MV.mvOpen(url); else location.href = url;
   }
-  MV.tienda = { load: load, installedGames: function () { return Object.keys(ST.inst).map(function (k) { var g = byId(k); return g && g.tipo !== 'dlc' ? g : null; }).filter(Boolean); }, dlcOf: function (id) { return Object.keys(ST.inst).filter(function (k) { return ST.inst[k].de === id; }).length; }, play: function (id) { var g = byId(id); if (g) play(g); } };
+  MV.tienda = { updates: function () { return updates().length; }, newCount: function () { return (CAT || []).filter(function (g) { return g.tipo !== 'dlc' && !installed(g); }).length; }, load: load, installedGames: function () { return Object.keys(ST.inst).map(function (k) { var g = byId(k); return g && g.tipo !== 'dlc' ? g : null; }).filter(Boolean); }, dlcOf: function (id) { return Object.keys(ST.inst).filter(function (k) { return ST.inst[k].de === id; }).length; }, play: function (id) { var g = byId(id); if (g) play(g); } };
 
   // ---------- Dibujo ----------
   function state(g) { return busy[g.id] != null ? 'busy' : needsUpdate(g) ? 'upd' : installed(g) ? 'inst' : 'new'; }

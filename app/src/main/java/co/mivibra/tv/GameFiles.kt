@@ -16,10 +16,18 @@ class GameFiles(private val root: File) : WebViewAssetLoader.PathHandler {
             if (p.isEmpty() || p.endsWith("/")) p += "index.html"
             val f = File(root, p).canonicalFile
             if (!f.path.startsWith(root.canonicalPath) || !f.isFile) return null
-            WebResourceResponse(mime(f.name), if (mime(f.name).startsWith("text") || f.name.endsWith(".js") || f.name.endsWith(".json")) "utf-8" else null, f.inputStream()).apply {
+            WebResourceResponse(mime(f.name), if (mime(f.name).startsWith("text") || f.name.endsWith(".js") || f.name.endsWith(".json")) "utf-8" else null, open(f)).apply {
                 responseHeaders = mapOf("Access-Control-Allow-Origin" to "*", "Cache-Control" to "no-cache")
             }
         } catch (_: Throwable) { null }
+    }
+
+    // Las versiones anteriores guardaron algunos archivos todavía comprimidos (gzip): se descomprimen al servirlos
+    private fun open(f: File): java.io.InputStream {
+        val head = ByteArray(2)
+        val n = f.inputStream().use { it.read(head) }
+        val gz = n == 2 && head[0] == 0x1f.toByte() && head[1] == 0x8b.toByte() && !f.name.endsWith(".gz")
+        return if (gz) java.util.zip.GZIPInputStream(f.inputStream().buffered(), 64 * 1024) else f.inputStream()
     }
 
     private fun mime(n: String): String = when (n.substringAfterLast('.', "").lowercase()) {

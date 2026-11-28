@@ -144,6 +144,7 @@
   var IC = {
     cloud: '<path d="M7 18a5 5 0 1 1 .9-9.92A6 6 0 0 1 19 10a4 4 0 0 1-1 7.87V18H7z"/>',
     lib: '<path d="M4 4h4v16H4zM10 4h4v16h-4zM16 5l3.5-1 3 15-3.5 1z"/>',
+    bag: '<path d="M5 8h14l-1 12H6z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>',
     usb: '<path d="M12 2v14M8 6l4-4 4 4M7 11v3l5 3 5-3v-3"/><circle cx="12" cy="20" r="2"/>',
     bios: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9zM9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/>',
     engine: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
@@ -193,6 +194,11 @@
       if (s.extern && !(MV.device && MV.device.desktop) && !(s.android && s.android.length)) return false;   // PS4 y Xbox: solo en el PC
       return true;
     };
+    // MiVibra Movimiento (con los juegos que bajes de la Tienda) y la Tienda de juegos, al comienzo del carrusel
+    function mvCard(badge) { var n = MV.tienda ? MV.tienda.installedGames().length : 0;
+      return '<button class="cf gx-card" data-act="mvm" data-title="MiVibra Movimiento" data-sys="Juegos de MiVibra · atletismo, bolos, tenis de mesa y playa' + (n ? ' · ' + n + ' de la Tienda' : '') + '" style="--c:#8E5CF7">' + (badge && n ? '<i class="gx-n">' + n + '</i>' : '') + '<span class="gx-ic">' + ic('lib') + '</span><b>MiVibra Movimiento</b></button>'; }
+    function storeCard(badge) { var up = MV.tienda && MV.tienda.updates ? MV.tienda.updates() : 0, nw = MV.tienda && MV.tienda.newCount ? MV.tienda.newCount() : 0;
+      return '<button class="cf gx-card" data-act="tienda" data-title="Tienda de juegos" data-sys="Juegos gratis · al descargarlos pasan a MiVibra Movimiento" style="--c:#13A89E">' + (badge && (up || nw) ? '<i class="gx-n">' + (up || nw) + '</i>' : '') + '<span class="gx-ic">' + ic('bag') + '</span><b>Tienda</b></button>'; }
     var withG = systems().filter(function (s) { return by[s.id]; });
     var noG = systems().filter(function (s) { return !by[s.id] && !s.port && canHere(s); });
     var cards = withG.concat(noG).map(function (s) {
@@ -205,13 +211,13 @@
     if (favs().length) cards.splice(all.length ? 1 : 0, 0, '<button class="cf gx-card" data-act="sys" data-arg="fav" data-title="Favoritos" data-sys="' + favs().length + (favs().length === 1 ? ' juego' : ' juegos') + '" style="--c:#E0447C"><i class="gx-n">★</i><span class="gx-ic">★</span><b>Favoritos</b></button>');
     var nat = natives();
     if (nat.length) cards.splice(Math.min(cards.length, (all.length ? 1 : 0) + (favs().length ? 1 : 0)), 0, '<button class="cf gx-card" data-act="sys" data-arg="native" data-title="Instalados en ' + (nativeLabel() === 'PC' ? 'el PC' : 'este equipo') + '" data-sys="' + nat.length + (nat.length === 1 ? ' juego' : ' juegos') + '" style="--c:#2E7DD7"><i class="gx-n">' + nat.length + '</i><span class="gx-ic">' + PAD + '</span><b>' + nativeLabel() + '</b></button>');
-    if (MV.VIEWS && MV.VIEWS.movimiento) cards.unshift('<button class="cf gx-card" data-act="mvm" data-title="MiVibra Movimiento" data-sys="Juegos de MiVibra · atletismo, bolos, tenis de mesa y playa" style="--c:#8E5CF7"><i class="gx-n">2</i><span class="gx-ic">' + ic('lib') + '</span><b>MiVibra Movimiento</b></button>');
+    if (MV.VIEWS && MV.VIEWS.movimiento) cards.unshift(mvCard(true), storeCard(true));
     var rec = (MV.load('recentGames', []) || []).filter(function (r) { return all.some(function (x) { return x.path === r.path; }); }).slice(0, 14);
     return topBar() +
       '<section class="gx-home">' +
 
       (all.length || nat.length ? '<div class="crow gx-cards">' + cards.join('') + '</div><div class="gx-dots" id="gxDots"></div><div class="gx-sysname"><span class="gx-sysic" id="gxSysIc"></span><b id="ctitle"></b><span id="csys"></span></div>'
-        : '<div class="crow gx-cards">' + (MV.VIEWS && MV.VIEWS.movimiento ? '<button class="cf gx-card" data-act="mvm" data-title="MiVibra Movimiento" data-sys="Juegos de MiVibra · atletismo, bolos, tenis de mesa y playa" style="--c:#8E5CF7"><span class="gx-ic">' + ic('lib') + '</span><b>MiVibra Movimiento</b></button>' : '') + '<button class="cf gx-card" data-act="scan" data-title="Buscar juegos" data-sys="Conecta tu USB y presiona OK" style="--c:#FF6900"><span class="gx-ic">' + ic('usb') + '</span><b>Buscar juegos</b></button><button class="cf gx-card" data-act="send" data-title="Enviar desde el celular" data-sys="Pasa juegos por WiFi" style="--c:#4C8DFF"><span class="gx-ic">' + ic('send') + '</span><b>Desde el celular</b></button></div><div class="gx-sysname"><b id="ctitle"></b><span id="csys"></span></div>') +
+        : '<div class="crow gx-cards">' + (MV.VIEWS && MV.VIEWS.movimiento ? mvCard(false) + storeCard(false) : '') + '<button class="cf gx-card" data-act="scan" data-title="Buscar juegos" data-sys="Conecta tu USB y presiona OK" style="--c:#FF6900"><span class="gx-ic">' + ic('usb') + '</span><b>Buscar juegos</b></button><button class="cf gx-card" data-act="send" data-title="Enviar desde el celular" data-sys="Pasa juegos por WiFi" style="--c:#4C8DFF"><span class="gx-ic">' + ic('send') + '</span><b>Desde el celular</b></button></div><div class="gx-sysname"><b id="ctitle"></b><span id="csys"></span></div>') +
       (rec.length ? '<h4 class="clabel">Jugados recientemente</h4><div class="crow gx-recent">' + rec.map(function (r) { return tile(r, false); }).join('') + '</div>' : '') +
       '</section><p id="cdesc" hidden></p>' + hints('Salir');
   }
@@ -549,6 +555,7 @@
       case 'sys': sysFilter = el.getAttribute('data-arg'); tab = 'games'; render(); break;
       case 'scan': (MV.ACT.scanChooser || MV.ACT.scanRoms)(); break;
       case 'mvm': close(); MV.go('movimiento'); break;
+      case 'tienda': close(); MV.go('tienda'); break;
       case 'bios': MV.ACT.importBios(); break;
       case 'drive': MV.ACT.driveMenu(); break;
       case 'swapab': if (A && A.padSwap) { var on = A.padSwap(A.padSwap('get') ? 'off' : 'on'); MV.toast(on ? 'A y B intercambiados en los menús' : 'A y B como vienen de fábrica'); var sm = el.querySelector('small'); if (sm) sm.textContent = swapTxt(); } break;
