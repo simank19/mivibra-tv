@@ -1234,6 +1234,7 @@
   function megaBooks(u) {
     if (!MV.native) return Promise.reject(new Error('MEGA funciona en la app instalada'));
     return MV.call('megaList', [u]).then(function (arr) {
+      (arr || []).forEach(function (f) { SEEN.push(f.name || ''); });
       return (arr || []).filter(function (f) { return WANT.test(f.name || ''); }).map(function (f) { return { url: f.url, file: f.name, title: fileTitle(f.name), fmt: fmtOf(f.name), pack: PACKX.test(f.name), path: f.path || '' }; });
     });
   }
@@ -1271,7 +1272,7 @@
     var files = function (chunk) {
       return api('files', chunk).then(function (j) {
         var c = (j.response || {}).folder_content || {};
-        (c.files || []).forEach(function (f) { if (WANT.test(f.filename || '')) out.push({ url: 'https://www.mediafire.com/file/' + f.quickkey + '/' + encodeURIComponent(f.filename) + '/file', file: f.filename, title: fileTitle(f.filename), fmt: fmtOf(f.filename), pack: PACKX.test(f.filename), path: path }); });
+        (c.files || []).forEach(function (f) { SEEN.push(f.filename || ''); if (WANT.test(f.filename || '')) out.push({ url: 'https://www.mediafire.com/file/' + f.quickkey + '/' + encodeURIComponent(f.filename) + '/file', file: f.filename, title: fileTitle(f.filename), fmt: fmtOf(f.filename), pack: PACKX.test(f.filename), path: path }); });
         if (c.more_chunks === 'yes' && chunk < 20) return files(chunk + 1);
       });
     };
