@@ -1,0 +1,33 @@
+name: TDLib para la app
+# Publica la librería de Telegram (TDLib, licencia Boost) para Android como descarga aparte:
+# la app la baja solo cuando alguien abre Cursos o Mi Telegram (así la APK no crece ~20 MB).
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/tdlib/**', '.github/workflows/tdlib.yml']
+permissions:
+  contents: write
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bajar TDLib ya compilada
+        run: |
+          V=$(cat .github/tdlib/version.txt)
+          echo "V=$V" >> $GITHUB_ENV
+          git clone --depth 1 https://github.com/fazilus/tdlib-android fz
+          mkdir out
+          for abi in arm64-v8a armeabi-v7a x86_64 x86; do
+            gzip -9 -c fz/tdlib/src/main/jniLibs/$abi/libtdjni.so > out/libtdjni-$abi.so.gz
+            sha256sum fz/tdlib/src/main/jniLibs/$abi/libtdjni.so | cut -d' ' -f1 > out/libtdjni-$abi.so.sha256
+          done
+          ls -la out
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: tdlib-${{ env.V }}
+          name: TDLib ${{ env.V }} (Telegram para MiVibra)
+          body: Librería de Telegram (TDLib, Boost Software License 1.0) que la app descarga al abrir Cursos o Mi Telegram.
+          make_latest: "false"
+          files: out/*

@@ -82,10 +82,17 @@ object Mega {
         val files = ArrayList<Triple<JSONObject, ByteArray, String>>()
         for (i in 0 until nodes.length()) {
             val n = nodes.optJSONObject(i) ?: continue
-            val h = n.optString("h"); val kk = n.optString("k").split("/").firstOrNull()?.substringAfter(':') ?: continue
-            if (kk.isBlank()) continue
-            val key = try { ecb(master, b64(kk)) } catch (_: Exception) { continue }
-            val name = attrs(n.optString("a"), key)?.optString("n") ?: continue
+            val h = n.optString("h")
+            // "k" puede traer varias claves (dueño:clave/carpeta:clave): se usa la que abre los atributos con la clave del enlace
+            var key: ByteArray? = null; var name: String? = null
+            for (pair in n.optString("k").split("/")) {
+                val kk = pair.substringAfter(':', "")
+                if (kk.isBlank()) continue
+                val k2 = try { ecb(master, b64(kk)) } catch (_: Exception) { continue }
+                val nm = attrs(n.optString("a"), k2)?.optString("n")
+                if (!nm.isNullOrEmpty()) { key = k2; name = nm; break }
+            }
+            if (key == null || name == null) continue
             names[h] = name; parent[h] = n.optString("p")
             if (n.optInt("t") == 0) files.add(Triple(n, key, name))
         }

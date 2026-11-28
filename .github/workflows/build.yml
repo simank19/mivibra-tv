@@ -30,6 +30,8 @@ jobs:
           MV_GOOGLE_WEB_CLIENT: ${{ secrets.MV_GOOGLE_WEB_CLIENT }}
           MV_GOOGLE_TV_CLIENT: ${{ secrets.MV_GOOGLE_TV_CLIENT }}
           MV_GOOGLE_TV_SECRET: ${{ secrets.MV_GOOGLE_TV_SECRET }}
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
         run: python3 .github/scripts/config.py
 
       - name: Prueba gratuita (sin datos del dueño)
@@ -104,6 +106,8 @@ jobs:
           MV_GOOGLE_WEB_CLIENT: ${{ secrets.MV_GOOGLE_WEB_CLIENT }}
           MV_GOOGLE_TV_CLIENT: ${{ secrets.MV_GOOGLE_TV_CLIENT }}
           MV_GOOGLE_TV_SECRET: ${{ secrets.MV_GOOGLE_TV_SECRET }}
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
         run: python .github/scripts/config.py
 
       - name: Prueba gratuita (sin datos del dueño)
@@ -159,6 +163,8 @@ jobs:
           MV_GOOGLE_WEB_CLIENT: ${{ secrets.MV_GOOGLE_WEB_CLIENT }}
           MV_GOOGLE_TV_CLIENT: ${{ secrets.MV_GOOGLE_TV_CLIENT }}
           MV_GOOGLE_TV_SECRET: ${{ secrets.MV_GOOGLE_TV_SECRET }}
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
         run: python3 .github/scripts/config.py
 
       - name: Prueba gratuita (sin datos del dueño)

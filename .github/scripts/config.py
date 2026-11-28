@@ -25,6 +25,9 @@ data = {
     'webClientId': os.environ.get('MV_GOOGLE_WEB_CLIENT', '').strip(),
     'tvClientId': os.environ.get('MV_GOOGLE_TV_CLIENT', '').strip(),
     'tvClientSecret': os.environ.get('MV_GOOGLE_TV_SECRET', '').strip(),
+    # Telegram (my.telegram.org): para Cursos y Mi Telegram
+    'tgApiId': os.environ.get('TG_API_ID', '').strip(),
+    'tgApiHash': os.environ.get('TG_API_HASH', '').strip(),
 }
 if not data['admin']:
     raise SystemExit('Falta el secreto MV_ADMIN_EMAIL')

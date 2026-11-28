@@ -48,9 +48,14 @@ async function list(link) {
   const r = await api([{ a: 'f', c: 1, ca: 1, r: 1 }], l.id);
   const names = {}, parent = {}, files = [];
   for (const n of r.f || []) {
-    const kk = String(n.k || '').split('/')[0].split(':')[1]; if (!kk) continue;
-    let key; try { key = ecb(master, b64(kk)); } catch (e) { continue; }
-    const at = attrs(n.a, key); if (!at) continue;
+    // "k" puede traer varias claves (dueño:clave/carpeta:clave): se usa la que abre los atributos
+    let key = null, at = null;
+    for (const pair of String(n.k || '').split('/')) {
+      const kk = pair.split(':')[1]; if (!kk) continue;
+      let k2; try { k2 = ecb(master, b64(kk)); } catch (e) { continue; }
+      const a2 = attrs(n.a, k2); if (a2 && a2.n) { key = k2; at = a2; break; }
+    }
+    if (!key) continue;
     names[n.h] = at.n; parent[n.h] = n.p;
     if (n.t === 0) files.push({ n, key, name: at.n });
   }
